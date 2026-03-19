@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/adamlamorre/Work/Adam/thesis && make format && make check"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/adamlamorre/Work/Adam/thesis && npx prettier --write $CLAUDE_FILE_PATH"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+import type { ThesisNode } from '@/types/node';
+import type { ThesisEdge } from '@/types/edge';
+
+export interface Graph {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GraphWithData extends Graph {
+  nodes: ThesisNode[];
+  edges: ThesisEdge[];
+}
+
+export type TriggerType = 'manual' | 'upstream_change' | 'scheduled' | 'event';
+export type EvaluationStatus = 'pending' | 'approved' | 'applied' | 'rejected';
+
+export interface Evaluation {
+  id: string;
+  node_id: string;
+  trigger_type: TriggerType;
+  trigger_source: string | null;
+  previous_conclusion: string | null;
+  new_conclusion: string | null;
+  previous_confidence: number | null;
+  new_confidence: number | null;
+  diff_summary: string | null;
+  skill_doc_id: string | null;
+  llm_provider: string | null;
+  llm_model: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  status: EvaluationStatus;
+  approved_by: string | null;
+  created_at: string;
+}
