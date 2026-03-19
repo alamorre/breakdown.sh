@@ -1,0 +1,159 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockAuth = vi.fn();
+const mockRevalidatePath = vi.fn();
+
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: () => mockAuth(),
+}));
+
+vi.mock('next/cache', () => ({
+  revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+}));
+
+const mockSelect = vi.fn();
+const mockSingle = vi.fn();
+const mockInsert = vi.fn();
+const mockUpdate = vi.fn();
+const mockDelete = vi.fn();
+const mockEq = vi.fn();
+const mockOrder = vi.fn();
+
+function createChain() {
+  const chain = {
+    select: mockSelect.mockReturnThis(),
+    single: mockSingle,
+    insert: mockInsert.mockReturnThis(),
+    update: mockUpdate.mockReturnThis(),
+    delete: mockDelete.mockReturnThis(),
+    eq: mockEq.mockReturnThis(),
+    order: mockOrder,
+  };
+  return chain;
+}
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServerClient: () => ({
+    from: () => createChain(),
+  }),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockAuth.mockReturnValue({ userId: 'user_123' });
+});
+
+describe('createGraph', () => {
+  it('should create a graph and return data', async () => {
+    const graph = { id: 'abc-123', user_id: 'user_123', name: 'Test Graph' };
+    mockSingle.mockResolvedValue({ data: graph, error: null });
+
+    const { createGraph } = await import('@/actions/graph-actions');
+    const result = await createGraph({ name: 'Test Graph' });
+
+    expect(result.data).toEqual(graph);
+    expect(result.error).toBeNull();
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('should return error for empty name', async () => {
+    const { createGraph } = await import('@/actions/graph-actions');
+    const result = await createGraph({ name: '' });
+
+    expect(result.data).toBeNull();
+    expect(result.error).toBeTruthy();
+  });
+
+  it('should throw when not authenticated', async () => {
+    mockAuth.mockReturnValue({ userId: null });
+
+    const { createGraph } = await import('@/actions/graph-actions');
+    await expect(createGraph({ name: 'Test' })).rejects.toThrow('Unauthorized');
+  });
+});
+
+describe('getUserGraphs', () => {
+  it('should return graphs for authenticated user', async () => {
+    const graphs = [
+      { id: '1', name: 'Graph 1' },
+      { id: '2', name: 'Graph 2' },
+    ];
+    mockOrder.mockResolvedValue({ data: graphs, error: null });
+
+    const { getUserGraphs } = await import('@/actions/graph-actions');
+    const result = await getUserGraphs();
+
+    expect(result.data).toEqual(graphs);
+    expect(result.error).toBeNull();
+  });
+
+  it('should return empty array on error', async () => {
+    mockOrder.mockResolvedValue({ data: null, error: { message: 'DB error' } });
+
+    const { getUserGraphs } = await import('@/actions/graph-actions');
+    const result = await getUserGraphs();
+
+    expect(result.data).toEqual([]);
+    expect(result.error).toBe('DB error');
+  });
+});
+
+describe('deleteGraph', () => {
+  it('should delete a graph', async () => {
+    mockEq.mockResolvedValue({ error: null });
+
+    const { deleteGraph } = await import('@/actions/graph-actions');
+    const result = await deleteGraph({ graphId: '550e8400-e29b-41d4-a716-446655440000' });
+
+    expect(result.error).toBeNull();
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('should return error for invalid graphId', async () => {
+    const { deleteGraph } = await import('@/actions/graph-actions');
+    const result = await deleteGraph({ graphId: 'not-a-uuid' });
+
+    expect(result.error).toBeTruthy();
+  });
+});
+
+describe('updateGraph', () => {
+  it('should update graph name', async () => {
+    const updated = { id: '550e8400-e29b-41d4-a716-446655440000', name: 'New Name' };
+    mockSingle.mockResolvedValue({ data: updated, error: null });
+
+    const { updateGraph } = await import('@/actions/graph-actions');
+    const result = await updateGraph({
+      graphId: '550e8400-e29b-41d4-a716-446655440000',
+      name: 'New Name',
+    });
+
+    expect(result.data).toEqual(updated);
+    expect(result.error).toBeNull();
+  });
+});
+
+describe('getGraph', () => {
+  it('should return graph with nodes and edges', async () => {
+    const graph = { id: '550e8400-e29b-41d4-a716-446655440000', name: 'Test' };
+    mockSingle.mockResolvedValue({ data: graph, error: null });
+    mockEq.mockResolvedValue({ data: [], error: null });
+
+    const { getGraph } = await import('@/actions/graph-actions');
+    const result = await getGraph({ graphId: '550e8400-e29b-41d4-a716-446655440000' });
+
+    expect(result.data?.graph).toEqual(graph);
+    expect(result.data?.nodes).toEqual([]);
+    expect(result.data?.edges).toEqual([]);
+  });
+
+  it('should return error for missing graph', async () => {
+    mockSingle.mockResolvedValue({ data: null, error: { message: 'Not found' } });
+
+    const { getGraph } = await import('@/actions/graph-actions');
+    const result = await getGraph({ graphId: '550e8400-e29b-41d4-a716-446655440000' });
+
+    expect(result.data).toBeNull();
+    expect(result.error).toBe('Not found');
+  });
+});
