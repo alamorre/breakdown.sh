@@ -1,182 +1,424 @@
 # Thesis — v1 Implementation Plan
 
-v1 scope = **Phase 1 (MVP)** from specs.md: a user can build a reasoning graph on a visual canvas, connect nodes with typed edges, evaluate nodes with AI, and persist everything to a database.
+v1 scope = **Phase 1 (MVP)**: a user can build an AI reasoning pipeline on a visual canvas. Nodes are computational units with an optional input, a prompt/task, and a generated output. Connecting nodes wires outputs to inputs. Clicking "Run" on a node sends its prompt + upstream outputs to Claude and generates a result. Running the full graph executes nodes in topological order.
 
 ---
 
-## Section 1: Project Scaffolding
+## What's Already Built (Sections 1–5)
 
-Set up the monorepo, tooling, and dev environment.
+The following are **done** and should not be rebuilt:
 
-- [ ] Initialize Next.js 15 (App Router) with TypeScript
-- [ ] Install and configure Tailwind CSS v4
-- [ ] Install and configure shadcn/ui (init + base components: button, input, dialog, dropdown-menu, sheet, tooltip, separator, badge)
-- [ ] Install Zustand for state management
-- [ ] Install @xyflow/react (React Flow v12)
-- [ ] Set up project directory structure (`app/`, `components/`, `lib/`, `types/`, `store/`)
-- [ ] Define shared TypeScript types for the domain model (`types/graph.ts`, `types/node.ts`, `types/edge.ts`)
-- [ ] Configure ESLint + Prettier
-- [ ] Set up environment variables pattern (`.env.local.example`)
-- [ ] Verify dev server runs clean
+- **Section 1 — Scaffolding:** Next.js 15, Tailwind v4, shadcn/ui, Zustand, React Flow, ESLint, Prettier, Vitest, directory structure.
+- **Section 2 — Auth:** Clerk integration, sign-in/sign-up pages, protected app shell, Google OAuth.
+- **Section 3 — Database:** Supabase project, client utilities (`lib/supabase/server.ts`, `lib/supabase/client.ts`), core tables (`graphs`, `nodes`, `edges`, `evaluations`), RLS policies, indexes.
+- **Section 4 — Graph CRUD:** Dashboard page, `createGraph`, `getUserGraphs`, `deleteGraph`, `updateGraph`, `getGraph` server actions. New Graph dialog, graph cards, navigation to editor.
+- **Section 5 — Canvas Foundation:** Graph editor page (`app/(app)/graph/[graphId]/page.tsx`), Zustand graph store, React Flow with Background/Controls/MiniMap, node drag, `onNodesChange`/`onEdgesChange`, graph top bar with editable name + back button.
 
-**Done when:** `npm run dev` serves a blank app with shadcn/ui rendering correctly.
+**Also built** (from in-progress Section 6–8 work that needs modification):
 
----
-
-## Section 2: Auth
-
-Users can sign up, sign in, and have a protected app shell.
-
-- [ ] Create Clerk project and configure environment variables (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`)
-- [ ] Install `@clerk/nextjs`
-- [ ] Add `ClerkProvider` to root layout
-- [ ] Add Clerk middleware (`middleware.ts`) to protect `/app/*` routes
-- [ ] Build sign-in and sign-up pages (`app/sign-in/[[...sign-in]]/page.tsx`, same for sign-up)
-- [ ] Build authenticated app shell layout (`app/(app)/layout.tsx`) with user button and sidebar skeleton
-- [ ] Add Google OAuth provider in Clerk dashboard
-- [ ] Verify: unauthenticated user is redirected to sign-in; authenticated user reaches the app shell
-
-**Done when:** A user can sign in with email or Google and land on a protected dashboard page.
+- `components/canvas/GraphCanvas.tsx` — main React Flow canvas (needs modification)
+- `components/canvas/GraphEditor.tsx` — layout wrapper with sidebar + canvas + detail panel (needs modification)
+- `components/canvas/ThesisNode.tsx` — custom node component (needs **full rewrite**)
+- `components/canvas/ThesisEdge.tsx` — custom edge component (keep as-is)
+- `components/canvas/NodeDetailPanel.tsx` — right-side sheet (needs **full rewrite**)
+- `components/canvas/NodeSidebar.tsx` — left sidebar with draggable node types (needs **full rewrite**)
+- `components/canvas/EdgeTypePicker.tsx` — dialog for picking edge type on connect (keep as-is)
+- `components/canvas/GraphTopBar.tsx` — top bar (keep as-is)
+- `store/graph-store.ts` — Zustand store (needs modification)
+- `actions/node-actions.ts` — node CRUD (needs modification)
+- `actions/edge-actions.ts` — edge CRUD (keep as-is)
+- `lib/graph/detect-cycle.ts` — cycle detection utility (keep as-is)
+- `types/node.ts`, `types/edge.ts`, `types/graph.ts` — domain types (need modification)
 
 ---
 
-## Section 3: Database & Supabase Setup
+## Core Model Change
 
-The Postgres schema is live and accessible from the app.
+The old model treated nodes as **static reasoning containers** (conclusion, confidence, evidence, assumptions) with an optional "Evaluate" button bolted on. The new model treats nodes as **computational units in a pipeline**:
 
-- [ ] Create Supabase project and configure environment variables (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
-- [ ] Install `@supabase/supabase-js`
-- [ ] Create Supabase client utilities (`lib/supabase/server.ts` for server components/actions, `lib/supabase/client.ts` for browser)
-- [ ] Run SQL migration for core tables: `graphs`, `nodes`, `edges`, `evaluations`
-- [ ] Add Row Level Security policies scoped to Clerk `user_id`
-- [ ] Add database indexes: `idx_edges_source`, `idx_edges_target`, `idx_nodes_graph`, `idx_evaluations_node`
-- [ ] Create TypeScript database types (generate from Supabase CLI or hand-write matching types)
-- [ ] Verify: can insert and query a graph row from a server action using the authenticated user's ID
+```
+┌─────────────────────────────────┐
+│  OUTPUT (generated on run)      │  ← text area, read-only, shows last run result
+│                                 │
+│  "BC rural land prices have..." │
+├─────────────────────────────────┤
+│  TASK / PROMPT                  │  ← text area, user-editable
+│                                 │
+│  "Analyze real estate market    │
+│   conditions for {{region}}..." │
+│                                 │
+│                         [Run ▸] │  ← executes this node
+├─────────────────────────────────┤
+│  ○ input (from upstream)        │  ← connection handle(s) at bottom
+└─────────────────────────────────┘
+```
 
-**Done when:** All four core tables exist with RLS, and a server action can CRUD a graph row for the signed-in user.
+- **Inputs (optional):** Data flowing in from upstream node outputs via edges. A node with no inbound edges is a root node — its prompt runs standalone.
+- **Prompt / Task:** The user-written instruction that defines what this node does. When the node runs, this prompt is sent to Claude along with any upstream outputs.
+- **Output (generated):** The result produced by running the node. Not user-editable — generated by Claude. Displayed prominently at the top of the card. Empty until the node has been run at least once.
 
----
-
-## Section 4: Graph CRUD & Dashboard
-
-Users can create, rename, delete, and open reasoning graphs.
-
-- [ ] Build dashboard page (`app/(app)/dashboard/page.tsx`) — lists the user's graphs
-- [ ] Server action: `createGraph(name, description)` → inserts into `graphs` table
-- [ ] Server action: `getUserGraphs()` → returns all graphs for current user
-- [ ] Server action: `deleteGraph(graphId)` → deletes graph (cascades nodes/edges)
-- [ ] Server action: `updateGraph(graphId, { name, description })` → rename/edit
-- [ ] UI: "New Graph" dialog with name + optional description
-- [ ] UI: Graph card in dashboard with name, description, updated_at, delete action
-- [ ] Clicking a graph card navigates to `/app/(app)/graph/[graphId]`
-
-**Done when:** User can create a graph from the dashboard, see it listed, rename it, delete it, and click into it.
+Edges are **data pipes**: the output of the source node is injected into the target node's prompt context when it runs. Edge types (`supports`, `contradicts`, `depends_on`, etc.) are retained as semantic labels that are included in the prompt context so Claude understands the relationship.
 
 ---
 
-## Section 5: Canvas Foundation
+## Section 6: Schema Migration — Execution Model
 
-The graph editor page renders a React Flow canvas with pan, zoom, and minimap.
+Migrate the `nodes` table to support the prompt/output execution model. Remove node type categories.
 
-- [ ] Build graph editor page (`app/(app)/graph/[graphId]/page.tsx`)
-- [ ] Create Zustand graph store (`store/graph-store.ts`) with state: `nodes`, `edges`, `selectedNodeId`, `selectedEdgeId`
-- [ ] Initialize React Flow with `<ReactFlow>`, `<Background>`, `<Controls>`, `<MiniMap>`
-- [ ] Load graph data (nodes + edges) from Supabase on page mount and hydrate the store
-- [ ] Implement canvas top bar: graph name (editable), back-to-dashboard button
-- [ ] Implement node drag — update position in store on `onNodeDragStop`
-- [ ] Wire up `onNodesChange` and `onEdgesChange` to keep store in sync with React Flow internals
-- [ ] Style canvas background, controls, and minimap with shadcn/ui theme tokens
+### Database Migration
 
-**Done when:** Opening a graph shows a working React Flow canvas. Nodes (if any) are loaded from the database. Pan, zoom, drag all work.
+Create a new Supabase migration file `supabase/migrations/20260330000000_execution-model.sql`:
+
+```sql
+-- Add prompt and output columns
+ALTER TABLE nodes ADD COLUMN prompt TEXT NOT NULL DEFAULT '';
+ALTER TABLE nodes ADD COLUMN output TEXT;
+
+-- Add run status tracking
+ALTER TABLE nodes ADD COLUMN run_status TEXT NOT NULL DEFAULT 'idle';
+-- Valid values: 'idle' | 'running' | 'success' | 'error'
+ALTER TABLE nodes ADD COLUMN run_error TEXT;
+ALTER TABLE nodes ADD COLUMN last_run_at TIMESTAMPTZ;
+
+-- Remove columns that no longer apply to the execution model
+ALTER TABLE nodes DROP COLUMN IF EXISTS conclusion;
+ALTER TABLE nodes DROP COLUMN IF EXISTS confidence;
+ALTER TABLE nodes DROP COLUMN IF EXISTS evidence;
+ALTER TABLE nodes DROP COLUMN IF EXISTS assumptions;
+ALTER TABLE nodes DROP COLUMN IF EXISTS skill_doc_id;
+ALTER TABLE nodes DROP COLUMN IF EXISTS autonomy_level;
+ALTER TABLE nodes DROP COLUMN IF EXISTS last_evaluated_at;
+ALTER TABLE nodes DROP COLUMN IF EXISTS evaluation_history;
+ALTER TABLE nodes DROP COLUMN IF EXISTS collapsed;
+ALTER TABLE nodes DROP COLUMN IF EXISTS color;
+
+-- node_type becomes a simple label string, no longer an enum of categories.
+-- Keep the column but it will store 'default' for all v1 nodes.
+-- Default all existing rows:
+ALTER TABLE nodes ALTER COLUMN node_type SET DEFAULT 'default';
+```
+
+### Type Updates
+
+Update `src/types/node.ts`:
+
+```typescript
+/** Run status of a node */
+export type RunStatus = 'idle' | 'running' | 'success' | 'error';
+
+/** A node on the canvas — a computational unit with prompt and generated output */
+export interface ThesisNode {
+  id: string;
+  graph_id: string;
+  node_type: string;           // 'default' for v1 — extensible later
+  name: string;
+  position_x: number;
+  position_y: number;
+
+  // Execution model
+  prompt: string;              // User-written task/instruction
+  output: string | null;       // Generated by Claude on run — null until first run
+  run_status: RunStatus;       // Current execution state
+  run_error: string | null;    // Error message if run_status === 'error'
+  last_run_at: string | null;  // ISO timestamp of last successful run
+
+  // Flexible metadata for future use
+  metadata: Record<string, unknown>;
+
+  created_at: string;
+  updated_at: string;
+}
+```
+
+Remove from `types/node.ts`: `NodeType` enum, `NODE_TYPE_CONFIG`, `AutonomyLevel`, `EvidenceItem`, `EvaluationHistoryEntry`, node category groupings.
+
+Keep `types/edge.ts` unchanged — `EdgeType`, `EDGE_TYPE_CONFIG`, and `ThesisEdge` all stay.
+
+Keep `types/graph.ts` unchanged — `Graph`, `GraphWithData`, `Evaluation` types stay.
+
+### Server Action Updates
+
+Update `src/actions/node-actions.ts`:
+
+- `createNode(input)` — change input schema: `{ graphId, name, prompt?, positionX, positionY }`. Insert with `node_type: 'default'`, `prompt: input.prompt ?? ''`, `output: null`, `run_status: 'idle'`.
+- `updateNode(input)` — change input schema: `{ nodeId, name?, prompt? }`. Only `name` and `prompt` are user-editable. Output is only written by the run action, never by the user.
+- `deleteNode(input)` — unchanged.
+
+### Store Updates
+
+Update `src/store/graph-store.ts`:
+
+- `CanvasNode.data.thesisNode` now uses the new `ThesisNode` shape.
+- `updateNodeData(nodeId, updates)` — accepts `Partial<Pick<ThesisNode, 'name' | 'prompt'>>` for user edits.
+- Add `setNodeRunStatus(nodeId, status, output?, error?)` — used by the run action to update a node's output and status in real time.
+
+### Tests
+
+Update `src/store/graph-store.test.ts` and `src/actions/node-actions.test.ts` to match new fields. Remove references to `conclusion`, `confidence`, `evidence`, `assumptions`, `collapsed`, `autonomy_level`.
+
+**Done when:** Migration applied, types compile, node CRUD server actions work with new schema, store tests pass.
 
 ---
 
-## Section 6: Node Type System
+## Section 7: Node Component — Execution Card
 
-Users can create nodes of different types from a sidebar, and each type renders distinctly on the canvas.
+Rewrite the `ThesisNode` component to match the ElevenLabs Flows card design: output on top, prompt/task in the middle, input handles at the bottom, run button visible.
 
-- [ ] Define node type enum and config map (`types/node.ts`): `assumption`, `sub_thesis`, `comparison`, `risk_assessment`, `timeline`, `decision_point`, `composite_thesis`
-- [ ] Build custom React Flow node component (`components/canvas/thesis-node.tsx`) that renders differently per type (icon, color, header)
-- [ ] Build node creation sidebar (`components/canvas/node-sidebar.tsx`) — lists available node types, grouped by category (Source / Analysis / Synthesis)
-- [ ] Implement drag-from-sidebar-to-canvas using @dnd-kit or React Flow's built-in drop handling
-- [ ] Server action: `createNode(graphId, nodeType, name, position)` → inserts into `nodes` table
-- [ ] On drop: create node in Supabase, then add to store
-- [ ] Each node on canvas shows: type icon, name, truncated conclusion (if any), confidence badge
-- [ ] Collapsed vs expanded state toggle on node
+### Component: `src/components/canvas/ThesisNode.tsx`
 
-**Done when:** User can drag node types from the sidebar onto the canvas. Each type renders with its distinct visual style. Nodes persist to the database.
+Full rewrite. The node card layout (top to bottom):
 
----
+```
+┌─────────────────────────────────────────┐
+│ ○ output handle (top, source)           │  ← React Flow Handle, type="source", position=Top
+├─────────────────────────────────────────┤
+│ OUTPUT SECTION                          │
+│ ┌─────────────────────────────────────┐ │
+│ │ Generated output text (read-only)   │ │  ← scrollable, max ~6 lines visible
+│ │ or "No output yet — click Run"      │ │  ← placeholder when output is null
+│ └─────────────────────────────────────┘ │
+├─────────────────────────────────────────┤
+│ TASK SECTION                            │
+│ ┌─────────────────────────────────────┐ │
+│ │ Prompt / task text (editable)       │ │  ← textarea, saves on blur (debounced)
+│ └─────────────────────────────────────┘ │
+│                                 [Run ▸] │  ← button, right-aligned
+├─────────────────────────────────────────┤
+│ NODE NAME (small, muted)         [···]  │  ← name label + overflow menu (delete)
+├─────────────────────────────────────────┤
+│ ○ input handle (bottom, target)         │  ← React Flow Handle, type="target", position=Bottom
+└─────────────────────────────────────────┘
+```
 
-## Section 7: Node Detail Panel
+**Visual specs:**
 
-Selecting a node opens a side panel where the user can view and edit all node fields.
+- Card width: 320px (fixed via `w-80`)
+- Card: `rounded-xl border bg-card shadow-sm` — clean white/dark card
+- Output section: `bg-muted/50 rounded-lg p-3 text-sm` — subtle background to distinguish from task. When `run_status === 'running'`, show a shimmer/pulse animation. When `run_status === 'error'`, show error state with `text-destructive`.
+- Task section: `p-3 text-sm` — plain textarea with `nodrag nopan` class (so typing doesn't drag the node). Use the `nowheel` class too so scroll works inside the textarea.
+- Run button: shadcn `Button` variant `default`, size `sm`. Shows spinner when `run_status === 'running'`. Disabled while running.
+- Name: small `text-xs text-muted-foreground` at the bottom.
+- Handles: React Flow `Handle` components. Style them as small circles (w-3 h-3) with `bg-primary` color, visible on hover.
+- Selected state: `ring-2 ring-ring`
+- The card must use `nodrag` class on interactive elements (textarea, button) so they don't trigger node dragging.
 
-- [ ] Build node detail sheet (`components/canvas/node-detail-panel.tsx`) — opens when a node is selected on canvas
-- [ ] Editable fields: name, conclusion (textarea), confidence (slider 0-1), evidence (list of strings, add/remove), assumptions (list of strings, add/remove)
-- [ ] Display metadata: node type, created_at, last_evaluated_at
-- [ ] Install Tiptap and use it for the conclusion field (rich text with basic formatting)
-- [ ] Server action: `updateNode(nodeId, updates)` → patches the `nodes` row
-- [ ] Auto-save on blur or after debounced typing (500ms)
-- [ ] Show upstream and downstream connections in the panel (list of connected node names with edge types)
-- [ ] Delete node action (with confirmation dialog) — removes node + connected edges
+**Behavior:**
 
-**Done when:** User can select any node, edit its conclusion/confidence/evidence/assumptions in the side panel, and changes persist.
+- Editing the task textarea calls `updateNodeData(nodeId, { prompt })` optimistically, then debounced `updateNode` server action (500ms).
+- Clicking "Run" calls the `runNode` server action (Section 9).
+- The overflow menu `[···]` has: "Delete" (with confirmation).
+- The node is wrapped in `React.memo` to prevent re-renders during canvas pan/zoom.
+
+### Component: `src/components/canvas/NodeSidebar.tsx`
+
+Rewrite. Since there are no node type categories, the sidebar simplifies to:
+
+- A single "Add Node" button that creates a new blank node at the center of the viewport.
+- Or: a single draggable item labeled "Node" that the user drags onto the canvas.
+- Keep the drag-to-canvas pattern from the current implementation, but with just one item type instead of a categorized list.
+
+The sidebar should be minimal — just a slim toolbar or a floating button, not a full 256px panel. Consider a vertical toolbar on the left edge of the canvas with an "add node" icon button.
+
+### Component: `src/components/canvas/NodeDetailPanel.tsx`
+
+Rewrite. The detail panel (right-side sheet) now shows:
+
+- **Name** — editable input field
+- **Prompt** — editable textarea (larger than the card's inline version, for comfortable editing of long prompts)
+- **Output** — read-only display of the last run output (full text, scrollable). Shows "Not yet run" if null.
+- **Run Status** — badge showing `idle` / `running` / `success` / `error` + `last_run_at` timestamp
+- **Connections** — read-only list of upstream nodes (inputs) and downstream nodes (outputs) with edge type badges
+- **Run button** — same as on the card
+- **Delete button** — with confirmation dialog
+
+Remove: confidence slider, evidence list, assumptions list, Tiptap rich text editor. The conclusion textarea is replaced by the prompt textarea + read-only output display.
+
+**Done when:** Node card renders with output on top, editable task in the middle, run button, input/output handles. Creating a node from the sidebar works. Detail panel shows prompt + output.
 
 ---
 
 ## Section 8: Edge System
 
-Users can connect nodes with typed edges that render distinctly on the canvas.
+Edges are **data pipes**. The output of the source node flows into the target node as input context when the target runs. Edge types provide semantic labels included in the prompt.
 
-- [ ] Define edge type enum: `supports`, `contradicts`, `depends_on`, `assumes`, `inputs_to`, `sequences_before`
-- [ ] Build custom React Flow edge component (`components/canvas/thesis-edge.tsx`) — color and style per edge type (e.g., green for supports, red for contradicts, dashed for assumes)
-- [ ] On connect (React Flow `onConnect`): show edge type picker dialog before creating the edge
-- [ ] Server action: `createEdge(graphId, sourceNodeId, targetNodeId, edgeType)` → inserts into `edges` table
-- [ ] Server action: `deleteEdge(edgeId)` → removes edge
-- [ ] Server action: `updateEdge(edgeId, { edgeType, weight })` → update edge properties
-- [ ] Edge click → show popover or panel with: edge type (changeable), weight slider
-- [ ] Edge labels on canvas showing the edge type
-- [ ] DAG validation: warn (but don't block) if a connection would create a cycle
+### What's Already Built (Keep)
 
-**Done when:** User can draw connections between nodes, pick the edge type, see it visually on the canvas. Edges persist and can be edited/deleted.
+- `ThesisEdge.tsx` — custom edge with color/dash per type, label badge. **Keep as-is.**
+- `EdgeTypePicker.tsx` — dialog for selecting edge type on connect. **Keep as-is.**
+- `edge-actions.ts` — `createEdge`, `updateEdge`, `deleteEdge` server actions. **Keep as-is.**
+- `types/edge.ts` — `EdgeType` enum, `EDGE_TYPE_CONFIG`, `ThesisEdge` interface. **Keep as-is.**
+- `detect-cycle.ts` — cycle detection on connect. **Keep as-is.**
+
+### What Changes
+
+In `GraphCanvas.tsx`, the connect flow is already correct (show EdgeTypePicker, create edge, add to store). No changes needed here.
+
+The key change is in **how edges are used at runtime** (Section 9). When a node runs, the system gathers all inbound edges, looks up the source node's output for each, and includes them in the prompt context with their edge type labels.
+
+### DAG Validation
+
+Keep the current behavior: warn on cycle but don't block. In v1, if a user creates a cycle, the run will simply skip already-visited nodes to prevent infinite loops.
+
+**Done when:** Edges still work exactly as before. No code changes in this section — it's already correct. This section exists to document the edge model for the implementer.
 
 ---
 
-## Section 9: Graph Persistence & Sync
+## Section 9: Node Execution — Run with Claude
+
+The core feature. Clicking "Run" on a node sends its prompt + upstream context to Claude and writes the generated output.
+
+### AI Client
+
+Create `src/lib/ai/claude.ts`:
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+
+export function createClaudeClient(): Anthropic {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+}
+```
+
+### Prompt Builder
+
+Create `src/lib/ai/build-prompt.ts`:
+
+```typescript
+export interface UpstreamInput {
+  nodeName: string;
+  nodeOutput: string;       // the upstream node's generated output
+  edgeType: string;         // 'supports', 'contradicts', etc.
+}
+
+export function buildRunPrompt(
+  nodePrompt: string,
+  upstreamInputs: UpstreamInput[]
+): string {
+  // If no upstream inputs, return the prompt as-is
+  if (upstreamInputs.length === 0) {
+    return nodePrompt;
+  }
+
+  // Build context section from upstream outputs
+  const contextLines = upstreamInputs.map((input) =>
+    `[${input.edgeType.toUpperCase()}] From "${input.nodeName}":\n${input.nodeOutput}`
+  );
+
+  return `The following context has been provided from upstream nodes in a reasoning graph:\n\n${contextLines.join('\n\n---\n\n')}\n\n---\n\nYour task:\n${nodePrompt}`;
+}
+```
+
+This function is the only place prompt strings are composed. Server actions call it, never build prompts inline.
+
+### Server Action: `runNode`
+
+Create or add to `src/actions/node-actions.ts`:
+
+```typescript
+export async function runNode(input: { nodeId: string }): Promise<{
+  data: { output: string } | null;
+  error: string | null;
+}> {
+  // 1. Auth check
+  // 2. Fetch the node from Supabase
+  // 3. Fetch all inbound edges for this node
+  // 4. For each inbound edge, fetch the source node's output
+  //    - If a source node has no output (never been run), include a note: "[not yet run]"
+  // 5. Call buildRunPrompt(node.prompt, upstreamInputs)
+  // 6. Update node run_status to 'running' in Supabase
+  // 7. Call Claude API:
+  //    - model: 'claude-sonnet-4-5-20250929' (fast, cheap for v1)
+  //    - max_tokens: 4096
+  //    - system: "You are a reasoning assistant in a node-based analysis tool. Produce clear, structured output."
+  //    - user message: the built prompt
+  // 8. On success: update node with output, run_status='success', last_run_at=now()
+  // 9. On error: update node with run_status='error', run_error=message
+  // 10. Log to evaluations table: trigger_type='manual', previous output, new output, token counts
+  // 11. Return { data: { output }, error: null }
+}
+```
+
+### Server Action: `runGraph`
+
+Add to `src/actions/node-actions.ts`:
+
+```typescript
+export async function runGraph(input: { graphId: string }): Promise<{
+  data: { results: Array<{ nodeId: string; output: string | null; error: string | null }> } | null;
+  error: string | null;
+}> {
+  // 1. Auth check
+  // 2. Fetch all nodes and edges for this graph
+  // 3. Topological sort: order nodes so each runs after all its upstream dependencies
+  //    - Use Kahn's algorithm: start with nodes that have no inbound edges, process in order
+  //    - If cycle detected (should be rare due to warnings), skip nodes in the cycle
+  // 4. For each node in topological order:
+  //    a. Gather upstream outputs (from nodes already run in this batch)
+  //    b. Call runNode logic (inline, not via separate server action call — to share the batch context)
+  //    c. Collect result
+  // 5. Return all results
+}
+```
+
+### UI: Run Button on Node
+
+The "Run" button on the `ThesisNode` card and the `NodeDetailPanel` both call `runNode`. The flow:
+
+1. User clicks "Run ▸"
+2. Optimistically set `run_status: 'running'` in the Zustand store (shows spinner on button, shimmer on output area)
+3. Call `runNode({ nodeId })` server action
+4. On success: update store with `output` and `run_status: 'success'`
+5. On error: update store with `run_status: 'error'` and `run_error`
+6. Show toast on error
+
+### UI: Run Graph Button
+
+Add a "Run All ▸" button to the `GraphTopBar`. Calls `runGraph({ graphId })`. Updates all node states in the store as results come back.
+
+### Store Updates
+
+Add to `src/store/graph-store.ts`:
+
+```typescript
+setNodeRunState(nodeId: string, state: {
+  run_status: RunStatus;
+  output?: string | null;
+  run_error?: string | null;
+  last_run_at?: string | null;
+}): void
+```
+
+This action updates the `thesisNode` data inside the React Flow node, triggering a re-render of only that node card.
+
+### Tests
+
+- `src/lib/ai/build-prompt.test.ts` — test prompt building: no inputs, single input, multiple inputs with different edge types.
+- `src/actions/node-actions.test.ts` — add tests for `runNode`: mock Claude API, verify output is saved, verify error handling, verify evaluation logging.
+
+**Done when:** User can click "Run" on any node. Claude receives the prompt + upstream outputs and generates a result. The output appears on the node card. Errors are handled gracefully. "Run All" executes the full graph in topological order.
+
+---
+
+## Section 10: Graph Persistence & Sync
 
 All canvas state round-trips cleanly between the client store and Supabase.
 
-- [ ] Debounced position save — batch-update node positions after drag stops (avoid saving on every pixel)
-- [ ] Server action: `batchUpdateNodePositions(updates: { nodeId, x, y }[])` → single query
-- [ ] Full graph load function: `getGraph(graphId)` → returns graph + all nodes + all edges in one query
-- [ ] Optimistic updates in Zustand store — apply changes locally first, sync to DB in background
-- [ ] Error handling: toast on save failure, retry logic
-- [ ] Loading skeleton for graph editor while data fetches
-- [ ] Handle stale graph (another tab edited it) — last-write-wins for v1, show updated_at
+### What's Already Built (Keep)
 
-**Done when:** User can close the browser, reopen the graph, and see everything exactly as they left it. Position changes, node edits, and edge changes all persist reliably.
+- Debounced position save via `batchUpdateNodePositions` — **keep as-is**
+- `getGraph(graphId)` returns graph + nodes + edges — **update to include new node fields**
+- Optimistic updates in Zustand store — **keep pattern, update for new fields**
+- `onNodesChange` / `onEdgesChange` synced to store — **keep as-is**
 
----
+### What to Add
 
-## Section 10: AI Node Evaluation
+- Loading skeleton for graph editor while data fetches (if not already present)
+- Toast on save failure (already present via Sonner — ensure it's wired up)
+- Ensure the `getGraph` query returns the new node fields (`prompt`, `output`, `run_status`, `run_error`, `last_run_at`)
 
-User clicks "Evaluate" on a node, and Claude analyzes it using upstream context.
-
-- [ ] Install `@anthropic-ai/sdk`
-- [ ] Create server-side Claude client (`lib/ai/claude.ts`) with API key from env
-- [ ] Build evaluation prompt builder (`lib/ai/build-prompt.ts`): given a node and its upstream nodes+edges, construct the evaluation prompt
-  - Include: node name, type, current conclusion, upstream conclusions with edge types, evidence, assumptions
-- [ ] Server action: `evaluateNode(nodeId)` → gathers context, calls Claude, returns structured result
-- [ ] Parse Claude response into: `{ conclusion, confidence, evidence[], diff_summary }`
-- [ ] UI: "Evaluate" button on node detail panel
-- [ ] Show evaluation result in a review dialog: previous vs. proposed conclusion, confidence change, diff summary
-- [ ] Accept/reject buttons — accept writes the new conclusion+confidence to the node, reject discards
-- [ ] Log evaluation to `evaluations` table (trigger_type: 'manual', status: 'approved'|'rejected')
-- [ ] Loading state + streaming indicator while Claude is thinking
-- [ ] Handle API errors gracefully (rate limit, timeout, invalid response)
-
-**Done when:** User can click "Evaluate" on any node. Claude reads the upstream graph context and proposes an updated conclusion. User can accept or reject. The evaluation is logged.
+**Done when:** Full round-trip works. User can edit prompts, run nodes, close the browser, reopen, and see everything exactly as left — including generated outputs and run states.
 
 ---
 
@@ -184,14 +426,17 @@ User clicks "Evaluate" on a node, and Claude analyzes it using upstream context.
 
 User can auto-arrange the graph with one click.
 
-- [ ] Install ELKjs
-- [ ] Build layout function (`lib/layout/elk-layout.ts`): takes nodes + edges, returns new positions using ELK's layered algorithm
-- [ ] Configure layout direction (top-to-bottom for DAG readability) with sensible spacing
-- [ ] UI: "Auto Layout" button in canvas toolbar
-- [ ] Animate nodes to new positions (React Flow `fitView` + position transitions)
-- [ ] Persist new positions after layout
+- Install ELKjs: `npm install elkjs`
+- Build layout function `src/lib/layout/elk-layout.ts`:
+  - Takes `CanvasNode[]` and `CanvasEdge[]`
+  - Returns new positions using ELK's layered algorithm
+  - Direction: top-to-bottom (DAG flows downward — outputs at top flow to inputs at bottom)
+  - Spacing: 80px horizontal, 100px vertical (enough room for the tall node cards)
+  - Account for node dimensions: width 320px, estimated height 300px per node
+- UI: "Auto Layout" button in `GraphTopBar` (next to "Run All")
+- On click: compute new layout, animate nodes to positions (React Flow `setNodes` with transition), then persist via `batchUpdateNodePositions`
 
-**Done when:** Clicking "Auto Layout" rearranges all nodes into a clean DAG layout and saves the positions.
+**Done when:** Clicking "Auto Layout" rearranges all nodes into a clean top-to-bottom DAG layout and saves positions.
 
 ---
 
@@ -199,12 +444,14 @@ User can auto-arrange the graph with one click.
 
 User can export their graph as JSON.
 
-- [ ] Build export function (`lib/export/export-graph.ts`): serializes full graph (graph metadata + nodes + edges) to a clean JSON structure
-- [ ] UI: "Export" button in canvas toolbar → triggers JSON file download
-- [ ] Include all node fields (conclusion, confidence, evidence, assumptions, position) and edge fields (type, weight) in export
-- [ ] File naming: `{graph-name}-{date}.json`
+- Build export function `src/lib/export/export-graph.ts`:
+  - Serializes: graph metadata + all nodes (id, name, prompt, output, position) + all edges (source, target, type, weight)
+  - Clean JSON structure, no internal IDs leaking (strip `graph_id`, `created_at`, `updated_at`)
+- UI: "Export" button in `GraphTopBar`
+- On click: trigger JSON file download
+- File naming: `{graph-name}-{YYYY-MM-DD}.json`
 
-**Done when:** User clicks export and gets a downloadable JSON file containing their full graph.
+**Done when:** User clicks Export and gets a downloadable JSON file with their full graph including prompts and outputs.
 
 ---
 
@@ -212,15 +459,124 @@ User can export their graph as JSON.
 
 Ship it.
 
-- [ ] Responsive canvas layout — sidebar collapses on small screens
-- [ ] Empty states: empty dashboard ("Create your first graph"), empty canvas ("Drag a node from the sidebar")
-- [ ] Keyboard shortcuts: Delete (remove selected node/edge), Escape (deselect), Cmd+Z (undo in Zustand — optional, skip if complex)
-- [ ] Toast notifications for save success/failure, evaluation complete, errors
-- [ ] Global error boundary
-- [ ] Deploy frontend to Vercel
-- [ ] Configure Vercel environment variables (Clerk, Supabase, Anthropic)
-- [ ] Verify production build: auth flow, graph CRUD, canvas, evaluation, export all work end-to-end
-- [ ] Set up Supabase production project (separate from dev)
-- [ ] Basic analytics: Vercel Analytics or PostHog (optional, skip if not needed for launch)
+- Empty states:
+  - Empty dashboard: "Create your first graph" with prominent CTA button
+  - Empty canvas: "Add a node to get started" centered message with an "Add Node" button
+- Keyboard shortcuts:
+  - `Delete` / `Backspace` — remove selected node or edge (with confirmation for nodes)
+  - `Escape` — deselect
+- Toast notifications: save failure, run complete, run error
+- Global error boundary
+- Deploy frontend to Vercel
+- Configure Vercel environment variables: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`
+- Verify production build end-to-end: auth → dashboard → create graph → add nodes → connect → edit prompts → run → see output → export
 
-**Done when:** The app is live on a Vercel URL. A new user can sign up, create a graph, add nodes, connect them, evaluate with AI, and export — end to end.
+**Done when:** The app is live. A new user can sign up, create a graph, add nodes, write prompts, connect them, run the graph, see AI-generated outputs, and export.
+
+---
+
+## Appendix A: Updated Data Model
+
+### `nodes` table (after migration)
+
+```sql
+CREATE TABLE nodes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  graph_id UUID REFERENCES graphs(id) ON DELETE CASCADE,
+  node_type TEXT NOT NULL DEFAULT 'default',
+  name TEXT NOT NULL,
+  position_x FLOAT NOT NULL,
+  position_y FLOAT NOT NULL,
+
+  -- Execution model
+  prompt TEXT NOT NULL DEFAULT '',         -- User-written task/instruction
+  output TEXT,                             -- Generated by Claude on run
+  run_status TEXT NOT NULL DEFAULT 'idle', -- 'idle' | 'running' | 'success' | 'error'
+  run_error TEXT,                          -- Error message if run failed
+  last_run_at TIMESTAMPTZ,                -- When last successfully run
+
+  metadata JSONB DEFAULT '{}',            -- Extensible
+
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### `edges` table (unchanged)
+
+```sql
+CREATE TABLE edges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  graph_id UUID REFERENCES graphs(id) ON DELETE CASCADE,
+  source_node_id UUID REFERENCES nodes(id) ON DELETE CASCADE,
+  target_node_id UUID REFERENCES nodes(id) ON DELETE CASCADE,
+  edge_type TEXT NOT NULL,
+  weight FLOAT DEFAULT 1.0,
+  condition TEXT,
+  transform TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(source_node_id, target_node_id)
+);
+```
+
+### `graphs` table (unchanged)
+
+### `evaluations` table (unchanged — used to log run history)
+
+For evaluations, map the fields:
+- `previous_conclusion` → previous output
+- `new_conclusion` → new output
+- `trigger_type` → `'manual'` for user-initiated runs
+- `previous_confidence` / `new_confidence` → not used in v1, set to null
+
+---
+
+## Appendix B: File Change Summary
+
+### Files to CREATE
+
+| File | Purpose |
+|------|---------|
+| `supabase/migrations/20260330000000_execution-model.sql` | Schema migration |
+| `src/lib/ai/claude.ts` | Claude API client |
+| `src/lib/ai/build-prompt.ts` | Prompt composition |
+| `src/lib/ai/build-prompt.test.ts` | Prompt builder tests |
+| `src/lib/layout/elk-layout.ts` | ELKjs auto-layout |
+| `src/lib/export/export-graph.ts` | JSON export |
+
+### Files to REWRITE
+
+| File | What changes |
+|------|-------------|
+| `src/types/node.ts` | Remove NodeType enum, categories, confidence, evidence, assumptions. Add prompt, output, run_status, run_error, last_run_at. |
+| `src/components/canvas/ThesisNode.tsx` | Full rewrite: output on top, editable task in middle, run button, handles top/bottom. 320px wide card. |
+| `src/components/canvas/NodeDetailPanel.tsx` | Full rewrite: name input, prompt textarea, read-only output, run status, connections, run button, delete. |
+| `src/components/canvas/NodeSidebar.tsx` | Simplify to single "Add Node" button/draggable item, no categories. |
+
+### Files to MODIFY
+
+| File | What changes |
+|------|-------------|
+| `src/store/graph-store.ts` | Update `CanvasNode` data shape, add `setNodeRunState` action, update `updateNodeData` for new fields. |
+| `src/store/graph-store.test.ts` | Update tests for new node shape. |
+| `src/actions/node-actions.ts` | Update `createNode`/`updateNode` for new fields, add `runNode` and `runGraph` actions. |
+| `src/actions/node-actions.test.ts` | Update tests, add run action tests. |
+| `src/components/canvas/GraphCanvas.tsx` | Update node creation on drop (new fields), ensure new ThesisNode type registered. |
+| `src/components/canvas/GraphEditor.tsx` | Adjust layout for simpler sidebar. |
+| `src/components/canvas/GraphTopBar.tsx` | Add "Run All" and "Auto Layout" and "Export" buttons. |
+| `src/app/(app)/graph/[graphId]/page.tsx` | Ensure new node fields passed through. |
+
+### Files to KEEP UNCHANGED
+
+| File | Why |
+|------|-----|
+| `src/components/canvas/ThesisEdge.tsx` | Edge rendering is correct |
+| `src/components/canvas/EdgeTypePicker.tsx` | Edge type selection is correct |
+| `src/types/edge.ts` | Edge types are correct |
+| `src/types/graph.ts` | Graph types are correct |
+| `src/actions/graph-actions.ts` | Graph CRUD is correct |
+| `src/actions/edge-actions.ts` | Edge CRUD is correct |
+| `src/lib/graph/detect-cycle.ts` | Cycle detection is correct |
+| `src/lib/supabase/*` | Supabase clients are correct |
+| All auth/dashboard code | Auth flow is correct |

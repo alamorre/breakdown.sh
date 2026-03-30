@@ -39,6 +39,15 @@ const mockNode: ThesisNode = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+const mockNode2: ThesisNode = {
+  ...mockNode,
+  id: 'node-2',
+  name: 'Second Node',
+  node_type: NodeType.SubThesis,
+  position_x: 300,
+  position_y: 400,
+};
+
 const mockEdge: ThesisEdge = {
   id: 'edge-1',
   graph_id: 'graph-1',
@@ -108,6 +117,97 @@ describe('selectEdge', () => {
     const state = useGraphStore.getState();
     expect(state.selectedEdgeId).toBe('edge-1');
     expect(state.selectedNodeId).toBeNull();
+  });
+});
+
+describe('addNode', () => {
+  it('should add a node to the store', () => {
+    useGraphStore.getState().hydrate(mockGraph, [], []);
+    useGraphStore.getState().addNode(mockNode);
+
+    const state = useGraphStore.getState();
+    expect(state.nodes).toHaveLength(1);
+    expect(state.nodes[0].id).toBe('node-1');
+    expect(state.nodes[0].data.thesisNode.name).toBe('Test Assumption');
+  });
+});
+
+describe('updateNodeData', () => {
+  it('should update thesis node data', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().updateNodeData('node-1', { name: 'Updated', confidence: 0.9 });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.name).toBe('Updated');
+    expect(state.nodes[0].data.thesisNode.confidence).toBe(0.9);
+  });
+
+  it('should not affect other nodes', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], []);
+    useGraphStore.getState().updateNodeData('node-1', { name: 'Updated' });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.name).toBe('Updated');
+    expect(state.nodes[1].data.thesisNode.name).toBe('Second Node');
+  });
+});
+
+describe('removeNode', () => {
+  it('should remove the node and connected edges', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
+    useGraphStore.getState().removeNode('node-1');
+
+    const state = useGraphStore.getState();
+    expect(state.nodes).toHaveLength(1);
+    expect(state.nodes[0].id).toBe('node-2');
+    expect(state.edges).toHaveLength(0);
+  });
+
+  it('should clear selection if removed node was selected', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().selectNode('node-1');
+    useGraphStore.getState().removeNode('node-1');
+
+    expect(useGraphStore.getState().selectedNodeId).toBeNull();
+  });
+});
+
+describe('addEdge', () => {
+  it('should add an edge to the store', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], []);
+    useGraphStore.getState().addEdge(mockEdge);
+
+    const state = useGraphStore.getState();
+    expect(state.edges).toHaveLength(1);
+    expect(state.edges[0].source).toBe('node-1');
+    expect(state.edges[0].target).toBe('node-2');
+  });
+});
+
+describe('updateEdgeData', () => {
+  it('should update thesis edge data', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
+    useGraphStore.getState().updateEdgeData('edge-1', { edge_type: EdgeType.Contradicts });
+
+    const state = useGraphStore.getState();
+    expect(state.edges[0].data.thesisEdge.edge_type).toBe(EdgeType.Contradicts);
+  });
+});
+
+describe('removeEdge', () => {
+  it('should remove the edge from the store', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
+    useGraphStore.getState().removeEdge('edge-1');
+
+    expect(useGraphStore.getState().edges).toHaveLength(0);
+  });
+
+  it('should clear selection if removed edge was selected', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
+    useGraphStore.getState().selectEdge('edge-1');
+    useGraphStore.getState().removeEdge('edge-1');
+
+    expect(useGraphStore.getState().selectedEdgeId).toBeNull();
   });
 });
 

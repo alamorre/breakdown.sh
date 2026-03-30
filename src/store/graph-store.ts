@@ -56,6 +56,12 @@ interface GraphStoreActions {
   hydrate: (graph: Graph, nodes: ThesisNode[], edges: ThesisEdge[]) => void;
   onNodesChange: (changes: NodeChange<CanvasNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<CanvasEdge>[]) => void;
+  addNode: (node: ThesisNode) => void;
+  updateNodeData: (nodeId: string, updates: Partial<ThesisNode>) => void;
+  removeNode: (nodeId: string) => void;
+  addEdge: (edge: ThesisEdge) => void;
+  updateEdgeData: (edgeId: string, updates: Partial<ThesisEdge>) => void;
+  removeEdge: (edgeId: string) => void;
   selectNode: (nodeId: string | null) => void;
   selectEdge: (edgeId: string | null) => void;
   debouncedPositionSave: () => void;
@@ -100,6 +106,67 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   onEdgesChange: (changes) => {
     set((state) => ({
       edges: applyEdgeChanges(changes, state.edges),
+    }));
+  },
+
+  addNode: (node) => {
+    set((state) => ({
+      nodes: [...state.nodes, toCanvasNode(node)],
+    }));
+  },
+
+  updateNodeData: (nodeId, updates) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              data: {
+                thesisNode: { ...n.data.thesisNode, ...updates },
+              },
+            }
+          : n,
+      ),
+    }));
+  },
+
+  removeNode: (nodeId) => {
+    set((state) => ({
+      nodes: state.nodes.filter((n) => n.id !== nodeId),
+      edges: state.edges.filter(
+        (e) =>
+          e.data.thesisEdge.source_node_id !== nodeId &&
+          e.data.thesisEdge.target_node_id !== nodeId,
+      ),
+      selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+    }));
+  },
+
+  addEdge: (edge) => {
+    set((state) => ({
+      edges: [...state.edges, toCanvasEdge(edge)],
+    }));
+  },
+
+  updateEdgeData: (edgeId, updates) => {
+    set((state) => ({
+      edges: state.edges.map((e) =>
+        e.id === edgeId
+          ? {
+              ...e,
+              data: {
+                thesisEdge: { ...e.data.thesisEdge, ...updates },
+              },
+            }
+          : e,
+      ),
+    }));
+  },
+
+  removeEdge: (edgeId) => {
+    set((state) => ({
+      edges: state.edges.filter((e) => e.id !== edgeId),
+      selectedEdgeId: state.selectedEdgeId === edgeId ? null : state.selectedEdgeId,
     }));
   },
 

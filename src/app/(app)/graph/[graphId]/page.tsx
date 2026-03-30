@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getGraph } from '@/actions/graph-actions';
-import { GraphCanvas } from '@/components/canvas/GraphCanvas';
+import { GraphEditor } from '@/components/canvas/GraphEditor';
 import { GraphTopBar } from '@/components/canvas/GraphTopBar';
 
 interface GraphPageProps {
@@ -18,9 +18,7 @@ export default async function GraphPage({ params }: GraphPageProps) {
   return (
     <div className="flex flex-1 flex-col">
       <GraphTopBar graphId={data.graph.id} initialName={data.graph.name} />
-      <div className="flex-1">
-        <GraphCanvas graph={data.graph} initialNodes={data.nodes} initialEdges={data.edges} />
-      </div>
+      <GraphEditor graph={data.graph} initialNodes={data.nodes} initialEdges={data.edges} />
     </div>
   );
 }
