@@ -9,8 +9,10 @@ import {
   Trash2,
   RefreshCw,
   Globe,
-  FileText,
-  Table,
+  ExternalLink,
+  Check,
+  CircleDashed,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -36,11 +38,34 @@ import { updateNode, runNode } from '@/actions/node-actions';
 import { deleteNode } from '@/actions/node-actions';
 import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
 import type { DataSourceType } from '@/types/data-source';
+import { GoogleDocsIcon, GoogleSheetsIcon } from '@/components/canvas/google-icons';
 
-const SOURCE_ICONS: Record<DataSourceType, typeof Globe> = {
-  'web-url': Globe,
-  'google-doc': FileText,
-  'google-sheet': Table,
+function extractDomain(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname;
+  } catch {
+    return '';
+  }
+}
+
+function formatTimeAgo(isoDate: string): string {
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
+const SOURCE_TYPE_LABELS: Record<DataSourceType, string> = {
+  'web-url': 'Web',
+  'google-doc': 'Google Docs',
+  'google-sheet': 'Google Sheets',
 };
 
 function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
@@ -53,6 +78,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
   const [prompt, setPrompt] = useState(thesisNode.prompt);
   const [sourceUrl, setSourceUrl] = useState((thesisNode.metadata as { url?: string })?.url ?? '');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [urlEditing, setUrlEditing] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when store changes from outside (e.g. detail panel edits)
@@ -127,6 +153,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
         output: result.output,
         run_error: null,
         last_run_at: new Date().toISOString(),
+        ...(result.summary ? { metadata: { summary: result.summary } } : {}),
       });
     }
   }, [thesisNode.id, setNodeRunState]);
@@ -143,9 +170,194 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
 
   const isRunning = thesisNode.run_status === 'running';
   const isError = thesisNode.run_status === 'error';
+  const isFetched = thesisNode.run_status === 'success' && thesisNode.output;
 
-  const SourceIcon = sourceType ? SOURCE_ICONS[sourceType] : null;
+  // --- Data Source Node (compact file card) ---
+  if (isSource && sourceType) {
+    const domain = extractDomain(sourceUrl);
+    const isGoogle = sourceType === 'google-doc' || sourceType === 'google-sheet';
+    const typeLabel = SOURCE_TYPE_LABELS[sourceType];
 
+    return (
+      <>
+        <div
+          className={cn(
+            'w-64 rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md',
+            selected && 'ring-2 ring-ring',
+            isError && 'border-destructive/40',
+            isRunning && 'border-primary/40',
+          )}
+        >
+          <Handle
+            type="target"
+            position={Position.Top}
+            className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+          />
+
+          {/* File card content */}
+          <div className="p-4">
+            {/* Icon + type label */}
+            <div className="mb-3 flex items-start justify-between">
+              <div className="flex items-center gap-2.5">
+                {sourceType === 'google-doc' && <GoogleDocsIcon className="size-8 shrink-0" />}
+                {sourceType === 'google-sheet' && <GoogleSheetsIcon className="size-8 shrink-0" />}
+                {sourceType === 'web-url' &&
+                  (domain ? (
+                    <>
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+                        alt=""
+                        className="size-8 shrink-0 rounded-lg"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          (e.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove('hidden');
+                        }}
+                      />
+                      <div className="hidden size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <Globe className="size-4 text-muted-foreground" />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Globe className="size-4 text-muted-foreground" />
+                    </div>
+                  ))}
+                <span className="text-xs font-medium text-muted-foreground">{typeLabel}</span>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="nodrag -mr-1 -mt-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+                  <MoreHorizontal className="size-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => setDeleteConfirmOpen(true)}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* File name */}
+            <h3 className="mb-1 truncate text-sm font-semibold leading-tight">{thesisNode.name}</h3>
+
+            {/* Domain / URL hint */}
+            {domain && !urlEditing && (
+              <button
+                type="button"
+                onClick={() => setUrlEditing(true)}
+                className="nodrag mb-3 flex items-center gap-1 truncate text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {isGoogle ? (
+                  <ExternalLink className="size-3 shrink-0" />
+                ) : (
+                  <Globe className="size-3 shrink-0" />
+                )}
+                <span className="truncate">{domain}</span>
+              </button>
+            )}
+
+            {/* URL input — shown when no URL set or when editing */}
+            {(!sourceUrl || urlEditing) && (
+              <Input
+                value={sourceUrl}
+                onChange={(e) => handleSourceUrlChange(e.target.value)}
+                onBlur={() => {
+                  if (sourceUrl) setUrlEditing(false);
+                }}
+                placeholder="Paste URL here..."
+                className="nodrag nopan nowheel mb-3 h-8 text-xs"
+                autoFocus={urlEditing}
+              />
+            )}
+
+            {/* Status line */}
+            <div className="flex items-center gap-1.5 text-xs">
+              {isRunning && (
+                <>
+                  <Loader2 className="size-3 animate-spin text-primary" />
+                  <span className="text-muted-foreground">Fetching...</span>
+                </>
+              )}
+              {isError && (
+                <>
+                  <AlertCircle className="size-3 text-destructive" />
+                  <span className="truncate text-destructive">
+                    {thesisNode.run_error ?? 'Error'}
+                  </span>
+                </>
+              )}
+              {isFetched && !isRunning && (
+                <>
+                  <Check className="size-3 text-emerald-500" />
+                  <span className="text-muted-foreground">Fetched</span>
+                  {thesisNode.last_run_at && (
+                    <span className="text-muted-foreground/60">
+                      {formatTimeAgo(thesisNode.last_run_at)}
+                    </span>
+                  )}
+                </>
+              )}
+              {!isRunning && !isError && !isFetched && (
+                <>
+                  <CircleDashed className="size-3 text-muted-foreground/50" />
+                  <span className="text-muted-foreground/60">Not fetched</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Action bar */}
+          <div className="flex items-center justify-end border-t px-3 py-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleRun}
+              disabled={isRunning || !sourceUrl}
+              className="nodrag h-7 gap-1.5 text-xs"
+            >
+              {isRunning ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3" />
+              )}
+              Fetch
+            </Button>
+          </div>
+
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+          />
+        </div>
+
+        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <DialogContent className="nodrag nopan">
+            <DialogHeader>
+              <DialogTitle>Delete Node</DialogTitle>
+              <DialogDescription>
+                This will permanently delete &ldquo;{thesisNode.name}&rdquo; and all its
+                connections. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDelete}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  // --- AI Node (original layout) ---
   return (
     <>
       <div
@@ -157,82 +369,80 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
           className="!h-3 !w-3 !border-2 !border-background !bg-primary"
         />
 
-        {/* Output section */}
-        <div className="p-3">
+        {/* Header: name, run button, overflow menu */}
+        <div className="flex items-center justify-between border-b px-3 py-1.5">
+          <span className="truncate text-sm font-medium">{thesisNode.name}</span>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              onClick={handleRun}
+              disabled={isRunning}
+              className="nodrag h-6 gap-1 px-2 text-xs"
+            >
+              {isRunning ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Play className="size-3" />
+              )}
+              {isRunning ? 'Running' : 'Run'}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="nodrag inline-flex h-6 w-6 items-center justify-center rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+                <MoreHorizontal className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Input section */}
+        <div className="p-3 pb-0">
+          <span className="mb-1 inline-block text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Input
+          </span>
+          <div className="max-h-[72px] overflow-hidden rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            <p className="line-clamp-3 whitespace-pre-wrap text-muted-foreground">
+              {thesisNode.prompt || 'No prompt yet'}
+            </p>
+          </div>
+        </div>
+
+        {/* Output TLDR section */}
+        <div className="p-3 pt-2">
+          <span className="mb-1 inline-block text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Output
+          </span>
           <div
             className={cn(
-              'min-h-[60px] rounded-lg bg-muted/50 p-3 text-sm',
+              'max-h-[72px] overflow-hidden rounded-lg bg-muted/50 px-3 py-2 text-sm',
               isRunning && 'animate-pulse',
               isError && 'border border-destructive/30 bg-destructive/5',
             )}
           >
-            {isRunning && (
-              <p className="text-muted-foreground">{isSource ? 'Fetching...' : 'Running...'}</p>
-            )}
-            {isError && <p className="text-destructive">{thesisNode.run_error ?? 'Error'}</p>}
-            {!isRunning && !isError && thesisNode.output && (
-              <p className="line-clamp-6 whitespace-pre-wrap">{thesisNode.output}</p>
-            )}
-            {!isRunning && !isError && !thesisNode.output && (
-              <p className="text-muted-foreground">
-                {isSource ? 'No data yet — click Fetch' : 'No output yet'}
+            {isRunning && <p className="text-muted-foreground">Running...</p>}
+            {isError && (
+              <p className="line-clamp-3 text-destructive">
+                {thesisNode.run_error ?? 'Error'}
               </p>
             )}
+            {!isRunning && !isError && thesisNode.output && (
+              <p className="line-clamp-3 leading-snug">
+                {(thesisNode.metadata as { summary?: string })?.summary ??
+                  thesisNode.output}
+              </p>
+            )}
+            {!isRunning && !isError && !thesisNode.output && (
+              <p className="text-muted-foreground">No output yet</p>
+            )}
           </div>
-        </div>
-
-        {/* Task section: URL input for sources, prompt textarea for AI nodes */}
-        <div className="px-3 pb-2">
-          {isSource ? (
-            <Input
-              value={sourceUrl}
-              onChange={(e) => handleSourceUrlChange(e.target.value)}
-              placeholder="Paste URL here..."
-              className="nodrag nopan nowheel text-sm"
-            />
-          ) : (
-            <Textarea
-              value={prompt}
-              onChange={(e) => handlePromptChange(e.target.value)}
-              placeholder="Write your task or prompt..."
-              rows={3}
-              className="nodrag nopan nowheel resize-none border-muted text-sm"
-            />
-          )}
-          <div className="mt-2 flex justify-end">
-            <Button size="sm" onClick={handleRun} disabled={isRunning} className="nodrag">
-              {isRunning ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : isSource ? (
-                <RefreshCw className="size-3.5" />
-              ) : (
-                <Play className="size-3.5" />
-              )}
-              {isSource ? 'Fetch' : 'Run'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Name + type icon + overflow menu */}
-        <div className="flex items-center justify-between border-t px-3 py-1.5">
-          <div className="flex items-center gap-1.5 truncate">
-            {SourceIcon && <SourceIcon className="size-3 shrink-0 text-muted-foreground" />}
-            <span className="truncate text-xs text-muted-foreground">{thesisNode.name}</span>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger className="nodrag inline-flex h-6 w-6 items-center justify-center rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
-              <MoreHorizontal className="size-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => setDeleteConfirmOpen(true)}
-              >
-                <Trash2 className="size-3.5" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
         <Handle

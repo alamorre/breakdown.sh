@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { createClaudeClient } from '@/lib/ai/claude';
-import { buildRunPrompt, type UpstreamInput } from '@/lib/ai/build-prompt';
+import { buildRunPrompt, buildSummaryPrompt, type UpstreamInput } from '@/lib/ai/build-prompt';
 import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
 import { fetchWebUrl } from '@/lib/fetch/fetch-web-url';
 import { fetchGoogleDoc } from '@/lib/fetch/fetch-google-doc';
@@ -196,7 +196,7 @@ export async function deleteNode(
 
 export async function runNode(
   input: z.infer<typeof runNodeSchema>,
-): Promise<{ data: { output: string } | null; error: string | null }> {
+): Promise<{ data: { output: string; summary?: string } | null; error: string | null }> {
   await getUserId();
   const parsed = runNodeSchema.safeParse(input);
   if (!parsed.success) {
@@ -286,10 +286,27 @@ export async function runNode(
     const outputBlock = response.content.find((block) => block.type === 'text');
     const output = outputBlock && 'text' in outputBlock ? outputBlock.text : '';
 
+    // Generate a 1-sentence summary via a fast model
+    let summary: string | undefined;
+    try {
+      const summaryResponse = await claude.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 150,
+        messages: [{ role: 'user', content: buildSummaryPrompt(output) }],
+      });
+      const summaryBlock = summaryResponse.content.find((block) => block.type === 'text');
+      summary = summaryBlock && 'text' in summaryBlock ? summaryBlock.text.trim() : undefined;
+    } catch {
+      // Summary is non-critical — proceed without it
+    }
+
+    const updatedMetadata = { ...typedNode.metadata, ...(summary ? { summary } : {}) };
+
     await supabase
       .from('nodes')
       .update({
         output,
+        metadata: updatedMetadata,
         run_status: 'success',
         run_error: null,
         last_run_at: new Date().toISOString(),
@@ -305,7 +322,7 @@ export async function runNode(
       new_conclusion: output,
       previous_confidence: null,
       new_confidence: null,
-      diff_summary: null,
+      diff_summary: summary ?? null,
       skill_doc_id: null,
       llm_provider: 'anthropic',
       llm_model: 'claude-sonnet-4-5-20250929',
@@ -314,7 +331,7 @@ export async function runNode(
       status: 'applied',
     });
 
-    return { data: { output }, error: null };
+    return { data: { output, summary }, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error during AI evaluation';
 
@@ -462,10 +479,27 @@ export async function runGraph(input: z.infer<typeof runGraphSchema>): Promise<{
       const outputBlock = response.content.find((block) => block.type === 'text');
       const output = outputBlock && 'text' in outputBlock ? outputBlock.text : '';
 
+      // Generate a 1-sentence summary via a fast model
+      let summary: string | undefined;
+      try {
+        const summaryResponse = await claude.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: buildSummaryPrompt(output) }],
+        });
+        const summaryBlock = summaryResponse.content.find((block) => block.type === 'text');
+        summary = summaryBlock && 'text' in summaryBlock ? summaryBlock.text.trim() : undefined;
+      } catch {
+        // Summary is non-critical
+      }
+
+      const updatedMetadata = { ...node.metadata, ...(summary ? { summary } : {}) };
+
       await supabase
         .from('nodes')
         .update({
           output,
+          metadata: updatedMetadata,
           run_status: 'success',
           run_error: null,
           last_run_at: new Date().toISOString(),
@@ -483,7 +517,7 @@ export async function runGraph(input: z.infer<typeof runGraphSchema>): Promise<{
         new_conclusion: output,
         previous_confidence: null,
         new_confidence: null,
-        diff_summary: null,
+        diff_summary: summary ?? null,
         skill_doc_id: null,
         llm_provider: 'anthropic',
         llm_model: 'claude-sonnet-4-5-20250929',

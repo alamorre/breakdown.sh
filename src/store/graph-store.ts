@@ -65,6 +65,7 @@ interface GraphStoreActions {
       output?: string | null;
       run_error?: string | null;
       last_run_at?: string | null;
+      metadata?: Record<string, unknown>;
     },
   ) => void;
   removeNode: (nodeId: string) => void;
@@ -152,6 +153,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
                   ...(runState.output !== undefined && { output: runState.output }),
                   ...(runState.run_error !== undefined && { run_error: runState.run_error }),
                   ...(runState.last_run_at !== undefined && { last_run_at: runState.last_run_at }),
+                  ...(runState.metadata && {
+                    metadata: { ...n.data.thesisNode.metadata, ...runState.metadata },
+                  }),
                 },
               },
             }
