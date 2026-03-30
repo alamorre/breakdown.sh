@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Play, Loader2, Trash2, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Sheet,
   SheetContent,
@@ -236,7 +238,7 @@ function NodeForm({
 
         <div className="space-y-1.5">
           <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
-          <ScrollArea className="h-48 rounded-lg border bg-muted/50 p-3">
+          <ScrollArea className="h-80 rounded-lg border bg-muted/50 p-3">
             {isRunning && (
               <p className="text-sm text-muted-foreground">
                 {isSource ? 'Fetching...' : 'Running...'}
@@ -246,7 +248,11 @@ function NodeForm({
               <p className="text-sm text-destructive">{thesisNode.run_error ?? 'Error'}</p>
             )}
             {!isRunning && thesisNode.run_status !== 'error' && thesisNode.output && (
-              <p className="whitespace-pre-wrap text-sm">{thesisNode.output}</p>
+              <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-headings:font-semibold prose-h1:text-lg prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-3">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {thesisNode.output}
+                </ReactMarkdown>
+              </div>
             )}
             {!isRunning && thesisNode.run_status !== 'error' && !thesisNode.output && (
               <p className="text-sm text-muted-foreground">
@@ -390,7 +396,7 @@ export function NodeDetailPanel() {
         if (!open) selectNode(null);
       }}
     >
-      <SheetContent side="right" className="w-[400px] overflow-y-auto sm:max-w-[400px]">
+      <SheetContent side="right" className="w-[720px] overflow-y-auto sm:max-w-[720px]">
         {thesisNode && selectedNodeId && (
           <NodeForm
             key={selectedNodeId}
