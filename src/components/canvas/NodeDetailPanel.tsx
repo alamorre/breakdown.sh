@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Play, Loader2, Trash2, RefreshCw } from 'lucide-react';
+import { Play, Loader2, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -32,6 +32,22 @@ import { updateNode, deleteNode, runNode } from '@/actions/node-actions';
 import type { ThesisNode } from '@/types/node';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
 import { isDataSourceNode, getDataSourceType, DATA_SOURCE_LABELS } from '@/types/data-source';
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Button variant="ghost" size="icon-sm" onClick={handleCopy}>
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+    </Button>
+  );
+}
 
 interface NodeFormProps {
   thesisNode: ThesisNode;
@@ -237,7 +253,12 @@ function NodeForm({
         )}
 
         <div className="space-y-1.5">
-          <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
+          <div className="flex items-center justify-between">
+            <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
+            {thesisNode.output && !isRunning && thesisNode.run_status !== 'error' && (
+              <CopyButton text={thesisNode.output} />
+            )}
+          </div>
           <ScrollArea className="h-80 rounded-lg border bg-muted/50 p-3">
             {isRunning && (
               <p className="text-sm text-muted-foreground">
@@ -382,9 +403,60 @@ function NodeForm({
   );
 }
 
+const MIN_WIDTH = 480;
+const MAX_WIDTH = 1200;
+const DEFAULT_WIDTH = 640;
+const STORAGE_KEY = 'thesis-detail-panel-width';
+
+function getStoredWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_WIDTH;
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return DEFAULT_WIDTH;
+  const parsed = Number(stored);
+  if (Number.isNaN(parsed) || parsed < MIN_WIDTH || parsed > MAX_WIDTH) return DEFAULT_WIDTH;
+  return parsed;
+}
+
 export function NodeDetailPanel() {
   const { nodes, edges, selectedNodeId, selectNode, updateNodeData, setNodeRunState, removeNode } =
     useGraphStore();
+
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const isDragging = useRef(false);
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    setPanelWidth(getStoredWidth());
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newWidth = window.innerWidth - moveEvent.clientX;
+      setPanelWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      // Persist final width
+      setPanelWidth((w) => {
+        localStorage.setItem(STORAGE_KEY, String(w));
+        return w;
+      });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const thesisNode = selectedNode?.data.thesisNode ?? null;
@@ -396,7 +468,16 @@ export function NodeDetailPanel() {
         if (!open) selectNode(null);
       }}
     >
-      <SheetContent side="right" className="w-[720px] overflow-y-auto sm:max-w-[720px]">
+      <SheetContent
+        side="right"
+        className="overflow-y-auto"
+        style={{ width: panelWidth, maxWidth: panelWidth }}
+      >
+        {/* Drag handle on left edge */}
+        <div
+          onMouseDown={handleMouseDown}
+          className="absolute inset-y-0 left-0 z-50 w-1.5 cursor-col-resize transition-colors hover:bg-primary/10 active:bg-primary/20"
+        />
         {thesisNode && selectedNodeId && (
           <NodeForm
             key={selectedNodeId}
