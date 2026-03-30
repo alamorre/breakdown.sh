@@ -14,14 +14,15 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useGraphStore, type CanvasNode, type CanvasEdge } from '@/store/graph-store';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode, NodeType } from '@/types/node';
+import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
 import { EdgeType } from '@/types/edge';
-import { NODE_TYPE_CONFIG } from '@/types/node';
-import { createNode } from '@/actions/node-actions';
-import { createEdge } from '@/actions/edge-actions';
+import { createNode, deleteNode } from '@/actions/node-actions';
+import { createEdge, deleteEdge } from '@/actions/edge-actions';
 import { wouldCreateCycle } from '@/lib/graph/detect-cycle';
 import { ThesisNodeMemo } from '@/components/canvas/ThesisNode';
 import { ThesisEdgeMemo } from '@/components/canvas/ThesisEdge';
@@ -47,6 +48,8 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
     selectEdge,
     addNode,
     addEdge,
+    removeNode,
+    removeEdge,
     reset,
   } = useGraphStore();
 
@@ -136,8 +139,7 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
       const nodeType = event.dataTransfer.getData('application/thesis-node-type');
       if (!nodeType) return;
 
-      const config = NODE_TYPE_CONFIG[nodeType as NodeType];
-      if (!config) return;
+      const nodeName = event.dataTransfer.getData('application/thesis-node-name') || 'New Node';
 
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!bounds) return;
@@ -149,8 +151,8 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
 
       const { data, error } = await createNode({
         graphId: graph.id,
+        name: nodeName,
         nodeType,
-        name: config.label,
         positionX: position.x,
         positionY: position.y,
       });
@@ -164,10 +166,54 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
     [reactFlowInstance, graph.id, addNode],
   );
 
+  const handleAddFirstNode = useCallback(async () => {
+    const { data, error } = await createNode({
+      graphId: graph.id,
+      name: 'New Node',
+      positionX: 0,
+      positionY: 0,
+    });
+
+    if (error || !data) {
+      toast.error(error ?? 'Failed to create node');
+    } else {
+      addNode(data);
+    }
+  }, [graph.id, addNode]);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        selectNode(null);
+        selectEdge(null);
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        const { selectedNodeId, selectedEdgeId } = useGraphStore.getState();
+
+        if (selectedEdgeId) {
+          removeEdge(selectedEdgeId);
+          void deleteEdge({ edgeId: selectedEdgeId }).then(({ error }) => {
+            if (error) toast.error('Failed to delete connection');
+          });
+        }
+
+        if (selectedNodeId) {
+          removeNode(selectedNodeId);
+          void deleteNode({ nodeId: selectedNodeId }).then(({ error }) => {
+            if (error) toast.error('Failed to delete node');
+          });
+        }
+      }
+    },
+    [selectNode, selectEdge, removeNode, removeEdge],
+  );
+
   const defaultEdgeOptions = useMemo(() => ({ type: 'thesis' as const }), []);
 
   return (
-    <div className="h-full w-full" ref={reactFlowWrapper}>
+    <div className="h-full w-full" ref={reactFlowWrapper} onKeyDown={handleKeyDown}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -188,6 +234,21 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls />
         <MiniMap className="!bg-background !border-border" maskColor="rgba(0, 0, 0, 0.1)" />
+
+        {nodes.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="pointer-events-auto flex flex-col items-center gap-4 rounded-lg border border-dashed border-border bg-background/80 px-10 py-8 text-center">
+              <p className="text-lg font-medium text-muted-foreground">No nodes yet</p>
+              <p className="text-sm text-muted-foreground">
+                Add a node to start building your reasoning graph.
+              </p>
+              <Button onClick={handleAddFirstNode}>
+                <Plus className="size-4" />
+                Add Node
+              </Button>
+            </div>
+          </div>
+        )}
       </ReactFlow>
 
       <EdgeTypePicker

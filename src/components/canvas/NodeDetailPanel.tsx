@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Trash2, Plus, X } from 'lucide-react';
+import { Play, Loader2, Trash2, RefreshCw } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -14,9 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -26,9 +26,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useGraphStore, type CanvasNode, type CanvasEdge } from '@/store/graph-store';
-import { updateNode, deleteNode } from '@/actions/node-actions';
-import { NODE_TYPE_CONFIG, type NodeType, type EvidenceItem, type ThesisNode } from '@/types/node';
+import { updateNode, deleteNode, runNode } from '@/actions/node-actions';
+import type { ThesisNode } from '@/types/node';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
+import { isDataSourceNode, getDataSourceType, DATA_SOURCE_LABELS } from '@/types/data-source';
 
 interface NodeFormProps {
   thesisNode: ThesisNode;
@@ -36,8 +37,16 @@ interface NodeFormProps {
   edges: CanvasEdge[];
   selectedNodeId: string;
   updateNodeData: (nodeId: string, updates: Partial<ThesisNode>) => void;
+  setNodeRunState: (
+    nodeId: string,
+    state: {
+      run_status: ThesisNode['run_status'];
+      output?: string | null;
+      run_error?: string | null;
+      last_run_at?: string | null;
+    },
+  ) => void;
   removeNode: (nodeId: string) => void;
-  selectNode: (nodeId: string | null) => void;
 }
 
 function NodeForm({
@@ -46,83 +55,105 @@ function NodeForm({
   edges,
   selectedNodeId,
   updateNodeData,
+  setNodeRunState,
   removeNode,
 }: NodeFormProps) {
+  const isSource = isDataSourceNode(thesisNode.node_type);
+  const sourceType = getDataSourceType(thesisNode.node_type);
+
   const [name, setName] = useState(thesisNode.name);
-  const [conclusion, setConclusion] = useState(thesisNode.conclusion ?? '');
-  const [confidence, setConfidence] = useState(thesisNode.confidence);
-  const [evidence, setEvidence] = useState<EvidenceItem[]>(thesisNode.evidence);
-  const [assumptions, setAssumptions] = useState<string[]>(thesisNode.assumptions);
-  const [newEvidence, setNewEvidence] = useState('');
-  const [newAssumption, setNewAssumption] = useState('');
+  const [prompt, setPrompt] = useState(thesisNode.prompt);
+  const [sourceUrl, setSourceUrl] = useState((thesisNode.metadata as { url?: string })?.url ?? '');
+  const [sheetName, setSheetName] = useState(
+    (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '',
+  );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const debouncedSave = (updates: Record<string, unknown>) => {
-    updateNodeData(selectedNodeId, updates as Partial<ThesisNode>);
+  // Sync local state when store changes from outside (e.g. card edits)
+  const storeName = thesisNode.name;
+  const storePrompt = thesisNode.prompt;
+  const storeUrl = (thesisNode.metadata as { url?: string })?.url ?? '';
+  const storeSheetName = (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '';
+  useEffect(() => { setName(storeName); }, [storeName]);
+  useEffect(() => { setPrompt(storePrompt); }, [storePrompt]);
+  useEffect(() => { setSourceUrl(storeUrl); }, [storeUrl]);
+  useEffect(() => { setSheetName(storeSheetName); }, [storeSheetName]);
 
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(async () => {
-      const { error } = await updateNode({
-        nodeId: selectedNodeId,
-        ...updates,
-      });
-      if (error) {
-        toast.error('Failed to save changes');
+  const debouncedSave = useCallback(
+    (
+      updates: Partial<Pick<ThesisNode, 'name' | 'prompt'>> & {
+        metadata?: Record<string, unknown>;
+      },
+    ) => {
+      const { metadata, ...nodeUpdates } = updates;
+      if (metadata) {
+        updateNodeData(selectedNodeId, { metadata });
       }
-    }, 500);
-  };
+      if (Object.keys(nodeUpdates).length > 0) {
+        updateNodeData(selectedNodeId, nodeUpdates);
+      }
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        const { error } = await updateNode({
+          nodeId: selectedNodeId,
+          ...nodeUpdates,
+          ...(metadata ? { metadata } : {}),
+        });
+        if (error) {
+          toast.error('Failed to save changes');
+        }
+      }, 500);
+    },
+    [selectedNodeId, updateNodeData],
+  );
 
   const handleNameChange = (value: string) => {
     setName(value);
     debouncedSave({ name: value });
   };
 
-  const handleConclusionChange = (value: string) => {
-    setConclusion(value);
-    debouncedSave({ conclusion: value || null });
+  const handlePromptChange = (value: string) => {
+    setPrompt(value);
+    debouncedSave({ prompt: value });
   };
 
-  const handleConfidenceChange = (value: number) => {
-    setConfidence(value);
-    debouncedSave({ confidence: value });
+  const handleSourceUrlChange = (value: string) => {
+    setSourceUrl(value);
+    const newMetadata = { ...thesisNode.metadata, url: value };
+    debouncedSave({ metadata: newMetadata });
   };
 
-  const handleAddEvidence = () => {
-    if (!newEvidence.trim()) return;
-    const item: EvidenceItem = {
-      id: crypto.randomUUID(),
-      content: newEvidence.trim(),
-      added_at: new Date().toISOString(),
-    };
-    const updated = [...evidence, item];
-    setEvidence(updated);
-    setNewEvidence('');
-    debouncedSave({ evidence: updated });
+  const handleSheetNameChange = (value: string) => {
+    setSheetName(value);
+    const newMetadata = { ...thesisNode.metadata, sheetName: value || undefined };
+    debouncedSave({ metadata: newMetadata });
   };
 
-  const handleRemoveEvidence = (id: string) => {
-    const updated = evidence.filter((e) => e.id !== id);
-    setEvidence(updated);
-    debouncedSave({ evidence: updated });
-  };
+  const handleRun = async () => {
+    setNodeRunState(selectedNodeId, { run_status: 'running' });
 
-  const handleAddAssumption = () => {
-    if (!newAssumption.trim()) return;
-    const updated = [...assumptions, newAssumption.trim()];
-    setAssumptions(updated);
-    setNewAssumption('');
-    debouncedSave({ assumptions: updated });
-  };
+    const { data: result, error } = await runNode({ nodeId: selectedNodeId });
 
-  const handleRemoveAssumption = (index: number) => {
-    const updated = assumptions.filter((_, i) => i !== index);
-    setAssumptions(updated);
-    debouncedSave({ assumptions: updated });
+    if (error || !result) {
+      setNodeRunState(selectedNodeId, {
+        run_status: 'error',
+        run_error: error ?? 'Run failed',
+      });
+      toast.error(error ?? 'Run failed');
+    } else {
+      setNodeRunState(selectedNodeId, {
+        run_status: 'success',
+        output: result.output,
+        run_error: null,
+        last_run_at: new Date().toISOString(),
+      });
+    }
   };
 
   const handleDelete = async () => {
@@ -135,8 +166,6 @@ function NodeForm({
     setDeleteConfirmOpen(false);
   };
 
-  const config = NODE_TYPE_CONFIG[thesisNode.node_type as NodeType];
-
   const upstreamEdges = edges.filter((e) => e.data.thesisEdge.target_node_id === selectedNodeId);
   const downstreamEdges = edges.filter((e) => e.data.thesisEdge.source_node_id === selectedNodeId);
 
@@ -145,14 +174,22 @@ function NodeForm({
     return node?.data.thesisNode.name ?? 'Unknown';
   };
 
+  const isRunning = thesisNode.run_status === 'running';
+
+  const statusVariant =
+    thesisNode.run_status === 'success'
+      ? 'default'
+      : thesisNode.run_status === 'error'
+        ? 'destructive'
+        : 'secondary';
+
   return (
     <>
       <SheetHeader>
-        <div className="flex items-center gap-2">
-          <Badge className={config.color}>{config.label}</Badge>
-        </div>
         <SheetTitle className="sr-only">{name}</SheetTitle>
-        <SheetDescription className="sr-only">Edit node details</SheetDescription>
+        <SheetDescription className="sr-only">
+          Edit {isSource && sourceType ? DATA_SOURCE_LABELS[sourceType] : 'node'} details
+        </SheetDescription>
       </SheetHeader>
 
       <div className="flex flex-col gap-5 px-4 pb-4">
@@ -161,86 +198,84 @@ function NodeForm({
           <Input id="node-name" value={name} onChange={(e) => handleNameChange(e.target.value)} />
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="node-conclusion">Conclusion</Label>
-          <Textarea
-            id="node-conclusion"
-            value={conclusion}
-            onChange={(e) => handleConclusionChange(e.target.value)}
-            placeholder="What is the conclusion of this node?"
-            rows={4}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label>Confidence</Label>
-            <span className="text-xs text-muted-foreground">{Math.round(confidence * 100)}%</span>
-          </div>
-          <Slider
-            value={[confidence * 100]}
-            min={0}
-            max={100}
-            onValueChange={(value) => {
-              const vals = Array.isArray(value) ? value : [value];
-              handleConfidenceChange(vals[0] / 100);
-            }}
-          />
-        </div>
-
-        <Separator />
-
-        <div className="space-y-2">
-          <Label>Evidence</Label>
-          {evidence.map((item) => (
-            <div key={item.id} className="flex items-start gap-1.5 rounded-md bg-muted p-2">
-              <p className="flex-1 text-xs">{item.content}</p>
-              <Button variant="ghost" size="icon-xs" onClick={() => handleRemoveEvidence(item.id)}>
-                <X className="size-3" />
-              </Button>
+        {isSource ? (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="source-url">Source URL</Label>
+              <Input
+                id="source-url"
+                value={sourceUrl}
+                onChange={(e) => handleSourceUrlChange(e.target.value)}
+                placeholder="Paste URL here..."
+              />
             </div>
-          ))}
-          <div className="flex gap-1.5">
-            <Input
-              value={newEvidence}
-              onChange={(e) => setNewEvidence(e.target.value)}
-              placeholder="Add evidence..."
-              className="h-7 text-xs"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddEvidence();
-              }}
+            {sourceType === 'google-sheet' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="sheet-name">Sheet Name (optional)</Label>
+                <Input
+                  id="sheet-name"
+                  value={sheetName}
+                  onChange={(e) => handleSheetNameChange(e.target.value)}
+                  placeholder="e.g. Sheet1"
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="node-prompt">Prompt</Label>
+            <Textarea
+              id="node-prompt"
+              value={prompt}
+              onChange={(e) => handlePromptChange(e.target.value)}
+              placeholder="Write your task or prompt..."
+              rows={8}
             />
-            <Button variant="outline" size="icon-xs" onClick={handleAddEvidence}>
-              <Plus className="size-3" />
-            </Button>
           </div>
+        )}
+
+        <div className="space-y-1.5">
+          <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
+          <ScrollArea className="h-48 rounded-lg border bg-muted/50 p-3">
+            {isRunning && (
+              <p className="text-sm text-muted-foreground">
+                {isSource ? 'Fetching...' : 'Running...'}
+              </p>
+            )}
+            {thesisNode.run_status === 'error' && (
+              <p className="text-sm text-destructive">{thesisNode.run_error ?? 'Error'}</p>
+            )}
+            {!isRunning && thesisNode.run_status !== 'error' && thesisNode.output && (
+              <p className="whitespace-pre-wrap text-sm">{thesisNode.output}</p>
+            )}
+            {!isRunning && thesisNode.run_status !== 'error' && !thesisNode.output && (
+              <p className="text-sm text-muted-foreground">
+                {isSource ? 'Not yet fetched' : 'Not yet run'}
+              </p>
+            )}
+          </ScrollArea>
         </div>
 
-        <div className="space-y-2">
-          <Label>Assumptions</Label>
-          {assumptions.map((item, index) => (
-            <div key={index} className="flex items-start gap-1.5 rounded-md bg-muted p-2">
-              <p className="flex-1 text-xs">{item}</p>
-              <Button variant="ghost" size="icon-xs" onClick={() => handleRemoveAssumption(index)}>
-                <X className="size-3" />
-              </Button>
-            </div>
-          ))}
-          <div className="flex gap-1.5">
-            <Input
-              value={newAssumption}
-              onChange={(e) => setNewAssumption(e.target.value)}
-              placeholder="Add assumption..."
-              className="h-7 text-xs"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddAssumption();
-              }}
-            />
-            <Button variant="outline" size="icon-xs" onClick={handleAddAssumption}>
-              <Plus className="size-3" />
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
+          {thesisNode.last_run_at && (
+            <span className="text-xs text-muted-foreground">
+              {isSource ? 'Last fetched' : 'Last run'}:{' '}
+              {new Date(thesisNode.last_run_at).toLocaleString()}
+            </span>
+          )}
         </div>
+
+        <Button onClick={handleRun} disabled={isRunning}>
+          {isRunning ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : isSource ? (
+            <RefreshCw className="size-4" />
+          ) : (
+            <Play className="size-4" />
+          )}
+          {isSource ? 'Fetch' : 'Run'}
+        </Button>
 
         {(upstreamEdges.length > 0 || downstreamEdges.length > 0) && (
           <>
@@ -250,7 +285,7 @@ function NodeForm({
               {upstreamEdges.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Upstream
+                    Upstream (inputs)
                   </p>
                   {upstreamEdges.map((e) => {
                     const edgeConfig = EDGE_TYPE_CONFIG[e.data.thesisEdge.edge_type as EdgeType];
@@ -275,7 +310,7 @@ function NodeForm({
               {downstreamEdges.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Downstream
+                    Downstream (outputs)
                   </p>
                   {downstreamEdges.map((e) => {
                     const edgeConfig = EDGE_TYPE_CONFIG[e.data.thesisEdge.edge_type as EdgeType];
@@ -305,9 +340,6 @@ function NodeForm({
 
         <div className="space-y-1 text-xs text-muted-foreground">
           <p>Created: {new Date(thesisNode.created_at).toLocaleDateString()}</p>
-          {thesisNode.last_evaluated_at && (
-            <p>Last evaluated: {new Date(thesisNode.last_evaluated_at).toLocaleDateString()}</p>
-          )}
         </div>
 
         <Button
@@ -345,7 +377,8 @@ function NodeForm({
 }
 
 export function NodeDetailPanel() {
-  const { nodes, edges, selectedNodeId, selectNode, updateNodeData, removeNode } = useGraphStore();
+  const { nodes, edges, selectedNodeId, selectNode, updateNodeData, setNodeRunState, removeNode } =
+    useGraphStore();
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const thesisNode = selectedNode?.data.thesisNode ?? null;
@@ -366,8 +399,8 @@ export function NodeDetailPanel() {
             edges={edges}
             selectedNodeId={selectedNodeId}
             updateNodeData={updateNodeData}
+            setNodeRunState={setNodeRunState}
             removeNode={removeNode}
-            selectNode={selectNode}
           />
         )}
       </SheetContent>

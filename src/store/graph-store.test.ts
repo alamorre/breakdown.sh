@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useGraphStore } from '@/store/graph-store';
 import type { Graph } from '@/types/graph';
-import { NodeType, AutonomyLevel, type ThesisNode } from '@/types/node';
+import type { ThesisNode } from '@/types/node';
 import { EdgeType, type ThesisEdge } from '@/types/edge';
 
 vi.mock('@/actions/graph-actions', () => ({
@@ -20,21 +20,16 @@ const mockGraph: Graph = {
 const mockNode: ThesisNode = {
   id: 'node-1',
   graph_id: 'graph-1',
-  node_type: NodeType.Assumption,
-  name: 'Test Assumption',
+  node_type: 'default',
+  name: 'Test Node',
   position_x: 100,
   position_y: 200,
-  conclusion: null,
-  confidence: 0.5,
-  evidence: [],
-  assumptions: [],
+  prompt: 'Analyze this data',
+  output: null,
+  run_status: 'idle',
+  run_error: null,
+  last_run_at: null,
   metadata: {},
-  skill_doc_id: null,
-  autonomy_level: AutonomyLevel.Propose,
-  last_evaluated_at: null,
-  evaluation_history: [],
-  collapsed: false,
-  color: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -43,7 +38,6 @@ const mockNode2: ThesisNode = {
   ...mockNode,
   id: 'node-2',
   name: 'Second Node',
-  node_type: NodeType.SubThesis,
   position_x: 300,
   position_y: 400,
 };
@@ -128,18 +122,18 @@ describe('addNode', () => {
     const state = useGraphStore.getState();
     expect(state.nodes).toHaveLength(1);
     expect(state.nodes[0].id).toBe('node-1');
-    expect(state.nodes[0].data.thesisNode.name).toBe('Test Assumption');
+    expect(state.nodes[0].data.thesisNode.name).toBe('Test Node');
   });
 });
 
 describe('updateNodeData', () => {
   it('should update thesis node data', () => {
     useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
-    useGraphStore.getState().updateNodeData('node-1', { name: 'Updated', confidence: 0.9 });
+    useGraphStore.getState().updateNodeData('node-1', { name: 'Updated', prompt: 'New prompt' });
 
     const state = useGraphStore.getState();
     expect(state.nodes[0].data.thesisNode.name).toBe('Updated');
-    expect(state.nodes[0].data.thesisNode.confidence).toBe(0.9);
+    expect(state.nodes[0].data.thesisNode.prompt).toBe('New prompt');
   });
 
   it('should not affect other nodes', () => {
@@ -149,6 +143,72 @@ describe('updateNodeData', () => {
     const state = useGraphStore.getState();
     expect(state.nodes[0].data.thesisNode.name).toBe('Updated');
     expect(state.nodes[1].data.thesisNode.name).toBe('Second Node');
+  });
+
+  it('should update metadata for data source nodes', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().updateNodeData('node-1', {
+      metadata: { url: 'https://example.com' },
+    });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.metadata).toEqual({ url: 'https://example.com' });
+  });
+});
+
+describe('setNodeRunState', () => {
+  it('should set node to running state', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().setNodeRunState('node-1', { run_status: 'running' });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.run_status).toBe('running');
+  });
+
+  it('should set node to success state with output', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().setNodeRunState('node-1', {
+      run_status: 'success',
+      output: 'Generated result',
+      run_error: null,
+      last_run_at: '2026-01-01T12:00:00Z',
+    });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.run_status).toBe('success');
+    expect(state.nodes[0].data.thesisNode.output).toBe('Generated result');
+    expect(state.nodes[0].data.thesisNode.run_error).toBeNull();
+    expect(state.nodes[0].data.thesisNode.last_run_at).toBe('2026-01-01T12:00:00Z');
+  });
+
+  it('should set node to error state', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().setNodeRunState('node-1', {
+      run_status: 'error',
+      run_error: 'API timeout',
+    });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.run_status).toBe('error');
+    expect(state.nodes[0].data.thesisNode.run_error).toBe('API timeout');
+  });
+
+  it('should preserve metadata when updating run state', () => {
+    useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
+    useGraphStore.getState().updateNodeData('node-1', {
+      metadata: { url: 'https://example.com' },
+    });
+    useGraphStore.getState().setNodeRunState('node-1', {
+      run_status: 'success',
+      output: 'Fetched content',
+      run_error: null,
+      last_run_at: '2026-01-01T12:00:00Z',
+    });
+
+    const state = useGraphStore.getState();
+    expect(state.nodes[0].data.thesisNode.metadata).toEqual({ url: 'https://example.com' });
+    expect(state.nodes[0].data.thesisNode.output).toBe('Fetched content');
+    expect(state.nodes[0].data.thesisNode.run_status).toBe('success');
   });
 });
 

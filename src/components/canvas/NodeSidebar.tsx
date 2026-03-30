@@ -1,114 +1,89 @@
 'use client';
 
+import { useCallback } from 'react';
+import { Plus, Brain, Globe, FileText, Table } from 'lucide-react';
+import { toast } from 'sonner';
+import { useReactFlow } from '@xyflow/react';
 import {
-  Database,
-  Zap,
-  Lightbulb,
-  MessageSquare,
-  FileText,
-  GitBranch,
-  Columns,
-  AlertTriangle,
-  Clock,
-  Layers,
-  Target,
-  Eye,
-} from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
-import { NodeType, NODE_TYPE_CONFIG, type NodeCategory } from '@/types/node';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useGraphStore } from '@/store/graph-store';
+import { createNode } from '@/actions/node-actions';
+import { SOURCE_NODE_TYPES, DATA_SOURCE_DEFAULT_NAMES } from '@/types/data-source';
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  database: Database,
-  zap: Zap,
-  lightbulb: Lightbulb,
-  'message-square': MessageSquare,
-  'file-text': FileText,
-  'git-branch': GitBranch,
-  columns: Columns,
-  'alert-triangle': AlertTriangle,
-  clock: Clock,
-  layers: Layers,
-  target: Target,
-  eye: Eye,
-};
-
-const CATEGORY_LABELS: Record<NodeCategory, string> = {
-  source: 'Source',
-  analysis: 'Analysis',
-  synthesis: 'Synthesis',
-};
-
-const CATEGORY_ORDER: NodeCategory[] = ['source', 'analysis', 'synthesis'];
-
-function getNodesByCategory(): Record<
-  NodeCategory,
-  { type: NodeType; config: (typeof NODE_TYPE_CONFIG)[NodeType] }[]
-> {
-  const grouped: Record<
-    NodeCategory,
-    { type: NodeType; config: (typeof NODE_TYPE_CONFIG)[NodeType] }[]
-  > = {
-    source: [],
-    analysis: [],
-    synthesis: [],
-  };
-
-  for (const [type, config] of Object.entries(NODE_TYPE_CONFIG)) {
-    grouped[config.category].push({ type: type as NodeType, config });
-  }
-
-  return grouped;
-}
+const NODE_OPTIONS = [
+  { label: 'AI Node', icon: Brain, nodeType: 'default', defaultName: 'New Node' },
+  {
+    label: 'Web URL',
+    icon: Globe,
+    nodeType: SOURCE_NODE_TYPES['web-url'],
+    defaultName: DATA_SOURCE_DEFAULT_NAMES['web-url'],
+  },
+  {
+    label: 'Google Doc',
+    icon: FileText,
+    nodeType: SOURCE_NODE_TYPES['google-doc'],
+    defaultName: DATA_SOURCE_DEFAULT_NAMES['google-doc'],
+  },
+  {
+    label: 'Google Sheet',
+    icon: Table,
+    nodeType: SOURCE_NODE_TYPES['google-sheet'],
+    defaultName: DATA_SOURCE_DEFAULT_NAMES['google-sheet'],
+  },
+] as const;
 
 export function NodeSidebar() {
-  const grouped = getNodesByCategory();
+  const { addNode, graph } = useGraphStore();
+  const reactFlowInstance = useReactFlow();
 
-  const handleDragStart = (event: React.DragEvent, nodeType: NodeType) => {
-    event.dataTransfer.setData('application/thesis-node-type', nodeType);
-    event.dataTransfer.effectAllowed = 'move';
-  };
+  const handleAddNode = useCallback(
+    async (nodeType: string, defaultName: string) => {
+      if (!graph) return;
+
+      const center = reactFlowInstance.screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      });
+
+      const { data, error } = await createNode({
+        graphId: graph.id,
+        name: defaultName,
+        nodeType,
+        positionX: center.x - 160,
+        positionY: center.y - 150,
+      });
+
+      if (error || !data) {
+        toast.error(error ?? 'Failed to create node');
+      } else {
+        addNode(data);
+      }
+    },
+    [graph, reactFlowInstance, addNode],
+  );
 
   return (
-    <div className="flex w-56 shrink-0 flex-col border-r bg-background">
-      <div className="px-3 py-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Nodes
-        </p>
-      </div>
-      <Separator />
-      <div className="flex-1 overflow-y-auto p-2">
-        {CATEGORY_ORDER.map((category, i) => (
-          <div key={category} className={cn(i > 0 && 'mt-3')}>
-            <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {CATEGORY_LABELS[category]}
-            </p>
-            <div className="space-y-0.5">
-              {grouped[category].map(({ type, config }) => {
-                const Icon = ICON_MAP[config.icon] ?? GitBranch;
-                return (
-                  <div
-                    key={type}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, type)}
-                    className="flex cursor-grab items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted active:cursor-grabbing"
-                  >
-                    <div
-                      className={cn(
-                        'flex size-5 items-center justify-center rounded',
-                        config.color,
-                      )}
-                    >
-                      <Icon className="size-3 text-white" />
-                    </div>
-                    <span className="text-xs">{config.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="flex w-12 shrink-0 flex-col items-center border-r bg-background py-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger className="inline-flex h-10 w-10 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors hover:bg-accent hover:text-accent-foreground">
+          <Plus className="size-5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start">
+          {NODE_OPTIONS.map((option) => (
+            <DropdownMenuItem
+              key={option.nodeType}
+              onClick={() => handleAddNode(option.nodeType, option.defaultName)}
+            >
+              <option.icon className="size-4" />
+              {option.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

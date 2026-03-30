@@ -8,7 +8,7 @@ import {
   type EdgeChange,
 } from '@xyflow/react';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
+import type { ThesisNode, RunStatus } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
 import { batchUpdateNodePositions } from '@/actions/graph-actions';
 
@@ -58,6 +58,15 @@ interface GraphStoreActions {
   onEdgesChange: (changes: EdgeChange<CanvasEdge>[]) => void;
   addNode: (node: ThesisNode) => void;
   updateNodeData: (nodeId: string, updates: Partial<ThesisNode>) => void;
+  setNodeRunState: (
+    nodeId: string,
+    state: {
+      run_status: RunStatus;
+      output?: string | null;
+      run_error?: string | null;
+      last_run_at?: string | null;
+    },
+  ) => void;
   removeNode: (nodeId: string) => void;
   addEdge: (edge: ThesisEdge) => void;
   updateEdgeData: (edgeId: string, updates: Partial<ThesisEdge>) => void;
@@ -123,6 +132,27 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
               ...n,
               data: {
                 thesisNode: { ...n.data.thesisNode, ...updates },
+              },
+            }
+          : n,
+      ),
+    }));
+  },
+
+  setNodeRunState: (nodeId, runState) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              data: {
+                thesisNode: {
+                  ...n.data.thesisNode,
+                  run_status: runState.run_status,
+                  ...(runState.output !== undefined && { output: runState.output }),
+                  ...(runState.run_error !== undefined && { run_error: runState.run_error }),
+                  ...(runState.last_run_at !== undefined && { last_run_at: runState.last_run_at }),
+                },
               },
             }
           : n,
