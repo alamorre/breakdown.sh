@@ -58,6 +58,26 @@ async function runDataSourceNode(
     return { data: null, error: `Unknown source type: ${node.node_type}` };
   }
 
+  // Text sources: copy prompt content directly to output
+  if (sourceType === 'text') {
+    if (!node.prompt) {
+      return { data: null, error: 'No text content. Paste or type your text first.' };
+    }
+
+    await supabase
+      .from('nodes')
+      .update({
+        output: node.prompt,
+        run_status: 'success',
+        run_error: null,
+        last_run_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', node.id);
+
+    return { data: { output: node.prompt }, error: null };
+  }
+
   const metadata = node.metadata ?? {};
   const url = (metadata as { url?: string }).url;
   if (!url) {

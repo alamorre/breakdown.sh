@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Play, Loader2, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
+import { Play, Loader2, Trash2, RefreshCw, Copy, Check, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -216,7 +216,18 @@ function NodeForm({
           <Input id="node-name" value={name} onChange={(e) => handleNameChange(e.target.value)} />
         </div>
 
-        {isSource ? (
+        {isSource && sourceType === 'text' ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="node-prompt">Content</Label>
+            <Textarea
+              id="node-prompt"
+              value={prompt}
+              onChange={(e) => handlePromptChange(e.target.value)}
+              placeholder="Paste or type your text here..."
+              rows={10}
+            />
+          </div>
+        ) : isSource ? (
           <>
             <div className="space-y-1.5">
               <Label htmlFor="source-url">Source URL</Label>
@@ -262,7 +273,7 @@ function NodeForm({
           <ScrollArea className="h-80 rounded-lg border bg-muted/50 p-3">
             {isRunning && (
               <p className="text-sm text-muted-foreground">
-                {isSource ? 'Fetching...' : 'Running...'}
+                {isSource && sourceType === 'text' ? 'Saving...' : isSource ? 'Fetching...' : 'Running...'}
               </p>
             )}
             {thesisNode.run_status === 'error' && (
@@ -277,7 +288,7 @@ function NodeForm({
             )}
             {!isRunning && thesisNode.run_status !== 'error' && !thesisNode.output && (
               <p className="text-sm text-muted-foreground">
-                {isSource ? 'Not yet fetched' : 'Not yet run'}
+                {isSource && sourceType === 'text' ? 'Not yet saved' : isSource ? 'Not yet fetched' : 'Not yet run'}
               </p>
             )}
           </ScrollArea>
@@ -287,7 +298,7 @@ function NodeForm({
           <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
           {thesisNode.last_run_at && (
             <span className="text-xs text-muted-foreground">
-              {isSource ? 'Last fetched' : 'Last run'}:{' '}
+              {isSource && sourceType === 'text' ? 'Last saved' : isSource ? 'Last fetched' : 'Last run'}:{' '}
               {new Date(thesisNode.last_run_at).toLocaleString()}
             </span>
           )}
@@ -296,12 +307,14 @@ function NodeForm({
         <Button onClick={handleRun} disabled={isRunning}>
           {isRunning ? (
             <Loader2 className="size-4 animate-spin" />
+          ) : isSource && sourceType === 'text' ? (
+            <Save className="size-4" />
           ) : isSource ? (
             <RefreshCw className="size-4" />
           ) : (
             <Play className="size-4" />
           )}
-          {isSource ? 'Fetch' : 'Run'}
+          {isSource && sourceType === 'text' ? 'Save' : isSource ? 'Fetch' : 'Run'}
         </Button>
 
         {(upstreamEdges.length > 0 || downstreamEdges.length > 0) && (
