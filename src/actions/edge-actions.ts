@@ -3,6 +3,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
+import {
+  getOwnedEdge,
+  verifyGraphOwnership,
+  verifyNodesBelongToGraph,
+} from '@/lib/supabase/ownership';
 import type { ThesisEdge } from '@/types/edge';
 
 const createEdgeSchema = z.object({
@@ -33,13 +38,26 @@ async function getUserId(): Promise<string> {
 export async function createEdge(
   input: z.infer<typeof createEdgeSchema>,
 ): Promise<{ data: ThesisEdge | null; error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = createEdgeSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
   }
 
   const supabase = createServerClient();
+  const ownership = await verifyGraphOwnership(supabase, userId, parsed.data.graphId);
+  if (ownership.error) {
+    return { data: null, error: ownership.error };
+  }
+
+  const nodeCheck = await verifyNodesBelongToGraph(supabase, parsed.data.graphId, [
+    parsed.data.sourceNodeId,
+    parsed.data.targetNodeId,
+  ]);
+  if (nodeCheck.error) {
+    return { data: null, error: nodeCheck.error };
+  }
+
   const { data, error } = await supabase
     .from('edges')
     .insert({
@@ -61,13 +79,18 @@ export async function createEdge(
 export async function updateEdge(
   input: z.infer<typeof updateEdgeSchema>,
 ): Promise<{ data: ThesisEdge | null; error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = updateEdgeSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
   }
 
   const supabase = createServerClient();
+  const ownership = await getOwnedEdge(supabase, userId, parsed.data.edgeId);
+  if (ownership.error) {
+    return { data: null, error: ownership.error };
+  }
+
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -92,13 +115,18 @@ export async function updateEdge(
 export async function deleteEdge(
   input: z.infer<typeof deleteEdgeSchema>,
 ): Promise<{ error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = deleteEdgeSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.message };
   }
 
   const supabase = createServerClient();
+  const ownership = await getOwnedEdge(supabase, userId, parsed.data.edgeId);
+  if (ownership.error) {
+    return { error: ownership.error };
+  }
+
   const { error } = await supabase.from('edges').delete().eq('id', parsed.data.edgeId);
 
   if (error) {

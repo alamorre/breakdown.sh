@@ -34,3 +34,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## PR Preview Deployments
+
+Vercel's GitHub app creates preview deployments for pull requests and comments the preview
+link on the PR.
+
+Configure these Vercel project environment variables for both Production and Preview:
+
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ANTHROPIC_API_KEY`
+
+Enable Vercel's "Automatically expose System Environment Variables" setting so preview
+deployments can show the PR number, branch, and commit in the in-app preview banner.
+
+Previews intentionally use production Supabase for now. Clerk also needs allowed origins and
+redirect URLs for Vercel preview URLs so the staging app can authenticate with the same user
+IDs as production.

@@ -3,6 +3,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
+import { getOwnedNode, verifyGraphOwnership } from '@/lib/supabase/ownership';
 import { createClaudeClient } from '@/lib/ai/claude';
 import { buildRunPrompt, buildSummaryPrompt, type UpstreamInput } from '@/lib/ai/build-prompt';
 import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
@@ -131,13 +132,18 @@ async function runDataSourceNode(
 export async function createNode(
   input: z.infer<typeof createNodeSchema>,
 ): Promise<{ data: ThesisNode | null; error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = createNodeSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
   }
 
   const supabase = createServerClient();
+  const ownership = await verifyGraphOwnership(supabase, userId, parsed.data.graphId);
+  if (ownership.error) {
+    return { data: null, error: ownership.error };
+  }
+
   const { data, error } = await supabase
     .from('nodes')
     .insert({
@@ -162,13 +168,18 @@ export async function createNode(
 export async function updateNode(
   input: z.infer<typeof updateNodeSchema>,
 ): Promise<{ data: ThesisNode | null; error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = updateNodeSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
   }
 
   const supabase = createServerClient();
+  const ownership = await getOwnedNode(supabase, userId, parsed.data.nodeId);
+  if (ownership.error) {
+    return { data: null, error: ownership.error };
+  }
+
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -194,13 +205,18 @@ export async function updateNode(
 export async function deleteNode(
   input: z.infer<typeof deleteNodeSchema>,
 ): Promise<{ error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = deleteNodeSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.message };
   }
 
   const supabase = createServerClient();
+  const ownership = await getOwnedNode(supabase, userId, parsed.data.nodeId);
+  if (ownership.error) {
+    return { error: ownership.error };
+  }
+
   const { error } = await supabase.from('nodes').delete().eq('id', parsed.data.nodeId);
 
   if (error) {
@@ -213,7 +229,7 @@ export async function deleteNode(
 export async function runNode(
   input: z.infer<typeof runNodeSchema>,
 ): Promise<{ data: { output: string; summary?: string } | null; error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = runNodeSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
@@ -221,17 +237,12 @@ export async function runNode(
 
   const supabase = createServerClient();
 
-  const { data: node, error: nodeError } = await supabase
-    .from('nodes')
-    .select('*')
-    .eq('id', parsed.data.nodeId)
-    .single();
-
-  if (nodeError || !node) {
-    return { data: null, error: nodeError?.message ?? 'Node not found' };
+  const ownedNode = await getOwnedNode(supabase, userId, parsed.data.nodeId);
+  if (ownedNode.error || !ownedNode.data) {
+    return { data: null, error: ownedNode.error ?? 'Node not found' };
   }
 
-  const typedNode = node as ThesisNode;
+  const typedNode = ownedNode.data;
 
   // Branch: data source nodes fetch external content instead of calling Claude
   if (isDataSourceNode(typedNode.node_type)) {
@@ -245,7 +256,8 @@ export async function runNode(
   const { data: inboundEdges, error: edgesError } = await supabase
     .from('edges')
     .select('*')
-    .eq('target_node_id', parsed.data.nodeId);
+    .eq('target_node_id', parsed.data.nodeId)
+    .eq('graph_id', typedNode.graph_id);
 
   if (edgesError) {
     return { data: null, error: edgesError.message };
@@ -259,7 +271,8 @@ export async function runNode(
     const { data: sourceNodes, error: sourceError } = await supabase
       .from('nodes')
       .select('*')
-      .in('id', sourceIds);
+      .in('id', sourceIds)
+      .eq('graph_id', typedNode.graph_id);
 
     if (sourceError) {
       return { data: null, error: sourceError.message };

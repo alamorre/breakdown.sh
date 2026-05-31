@@ -3,6 +3,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { PreviewEnvironmentBanner } from '@/components/shared/PreviewEnvironmentBanner';
 import '@/app/globals.css';
 
 const geistSans = Geist({
@@ -29,6 +30,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
         <body className="min-h-full flex flex-col">
+          <PreviewEnvironmentBanner />
           <ErrorBoundary>{children}</ErrorBoundary>
           <Toaster position="bottom-right" />
         </body>
