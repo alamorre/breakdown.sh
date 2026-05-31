@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getRunAllInitialPlan,
   isParallelRunEligibleNode,
   RunAllCycleError,
   runDependencyAwareBatches,
@@ -8,6 +9,34 @@ import {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('runDependencyAwareBatches', () => {
+  it('identifies the initial running and queued nodes without marking downstream ready', () => {
+    const plan = getRunAllInitialPlan(
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'a', target: 'c' },
+        { source: 'b', target: 'd' },
+      ],
+      2,
+    );
+
+    expect(plan).toEqual({
+      runningNodeIds: ['a', 'e'],
+      readyQueuedNodeIds: [],
+      dependencyQueuedNodeIds: ['b', 'c', 'd'],
+    });
+  });
+
+  it('queues extra ready roots when they exceed the concurrency cap', () => {
+    const plan = getRunAllInitialPlan([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }], [], 3);
+
+    expect(plan).toEqual({
+      runningNodeIds: ['a', 'b', 'c'],
+      readyQueuedNodeIds: ['d'],
+      dependencyQueuedNodeIds: [],
+    });
+  });
+
   it('keeps dependents behind their successful dependencies', async () => {
     const events: string[] = [];
 

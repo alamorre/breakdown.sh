@@ -1,5 +1,5 @@
 /** Run status of a node */
-export type RunStatus = 'idle' | 'running' | 'success' | 'error';
+export type RunStatus = 'idle' | 'queued' | 'running' | 'success' | 'error';
 
 /** A node on the canvas — a computational unit with prompt and generated output */
 export interface ThesisNode {

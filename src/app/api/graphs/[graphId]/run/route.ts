@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { runGraphWithScheduler } from '@/lib/graph/run-graph-execution';
+import { getGraphRunStatus, runGraphWithScheduler } from '@/lib/graph/run-graph-execution';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ gra
   }
 
   const result = await runGraphWithScheduler({ graphId, runId: body.data.runId });
+  const status = result.error ? (result.error === 'Unauthorized' ? 401 : 400) : 200;
+
+  return Response.json(result, { status });
+}
+
+export async function GET(_request: Request, { params }: { params: Promise<{ graphId: string }> }) {
+  const { graphId } = await params;
+  const result = await getGraphRunStatus(graphId);
   const status = result.error ? (result.error === 'Unauthorized' ? 401 : 400) : 200;
 
   return Response.json(result, { status });

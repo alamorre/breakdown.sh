@@ -2,9 +2,14 @@ import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { runNode } from '@/actions/node-actions';
-import type { ThesisNode } from '@/types/node';
+import type { RunStatus, ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
-import type { RunGraphNodeResult, RunGraphResponse } from '@/types/run-graph';
+import type {
+  RunGraphNodeResult,
+  RunGraphResponse,
+  RunGraphStatusResponse,
+} from '@/types/run-graph';
+import { sortTopologically } from './topological-sort';
 import { RUN_ALL_MAX_CONCURRENCY, RunAllCycleError, runDependencyAwareBatches } from './run-all';
 import { clearRunCancellation, isRunCancelled } from './run-cancellation';
 
@@ -40,6 +45,75 @@ async function setSkippedOrCancelledNodeStatus(
       updated_at: new Date().toISOString(),
     })
     .eq('id', result.nodeId);
+}
+
+async function markNodesQueued(
+  supabase: ReturnType<typeof createServerClient>,
+  nodes: ThesisNode[],
+) {
+  if (nodes.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('nodes')
+    .update({
+      run_status: 'queued',
+      run_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .in(
+      'id',
+      nodes.map((node) => node.id),
+    );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatusResponse> {
+  try {
+    const userId = await getUserId();
+    const supabase = createServerClient();
+
+    const { data: graph, error: graphError } = await supabase
+      .from('graphs')
+      .select('id')
+      .eq('id', graphId)
+      .eq('user_id', userId)
+      .single();
+
+    if (graphError || !graph) {
+      return { data: null, error: graphError?.message ?? 'Graph not found' };
+    }
+
+    const { data: nodes, error: nodesError } = await supabase
+      .from('nodes')
+      .select('id,name,run_status,run_error,last_run_at,output,metadata')
+      .eq('graph_id', graphId);
+
+    if (nodesError) {
+      return { data: null, error: nodesError.message };
+    }
+
+    return {
+      data: {
+        nodes: ((nodes ?? []) as ThesisNode[]).map((node) => ({
+          nodeId: node.id,
+          name: node.name,
+          runStatus: node.run_status as RunStatus,
+          output: node.output,
+          summary: (node.metadata as { summary?: string } | null)?.summary,
+          lastRunAt: node.last_run_at,
+          error: node.run_error,
+        })),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'Failed to load run status' };
+  }
 }
 
 export async function runGraphWithScheduler(input: {
@@ -84,16 +158,23 @@ export async function runGraphWithScheduler(input: {
     const nodes = (nodesResult.data ?? []) as ThesisNode[];
     const edges = (edgesResult.data ?? []) as ThesisEdge[];
     const nodeNames = new Map(nodes.map((node) => [node.id, node.name]));
+    const runEdges = edges.map((edge) => ({
+      source: edge.source_node_id,
+      target: edge.target_node_id,
+    }));
+
+    const { unsortedNodeIds } = sortTopologically(nodes, runEdges);
+    if (unsortedNodeIds.length > 0) {
+      throw new RunAllCycleError(unsortedNodeIds);
+    }
+    await markNodesQueued(supabase, nodes);
 
     const summary = await runDependencyAwareBatches<
       ThesisNode,
       { output: string; summary?: string; lastRunAt: string }
     >({
       nodes,
-      edges: edges.map((edge) => ({
-        source: edge.source_node_id,
-        target: edge.target_node_id,
-      })),
+      edges: runEdges,
       maxConcurrency: RUN_ALL_MAX_CONCURRENCY,
       shouldCancel: () => isRunCancelled(parsed.data.runId),
       onNodeStart: async (node) => {

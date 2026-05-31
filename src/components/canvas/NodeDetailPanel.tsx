@@ -203,6 +203,7 @@ function NodeForm({
   };
 
   const isRunning = thesisNode.run_status === 'running';
+  const isQueued = thesisNode.run_status === 'queued';
 
   const statusVariant =
     thesisNode.run_status === 'success'
@@ -276,7 +277,7 @@ function NodeForm({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
-            {thesisNode.output && !isRunning && thesisNode.run_status !== 'error' && (
+            {thesisNode.output && !isRunning && !isQueued && thesisNode.run_status !== 'error' && (
               <CopyButton text={thesisNode.output} />
             )}
           </div>
@@ -290,15 +291,20 @@ function NodeForm({
                     : 'Running...'}
               </p>
             )}
+            {isQueued && (
+              <p className="text-sm text-muted-foreground">
+                {thesisNode.run_error ?? 'Queued for Run All'}
+              </p>
+            )}
             {thesisNode.run_status === 'error' && (
               <p className="text-sm text-destructive">{thesisNode.run_error ?? 'Error'}</p>
             )}
-            {!isRunning && thesisNode.run_status !== 'error' && thesisNode.output && (
+            {!isRunning && !isQueued && thesisNode.run_status !== 'error' && thesisNode.output && (
               <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-headings:font-semibold prose-h1:text-lg prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-3">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{thesisNode.output}</ReactMarkdown>
               </div>
             )}
-            {!isRunning && thesisNode.run_status !== 'error' && !thesisNode.output && (
+            {!isRunning && !isQueued && thesisNode.run_status !== 'error' && !thesisNode.output && (
               <p className="text-sm text-muted-foreground">
                 {isSource && sourceType === 'text'
                   ? 'Not yet saved'
@@ -324,7 +330,7 @@ function NodeForm({
           )}
         </div>
 
-        <Button onClick={handleRun} disabled={isRunning}>
+        <Button onClick={handleRun} disabled={isRunning || isQueued}>
           {isRunning ? (
             <Loader2 className="size-4 animate-spin" />
           ) : isSource && sourceType === 'text' ? (

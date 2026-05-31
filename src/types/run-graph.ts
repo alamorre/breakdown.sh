@@ -30,3 +30,18 @@ export interface RunGraphResponse {
   data: RunGraphData | null;
   error: string | null;
 }
+
+export interface RunGraphStatusNode {
+  nodeId: string;
+  name: string;
+  runStatus: RunStatus;
+  output?: string | null;
+  summary?: string;
+  lastRunAt?: string | null;
+  error: string | null;
+}
+
+export interface RunGraphStatusResponse {
+  data: { nodes: RunGraphStatusNode[] } | null;
+  error: string | null;
+}

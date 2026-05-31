@@ -21,6 +21,12 @@ export interface RunAllSchedulerSummary<TResult> {
   eligibility: typeof RUN_ALL_PARALLEL_ELIGIBILITY;
 }
 
+export interface RunAllInitialPlan {
+  runningNodeIds: string[];
+  readyQueuedNodeIds: string[];
+  dependencyQueuedNodeIds: string[];
+}
+
 interface RunDependencyAwareBatchesOptions<TNode extends DirectedNode, TResult> {
   nodes: TNode[];
   edges: DirectedEdge[];
@@ -43,6 +49,35 @@ export class RunAllCycleError extends Error {
 
 export function isParallelRunEligibleNode(node: Pick<ThesisNode, 'node_type'>): boolean {
   return typeof node.node_type === 'string';
+}
+
+export function getRunAllInitialPlan<TNode extends DirectedNode>(
+  nodes: TNode[],
+  edges: DirectedEdge[],
+  maxConcurrency = RUN_ALL_MAX_CONCURRENCY,
+): RunAllInitialPlan {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const inDegree = new Map(nodes.map((node) => [node.id, 0]));
+
+  for (const edge of edges) {
+    if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) {
+      continue;
+    }
+
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+  }
+
+  const limit = Math.max(1, Math.floor(maxConcurrency));
+  const readyNodeIds = nodes
+    .filter((node) => (inDegree.get(node.id) ?? 0) === 0)
+    .map((node) => node.id);
+  const readySet = new Set(readyNodeIds);
+
+  return {
+    runningNodeIds: readyNodeIds.slice(0, limit),
+    readyQueuedNodeIds: readyNodeIds.slice(limit),
+    dependencyQueuedNodeIds: nodes.filter((node) => !readySet.has(node.id)).map((node) => node.id),
+  };
 }
 
 export async function runDependencyAwareBatches<TNode extends DirectedNode, TResult>({
