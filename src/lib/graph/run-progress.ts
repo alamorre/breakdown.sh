@@ -18,6 +18,8 @@ export interface RunProgressSummary {
   total: number;
   succeeded: number;
   failed: number;
+  skipped: number;
+  cancelled: number;
   running: number;
   queued: number;
   pending: number;
@@ -46,6 +48,14 @@ export function getRunProgressState(
     return { label: 'Queued', tone: 'pending' };
   }
 
+  if (item.runStatus === 'skipped') {
+    return { label: 'Blocked', tone: 'error' };
+  }
+
+  if (item.runStatus === 'cancelled') {
+    return { label: 'Cancelled', tone: 'warning' };
+  }
+
   const errorText = item.error?.toLowerCase() ?? '';
   if (item.runStatus === 'error') {
     return {
@@ -65,6 +75,8 @@ export function summarizeRunProgress(items: RunProgressItem[]): RunProgressSumma
     total: items.length,
     succeeded: 0,
     failed: 0,
+    skipped: 0,
+    cancelled: 0,
     running: 0,
     queued: 0,
     pending: 0,
@@ -76,6 +88,10 @@ export function summarizeRunProgress(items: RunProgressItem[]): RunProgressSumma
       summary.succeeded++;
     } else if (item.runStatus === 'error') {
       summary.failed++;
+    } else if (item.runStatus === 'skipped') {
+      summary.skipped++;
+    } else if (item.runStatus === 'cancelled') {
+      summary.cancelled++;
     } else if (item.runStatus === 'running') {
       summary.running++;
     } else if (item.runStatus === 'queued') {
@@ -85,7 +101,7 @@ export function summarizeRunProgress(items: RunProgressItem[]): RunProgressSumma
     }
   }
 
-  summary.settled = summary.succeeded + summary.failed;
+  summary.settled = summary.succeeded + summary.failed + summary.skipped + summary.cancelled;
   return summary;
 }
 

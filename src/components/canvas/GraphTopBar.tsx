@@ -20,11 +20,11 @@ import type {
   RunGraphNodeResult,
   RunGraphResponse,
   RunGraphStatusNode,
-  RunGraphStatusResponse,
+  RunGraphStreamEvent,
 } from '@/types/run-graph';
+import { RUN_GRAPH_STREAM_CONTENT_TYPE } from '@/types/run-graph';
 
 const RUN_PROGRESS_TOAST_ID = 'run-all-progress';
-const RUN_PROGRESS_POLL_MS = 1500;
 
 function buildInitialProgressItems(
   nodes: CanvasNode[],
@@ -78,6 +78,40 @@ function buildResultProgressItems(
   );
 }
 
+async function readRunGraphStream(
+  body: ReadableStream<Uint8Array>,
+  onEvent: (event: RunGraphStreamEvent) => void,
+) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      onEvent(JSON.parse(trimmed) as RunGraphStreamEvent);
+    }
+
+    if (done) {
+      break;
+    }
+  }
+
+  const trailingLine = buffer.trim();
+  if (trailingLine) {
+    onEvent(JSON.parse(trailingLine) as RunGraphStreamEvent);
+  }
+}
+
 interface GraphTopBarProps {
   graphId: string;
   initialName: string;
@@ -95,7 +129,6 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
   const activeRunStartedAtRef = useRef<number | null>(null);
   const activeRunProgressNoteRef = useRef<string | undefined>(undefined);
   const activeProgressItemsRef = useRef<RunProgressItem[]>([]);
-  const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -162,8 +195,24 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
       );
     };
 
+    const statusByNodeId = new Map<string, RunGraphStatusNode>(
+      currentNodes.map((node) => [
+        node.id,
+        {
+          nodeId: node.id,
+          name: node.data.thesisNode.name,
+          runStatus: node.data.thesisNode.run_status,
+          output: node.data.thesisNode.output,
+          summary: (node.data.thesisNode.metadata as { summary?: string }).summary,
+          lastRunAt: node.data.thesisNode.last_run_at,
+          error: node.data.thesisNode.run_error,
+        },
+      ]),
+    );
+
     const applyStatusNodes = (statusNodes: RunGraphStatusNode[]) => {
       for (const statusNode of statusNodes) {
+        statusByNodeId.set(statusNode.nodeId, statusNode);
         setNodeRunState(statusNode.nodeId, {
           run_status: statusNode.runStatus,
           output: statusNode.output,
@@ -172,21 +221,8 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
           ...(statusNode.summary ? { metadata: { summary: statusNode.summary } } : {}),
         });
       }
-    };
 
-    const pollRunStatus = async () => {
-      try {
-        const response = await fetch(`/api/graphs/${graph.id}/run`, { cache: 'no-store' });
-        const snapshot = (await response.json()) as RunGraphStatusResponse;
-        if (activeRunIdRef.current !== runId || !response.ok || snapshot.error || !snapshot.data) {
-          return;
-        }
-
-        applyStatusNodes(snapshot.data.nodes);
-        showProgressToast(buildLiveProgressItems(snapshot.data.nodes, orderedNodeIds));
-      } catch {
-        // Polling only improves progress visibility; the main run request still owns final state.
-      }
+      showProgressToast(buildLiveProgressItems([...statusByNodeId.values()], orderedNodeIds));
     };
 
     try {
@@ -213,29 +249,67 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
 
       const runRequest = fetch(`/api/graphs/${graph.id}/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Accept: RUN_GRAPH_STREAM_CONTENT_TYPE,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ runId }),
       });
 
-      progressPollRef.current = setInterval(() => {
-        void pollRunStatus();
-      }, RUN_PROGRESS_POLL_MS);
-
       const response = await runRequest;
-      const result = (await response.json()) as RunGraphResponse;
-
-      if (!response.ok || result.error || !result.data) {
-        toast.error(result.error ?? 'Failed to run graph');
+      if (!response.ok || !response.body) {
+        const result = (await response.json().catch(() => null)) as RunGraphResponse | null;
+        toast.error(result?.error ?? 'Failed to run graph');
         for (const node of currentNodes) {
           setNodeRunState(node.id, {
             run_status: 'error',
-            run_error: result.error ?? 'Run failed',
+            run_error: result?.error ?? 'Run failed',
           });
         }
         return;
       }
 
-      for (const nodeResult of result.data.results) {
+      const streamResult: { data: RunGraphResponse['data']; error: string | null } = {
+        data: null,
+        error: null,
+      };
+
+      await readRunGraphStream(response.body, (event) => {
+        if (activeRunIdRef.current !== runId) {
+          return;
+        }
+
+        if (event.type === 'run-started') {
+          applyStatusNodes(event.nodes);
+          return;
+        }
+
+        if (event.type === 'node-started' || event.type === 'node-settled') {
+          applyStatusNodes([event.node]);
+          return;
+        }
+
+        if (event.type === 'run-completed') {
+          streamResult.data = event.data;
+          return;
+        }
+
+        streamResult.error = event.error;
+      });
+
+      const resultData = streamResult.data;
+      if (streamResult.error || !resultData) {
+        toast.error(streamResult.error ?? 'Failed to run graph');
+        for (const node of currentNodes) {
+          setNodeRunState(node.id, {
+            run_status: 'error',
+            run_error: streamResult.error ?? 'Run failed',
+          });
+        }
+        return;
+      }
+
+      for (const nodeResult of resultData.results) {
         setNodeRunState(nodeResult.nodeId, {
           run_status: nodeResult.runStatus,
           output: nodeResult.output,
@@ -244,10 +318,10 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
           ...(nodeResult.summary ? { metadata: { summary: nodeResult.summary } } : {}),
         });
       }
-      showProgressToast(buildResultProgressItems(result.data.results, orderedNodes));
+      showProgressToast(buildResultProgressItems(resultData.results, orderedNodes));
 
-      const { metrics } = result.data;
-      if (result.data.cancelled) {
+      const { metrics } = resultData;
+      if (resultData.cancelled) {
         toast.info(
           `Run cancelled after ${metrics.succeeded + metrics.failed}/${metrics.total} nodes settled`,
         );
@@ -281,10 +355,6 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
         activeRunProgressNoteRef.current = undefined;
         activeProgressItemsRef.current = [];
       }
-      if (progressPollRef.current) {
-        clearInterval(progressPollRef.current);
-        progressPollRef.current = null;
-      }
       toast.dismiss(RUN_PROGRESS_TOAST_ID);
       setRunningAll(false);
     }
@@ -317,9 +387,16 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ runId }),
-    }).catch(() => {
-      toast.error('Failed to cancel run');
-    });
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const result = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(result?.error ?? 'Failed to cancel run');
+        }
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to cancel run');
+      });
   }, [graph]);
 
   const handleAutoLayout = useCallback(async () => {

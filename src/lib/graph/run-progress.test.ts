@@ -15,30 +15,34 @@ describe('run progress helpers', () => {
       { nodeId: 'c', name: 'C', runStatus: 'queued', error: null },
       { nodeId: 'd', name: 'D', runStatus: 'error', error: 'Source failed' },
       { nodeId: 'e', name: 'E', runStatus: 'idle', error: null },
+      { nodeId: 'f', name: 'F', runStatus: 'skipped', error: 'Skipped because upstream failed' },
+      { nodeId: 'g', name: 'G', runStatus: 'cancelled', error: 'Run cancelled' },
     ];
 
     expect(summarizeRunProgress(items)).toEqual({
-      total: 5,
+      total: 7,
       succeeded: 1,
       failed: 1,
+      skipped: 1,
+      cancelled: 1,
       running: 1,
       queued: 1,
       pending: 1,
-      settled: 2,
+      settled: 4,
     });
   });
 
-  it('labels skipped nodes as blocked and cancelled idle nodes separately', () => {
+  it('labels skipped and cancelled nodes separately', () => {
     expect(
       getRunProgressState({
-        runStatus: 'error',
+        runStatus: 'skipped',
         error: 'Skipped because upstream did not complete: Research',
       }),
     ).toEqual({ label: 'Blocked', tone: 'error' });
 
     expect(
       getRunProgressState({
-        runStatus: 'idle',
+        runStatus: 'cancelled',
         error: 'Run cancelled before this node started.',
       }),
     ).toEqual({ label: 'Cancelled', tone: 'warning' });

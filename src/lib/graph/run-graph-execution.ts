@@ -7,16 +7,36 @@ import type { ThesisEdge } from '@/types/edge';
 import type {
   RunGraphNodeResult,
   RunGraphResponse,
+  RunGraphStatusNode,
   RunGraphStatusResponse,
+  RunGraphStreamEvent,
 } from '@/types/run-graph';
 import { sortTopologically } from './topological-sort';
-import { RUN_ALL_MAX_CONCURRENCY, RunAllCycleError, runDependencyAwareBatches } from './run-all';
-import { clearRunCancellation, isRunCancelled } from './run-cancellation';
+import {
+  getRunAllInitialPlan,
+  RUN_ALL_MAX_CONCURRENCY,
+  RunAllCycleError,
+  runDependencyAwareBatches,
+} from './run-all';
+import { isRunCancelled } from './run-cancellation';
 
 const runGraphInputSchema = z.object({
   graphId: z.string().uuid(),
   runId: z.string().min(1).max(100),
 });
+
+type RunGraphProgressHandler = (event: RunGraphStreamEvent) => void | Promise<void>;
+
+async function publishProgress(
+  handler: RunGraphProgressHandler | undefined,
+  event: RunGraphStreamEvent,
+) {
+  try {
+    await handler?.(event);
+  } catch {
+    // Progress streaming is best-effort; the server-side run should continue if a client disconnects.
+  }
+}
 
 async function getUserId(): Promise<string> {
   const { userId } = await auth();
@@ -33,11 +53,74 @@ function formatSkippedError(result: { upstreamNodeIds: string[] }, nodeNames: Ma
   return `Skipped because upstream did not complete: ${upstreamNames.join(', ')}`;
 }
 
-async function setSkippedOrCancelledNodeStatus(
+function getNodeSummary(node: ThesisNode) {
+  return (node.metadata as { summary?: string } | null)?.summary;
+}
+
+function toStatusNode(
+  node: ThesisNode,
+  overrides: Partial<Omit<RunGraphStatusNode, 'nodeId' | 'name'>> = {},
+): RunGraphStatusNode {
+  return {
+    nodeId: node.id,
+    name: node.name,
+    runStatus: overrides.runStatus ?? (node.run_status as RunStatus),
+    output: overrides.output ?? node.output,
+    summary: overrides.summary ?? getNodeSummary(node),
+    lastRunAt: overrides.lastRunAt ?? node.last_run_at,
+    error: overrides.error ?? node.run_error,
+  };
+}
+
+function mapSchedulerResultToNodeResult(
+  result: {
+    nodeId: string;
+    status: 'success' | 'failed' | 'skipped' | 'cancelled';
+    result?: { output: string; summary?: string; lastRunAt: string };
+    error: string | null;
+    upstreamNodeIds: string[];
+  },
+  nodeNames: Map<string, string>,
+): RunGraphNodeResult {
+  if (result.status === 'success') {
+    return {
+      nodeId: result.nodeId,
+      runStatus: 'success',
+      output: result.result?.output,
+      summary: result.result?.summary,
+      lastRunAt: result.result?.lastRunAt,
+      error: null,
+    };
+  }
+
+  if (result.status === 'cancelled') {
+    return {
+      nodeId: result.nodeId,
+      runStatus: 'cancelled',
+      error: 'Run cancelled before this node started.',
+    };
+  }
+
+  if (result.status === 'skipped') {
+    return {
+      nodeId: result.nodeId,
+      runStatus: 'skipped',
+      error: formatSkippedError(result, nodeNames),
+    };
+  }
+
+  return {
+    nodeId: result.nodeId,
+    runStatus: 'error',
+    error: result.error ?? 'Run failed',
+  };
+}
+
+async function setFailedSkippedOrCancelledNodeStatus(
   supabase: ReturnType<typeof createServerClient>,
   result: RunGraphNodeResult,
 ) {
-  await supabase
+  const { error } = await supabase
     .from('nodes')
     .update({
       run_status: result.runStatus,
@@ -45,6 +128,10 @@ async function setSkippedOrCancelledNodeStatus(
       updated_at: new Date().toISOString(),
     })
     .eq('id', result.nodeId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 async function markNodesQueued(
@@ -99,15 +186,7 @@ export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatus
 
     return {
       data: {
-        nodes: ((nodes ?? []) as ThesisNode[]).map((node) => ({
-          nodeId: node.id,
-          name: node.name,
-          runStatus: node.run_status as RunStatus,
-          output: node.output,
-          summary: (node.metadata as { summary?: string } | null)?.summary,
-          lastRunAt: node.last_run_at,
-          error: node.run_error,
-        })),
+        nodes: ((nodes ?? []) as ThesisNode[]).map((node) => toStatusNode(node)),
       },
       error: null,
     };
@@ -119,14 +198,12 @@ export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatus
 export async function runGraphWithScheduler(input: {
   graphId: string;
   runId: string;
+  onProgress?: RunGraphProgressHandler;
 }): Promise<RunGraphResponse> {
   const parsed = runGraphInputSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
   }
-
-  clearRunCancellation(parsed.data.runId);
-
   try {
     const userId = await getUserId();
     const startedAt = Date.now();
@@ -169,6 +246,23 @@ export async function runGraphWithScheduler(input: {
     }
     await markNodesQueued(supabase, nodes);
 
+    const initialPlan = getRunAllInitialPlan(nodes, runEdges, RUN_ALL_MAX_CONCURRENCY);
+    const initiallyRunningNodeIds = new Set(initialPlan.runningNodeIds);
+    const readyQueuedNodeIds = new Set(initialPlan.readyQueuedNodeIds);
+    await publishProgress(input.onProgress, {
+      type: 'run-started',
+      nodes: nodes.map((node) =>
+        toStatusNode(node, {
+          runStatus: initiallyRunningNodeIds.has(node.id) ? 'running' : 'queued',
+          error: initiallyRunningNodeIds.has(node.id)
+            ? null
+            : readyQueuedNodeIds.has(node.id)
+              ? 'Waiting for a concurrency slot.'
+              : 'Waiting for upstream nodes to finish.',
+        }),
+      ),
+    });
+
     const summary = await runDependencyAwareBatches<
       ThesisNode,
       { output: string; summary?: string; lastRunAt: string }
@@ -176,7 +270,7 @@ export async function runGraphWithScheduler(input: {
       nodes,
       edges: runEdges,
       maxConcurrency: RUN_ALL_MAX_CONCURRENCY,
-      shouldCancel: () => isRunCancelled(parsed.data.runId),
+      shouldCancel: () => isRunCancelled(supabase, parsed.data.graphId),
       onNodeStart: async (node) => {
         await supabase
           .from('nodes')
@@ -186,21 +280,34 @@ export async function runGraphWithScheduler(input: {
             updated_at: new Date().toISOString(),
           })
           .eq('id', node.id);
+        await publishProgress(input.onProgress, {
+          type: 'node-started',
+          node: toStatusNode(node, {
+            runStatus: 'running',
+            error: null,
+          }),
+        });
       },
       onNodeSettled: async (result) => {
-        if (result.status !== 'skipped' && result.status !== 'cancelled') {
-          return;
+        const node = nodes.find((candidate) => candidate.id === result.nodeId);
+        const mappedResult = mapSchedulerResultToNodeResult(result, nodeNames);
+
+        if (mappedResult.runStatus !== 'success') {
+          await setFailedSkippedOrCancelledNodeStatus(supabase, mappedResult);
         }
 
-        const mappedResult: RunGraphNodeResult = {
-          nodeId: result.nodeId,
-          runStatus: result.status === 'cancelled' ? 'idle' : 'error',
-          error:
-            result.status === 'cancelled'
-              ? 'Run cancelled before this node started.'
-              : formatSkippedError(result, nodeNames),
-        };
-        await setSkippedOrCancelledNodeStatus(supabase, mappedResult);
+        if (node) {
+          await publishProgress(input.onProgress, {
+            type: 'node-settled',
+            node: toStatusNode(node, {
+              runStatus: mappedResult.runStatus,
+              output: mappedResult.output,
+              summary: mappedResult.summary,
+              lastRunAt: mappedResult.lastRunAt,
+              error: mappedResult.error,
+            }),
+          });
+        }
       },
       runNode: async (node) => {
         const result = await runNode({ nodeId: node.id });
@@ -211,35 +318,9 @@ export async function runGraphWithScheduler(input: {
       },
     });
 
-    const results: RunGraphNodeResult[] = summary.results.map((result) => {
-      if (result.status === 'success') {
-        return {
-          nodeId: result.nodeId,
-          runStatus: 'success',
-          output: result.result?.output,
-          summary: result.result?.summary,
-          lastRunAt: result.result?.lastRunAt,
-          error: null,
-        };
-      }
-
-      if (result.status === 'cancelled') {
-        return {
-          nodeId: result.nodeId,
-          runStatus: 'idle',
-          error: 'Run cancelled before this node started.',
-        };
-      }
-
-      return {
-        nodeId: result.nodeId,
-        runStatus: 'error',
-        error:
-          result.status === 'skipped'
-            ? formatSkippedError(result, nodeNames)
-            : (result.error ?? 'Run failed'),
-      };
-    });
+    const results = summary.results.map((result) =>
+      mapSchedulerResultToNodeResult(result, nodeNames),
+    );
 
     return {
       data: {
@@ -267,7 +348,5 @@ export async function runGraphWithScheduler(input: {
     }
 
     return { data: null, error: err instanceof Error ? err.message : 'Failed to run graph' };
-  } finally {
-    clearRunCancellation(parsed.data.runId);
   }
 }

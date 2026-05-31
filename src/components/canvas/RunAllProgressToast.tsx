@@ -82,6 +82,7 @@ function formatIssueCount(count: number) {
 export function RunAllProgressToast({ items, elapsedMs, note }: RunAllProgressToastProps) {
   const summary = summarizeRunProgress(items);
   const waitingCount = summary.queued + summary.pending;
+  const issueCount = summary.failed + summary.skipped + summary.cancelled;
 
   return (
     <div className="w-[356px] max-w-[calc(100vw-32px)] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg">
@@ -94,8 +95,8 @@ export function RunAllProgressToast({ items, elapsedMs, note }: RunAllProgressTo
             </span>
             {summary.running > 0 && <span>{summary.running} running</span>}
             {waitingCount > 0 && <span>{waitingCount} queued</span>}
-            {summary.failed > 0 && (
-              <span className="text-destructive">{formatIssueCount(summary.failed)}</span>
+            {issueCount > 0 && (
+              <span className="text-destructive">{formatIssueCount(issueCount)}</span>
             )}
             <span>{formatElapsed(elapsedMs)} elapsed</span>
           </div>
