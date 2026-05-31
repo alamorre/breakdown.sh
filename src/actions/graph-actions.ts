@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
+import { getOwnedNode } from '@/lib/supabase/ownership';
 import type { Graph } from '@/types/graph';
 import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
@@ -193,8 +194,16 @@ export async function updateGraphName(
 export async function batchUpdateNodePositions(
   updates: { nodeId: string; x: number; y: number }[],
 ): Promise<{ error: string | null }> {
-  await getUserId();
+  const userId = await getUserId();
   const supabase = createServerClient();
+
+  const ownershipChecks = await Promise.all(
+    updates.map((update) => getOwnedNode(supabase, userId, update.nodeId)),
+  );
+  const failedOwnership = ownershipChecks.find((result) => result.error);
+  if (failedOwnership?.error) {
+    return { error: failedOwnership.error };
+  }
 
   for (const { nodeId, x, y } of updates) {
     const { error } = await supabase

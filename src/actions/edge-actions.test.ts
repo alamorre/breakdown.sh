@@ -12,6 +12,7 @@ const mockInsert = vi.fn();
 const mockUpdate = vi.fn();
 const mockDelete = vi.fn();
 const mockEq = vi.fn();
+const mockIn = vi.fn();
 
 function createChain() {
   return {
@@ -21,6 +22,7 @@ function createChain() {
     update: mockUpdate.mockReturnThis(),
     delete: mockDelete.mockReturnThis(),
     eq: mockEq.mockReturnThis(),
+    in: mockIn,
   };
 }
 
@@ -33,6 +35,7 @@ vi.mock('@/lib/supabase/server', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockReturnValue({ userId: 'user_123' });
+  mockIn.mockReturnThis();
 });
 
 const UUID1 = '550e8400-e29b-41d4-a716-446655440001';
@@ -49,6 +52,13 @@ describe('createEdge', () => {
       edge_type: 'supports',
     };
     mockSingle.mockResolvedValue({ data: edge, error: null });
+    mockIn.mockResolvedValue({
+      data: [
+        { id: UUID2, graph_id: UUID2 },
+        { id: UUID3, graph_id: UUID2 },
+      ],
+      error: null,
+    });
 
     const { createEdge } = await import('@/actions/edge-actions');
     const result = await createEdge({
