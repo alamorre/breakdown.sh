@@ -1,0 +1,46 @@
+name: Claude Security Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Claude Security Review
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    env:
+      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+    steps:
+      - name: Require Claude API key
+        if: ${{ env.CLAUDE_API_KEY == '' }}
+        run: |
+          echo "::error::CLAUDE_API_KEY repository secret is required to run Claude Security Review."
+          exit 1
+
+      - name: Checkout
+        if: ${{ env.CLAUDE_API_KEY != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+
+      - name: Run Claude Security Review
+        if: ${{ env.CLAUDE_API_KEY != '' }}
+        uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ env.CLAUDE_API_KEY }}
+          exclude-directories: .next,node_modules,coverage

@@ -1,4 +1,4 @@
-.PHONY: dev build lint typecheck test format check
+.PHONY: dev build lint typecheck test test-coverage format check
 
 dev:
 	npx next dev
@@ -15,7 +15,10 @@ typecheck:
 test:
 	npx vitest run
 
+test-coverage:
+	npx vitest run --coverage
+
 format:
 	npx prettier --write .
 
-check: lint typecheck test
+check: lint typecheck test-coverage build
