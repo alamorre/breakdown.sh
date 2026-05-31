@@ -8,15 +8,12 @@ import { useReactFlow } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { updateGraphName } from '@/actions/graph-actions';
-import { runNode } from '@/actions/node-actions';
 import { useGraphStore } from '@/store/graph-store';
 import { computeLayout } from '@/lib/layout/elk-layout';
 import { exportGraph } from '@/lib/export/export-graph';
 import { sortTopologically } from '@/lib/graph/topological-sort';
-import { getFailedUpstreamNodeNames } from '@/lib/graph/run-all';
-import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
 import { notifyRunCompletion } from '@/lib/notifications/run-completion';
-import { isDataSourceNode } from '@/types/data-source';
+import type { RunGraphResponse } from '@/types/run-graph';
 
 interface GraphTopBarProps {
   graphId: string;
@@ -31,6 +28,7 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
 
   const { nodes, edges, graph, setNodeRunState } = useGraphStore();
   const reactFlowInstance = useReactFlow();
+  const activeRunIdRef = useRef<string | null>(null);
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -46,143 +44,118 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
     }
   }, [name, initialName, graphId]);
 
-  const cancelRef = useRef(false);
-
   const handleRunAll = useCallback(async () => {
     if (!graph) return;
-    cancelRef.current = false;
+    const currentNodes = useGraphStore.getState().nodes;
+    const currentEdges = useGraphStore.getState().edges;
+
+    if (currentNodes.length === 0) {
+      toast.info('No nodes to run');
+      return;
+    }
+
+    const { unsortedNodeIds } = sortTopologically(
+      currentNodes,
+      currentEdges.map((edge) => ({
+        source: edge.data.thesisEdge.source_node_id,
+        target: edge.data.thesisEdge.target_node_id,
+      })),
+    );
+
+    if (unsortedNodeIds.length > 0) {
+      toast.error('Run all requires an acyclic graph. Remove the cycle and try again.');
+      return;
+    }
+
+    const runId = crypto.randomUUID();
+    activeRunIdRef.current = runId;
     setRunningAll(true);
 
     try {
-      const currentNodes = useGraphStore.getState().nodes;
-      const currentEdges = useGraphStore.getState().edges;
-      const { sortedNodes, unsortedNodeIds } = sortTopologically(
-        currentNodes,
-        currentEdges.map((edge) => ({
-          source: edge.data.thesisEdge.source_node_id,
-          target: edge.data.thesisEdge.target_node_id,
-        })),
-      );
+      for (const node of currentNodes) {
+        setNodeRunState(node.id, { run_status: 'running', run_error: null });
+      }
 
-      if (unsortedNodeIds.length > 0) {
-        toast.error('Run all requires an acyclic graph. Remove the cycle and try again.');
+      toast.loading(`Running ${currentNodes.length} nodes with bounded parallelism`, {
+        id: 'run-all-progress',
+      });
+
+      const response = await fetch(`/api/graphs/${graph.id}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId }),
+      });
+      const result = (await response.json()) as RunGraphResponse;
+
+      if (!response.ok || result.error || !result.data) {
+        toast.error(result.error ?? 'Failed to run graph');
+        for (const node of currentNodes) {
+          setNodeRunState(node.id, {
+            run_status: 'error',
+            run_error: result.error ?? 'Run failed',
+          });
+        }
         return;
       }
 
-      if (sortedNodes.length === 0) {
-        toast.info('No nodes to run');
-        return;
+      for (const nodeResult of result.data.results) {
+        setNodeRunState(nodeResult.nodeId, {
+          run_status: nodeResult.runStatus,
+          output: nodeResult.output,
+          run_error: nodeResult.error,
+          last_run_at: nodeResult.lastRunAt,
+          ...(nodeResult.summary ? { metadata: { summary: nodeResult.summary } } : {}),
+        });
       }
 
-      const staleSources = sortedNodes.filter((node) => isStaleSourceNode(node.data.thesisNode));
-      if (staleSources.length > 0) {
-        const preview = staleSources
-          .slice(0, 3)
-          .map(
-            (node) =>
-              `${node.data.thesisNode.name} (${formatSourceAge(node.data.thesisNode.last_run_at)})`,
-          )
-          .join(', ');
-        const more = staleSources.length > 3 ? `, +${staleSources.length - 3} more` : '';
-        toast.warning(`Refreshing stale sources before analysis: ${preview}${more}`);
-      }
-
-      let processed = 0;
-      let succeeded = 0;
-      let failed = 0;
-      let skipped = 0;
-      const failedNodeIds = new Set<string>();
-
-      for (const node of sortedNodes) {
-        if (cancelRef.current) {
-          toast.info(`Run cancelled after ${processed}/${sortedNodes.length} nodes`);
-          break;
-        }
-
-        const failedUpstreamNames = getFailedUpstreamNodeNames(
-          node.id,
-          currentEdges,
-          sortedNodes,
-          failedNodeIds,
+      const { metrics } = result.data;
+      if (result.data.cancelled) {
+        toast.info(
+          `Run cancelled after ${metrics.succeeded + metrics.failed}/${metrics.total} nodes settled`,
         );
-
-        if (failedUpstreamNames.length > 0) {
-          skipped++;
-          processed++;
-          failedNodeIds.add(node.id);
-          setNodeRunState(node.id, {
-            run_status: 'error',
-            run_error: `Skipped because upstream failed: ${failedUpstreamNames.join(', ')}`,
-          });
-          continue;
-        }
-
-        setNodeRunState(node.id, { run_status: 'running' });
-        const runVerb = isDataSourceNode(node.data.thesisNode.node_type)
-          ? 'Refreshing source'
-          : 'Running node';
-        toast.loading(
-          `${runVerb} ${processed + 1}/${sortedNodes.length}: ${node.data.thesisNode.name}`,
-          {
-            id: 'run-all-progress',
-          },
+      } else if (metrics.failed === 0 && metrics.skipped === 0) {
+        notifyRunCompletion({
+          graphName: graph.name,
+          nodeCount: metrics.succeeded,
+          url: window.location.href,
+        });
+      } else {
+        const skippedText = metrics.skipped > 0 ? `, ${metrics.skipped} skipped` : '';
+        const cancelledText = metrics.cancelled > 0 ? `, ${metrics.cancelled} cancelled` : '';
+        toast.warning(
+          `${metrics.succeeded}/${metrics.total} nodes succeeded, ${metrics.failed} failed${skippedText}${cancelledText}`,
         );
-
-        try {
-          const { data, error } = await runNode({ nodeId: node.id });
-
-          if (error || !data) {
-            failed++;
-            failedNodeIds.add(node.id);
-            setNodeRunState(node.id, {
-              run_status: 'error',
-              run_error: error ?? 'Run failed',
-            });
-          } else {
-            succeeded++;
-            setNodeRunState(node.id, {
-              run_status: 'success',
-              output: data.output,
-              run_error: null,
-              last_run_at: data.lastRunAt,
-              ...(data.summary ? { metadata: { summary: data.summary } } : {}),
-            });
-          }
-        } catch (err) {
-          failed++;
-          failedNodeIds.add(node.id);
-          setNodeRunState(node.id, {
-            run_status: 'error',
-            run_error: err instanceof Error ? err.message : 'Run failed',
-          });
-        }
-
-        processed++;
       }
-
-      if (!cancelRef.current) {
-        if (failed === 0 && skipped === 0) {
-          notifyRunCompletion({
-            graphName: graph.name,
-            nodeCount: succeeded,
-            url: window.location.href,
-          });
-        } else {
-          const skippedText = skipped > 0 ? `, ${skipped} skipped` : '';
-          toast.warning(
-            `${succeeded}/${processed} nodes succeeded, ${failed} failed${skippedText}`,
-          );
-        }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to run graph');
+      for (const node of currentNodes) {
+        setNodeRunState(node.id, {
+          run_status: 'error',
+          run_error: err instanceof Error ? err.message : 'Run failed',
+        });
       }
     } finally {
+      if (activeRunIdRef.current === runId) {
+        activeRunIdRef.current = null;
+      }
       toast.dismiss('run-all-progress');
       setRunningAll(false);
     }
   }, [graph, setNodeRunState]);
 
   const handleCancelRun = useCallback(() => {
-    cancelRef.current = true;
-  }, []);
+    const runId = activeRunIdRef.current;
+    if (!graph || !runId) return;
+
+    toast.loading('Cancelling after in-flight nodes finish...', { id: 'run-all-progress' });
+    void fetch(`/api/graphs/${graph.id}/run/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runId }),
+    }).catch(() => {
+      toast.error('Failed to cancel run');
+    });
+  }, [graph]);
 
   const handleAutoLayout = useCallback(async () => {
     setLayouting(true);
