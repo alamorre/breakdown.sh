@@ -13,6 +13,7 @@ import { useGraphStore } from '@/store/graph-store';
 import { computeLayout } from '@/lib/layout/elk-layout';
 import { exportGraph } from '@/lib/export/export-graph';
 import { sortTopologically } from '@/lib/graph/topological-sort';
+import { notifyRunCompletion } from '@/lib/notifications/run-completion';
 
 interface GraphTopBarProps {
   graphId: string;
@@ -118,7 +119,11 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
 
       if (!cancelRef.current) {
         if (failed === 0) {
-          toast.success(`All ${completed} nodes ran successfully`);
+          notifyRunCompletion({
+            graphName: graph.name,
+            nodeCount: completed,
+            url: window.location.href,
+          });
         } else {
           toast.warning(`${completed - failed}/${completed} nodes succeeded, ${failed} failed`);
         }
