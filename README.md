@@ -37,16 +37,11 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## PR Preview Deployments
 
-Trusted pull requests from this repository deploy a Vercel preview and update one sticky PR
-comment with the staging link. The stable alias is based on the PR title plus PR number, for
-example `https://thesis-pr-123-add-node-toolbar.preview.example.com`.
+Vercel's GitHub app creates preview deployments for pull requests and comments the preview
+link on the PR.
 
-Configure these GitHub repository secrets:
+Configure these Vercel project environment variables for both Production and Preview:
 
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
-- `VERCEL_PREVIEW_DOMAIN`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -54,10 +49,9 @@ Configure these GitHub repository secrets:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
 
-`VERCEL_PREVIEW_DOMAIN` can be a repository variable instead of a secret. It should be the
-base wildcard domain, such as `preview.example.com`. The workflow aliases each PR to a
-subdomain below it, so DNS and Vercel need to be configured for that wildcard domain.
+Enable Vercel's "Automatically expose System Environment Variables" setting so preview
+deployments can show the PR number, branch, and commit in the in-app preview banner.
 
 Previews intentionally use production Supabase for now. Clerk also needs allowed origins and
-redirect URLs for the preview wildcard domain so the staging app can authenticate with the
-same user IDs as production.
+redirect URLs for Vercel preview URLs so the staging app can authenticate with the same user
+IDs as production.

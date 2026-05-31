@@ -3,13 +3,17 @@ function shortSha(sha: string | undefined) {
 }
 
 export function PreviewEnvironmentBanner() {
-  if (process.env.NEXT_PUBLIC_APP_ENV !== 'preview') {
+  const appEnv = process.env.NEXT_PUBLIC_APP_ENV ?? process.env.VERCEL_ENV;
+  if (appEnv !== 'preview') {
     return null;
   }
 
-  const prNumber = process.env.NEXT_PUBLIC_PREVIEW_PR_NUMBER;
-  const prTitle = process.env.NEXT_PUBLIC_PREVIEW_PR_TITLE;
-  const commitSha = shortSha(process.env.NEXT_PUBLIC_PREVIEW_COMMIT_SHA);
+  const prNumber =
+    process.env.NEXT_PUBLIC_PREVIEW_PR_NUMBER ?? process.env.VERCEL_GIT_PULL_REQUEST_ID;
+  const prTitle = process.env.NEXT_PUBLIC_PREVIEW_PR_TITLE ?? process.env.VERCEL_GIT_COMMIT_REF;
+  const commitSha = shortSha(
+    process.env.NEXT_PUBLIC_PREVIEW_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA,
+  );
   const databaseTarget = process.env.NEXT_PUBLIC_PREVIEW_DATABASE_TARGET ?? 'production';
   const prLabel = prNumber ? `PR #${prNumber}` : 'PR preview';
   const details = [prTitle, commitSha ? `commit ${commitSha}` : null].filter(Boolean).join(' | ');
