@@ -62,6 +62,7 @@ interface NodeFormProps {
       output?: string | null;
       run_error?: string | null;
       last_run_at?: string | null;
+      metadata?: Record<string, unknown>;
     },
   ) => void;
   removeNode: (nodeId: string) => void;
@@ -177,7 +178,8 @@ function NodeForm({
         run_status: 'success',
         output: result.output,
         run_error: null,
-        last_run_at: new Date().toISOString(),
+        last_run_at: result.lastRunAt,
+        ...(result.summary ? { metadata: { summary: result.summary } } : {}),
       });
     }
   };

@@ -13,7 +13,10 @@ import { useGraphStore } from '@/store/graph-store';
 import { computeLayout } from '@/lib/layout/elk-layout';
 import { exportGraph } from '@/lib/export/export-graph';
 import { sortTopologically } from '@/lib/graph/topological-sort';
+import { getFailedUpstreamNodeNames } from '@/lib/graph/run-all';
+import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
 import { notifyRunCompletion } from '@/lib/notifications/run-completion';
+import { isDataSourceNode } from '@/types/data-source';
 
 interface GraphTopBarProps {
   graphId: string;
@@ -71,18 +74,55 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
         return;
       }
 
-      let completed = 0;
+      const staleSources = sortedNodes.filter((node) => isStaleSourceNode(node.data.thesisNode));
+      if (staleSources.length > 0) {
+        const preview = staleSources
+          .slice(0, 3)
+          .map(
+            (node) =>
+              `${node.data.thesisNode.name} (${formatSourceAge(node.data.thesisNode.last_run_at)})`,
+          )
+          .join(', ');
+        const more = staleSources.length > 3 ? `, +${staleSources.length - 3} more` : '';
+        toast.warning(`Refreshing stale sources before analysis: ${preview}${more}`);
+      }
+
+      let processed = 0;
+      let succeeded = 0;
       let failed = 0;
+      let skipped = 0;
+      const failedNodeIds = new Set<string>();
 
       for (const node of sortedNodes) {
         if (cancelRef.current) {
-          toast.info(`Run cancelled after ${completed}/${sortedNodes.length} nodes`);
+          toast.info(`Run cancelled after ${processed}/${sortedNodes.length} nodes`);
           break;
         }
 
+        const failedUpstreamNames = getFailedUpstreamNodeNames(
+          node.id,
+          currentEdges,
+          sortedNodes,
+          failedNodeIds,
+        );
+
+        if (failedUpstreamNames.length > 0) {
+          skipped++;
+          processed++;
+          failedNodeIds.add(node.id);
+          setNodeRunState(node.id, {
+            run_status: 'error',
+            run_error: `Skipped because upstream failed: ${failedUpstreamNames.join(', ')}`,
+          });
+          continue;
+        }
+
         setNodeRunState(node.id, { run_status: 'running' });
+        const runVerb = isDataSourceNode(node.data.thesisNode.node_type)
+          ? 'Refreshing source'
+          : 'Running node';
         toast.loading(
-          `Running node ${completed + 1}/${sortedNodes.length}: ${node.data.thesisNode.name}`,
+          `${runVerb} ${processed + 1}/${sortedNodes.length}: ${node.data.thesisNode.name}`,
           {
             id: 'run-all-progress',
           },
@@ -93,39 +133,45 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
 
           if (error || !data) {
             failed++;
+            failedNodeIds.add(node.id);
             setNodeRunState(node.id, {
               run_status: 'error',
               run_error: error ?? 'Run failed',
             });
           } else {
+            succeeded++;
             setNodeRunState(node.id, {
               run_status: 'success',
               output: data.output,
               run_error: null,
-              last_run_at: new Date().toISOString(),
+              last_run_at: data.lastRunAt,
               ...(data.summary ? { metadata: { summary: data.summary } } : {}),
             });
           }
         } catch (err) {
           failed++;
+          failedNodeIds.add(node.id);
           setNodeRunState(node.id, {
             run_status: 'error',
             run_error: err instanceof Error ? err.message : 'Run failed',
           });
         }
 
-        completed++;
+        processed++;
       }
 
       if (!cancelRef.current) {
-        if (failed === 0) {
+        if (failed === 0 && skipped === 0) {
           notifyRunCompletion({
             graphName: graph.name,
-            nodeCount: completed,
+            nodeCount: succeeded,
             url: window.location.href,
           });
         } else {
-          toast.warning(`${completed - failed}/${completed} nodes succeeded, ${failed} failed`);
+          const skippedText = skipped > 0 ? `, ${skipped} skipped` : '';
+          toast.warning(
+            `${succeeded}/${processed} nodes succeeded, ${failed} failed${skippedText}`,
+          );
         }
       }
     } finally {

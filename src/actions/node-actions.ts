@@ -9,6 +9,7 @@ import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
 import { fetchWebUrl } from '@/lib/fetch/fetch-web-url';
 import { fetchGoogleDoc } from '@/lib/fetch/fetch-google-doc';
 import { fetchGoogleSheet } from '@/lib/fetch/fetch-google-sheet';
+import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
 import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
 
@@ -48,7 +49,7 @@ async function getUserId(): Promise<string> {
 async function runDataSourceNode(
   supabase: ReturnType<typeof createServerClient>,
   node: ThesisNode,
-): Promise<{ data: { output: string } | null; error: string | null }> {
+): Promise<{ data: { output: string; lastRunAt: string } | null; error: string | null }> {
   const sourceType = getDataSourceType(node.node_type);
   if (!sourceType) {
     return { data: null, error: `Unknown source type: ${node.node_type}` };
@@ -60,18 +61,20 @@ async function runDataSourceNode(
       return { data: null, error: 'No text content. Paste or type your text first.' };
     }
 
+    const lastRunAt = new Date().toISOString();
+
     await supabase
       .from('nodes')
       .update({
         output: node.prompt,
         run_status: 'success',
         run_error: null,
-        last_run_at: new Date().toISOString(),
+        last_run_at: lastRunAt,
         updated_at: new Date().toISOString(),
       })
       .eq('id', node.id);
 
-    return { data: { output: node.prompt }, error: null };
+    return { data: { output: node.prompt, lastRunAt }, error: null };
   }
 
   const metadata = node.metadata ?? {};
@@ -111,7 +114,7 @@ async function runDataSourceNode(
       })
       .eq('id', node.id);
 
-    return { data: { output: result.content }, error: null };
+    return { data: { output: result.content, lastRunAt: result.fetchedAt }, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown fetch error';
 
@@ -212,7 +215,10 @@ export async function deleteNode(
 
 export async function runNode(
   input: z.infer<typeof runNodeSchema>,
-): Promise<{ data: { output: string; summary?: string } | null; error: string | null }> {
+): Promise<{
+  data: { output: string; summary?: string; lastRunAt: string } | null;
+  error: string | null;
+}> {
   await getUserId();
   const parsed = runNodeSchema.safeParse(input);
   if (!parsed.success) {
@@ -270,13 +276,45 @@ export async function runNode(
       sourceMap.set(sn.id, sn);
     }
 
+    const unavailableInputs: string[] = [];
+    const staleInputs: string[] = [];
+
     for (const edge of typedEdges) {
       const sourceNode = sourceMap.get(edge.source_node_id);
+      if (!sourceNode) {
+        unavailableInputs.push('Unknown node');
+        continue;
+      }
+
+      if (sourceNode.run_status !== 'success' || !sourceNode.output) {
+        unavailableInputs.push(sourceNode.name);
+        continue;
+      }
+
+      if (isStaleSourceNode(sourceNode)) {
+        staleInputs.push(`${sourceNode.name} (${formatSourceAge(sourceNode.last_run_at)})`);
+        continue;
+      }
+
       upstreamInputs.push({
-        nodeName: sourceNode?.name ?? 'Unknown',
-        nodeOutput: sourceNode?.output ?? '[not yet run]',
+        nodeName: sourceNode.name,
+        nodeOutput: sourceNode.output,
         edgeType: edge.edge_type,
       });
+    }
+
+    if (unavailableInputs.length > 0) {
+      return {
+        data: null,
+        error: `Upstream input not ready: ${unavailableInputs.join(', ')}. Run or refresh it first.`,
+      };
+    }
+
+    if (staleInputs.length > 0) {
+      return {
+        data: null,
+        error: `Stale source input: ${staleInputs.join(', ')}. Use Run All or refresh the source before running this node.`,
+      };
     }
   }
 
@@ -318,6 +356,8 @@ export async function runNode(
 
     const updatedMetadata = { ...typedNode.metadata, ...(summary ? { summary } : {}) };
 
+    const lastRunAt = new Date().toISOString();
+
     await supabase
       .from('nodes')
       .update({
@@ -325,7 +365,7 @@ export async function runNode(
         metadata: updatedMetadata,
         run_status: 'success',
         run_error: null,
-        last_run_at: new Date().toISOString(),
+        last_run_at: lastRunAt,
         updated_at: new Date().toISOString(),
       })
       .eq('id', parsed.data.nodeId);
@@ -347,7 +387,7 @@ export async function runNode(
       status: 'applied',
     });
 
-    return { data: { output, summary }, error: null };
+    return { data: { output, summary, lastRunAt }, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error during AI evaluation';
 
