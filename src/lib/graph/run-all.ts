@@ -32,7 +32,7 @@ interface RunDependencyAwareBatchesOptions<TNode extends DirectedNode, TResult> 
   edges: DirectedEdge[];
   maxConcurrency?: number;
   runNode: (node: TNode) => Promise<TResult>;
-  shouldCancel?: () => boolean;
+  shouldCancel?: () => boolean | Promise<boolean>;
   onNodeStart?: (node: TNode) => void | Promise<void>;
   onNodeSettled?: (result: RunAllSchedulerResult<TResult>, node: TNode) => void | Promise<void>;
 }
@@ -127,7 +127,7 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
     .map((node) => node.id);
 
   let runningCount = 0;
-  let cancelled = shouldCancel();
+  let cancelled = false;
 
   async function settleNode(result: RunAllSchedulerResult<TResult>) {
     const node = nodeMap.get(result.nodeId);
@@ -188,8 +188,14 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
     return skippedAny;
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+
     const finish = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
       const orderedResults = nodes
         .map((node) => results.get(node.id))
         .filter((result): result is RunAllSchedulerResult<TResult> => Boolean(result));
@@ -202,59 +208,71 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
       });
     };
 
+    const fail = (err: unknown) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      reject(err);
+    };
+
     const schedule = () => {
       void (async () => {
-        while (await maybeSkipBlockedReadyNodes()) {
-          // Keep propagating skips through descendants that have become ready.
-        }
+        try {
+          while (await maybeSkipBlockedReadyNodes()) {
+            // Keep propagating skips through descendants that have become ready.
+          }
 
-        if (shouldCancel()) {
-          cancelled = true;
-        }
+          if (!cancelled && (await shouldCancel())) {
+            cancelled = true;
+          }
 
-        if (cancelled) {
-          if (runningCount === 0) {
-            await cancelUnstartedNodes();
+          if (cancelled) {
+            if (runningCount === 0) {
+              await cancelUnstartedNodes();
+              finish();
+            }
+            return;
+          }
+
+          while (runningCount < limit && readyQueue.length > 0) {
+            const nodeId = readyQueue.shift();
+            const node = nodeId ? nodeMap.get(nodeId) : undefined;
+            if (!node || results.has(node.id)) {
+              continue;
+            }
+
+            runningCount++;
+            void (async () => {
+              try {
+                await onNodeStart?.(node);
+                const result = await runNode(node);
+                await settleNode({
+                  nodeId: node.id,
+                  status: 'success',
+                  result,
+                  error: null,
+                  upstreamNodeIds: [],
+                });
+              } catch (err) {
+                await settleNode({
+                  nodeId: node.id,
+                  status: 'failed',
+                  error: err instanceof Error ? err.message : 'Run failed',
+                  upstreamNodeIds: [],
+                });
+              } finally {
+                runningCount--;
+                schedule();
+              }
+            })();
+          }
+
+          if (runningCount === 0 && results.size === nodes.length) {
             finish();
           }
-          return;
-        }
-
-        while (runningCount < limit && readyQueue.length > 0) {
-          const nodeId = readyQueue.shift();
-          const node = nodeId ? nodeMap.get(nodeId) : undefined;
-          if (!node || results.has(node.id)) {
-            continue;
-          }
-
-          runningCount++;
-          void (async () => {
-            try {
-              await onNodeStart?.(node);
-              const result = await runNode(node);
-              await settleNode({
-                nodeId: node.id,
-                status: 'success',
-                result,
-                error: null,
-                upstreamNodeIds: [],
-              });
-            } catch (err) {
-              await settleNode({
-                nodeId: node.id,
-                status: 'failed',
-                error: err instanceof Error ? err.message : 'Run failed',
-                upstreamNodeIds: [],
-              });
-            } finally {
-              runningCount--;
-              schedule();
-            }
-          })();
-        }
-
-        if (runningCount === 0 && results.size === nodes.length) {
-          finish();
+        } catch (err) {
+          fail(err);
         }
       })();
     };

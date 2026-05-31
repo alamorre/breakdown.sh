@@ -153,6 +153,30 @@ describe('runDependencyAwareBatches', () => {
     ]);
   });
 
+  it('supports async cancellation checks for durable cancellation stores', async () => {
+    let cancelled = false;
+    const started: string[] = [];
+
+    const summary = await runDependencyAwareBatches({
+      nodes: [{ id: 'a' }, { id: 'b' }],
+      edges: [{ source: 'a', target: 'b' }],
+      maxConcurrency: 1,
+      shouldCancel: async () => cancelled,
+      runNode: async (node) => {
+        started.push(node.id);
+        cancelled = true;
+        await wait(1);
+        return node.id;
+      },
+    });
+
+    expect(started).toEqual(['a']);
+    expect(summary.results).toMatchObject([
+      { nodeId: 'a', status: 'success' },
+      { nodeId: 'b', status: 'cancelled' },
+    ]);
+  });
+
   it('reports cycles before scheduling any nodes', async () => {
     const starts: string[] = [];
 
