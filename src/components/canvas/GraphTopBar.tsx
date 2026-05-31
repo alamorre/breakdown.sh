@@ -13,67 +13,69 @@ import { computeLayout } from '@/lib/layout/elk-layout';
 import { exportGraph } from '@/lib/export/export-graph';
 import { getRunAllInitialPlan, RUN_ALL_MAX_CONCURRENCY } from '@/lib/graph/run-all';
 import { sortTopologically } from '@/lib/graph/topological-sort';
+import { sortRunProgressItems, type RunProgressItem } from '@/lib/graph/run-progress';
 import { notifyRunCompletion } from '@/lib/notifications/run-completion';
+import { RunAllProgressToast } from '@/components/canvas/RunAllProgressToast';
 import type {
+  RunGraphNodeResult,
   RunGraphResponse,
   RunGraphStatusNode,
   RunGraphStatusResponse,
 } from '@/types/run-graph';
 
 const RUN_PROGRESS_TOAST_ID = 'run-all-progress';
-const RUN_PROGRESS_POLL_MS = 4000;
-const MAX_PROGRESS_NODE_NAMES = 3;
+const RUN_PROGRESS_POLL_MS = 1500;
 
-function formatNodeList(names: string[]) {
-  const visibleNames = names.slice(0, MAX_PROGRESS_NODE_NAMES);
-  const moreCount = names.length - visibleNames.length;
-  return `${visibleNames.join(', ')}${moreCount > 0 ? `, +${moreCount} more` : ''}`;
+function buildInitialProgressItems(
+  nodes: CanvasNode[],
+  runningNodeIds: string[],
+  readyQueuedNodeIds: string[],
+): RunProgressItem[] {
+  const runningIds = new Set(runningNodeIds);
+  const readyQueuedIds = new Set(readyQueuedNodeIds);
+
+  return nodes.map((node) => ({
+    nodeId: node.id,
+    name: node.data.thesisNode.name,
+    runStatus: runningIds.has(node.id) ? 'running' : 'queued',
+    error: runningIds.has(node.id)
+      ? null
+      : readyQueuedIds.has(node.id)
+        ? 'Waiting for a concurrency slot.'
+        : 'Waiting for upstream nodes to finish.',
+  }));
 }
 
-function formatElapsed(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+function buildLiveProgressItems(
+  statusNodes: RunGraphStatusNode[],
+  orderedNodeIds: string[],
+): RunProgressItem[] {
+  return sortRunProgressItems(
+    statusNodes.map((node) => ({
+      nodeId: node.nodeId,
+      name: node.name,
+      runStatus: node.runStatus,
+      error: node.error,
+    })),
+    orderedNodeIds,
+  );
 }
 
-function getNodeNames(nodes: CanvasNode[], nodeIds: string[]) {
-  const names = new Map(nodes.map((node) => [node.id, node.data.thesisNode.name]));
-  return nodeIds.map((nodeId) => names.get(nodeId) ?? 'Unknown node');
-}
+function buildResultProgressItems(
+  results: RunGraphNodeResult[],
+  orderedNodes: CanvasNode[],
+): RunProgressItem[] {
+  const nodeNames = new Map(orderedNodes.map((node) => [node.id, node.data.thesisNode.name]));
 
-function formatInitialProgressMessage(nodes: CanvasNode[], runningNodeIds: string[]) {
-  const runningNames = getNodeNames(nodes, runningNodeIds);
-  const queuedCount = nodes.length - runningNodeIds.length;
-
-  if (runningNames.length === 0) {
-    return `Preparing ${nodes.length} nodes. Downstream nodes will wait for upstream outputs.`;
-  }
-
-  return `Starting ${runningNames.length}/${nodes.length}: ${formatNodeList(
-    runningNames,
-  )}. ${queuedCount} queued; downstream waits for dependencies.`;
-}
-
-function formatLiveProgressMessage(statusNodes: RunGraphStatusNode[], elapsedMs: number) {
-  const running = statusNodes.filter((node) => node.runStatus === 'running');
-  const queued = statusNodes.filter((node) => node.runStatus === 'queued');
-  const succeeded = statusNodes.filter((node) => node.runStatus === 'success').length;
-  const failed = statusNodes.filter((node) => node.runStatus === 'error').length;
-  const settled = succeeded + failed;
-  const elapsed = formatElapsed(elapsedMs);
-
-  if (running.length > 0) {
-    return `Running ${running.length} now: ${formatNodeList(
-      running.map((node) => node.name),
-    )}. ${settled}/${statusNodes.length} done, ${queued.length} queued. ${elapsed} elapsed.`;
-  }
-
-  if (queued.length > 0) {
-    return `Waiting for the next eligible batch. ${settled}/${statusNodes.length} done, ${queued.length} queued. ${elapsed} elapsed.`;
-  }
-
-  return `Finalizing run results. ${settled}/${statusNodes.length} done. ${elapsed} elapsed.`;
+  return sortRunProgressItems(
+    results.map((result) => ({
+      nodeId: result.nodeId,
+      name: nodeNames.get(result.nodeId) ?? 'Unknown node',
+      runStatus: result.runStatus,
+      error: result.error,
+    })),
+    orderedNodes.map((node) => node.id),
+  );
 }
 
 interface GraphTopBarProps {
@@ -90,6 +92,9 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
   const { nodes, edges, graph, setNodeRunState } = useGraphStore();
   const reactFlowInstance = useReactFlow();
   const activeRunIdRef = useRef<string | null>(null);
+  const activeRunStartedAtRef = useRef<number | null>(null);
+  const activeRunProgressNoteRef = useRef<string | undefined>(undefined);
+  const activeProgressItemsRef = useRef<RunProgressItem[]>([]);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleSave = useCallback(async () => {
@@ -120,20 +125,42 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
       return;
     }
 
-    const { unsortedNodeIds } = sortTopologically(currentNodes, runEdges);
+    const { sortedNodes, unsortedNodeIds } = sortTopologically(currentNodes, runEdges);
 
     if (unsortedNodeIds.length > 0) {
       toast.error('Run all requires an acyclic graph. Remove the cycle and try again.');
       return;
     }
 
-    const initialPlan = getRunAllInitialPlan(currentNodes, runEdges, RUN_ALL_MAX_CONCURRENCY);
+    const orderedNodes = sortedNodes.length === currentNodes.length ? sortedNodes : currentNodes;
+    const orderedNodeIds = orderedNodes.map((node) => node.id);
+    const initialPlan = getRunAllInitialPlan(orderedNodes, runEdges, RUN_ALL_MAX_CONCURRENCY);
     const initiallyRunningNodeIds = new Set(initialPlan.runningNodeIds);
     const readyQueuedNodeIds = new Set(initialPlan.readyQueuedNodeIds);
     const runId = crypto.randomUUID();
     const startedAt = Date.now();
     activeRunIdRef.current = runId;
+    activeRunStartedAtRef.current = startedAt;
+    activeRunProgressNoteRef.current = undefined;
     setRunningAll(true);
+
+    const showProgressToast = (items: RunProgressItem[], note?: string) => {
+      const progressNote = note ?? activeRunProgressNoteRef.current;
+      activeProgressItemsRef.current = items;
+      toast.custom(
+        () => (
+          <RunAllProgressToast
+            items={items}
+            elapsedMs={Date.now() - startedAt}
+            note={progressNote}
+          />
+        ),
+        {
+          id: RUN_PROGRESS_TOAST_ID,
+          duration: Infinity,
+        },
+      );
+    };
 
     const applyStatusNodes = (statusNodes: RunGraphStatusNode[]) => {
       for (const statusNode of statusNodes) {
@@ -156,9 +183,7 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
         }
 
         applyStatusNodes(snapshot.data.nodes);
-        toast.loading(formatLiveProgressMessage(snapshot.data.nodes, Date.now() - startedAt), {
-          id: RUN_PROGRESS_TOAST_ID,
-        });
+        showProgressToast(buildLiveProgressItems(snapshot.data.nodes, orderedNodeIds));
       } catch {
         // Polling only improves progress visibility; the main run request still owns final state.
       }
@@ -178,9 +203,13 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
         }
       }
 
-      toast.loading(formatInitialProgressMessage(currentNodes, initialPlan.runningNodeIds), {
-        id: RUN_PROGRESS_TOAST_ID,
-      });
+      showProgressToast(
+        buildInitialProgressItems(
+          orderedNodes,
+          initialPlan.runningNodeIds,
+          initialPlan.readyQueuedNodeIds,
+        ),
+      );
 
       const runRequest = fetch(`/api/graphs/${graph.id}/run`, {
         method: 'POST',
@@ -215,6 +244,7 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
           ...(nodeResult.summary ? { metadata: { summary: nodeResult.summary } } : {}),
         });
       }
+      showProgressToast(buildResultProgressItems(result.data.results, orderedNodes));
 
       const { metrics } = result.data;
       if (result.data.cancelled) {
@@ -246,6 +276,11 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
       if (activeRunIdRef.current === runId) {
         activeRunIdRef.current = null;
       }
+      if (activeRunStartedAtRef.current === startedAt) {
+        activeRunStartedAtRef.current = null;
+        activeRunProgressNoteRef.current = undefined;
+        activeProgressItemsRef.current = [];
+      }
       if (progressPollRef.current) {
         clearInterval(progressPollRef.current);
         progressPollRef.current = null;
@@ -259,9 +294,25 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
     const runId = activeRunIdRef.current;
     if (!graph || !runId) return;
 
-    toast.loading('Cancel requested. In-flight nodes will finish; queued nodes will not start.', {
-      id: RUN_PROGRESS_TOAST_ID,
-    });
+    if (activeProgressItemsRef.current.length > 0) {
+      const startedAt = activeRunStartedAtRef.current ?? Date.now();
+      const cancelNote =
+        'Cancel requested. In-flight nodes will finish; queued nodes will not start.';
+      activeRunProgressNoteRef.current = cancelNote;
+      toast.custom(
+        () => (
+          <RunAllProgressToast
+            items={activeProgressItemsRef.current}
+            elapsedMs={Date.now() - startedAt}
+            note={cancelNote}
+          />
+        ),
+        {
+          id: RUN_PROGRESS_TOAST_ID,
+          duration: Infinity,
+        },
+      );
+    }
     void fetch(`/api/graphs/${graph.id}/run/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
