@@ -45,6 +45,7 @@ vi.mock('@/lib/ai/claude', () => ({
 
 vi.mock('@/lib/ai/build-prompt', () => ({
   buildRunPrompt: vi.fn((prompt: string) => prompt),
+  buildSummaryPrompt: vi.fn((output: string) => output),
 }));
 
 beforeEach(() => {
@@ -181,5 +182,60 @@ describe('deleteNode', () => {
     const result = await deleteNode({ nodeId: 'not-a-uuid' });
 
     expect(result.error).toBeTruthy();
+  });
+});
+
+describe('runNode', () => {
+  it('should reject stale source inputs before running AI nodes', async () => {
+    const nodeId = '550e8400-e29b-41d4-a716-446655440010';
+    const sourceId = '550e8400-e29b-41d4-a716-446655440011';
+    const aiNode = {
+      id: nodeId,
+      graph_id: '550e8400-e29b-41d4-a716-446655440001',
+      node_type: 'default',
+      name: 'Analysis Node',
+      prompt: 'Analyze source',
+      output: null,
+      run_status: 'idle',
+      run_error: null,
+      last_run_at: null,
+      metadata: {},
+      created_at: '2026-05-31T00:00:00Z',
+      updated_at: '2026-05-31T00:00:00Z',
+    };
+    const staleSource = {
+      ...aiNode,
+      id: sourceId,
+      node_type: 'source-web-url',
+      name: 'Market Source',
+      output: 'Old market data',
+      run_status: 'success',
+      last_run_at: '2026-01-01T00:00:00Z',
+    };
+    const edge = {
+      id: '550e8400-e29b-41d4-a716-446655440012',
+      graph_id: aiNode.graph_id,
+      source_node_id: sourceId,
+      target_node_id: nodeId,
+      edge_type: 'inputs_to',
+      weight: 1,
+      condition: null,
+      transform: null,
+      created_at: '2026-05-31T00:00:00Z',
+      updated_at: '2026-05-31T00:00:00Z',
+    };
+
+    mockSingle.mockResolvedValueOnce({ data: aiNode, error: null });
+    mockEq
+      .mockReturnValueOnce({ single: mockSingle })
+      .mockResolvedValueOnce({ data: [edge], error: null });
+    mockIn.mockResolvedValueOnce({ data: [staleSource], error: null });
+
+    const { runNode } = await import('@/actions/node-actions');
+    const result = await runNode({ nodeId });
+
+    expect(result.data).toBeNull();
+    expect(result.error).toContain('Stale source input: Market Source');
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
