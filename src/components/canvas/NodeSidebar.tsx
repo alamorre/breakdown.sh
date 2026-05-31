@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { Plus, Brain, Globe, FileText, Table } from 'lucide-react';
+import { Plus, Brain, Globe, FileText, Table, TextIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReactFlow } from '@xyflow/react';
 import {
@@ -33,6 +33,12 @@ const NODE_OPTIONS = [
     icon: Table,
     nodeType: SOURCE_NODE_TYPES['google-sheet'],
     defaultName: DATA_SOURCE_DEFAULT_NAMES['google-sheet'],
+  },
+  {
+    label: 'Text',
+    icon: TextIcon,
+    nodeType: SOURCE_NODE_TYPES['text'],
+    defaultName: DATA_SOURCE_DEFAULT_NAMES['text'],
   },
 ] as const;
 

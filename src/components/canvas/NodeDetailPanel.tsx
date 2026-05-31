@@ -2,7 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Play, Loader2, Trash2, RefreshCw } from 'lucide-react';
+import { Play, Loader2, Trash2, RefreshCw, Copy, Check, Save } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Sheet,
   SheetContent,
@@ -30,6 +32,22 @@ import { updateNode, deleteNode, runNode } from '@/actions/node-actions';
 import type { ThesisNode } from '@/types/node';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
 import { isDataSourceNode, getDataSourceType, DATA_SOURCE_LABELS } from '@/types/data-source';
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Button variant="ghost" size="icon-sm" onClick={handleCopy}>
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+    </Button>
+  );
+}
 
 interface NodeFormProps {
   thesisNode: ThesisNode;
@@ -76,10 +94,18 @@ function NodeForm({
   const storePrompt = thesisNode.prompt;
   const storeUrl = (thesisNode.metadata as { url?: string })?.url ?? '';
   const storeSheetName = (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '';
-  useEffect(() => { setName(storeName); }, [storeName]);
-  useEffect(() => { setPrompt(storePrompt); }, [storePrompt]);
-  useEffect(() => { setSourceUrl(storeUrl); }, [storeUrl]);
-  useEffect(() => { setSheetName(storeSheetName); }, [storeSheetName]);
+  useEffect(() => {
+    setName(storeName);
+  }, [storeName]);
+  useEffect(() => {
+    setPrompt(storePrompt);
+  }, [storePrompt]);
+  useEffect(() => {
+    setSourceUrl(storeUrl);
+  }, [storeUrl]);
+  useEffect(() => {
+    setSheetName(storeSheetName);
+  }, [storeSheetName]);
 
   const debouncedSave = useCallback(
     (
@@ -198,7 +224,18 @@ function NodeForm({
           <Input id="node-name" value={name} onChange={(e) => handleNameChange(e.target.value)} />
         </div>
 
-        {isSource ? (
+        {isSource && sourceType === 'text' ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="node-prompt">Content</Label>
+            <Textarea
+              id="node-prompt"
+              value={prompt}
+              onChange={(e) => handlePromptChange(e.target.value)}
+              placeholder="Paste or type your text here..."
+              rows={10}
+            />
+          </div>
+        ) : isSource ? (
           <>
             <div className="space-y-1.5">
               <Label htmlFor="source-url">Source URL</Label>
@@ -235,22 +272,37 @@ function NodeForm({
         )}
 
         <div className="space-y-1.5">
-          <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
-          <ScrollArea className="h-48 rounded-lg border bg-muted/50 p-3">
+          <div className="flex items-center justify-between">
+            <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
+            {thesisNode.output && !isRunning && thesisNode.run_status !== 'error' && (
+              <CopyButton text={thesisNode.output} />
+            )}
+          </div>
+          <ScrollArea className="h-80 rounded-lg border bg-muted/50 p-3">
             {isRunning && (
               <p className="text-sm text-muted-foreground">
-                {isSource ? 'Fetching...' : 'Running...'}
+                {isSource && sourceType === 'text'
+                  ? 'Saving...'
+                  : isSource
+                    ? 'Fetching...'
+                    : 'Running...'}
               </p>
             )}
             {thesisNode.run_status === 'error' && (
               <p className="text-sm text-destructive">{thesisNode.run_error ?? 'Error'}</p>
             )}
             {!isRunning && thesisNode.run_status !== 'error' && thesisNode.output && (
-              <p className="whitespace-pre-wrap text-sm">{thesisNode.output}</p>
+              <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-headings:font-semibold prose-h1:text-lg prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-3">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{thesisNode.output}</ReactMarkdown>
+              </div>
             )}
             {!isRunning && thesisNode.run_status !== 'error' && !thesisNode.output && (
               <p className="text-sm text-muted-foreground">
-                {isSource ? 'Not yet fetched' : 'Not yet run'}
+                {isSource && sourceType === 'text'
+                  ? 'Not yet saved'
+                  : isSource
+                    ? 'Not yet fetched'
+                    : 'Not yet run'}
               </p>
             )}
           </ScrollArea>
@@ -260,8 +312,12 @@ function NodeForm({
           <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
           {thesisNode.last_run_at && (
             <span className="text-xs text-muted-foreground">
-              {isSource ? 'Last fetched' : 'Last run'}:{' '}
-              {new Date(thesisNode.last_run_at).toLocaleString()}
+              {isSource && sourceType === 'text'
+                ? 'Last saved'
+                : isSource
+                  ? 'Last fetched'
+                  : 'Last run'}
+              : {new Date(thesisNode.last_run_at).toLocaleString()}
             </span>
           )}
         </div>
@@ -269,12 +325,14 @@ function NodeForm({
         <Button onClick={handleRun} disabled={isRunning}>
           {isRunning ? (
             <Loader2 className="size-4 animate-spin" />
+          ) : isSource && sourceType === 'text' ? (
+            <Save className="size-4" />
           ) : isSource ? (
             <RefreshCw className="size-4" />
           ) : (
             <Play className="size-4" />
           )}
-          {isSource ? 'Fetch' : 'Run'}
+          {isSource && sourceType === 'text' ? 'Save' : isSource ? 'Fetch' : 'Run'}
         </Button>
 
         {(upstreamEdges.length > 0 || downstreamEdges.length > 0) && (
@@ -376,9 +434,63 @@ function NodeForm({
   );
 }
 
+const MIN_WIDTH = 480;
+const MAX_WIDTH = 1200;
+const DEFAULT_WIDTH = 640;
+const STORAGE_KEY = 'thesis-detail-panel-width';
+
+function getStoredWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_WIDTH;
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return DEFAULT_WIDTH;
+  const parsed = Number(stored);
+  if (Number.isNaN(parsed) || parsed < MIN_WIDTH || parsed > MAX_WIDTH) return DEFAULT_WIDTH;
+  return parsed;
+}
+
 export function NodeDetailPanel() {
   const { nodes, edges, selectedNodeId, selectNode, updateNodeData, setNodeRunState, removeNode } =
     useGraphStore();
+
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const isDragging = useRef(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setPanelWidth(getStoredWidth());
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newWidth = window.innerWidth - moveEvent.clientX;
+      setPanelWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      // Persist final width
+      setPanelWidth((w) => {
+        localStorage.setItem(STORAGE_KEY, String(w));
+        return w;
+      });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const thesisNode = selectedNode?.data.thesisNode ?? null;
@@ -390,7 +502,16 @@ export function NodeDetailPanel() {
         if (!open) selectNode(null);
       }}
     >
-      <SheetContent side="right" className="w-[400px] overflow-y-auto sm:max-w-[400px]">
+      <SheetContent
+        side="right"
+        className="overflow-y-auto"
+        style={{ width: panelWidth, maxWidth: panelWidth }}
+      >
+        {/* Drag handle on left edge */}
+        <div
+          onMouseDown={handleMouseDown}
+          className="absolute inset-y-0 left-0 z-50 w-1.5 cursor-col-resize transition-colors hover:bg-primary/10 active:bg-primary/20"
+        />
         {thesisNode && selectedNodeId && (
           <NodeForm
             key={selectedNodeId}
