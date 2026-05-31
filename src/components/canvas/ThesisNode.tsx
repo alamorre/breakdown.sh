@@ -172,6 +172,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
   }, [thesisNode.id, removeNode]);
 
   const isRunning = thesisNode.run_status === 'running';
+  const isQueued = thesisNode.run_status === 'queued';
   const isError = thesisNode.run_status === 'error';
   const isFetched = thesisNode.run_status === 'success' && thesisNode.output;
 
@@ -230,6 +231,12 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             />
 
             <div className="flex items-center gap-1.5 text-xs">
+              {isQueued && (
+                <>
+                  <CircleDashed className="size-3 text-amber-500" />
+                  <span className="text-amber-600 dark:text-amber-400">Queued</span>
+                </>
+              )}
               {isError && (
                 <>
                   <AlertCircle className="size-3 text-destructive" />
@@ -238,7 +245,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                   </span>
                 </>
               )}
-              {isTextSaved && !hasUnsavedChanges && (
+              {isTextSaved && !hasUnsavedChanges && !isQueued && (
                 <>
                   <Check className="size-3 text-emerald-500" />
                   <span className="text-muted-foreground">Saved</span>
@@ -249,13 +256,13 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                   )}
                 </>
               )}
-              {hasUnsavedChanges && prompt && (
+              {hasUnsavedChanges && prompt && !isQueued && (
                 <>
                   <CircleDashed className="size-3 text-amber-500" />
                   <span className="text-amber-600 dark:text-amber-400">Unsaved changes</span>
                 </>
               )}
-              {!isError && !prompt && (
+              {!isQueued && !isError && !prompt && (
                 <>
                   <CircleDashed className="size-3 text-muted-foreground/50" />
                   <span className="text-muted-foreground/60">No content</span>
@@ -269,7 +276,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
               size="sm"
               variant="secondary"
               onClick={handleRun}
-              disabled={isRunning || !prompt}
+              disabled={isRunning || isQueued || !prompt}
               className="nodrag h-7 gap-1.5 text-xs"
             >
               {isRunning ? (
@@ -325,6 +332,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             selected && 'ring-2 ring-ring',
             isError && 'border-destructive/40',
             isRunning && 'border-primary/40',
+            isQueued && 'border-amber-400/50',
           )}
         >
           <Handle
@@ -417,6 +425,12 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
 
             {/* Status line */}
             <div className="flex items-center gap-1.5 text-xs">
+              {isQueued && (
+                <>
+                  <CircleDashed className="size-3 text-amber-500" />
+                  <span className="text-amber-600 dark:text-amber-400">Queued</span>
+                </>
+              )}
               {isRunning && (
                 <>
                   <Loader2 className="size-3 animate-spin text-primary" />
@@ -431,7 +445,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                   </span>
                 </>
               )}
-              {isFetched && !isRunning && (
+              {isFetched && !isRunning && !isQueued && (
                 <>
                   <Check className="size-3 text-emerald-500" />
                   <span className="text-muted-foreground">Fetched</span>
@@ -442,7 +456,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                   )}
                 </>
               )}
-              {!isRunning && !isError && !isFetched && (
+              {!isQueued && !isRunning && !isError && !isFetched && (
                 <>
                   <CircleDashed className="size-3 text-muted-foreground/50" />
                   <span className="text-muted-foreground/60">Not fetched</span>
@@ -469,7 +483,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
               size="sm"
               variant="secondary"
               onClick={handleRun}
-              disabled={isRunning || !sourceUrl}
+              disabled={isRunning || isQueued || !sourceUrl}
               className="nodrag h-7 gap-1.5 text-xs"
             >
               {isRunning ? (
@@ -515,7 +529,11 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
   return (
     <>
       <div
-        className={cn('w-80 rounded-xl border bg-card shadow-sm', selected && 'ring-2 ring-ring')}
+        className={cn(
+          'w-80 rounded-xl border bg-card shadow-sm',
+          selected && 'ring-2 ring-ring',
+          isQueued && 'border-amber-400/50',
+        )}
       >
         <Handle
           type="target"
@@ -530,7 +548,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             <Button
               size="sm"
               onClick={handleRun}
-              disabled={isRunning}
+              disabled={isRunning || isQueued}
               className="nodrag h-6 gap-1 px-2 text-xs"
             >
               {isRunning ? (
@@ -538,7 +556,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
               ) : (
                 <Play className="size-3" />
               )}
-              {isRunning ? 'Running' : 'Run'}
+              {isRunning ? 'Running' : isQueued ? 'Queued' : 'Run'}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger className="nodrag inline-flex h-6 w-6 items-center justify-center rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
@@ -578,19 +596,25 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             className={cn(
               'max-h-[72px] overflow-hidden rounded-lg bg-muted/50 px-3 py-2 text-sm',
               isRunning && 'animate-pulse',
+              isQueued && 'border border-amber-400/30 bg-amber-50/60 dark:bg-amber-950/10',
               isError && 'border border-destructive/30 bg-destructive/5',
             )}
           >
             {isRunning && <p className="text-muted-foreground">Running...</p>}
+            {isQueued && !isRunning && (
+              <p className="text-muted-foreground">
+                {thesisNode.run_error ?? 'Queued for Run All'}
+              </p>
+            )}
             {isError && (
               <p className="line-clamp-3 text-destructive">{thesisNode.run_error ?? 'Error'}</p>
             )}
-            {!isRunning && !isError && thesisNode.output && (
+            {!isQueued && !isRunning && !isError && thesisNode.output && (
               <p className="line-clamp-3 leading-snug">
                 {(thesisNode.metadata as { summary?: string })?.summary ?? thesisNode.output}
               </p>
             )}
-            {!isRunning && !isError && !thesisNode.output && (
+            {!isQueued && !isRunning && !isError && !thesisNode.output && (
               <p className="text-muted-foreground">No output yet</p>
             )}
           </div>
@@ -603,13 +627,19 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 <span className="text-muted-foreground">Running...</span>
               </>
             )}
+            {isQueued && !isRunning && (
+              <>
+                <CircleDashed className="size-3 text-amber-500" />
+                <span className="text-amber-600 dark:text-amber-400">Queued</span>
+              </>
+            )}
             {isError && !isRunning && (
               <>
                 <AlertCircle className="size-3 text-destructive" />
                 <span className="truncate text-destructive">{thesisNode.run_error ?? 'Error'}</span>
               </>
             )}
-            {thesisNode.run_status === 'success' && !isRunning && (
+            {thesisNode.run_status === 'success' && !isRunning && !isQueued && (
               <>
                 <Check className="size-3 text-emerald-500" />
                 <span className="text-muted-foreground">Run</span>
@@ -620,7 +650,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 )}
               </>
             )}
-            {thesisNode.run_status === 'idle' && !isRunning && (
+            {thesisNode.run_status === 'idle' && !isRunning && !isQueued && (
               <>
                 <CircleDashed className="size-3 text-muted-foreground/50" />
                 <span className="text-muted-foreground/60">Not run</span>
