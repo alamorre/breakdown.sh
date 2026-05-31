@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
+import { ANTHROPIC_MODEL_IDS, DEFAULT_ANTHROPIC_MODEL_ID } from '@/lib/ai/models';
 import type { Graph } from '@/types/graph';
 import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
@@ -17,6 +18,7 @@ const updateGraphSchema = z.object({
   graphId: z.string().uuid(),
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional(),
+  llmModel: z.enum(ANTHROPIC_MODEL_IDS).optional(),
 });
 
 const deleteGraphSchema = z.object({
@@ -51,6 +53,7 @@ export async function createGraph(
       user_id: userId,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
+      llm_model: DEFAULT_ANTHROPIC_MODEL_ID,
     })
     .select()
     .single();
@@ -93,9 +96,10 @@ export async function updateGraph(
   }
 
   const supabase = createServerClient();
-  const updates: Record<string, string> = {};
+  const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
+  if (parsed.data.llmModel !== undefined) updates.llm_model = parsed.data.llmModel;
 
   const { data, error } = await supabase
     .from('graphs')
@@ -110,6 +114,7 @@ export async function updateGraph(
   }
 
   revalidatePath('/dashboard');
+  revalidatePath(`/graph/${parsed.data.graphId}`);
   return { data: data as Graph, error: null };
 }
 
@@ -188,6 +193,17 @@ export async function updateGraphName(
 ): Promise<{ error: string | null }> {
   const result = await updateGraph({ graphId, name });
   return { error: result.error };
+}
+
+export async function updateGraphModel(
+  graphId: string,
+  llmModel: z.infer<typeof updateGraphSchema>['llmModel'],
+): Promise<{ data: Graph | null; error: string | null }> {
+  if (!llmModel) {
+    return { data: null, error: 'Model is required' };
+  }
+
+  return updateGraph({ graphId, llmModel });
 }
 
 export async function batchUpdateNodePositions(

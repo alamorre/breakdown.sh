@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { runNode } from '@/actions/node-actions';
+import { resolveAnthropicModelId } from '@/lib/ai/models';
 import type { RunStatus, ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
 import type {
@@ -220,6 +221,10 @@ export async function runGraphWithScheduler(input: {
       return { data: null, error: graphError?.message ?? 'Graph not found' };
     }
 
+    const executionModel = resolveAnthropicModelId(
+      (graph as { llm_model?: string | null }).llm_model,
+    );
+
     const [nodesResult, edgesResult] = await Promise.all([
       supabase.from('nodes').select('*').eq('graph_id', parsed.data.graphId),
       supabase.from('edges').select('*').eq('graph_id', parsed.data.graphId),
@@ -310,7 +315,7 @@ export async function runGraphWithScheduler(input: {
         }
       },
       runNode: async (node) => {
-        const result = await runNode({ nodeId: node.id });
+        const result = await runNode({ nodeId: node.id, llmModel: executionModel });
         if (result.error || !result.data) {
           throw new Error(result.error ?? 'Run failed');
         }

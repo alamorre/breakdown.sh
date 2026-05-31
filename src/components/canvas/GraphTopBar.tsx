@@ -1,13 +1,28 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Play, Loader2, LayoutGrid, Download, Square } from 'lucide-react';
+import {
+  Play,
+  Loader2,
+  LayoutGrid,
+  Download,
+  Square,
+  BrainCircuit,
+  ChevronDown,
+} from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { updateGraphName } from '@/actions/graph-actions';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { updateGraphModel, updateGraphName } from '@/actions/graph-actions';
 import { useGraphStore, type CanvasNode } from '@/store/graph-store';
 import { computeLayout } from '@/lib/layout/elk-layout';
 import { exportGraph } from '@/lib/export/export-graph';
@@ -16,6 +31,13 @@ import { sortTopologically } from '@/lib/graph/topological-sort';
 import { sortRunProgressItems, type RunProgressItem } from '@/lib/graph/run-progress';
 import { notifyRunCompletion } from '@/lib/notifications/run-completion';
 import { RunAllProgressToast } from '@/components/canvas/RunAllProgressToast';
+import { cn } from '@/lib/utils';
+import {
+  ANTHROPIC_MODEL_OPTIONS,
+  getAnthropicModelOption,
+  resolveAnthropicModelId,
+  type AnthropicModelId,
+} from '@/lib/ai/models';
 import type {
   RunGraphNodeResult,
   RunGraphResponse,
@@ -115,20 +137,30 @@ async function readRunGraphStream(
 interface GraphTopBarProps {
   graphId: string;
   initialName: string;
+  initialLlmModel: AnthropicModelId | null;
 }
 
-export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
+export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopBarProps) {
   const [name, setName] = useState(initialName);
   const [editing, setEditing] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
   const [layouting, setLayouting] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState<AnthropicModelId>(
+    resolveAnthropicModelId(initialLlmModel),
+  );
 
-  const { nodes, edges, graph, setNodeRunState } = useGraphStore();
+  const { nodes, edges, graph, setNodeRunState, updateGraphData } = useGraphStore();
   const reactFlowInstance = useReactFlow();
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunStartedAtRef = useRef<number | null>(null);
   const activeRunProgressNoteRef = useRef<string | undefined>(undefined);
   const activeProgressItemsRef = useRef<RunProgressItem[]>([]);
+  const selectedModel = getAnthropicModelOption(selectedModelId);
+
+  useEffect(() => {
+    setSelectedModelId(resolveAnthropicModelId(initialLlmModel));
+  }, [initialLlmModel]);
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -143,6 +175,28 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
       setName(initialName);
     }
   }, [name, initialName, graphId]);
+
+  const handleModelSelect = useCallback(
+    async (modelId: AnthropicModelId) => {
+      if (modelId === selectedModelId || runningAll) return;
+
+      const previousModelId = selectedModelId;
+      setSelectedModelId(modelId);
+      setSavingModel(true);
+
+      const { data, error } = await updateGraphModel(graphId, modelId);
+
+      setSavingModel(false);
+      if (error || !data) {
+        setSelectedModelId(previousModelId);
+        toast.error(error ?? 'Failed to save model');
+        return;
+      }
+
+      updateGraphData(data);
+    },
+    [graphId, runningAll, selectedModelId, updateGraphData],
+  );
 
   const handleRunAll = useCallback(async () => {
     if (!graph) return;
@@ -484,6 +538,38 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
         <Download className="size-3.5" />
         Export
       </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'sm' }),
+            'min-w-[6.75rem] justify-start',
+          )}
+          disabled={runningAll || savingModel}
+          title="Anthropic model"
+        >
+          {savingModel ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <BrainCircuit className="size-3.5" />
+          )}
+          <span>{selectedModel.label}</span>
+          <ChevronDown className="ml-auto size-3" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuRadioGroup
+            value={selectedModelId}
+            disabled={runningAll || savingModel}
+            onValueChange={(value) => void handleModelSelect(value as AnthropicModelId)}
+          >
+            {ANTHROPIC_MODEL_OPTIONS.map((option) => (
+              <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
+                {option.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {runningAll ? (
         <Button size="sm" variant="destructive" onClick={handleCancelRun}>

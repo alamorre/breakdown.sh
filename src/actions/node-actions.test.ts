@@ -13,6 +13,7 @@ const mockUpdate = vi.fn();
 const mockDelete = vi.fn();
 const mockEq = vi.fn();
 const mockIn = vi.fn();
+const mockClaudeCreate = vi.fn();
 
 function createChain() {
   return {
@@ -35,10 +36,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/ai/claude', () => ({
   createClaudeClient: () => ({
     messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text: 'Generated output' }],
-        usage: { input_tokens: 100, output_tokens: 50 },
-      }),
+      create: mockClaudeCreate,
     },
   }),
 }));
@@ -51,6 +49,10 @@ vi.mock('@/lib/ai/build-prompt', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockReturnValue({ userId: 'user_123' });
+  mockClaudeCreate.mockResolvedValue({
+    content: [{ type: 'text', text: 'Generated output' }],
+    usage: { input_tokens: 100, output_tokens: 50 },
+  });
 });
 
 describe('createNode', () => {
@@ -186,6 +188,78 @@ describe('deleteNode', () => {
 });
 
 describe('runNode', () => {
+  it('should use the graph-selected model and store it on the evaluation', async () => {
+    const nodeId = '550e8400-e29b-41d4-a716-446655440010';
+    const aiNode = {
+      id: nodeId,
+      graph_id: '550e8400-e29b-41d4-a716-446655440001',
+      node_type: 'default',
+      name: 'Analysis Node',
+      prompt: 'Analyze source',
+      output: null,
+      run_status: 'idle',
+      run_error: null,
+      last_run_at: null,
+      metadata: {},
+      created_at: '2026-05-31T00:00:00Z',
+      updated_at: '2026-05-31T00:00:00Z',
+    };
+
+    mockSingle
+      .mockResolvedValueOnce({ data: aiNode, error: null })
+      .mockResolvedValueOnce({ data: { llm_model: 'claude-opus-4-8' }, error: null });
+
+    const { runNode } = await import('@/actions/node-actions');
+    const result = await runNode({ nodeId });
+
+    expect(result.error).toBeNull();
+    expect(mockClaudeCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: 'claude-opus-4-8' }),
+    );
+    expect(mockClaudeCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: 'claude-haiku-4-5-20251001' }),
+    );
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ llm_model: 'claude-opus-4-8' }),
+    );
+  });
+
+  it('should default to Sonnet when the graph has no selected model', async () => {
+    const nodeId = '550e8400-e29b-41d4-a716-446655440010';
+    const aiNode = {
+      id: nodeId,
+      graph_id: '550e8400-e29b-41d4-a716-446655440001',
+      node_type: 'default',
+      name: 'Analysis Node',
+      prompt: 'Analyze source',
+      output: null,
+      run_status: 'idle',
+      run_error: null,
+      last_run_at: null,
+      metadata: {},
+      created_at: '2026-05-31T00:00:00Z',
+      updated_at: '2026-05-31T00:00:00Z',
+    };
+
+    mockSingle
+      .mockResolvedValueOnce({ data: aiNode, error: null })
+      .mockResolvedValueOnce({ data: { llm_model: null }, error: null });
+
+    const { runNode } = await import('@/actions/node-actions');
+    const result = await runNode({ nodeId });
+
+    expect(result.error).toBeNull();
+    expect(mockClaudeCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: 'claude-sonnet-4-6' }),
+    );
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ llm_model: 'claude-sonnet-4-6' }),
+    );
+  });
+
   it('should reject stale source inputs before running AI nodes', async () => {
     const nodeId = '550e8400-e29b-41d4-a716-446655440010';
     const sourceId = '550e8400-e29b-41d4-a716-446655440011';

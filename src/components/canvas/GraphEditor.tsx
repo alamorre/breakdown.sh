@@ -20,7 +20,11 @@ export function GraphEditor({ graph, initialNodes, initialEdges }: GraphEditorPr
   return (
     <ReactFlowProvider>
       <TooltipProvider>
-        <GraphTopBar graphId={graph.id} initialName={graph.name} />
+        <GraphTopBar
+          graphId={graph.id}
+          initialName={graph.name}
+          initialLlmModel={graph.llm_model}
+        />
         <div className="flex flex-1 overflow-hidden">
           <NodeSidebar />
           <div className="flex-1">
