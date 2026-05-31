@@ -45,3 +45,27 @@ export interface RunGraphStatusResponse {
   data: { nodes: RunGraphStatusNode[] } | null;
   error: string | null;
 }
+
+export const RUN_GRAPH_STREAM_CONTENT_TYPE = 'application/x-ndjson; charset=utf-8';
+
+export type RunGraphStreamEvent =
+  | {
+      type: 'run-started';
+      nodes: RunGraphStatusNode[];
+    }
+  | {
+      type: 'node-started';
+      node: RunGraphStatusNode;
+    }
+  | {
+      type: 'node-settled';
+      node: RunGraphStatusNode;
+    }
+  | {
+      type: 'run-completed';
+      data: RunGraphData;
+    }
+  | {
+      type: 'run-failed';
+      error: string;
+    };

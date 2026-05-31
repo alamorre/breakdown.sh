@@ -1,5 +1,12 @@
 /** Run status of a node */
-export type RunStatus = 'idle' | 'queued' | 'running' | 'success' | 'error';
+export type RunStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'success'
+  | 'error'
+  | 'skipped'
+  | 'cancelled';
 
 /** A node on the canvas — a computational unit with prompt and generated output */
 export interface ThesisNode {
@@ -16,7 +23,7 @@ export interface ThesisNode {
   output: string | null;
   /** Current execution state */
   run_status: RunStatus;
-  /** Error message if run_status === 'error' */
+  /** Error message if run_status is error, skipped, or cancelled */
   run_error: string | null;
   /** ISO timestamp of last successful run */
   last_run_at: string | null;
