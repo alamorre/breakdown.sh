@@ -6,7 +6,7 @@ export const SOURCE_NODE_TYPES = {
   'web-url': 'source-web-url',
   'google-doc': 'source-google-doc',
   'google-sheet': 'source-google-sheet',
-  'text': 'source-text',
+  text: 'source-text',
 } as const satisfies Record<DataSourceType, string>;
 
 /** Metadata stored in nodes.metadata for web URL sources */
@@ -27,12 +27,14 @@ export interface GoogleSheetConfig {
   sheetName?: string;
 }
 
-/** Metadata stored in nodes.metadata for text sources (empty — content lives in output) */
-export interface TextSourceConfig {
-  /** No metadata needed — user text is stored directly as the node output */
-}
+/** Metadata stored in nodes.metadata for text sources (empty; content lives in the prompt) */
+export type TextSourceConfig = Record<string, never>;
 
-export type DataSourceConfig = WebUrlConfig | GoogleDocConfig | GoogleSheetConfig | TextSourceConfig;
+export type DataSourceConfig =
+  | WebUrlConfig
+  | GoogleDocConfig
+  | GoogleSheetConfig
+  | TextSourceConfig;
 
 /** Check if a node_type string represents a data source node */
 export function isDataSourceNode(nodeType: string): boolean {
@@ -52,7 +54,7 @@ export const DATA_SOURCE_LABELS: Record<DataSourceType, string> = {
   'web-url': 'Web URL',
   'google-doc': 'Google Doc',
   'google-sheet': 'Google Sheet',
-  'text': 'Text',
+  text: 'Text',
 };
 
 /** Default names for new source nodes */
@@ -60,5 +62,5 @@ export const DATA_SOURCE_DEFAULT_NAMES: Record<DataSourceType, string> = {
   'web-url': 'Web Source',
   'google-doc': 'Google Doc',
   'google-sheet': 'Google Sheet',
-  'text': 'Text Source',
+  text: 'Text Source',
 };

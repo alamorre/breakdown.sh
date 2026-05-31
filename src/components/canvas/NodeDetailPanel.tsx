@@ -94,10 +94,18 @@ function NodeForm({
   const storePrompt = thesisNode.prompt;
   const storeUrl = (thesisNode.metadata as { url?: string })?.url ?? '';
   const storeSheetName = (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '';
-  useEffect(() => { setName(storeName); }, [storeName]);
-  useEffect(() => { setPrompt(storePrompt); }, [storePrompt]);
-  useEffect(() => { setSourceUrl(storeUrl); }, [storeUrl]);
-  useEffect(() => { setSheetName(storeSheetName); }, [storeSheetName]);
+  useEffect(() => {
+    setName(storeName);
+  }, [storeName]);
+  useEffect(() => {
+    setPrompt(storePrompt);
+  }, [storePrompt]);
+  useEffect(() => {
+    setSourceUrl(storeUrl);
+  }, [storeUrl]);
+  useEffect(() => {
+    setSheetName(storeSheetName);
+  }, [storeSheetName]);
 
   const debouncedSave = useCallback(
     (
@@ -273,7 +281,11 @@ function NodeForm({
           <ScrollArea className="h-80 rounded-lg border bg-muted/50 p-3">
             {isRunning && (
               <p className="text-sm text-muted-foreground">
-                {isSource && sourceType === 'text' ? 'Saving...' : isSource ? 'Fetching...' : 'Running...'}
+                {isSource && sourceType === 'text'
+                  ? 'Saving...'
+                  : isSource
+                    ? 'Fetching...'
+                    : 'Running...'}
               </p>
             )}
             {thesisNode.run_status === 'error' && (
@@ -281,14 +293,16 @@ function NodeForm({
             )}
             {!isRunning && thesisNode.run_status !== 'error' && thesisNode.output && (
               <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-headings:font-semibold prose-h1:text-lg prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-3">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {thesisNode.output}
-                </ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{thesisNode.output}</ReactMarkdown>
               </div>
             )}
             {!isRunning && thesisNode.run_status !== 'error' && !thesisNode.output && (
               <p className="text-sm text-muted-foreground">
-                {isSource && sourceType === 'text' ? 'Not yet saved' : isSource ? 'Not yet fetched' : 'Not yet run'}
+                {isSource && sourceType === 'text'
+                  ? 'Not yet saved'
+                  : isSource
+                    ? 'Not yet fetched'
+                    : 'Not yet run'}
               </p>
             )}
           </ScrollArea>
@@ -298,8 +312,12 @@ function NodeForm({
           <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
           {thesisNode.last_run_at && (
             <span className="text-xs text-muted-foreground">
-              {isSource && sourceType === 'text' ? 'Last saved' : isSource ? 'Last fetched' : 'Last run'}:{' '}
-              {new Date(thesisNode.last_run_at).toLocaleString()}
+              {isSource && sourceType === 'text'
+                ? 'Last saved'
+                : isSource
+                  ? 'Last fetched'
+                  : 'Last run'}
+              : {new Date(thesisNode.last_run_at).toLocaleString()}
             </span>
           )}
         </div>
@@ -437,9 +455,12 @@ export function NodeDetailPanel() {
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const isDragging = useRef(false);
 
-  // Hydrate from localStorage on mount
   useEffect(() => {
-    setPanelWidth(getStoredWidth());
+    const frame = window.requestAnimationFrame(() => {
+      setPanelWidth(getStoredWidth());
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

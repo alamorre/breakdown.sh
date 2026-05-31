@@ -1,17 +1,18 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Play, Loader2, LayoutGrid, Download } from 'lucide-react';
+import { Play, Loader2, LayoutGrid, Download, Square } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { updateGraphName } from '@/actions/graph-actions';
-import { runGraph } from '@/actions/node-actions';
+import { runNode } from '@/actions/node-actions';
 import { useGraphStore } from '@/store/graph-store';
 import { computeLayout } from '@/lib/layout/elk-layout';
 import { exportGraph } from '@/lib/export/export-graph';
+import { sortTopologically } from '@/lib/graph/topological-sort';
 
 interface GraphTopBarProps {
   graphId: string;
@@ -41,42 +42,96 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
     }
   }, [name, initialName, graphId]);
 
+  const cancelRef = useRef(false);
+
   const handleRunAll = useCallback(async () => {
     if (!graph) return;
+    cancelRef.current = false;
     setRunningAll(true);
 
-    for (const node of nodes) {
-      setNodeRunState(node.id, { run_status: 'running' });
-    }
+    try {
+      const currentNodes = useGraphStore.getState().nodes;
+      const currentEdges = useGraphStore.getState().edges;
+      const { sortedNodes, unsortedNodeIds } = sortTopologically(
+        currentNodes,
+        currentEdges.map((edge) => ({
+          source: edge.data.thesisEdge.source_node_id,
+          target: edge.data.thesisEdge.target_node_id,
+        })),
+      );
 
-    const { data, error } = await runGraph({ graphId: graph.id });
-
-    if (error || !data) {
-      toast.error(error ?? 'Failed to run graph');
-      for (const node of nodes) {
-        setNodeRunState(node.id, { run_status: 'error', run_error: error ?? 'Run failed' });
+      if (unsortedNodeIds.length > 0) {
+        toast.error('Run all requires an acyclic graph. Remove the cycle and try again.');
+        return;
       }
-    } else {
-      for (const result of data.results) {
-        if (result.error) {
-          setNodeRunState(result.nodeId, {
+
+      if (sortedNodes.length === 0) {
+        toast.info('No nodes to run');
+        return;
+      }
+
+      let completed = 0;
+      let failed = 0;
+
+      for (const node of sortedNodes) {
+        if (cancelRef.current) {
+          toast.info(`Run cancelled after ${completed}/${sortedNodes.length} nodes`);
+          break;
+        }
+
+        setNodeRunState(node.id, { run_status: 'running' });
+        toast.loading(
+          `Running node ${completed + 1}/${sortedNodes.length}: ${node.data.thesisNode.name}`,
+          {
+            id: 'run-all-progress',
+          },
+        );
+
+        try {
+          const { data, error } = await runNode({ nodeId: node.id });
+
+          if (error || !data) {
+            failed++;
+            setNodeRunState(node.id, {
+              run_status: 'error',
+              run_error: error ?? 'Run failed',
+            });
+          } else {
+            setNodeRunState(node.id, {
+              run_status: 'success',
+              output: data.output,
+              run_error: null,
+              last_run_at: new Date().toISOString(),
+              ...(data.summary ? { metadata: { summary: data.summary } } : {}),
+            });
+          }
+        } catch (err) {
+          failed++;
+          setNodeRunState(node.id, {
             run_status: 'error',
-            run_error: result.error,
-          });
-        } else {
-          setNodeRunState(result.nodeId, {
-            run_status: 'success',
-            output: result.output,
-            run_error: null,
-            last_run_at: new Date().toISOString(),
+            run_error: err instanceof Error ? err.message : 'Run failed',
           });
         }
-      }
-      toast.success('Graph run complete');
-    }
 
-    setRunningAll(false);
-  }, [graph, nodes, setNodeRunState]);
+        completed++;
+      }
+
+      if (!cancelRef.current) {
+        if (failed === 0) {
+          toast.success(`All ${completed} nodes ran successfully`);
+        } else {
+          toast.warning(`${completed - failed}/${completed} nodes succeeded, ${failed} failed`);
+        }
+      }
+    } finally {
+      toast.dismiss('run-all-progress');
+      setRunningAll(false);
+    }
+  }, [graph, setNodeRunState]);
+
+  const handleCancelRun = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
 
   const handleAutoLayout = useCallback(async () => {
     setLayouting(true);
@@ -164,10 +219,17 @@ export function GraphTopBar({ graphId, initialName }: GraphTopBarProps) {
         Export
       </Button>
 
-      <Button size="sm" onClick={handleRunAll} disabled={runningAll}>
-        {runningAll ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
-        Run All
-      </Button>
+      {runningAll ? (
+        <Button size="sm" variant="destructive" onClick={handleCancelRun}>
+          <Square className="size-3.5" />
+          Cancel
+        </Button>
+      ) : (
+        <Button size="sm" onClick={handleRunAll}>
+          <Play className="size-3.5" />
+          Run All
+        </Button>
+      )}
     </div>
   );
 }
