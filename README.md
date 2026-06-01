@@ -25,6 +25,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 This project uses pnpm with a seven-day release cooldown. Dependency resolution is configured in `pnpm-workspace.yaml` with `minimumReleaseAge: 10080`, strict fallback behavior, and no bypass for registry metadata that is missing publish times.
 
+Run `pnpm run audit:high` before dependency changes. The PR checks include the same high-severity audit, and patched transitive dependency overrides live in `pnpm-workspace.yaml`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

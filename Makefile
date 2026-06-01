@@ -1,4 +1,4 @@
-.PHONY: dev build lint typecheck test test-coverage format check
+.PHONY: dev build lint typecheck test test-coverage audit-high format check
 
 dev:
 	pnpm run dev
@@ -17,6 +17,9 @@ test:
 
 test-coverage:
 	pnpm run test:coverage
+
+audit-high:
+	pnpm run audit:high
 
 format:
 	pnpm exec prettier --write .
