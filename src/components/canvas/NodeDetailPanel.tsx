@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { toast } from 'sonner';
-import { Play, Loader2, Trash2, RefreshCw, Copy, Check, Save } from 'lucide-react';
+import { Play, Loader2, Trash2, RefreshCw, Copy, Check, Save, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -12,7 +13,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,7 +32,12 @@ import { useGraphStore, type CanvasNode, type CanvasEdge } from '@/store/graph-s
 import { updateNode, deleteNode, runNode } from '@/actions/node-actions';
 import type { ThesisNode } from '@/types/node';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
-import { isDataSourceNode, getDataSourceType, DATA_SOURCE_LABELS } from '@/types/data-source';
+import {
+  isDataSourceNode,
+  getDataSourceType,
+  DATA_SOURCE_LABELS,
+  isGoogleDriveSourceConfig,
+} from '@/types/data-source';
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -79,10 +85,14 @@ function NodeForm({
 }: NodeFormProps) {
   const isSource = isDataSourceNode(thesisNode.node_type);
   const sourceType = getDataSourceType(thesisNode.node_type);
+  const driveMetadata = isGoogleDriveSourceConfig(thesisNode.metadata) ? thesisNode.metadata : null;
+  const pathname = usePathname();
 
   const [name, setName] = useState(thesisNode.name);
   const [prompt, setPrompt] = useState(thesisNode.prompt);
-  const [sourceUrl, setSourceUrl] = useState((thesisNode.metadata as { url?: string })?.url ?? '');
+  const [sourceUrl, setSourceUrl] = useState(
+    driveMetadata?.webViewLink ?? (thesisNode.metadata as { url?: string })?.url ?? '',
+  );
   const [sheetName, setSheetName] = useState(
     (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '',
   );
@@ -93,7 +103,10 @@ function NodeForm({
   // Sync local state when store changes from outside (e.g. card edits)
   const storeName = thesisNode.name;
   const storePrompt = thesisNode.prompt;
-  const storeUrl = (thesisNode.metadata as { url?: string })?.url ?? '';
+  const storeUrl =
+    (isGoogleDriveSourceConfig(thesisNode.metadata)
+      ? thesisNode.metadata.webViewLink
+      : (thesisNode.metadata as { url?: string })?.url) ?? '';
   const storeSheetName = (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '';
   useEffect(() => {
     setName(storeName);
@@ -179,7 +192,14 @@ function NodeForm({
         output: result.output,
         run_error: null,
         last_run_at: result.lastRunAt,
-        ...(result.summary ? { metadata: { summary: result.summary } } : {}),
+        ...(result.metadata || result.summary
+          ? {
+              metadata: {
+                ...(result.metadata ?? {}),
+                ...(result.summary ? { summary: result.summary } : {}),
+              },
+            }
+          : {}),
       });
     }
   };
@@ -207,6 +227,11 @@ function NodeForm({
   const isSkipped = thesisNode.run_status === 'skipped';
   const isCancelled = thesisNode.run_status === 'cancelled';
   const isBlocked = thesisNode.run_status === 'error' || isSkipped || isCancelled;
+  const needsReconnect =
+    Boolean(driveMetadata) &&
+    isBlocked &&
+    (thesisNode.run_error ?? '').includes('Reconnect Google Drive');
+  const connectHref = `/api/integrations/google-drive/connect?returnTo=${encodeURIComponent(pathname)}`;
 
   const statusVariant =
     thesisNode.run_status === 'success'
@@ -240,6 +265,43 @@ function NodeForm({
               placeholder="Paste or type your text here..."
               rows={10}
             />
+          </div>
+        ) : isSource && driveMetadata ? (
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
+            <div className="grid gap-1.5">
+              <Label>Drive File</Label>
+              <div className="font-medium">{driveMetadata.fileName}</div>
+              <div className="text-muted-foreground">
+                {DATA_SOURCE_LABELS[sourceType ?? 'web-url']}
+              </div>
+            </div>
+            <div className="grid gap-1.5 text-muted-foreground">
+              <div>
+                Account: <span className="text-foreground">{driveMetadata.accountEmail}</span>
+              </div>
+              {driveMetadata.lastKnownModifiedTime && (
+                <div>
+                  Last modified:{' '}
+                  <span className="text-foreground">
+                    {new Date(driveMetadata.lastKnownModifiedTime).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              <div>
+                Export: <span className="text-foreground">{driveMetadata.exportMimeType}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={driveMetadata.webViewLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                <ExternalLink className="size-3.5" />
+                Open in Drive
+              </a>
+            </div>
           </div>
         ) : isSource ? (
           <>
@@ -333,18 +395,24 @@ function NodeForm({
           )}
         </div>
 
-        <Button onClick={handleRun} disabled={isRunning || isQueued}>
-          {isRunning ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : isSource && sourceType === 'text' ? (
-            <Save className="size-4" />
-          ) : isSource ? (
-            <RefreshCw className="size-4" />
-          ) : (
-            <Play className="size-4" />
-          )}
-          {isSource && sourceType === 'text' ? 'Save' : isSource ? 'Fetch' : 'Run'}
-        </Button>
+        {needsReconnect ? (
+          <a className={buttonVariants()} href={connectHref}>
+            Reconnect Google Drive
+          </a>
+        ) : (
+          <Button onClick={handleRun} disabled={isRunning || isQueued}>
+            {isRunning ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : isSource && sourceType === 'text' ? (
+              <Save className="size-4" />
+            ) : isSource ? (
+              <RefreshCw className="size-4" />
+            ) : (
+              <Play className="size-4" />
+            )}
+            {isSource && sourceType === 'text' ? 'Save' : isSource ? 'Refresh' : 'Run'}
+          </Button>
+        )}
 
         {(upstreamEdges.length > 0 || downstreamEdges.length > 0) && (
           <>

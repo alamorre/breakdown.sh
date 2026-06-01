@@ -17,7 +17,7 @@ import {
   Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -38,9 +38,17 @@ import { cn } from '@/lib/utils';
 import { useGraphStore, type CanvasNode } from '@/store/graph-store';
 import { updateNode, runNode } from '@/actions/node-actions';
 import { deleteNode } from '@/actions/node-actions';
-import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
+import {
+  isDataSourceNode,
+  getDataSourceType,
+  isGoogleDriveSourceConfig,
+} from '@/types/data-source';
 import type { DataSourceType } from '@/types/data-source';
-import { GoogleDocsIcon, GoogleSheetsIcon } from '@/components/canvas/google-icons';
+import {
+  GoogleDocsIcon,
+  GoogleSheetsIcon,
+  GoogleSlidesIcon,
+} from '@/components/canvas/google-icons';
 
 function extractDomain(url: string): string {
   try {
@@ -68,6 +76,7 @@ const SOURCE_TYPE_LABELS: Record<DataSourceType, string> = {
   'web-url': 'Web',
   'google-doc': 'Google Docs',
   'google-sheet': 'Google Sheets',
+  'google-presentation': 'Google Slides',
   text: 'Text',
 };
 
@@ -77,16 +86,22 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
 
   const isSource = isDataSourceNode(thesisNode.node_type);
   const sourceType = getDataSourceType(thesisNode.node_type);
+  const driveMetadata = isGoogleDriveSourceConfig(thesisNode.metadata) ? thesisNode.metadata : null;
 
   const [prompt, setPrompt] = useState(thesisNode.prompt);
-  const [sourceUrl, setSourceUrl] = useState((thesisNode.metadata as { url?: string })?.url ?? '');
+  const [sourceUrl, setSourceUrl] = useState(
+    driveMetadata?.webViewLink ?? (thesisNode.metadata as { url?: string })?.url ?? '',
+  );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [urlEditing, setUrlEditing] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when store changes from outside (e.g. detail panel edits)
   const storePrompt = thesisNode.prompt;
-  const storeUrl = (thesisNode.metadata as { url?: string })?.url ?? '';
+  const storeUrl =
+    (isGoogleDriveSourceConfig(thesisNode.metadata)
+      ? thesisNode.metadata.webViewLink
+      : (thesisNode.metadata as { url?: string })?.url) ?? '';
   useEffect(() => {
     setPrompt(storePrompt);
   }, [storePrompt]);
@@ -156,7 +171,14 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
         output: result.output,
         run_error: null,
         last_run_at: result.lastRunAt,
-        ...(result.summary ? { metadata: { summary: result.summary } } : {}),
+        ...(result.metadata || result.summary
+          ? {
+              metadata: {
+                ...(result.metadata ?? {}),
+                ...(result.summary ? { summary: result.summary } : {}),
+              },
+            }
+          : {}),
       });
     }
   }, [thesisNode.id, setNodeRunState]);
@@ -324,8 +346,17 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
   // --- Data Source Node (compact file card) ---
   if (isSource && sourceType) {
     const domain = extractDomain(sourceUrl);
-    const isGoogle = sourceType === 'google-doc' || sourceType === 'google-sheet';
+    const isGoogle =
+      sourceType === 'google-doc' ||
+      sourceType === 'google-sheet' ||
+      sourceType === 'google-presentation';
     const typeLabel = SOURCE_TYPE_LABELS[sourceType];
+    const needsReconnect =
+      Boolean(driveMetadata) &&
+      isBlocked &&
+      (thesisNode.run_error ?? '').includes('Reconnect Google Drive');
+    const returnTo = typeof window === 'undefined' ? '/dashboard' : window.location.pathname;
+    const connectHref = `/api/integrations/google-drive/connect?returnTo=${encodeURIComponent(returnTo)}`;
 
     return (
       <>
@@ -351,6 +382,9 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
               <div className="flex items-center gap-2.5">
                 {sourceType === 'google-doc' && <GoogleDocsIcon className="size-8 shrink-0" />}
                 {sourceType === 'google-sheet' && <GoogleSheetsIcon className="size-8 shrink-0" />}
+                {sourceType === 'google-presentation' && (
+                  <GoogleSlidesIcon className="size-8 shrink-0" />
+                )}
                 {sourceType === 'web-url' &&
                   (domain ? (
                     <>
@@ -396,11 +430,13 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             {/* File name */}
             <h3 className="mb-1 truncate text-sm font-semibold leading-tight">{thesisNode.name}</h3>
 
-            {/* Domain / URL hint */}
-            {domain && !urlEditing && (
+            {/* Domain, URL, or connected account hint */}
+            {(domain || driveMetadata?.accountEmail) && !urlEditing && (
               <button
                 type="button"
-                onClick={() => setUrlEditing(true)}
+                onClick={() => {
+                  if (!driveMetadata) setUrlEditing(true);
+                }}
                 className="nodrag mb-3 flex items-center gap-1 truncate text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 {isGoogle ? (
@@ -408,12 +444,12 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 ) : (
                   <Globe className="size-3 shrink-0" />
                 )}
-                <span className="truncate">{domain}</span>
+                <span className="truncate">{driveMetadata?.accountEmail ?? domain}</span>
               </button>
             )}
 
             {/* URL input — shown when no URL set or when editing */}
-            {(!sourceUrl || urlEditing) && (
+            {!driveMetadata && (!sourceUrl || urlEditing) && (
               <Input
                 value={sourceUrl}
                 onChange={(e) => handleSourceUrlChange(e.target.value)}
@@ -482,20 +518,33 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             ) : (
               <div />
             )}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleRun}
-              disabled={isRunning || isQueued || !sourceUrl}
-              className="nodrag h-7 gap-1.5 text-xs"
-            >
-              {isRunning ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <RefreshCw className="size-3" />
-              )}
-              Fetch
-            </Button>
+            {needsReconnect ? (
+              <a
+                href={connectHref}
+                className={buttonVariants({
+                  variant: 'secondary',
+                  size: 'sm',
+                  className: 'nodrag h-7 gap-1.5 text-xs',
+                })}
+              >
+                Reconnect
+              </a>
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleRun}
+                disabled={isRunning || isQueued || !sourceUrl}
+                className="nodrag h-7 gap-1.5 text-xs"
+              >
+                {isRunning ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3" />
+                )}
+                Refresh
+              </Button>
+            )}
           </div>
 
           <Handle

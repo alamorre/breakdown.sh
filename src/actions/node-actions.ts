@@ -14,7 +14,9 @@ import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
 import { fetchWebUrl } from '@/lib/fetch/fetch-web-url';
 import { fetchGoogleDoc } from '@/lib/fetch/fetch-google-doc';
 import { fetchGoogleSheet } from '@/lib/fetch/fetch-google-sheet';
+import { fetchGoogleDriveSource } from '@/lib/integrations/google-drive/export';
 import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
+import { isGoogleDriveSourceConfig } from '@/types/data-source';
 import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
 
@@ -55,7 +57,11 @@ async function getUserId(): Promise<string> {
 async function runDataSourceNode(
   supabase: ReturnType<typeof createServerClient>,
   node: ThesisNode,
-): Promise<{ data: { output: string; lastRunAt: string } | null; error: string | null }> {
+  userId: string,
+): Promise<{
+  data: { output: string; lastRunAt: string; metadata?: Record<string, unknown> } | null;
+  error: string | null;
+}> {
   const sourceType = getDataSourceType(node.node_type);
   if (!sourceType) {
     return { data: null, error: `Unknown source type: ${node.node_type}` };
@@ -84,6 +90,53 @@ async function runDataSourceNode(
   }
 
   const metadata = node.metadata ?? {};
+
+  if (isGoogleDriveSourceConfig(metadata)) {
+    await supabase
+      .from('nodes')
+      .update({ run_status: 'running', run_error: null, updated_at: new Date().toISOString() })
+      .eq('id', node.id);
+
+    try {
+      const result = await fetchGoogleDriveSource(supabase, { node, userId });
+      const updatedMetadata = { ...metadata, ...result.metadata };
+
+      await supabase
+        .from('nodes')
+        .update({
+          output: result.content,
+          metadata: updatedMetadata,
+          run_status: 'success',
+          run_error: null,
+          last_run_at: result.fetchedAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', node.id);
+
+      return {
+        data: {
+          output: result.content,
+          lastRunAt: result.fetchedAt,
+          metadata: updatedMetadata,
+        },
+        error: null,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown Google Drive fetch error';
+
+      await supabase
+        .from('nodes')
+        .update({
+          run_status: 'error',
+          run_error: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', node.id);
+
+      return { data: null, error: message };
+    }
+  }
+
   const url = (metadata as { url?: string }).url;
   if (!url) {
     return { data: null, error: 'No URL configured. Enter a URL to fetch.' };
@@ -107,6 +160,8 @@ async function runDataSourceNode(
       case 'google-sheet':
         result = await fetchGoogleSheet(url, (metadata as { sheetName?: string }).sheetName);
         break;
+      case 'google-presentation':
+        throw new Error('Google Presentations require a native Google Drive connection.');
     }
 
     await supabase
@@ -220,7 +275,12 @@ export async function deleteNode(
 }
 
 export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
-  data: { output: string; summary?: string; lastRunAt: string } | null;
+  data: {
+    output: string;
+    summary?: string;
+    lastRunAt: string;
+    metadata?: Record<string, unknown>;
+  } | null;
   error: string | null;
 }> {
   const userId = await getUserId();
@@ -245,7 +305,7 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
 
   // Branch: data source nodes fetch external content instead of calling Claude
   if (isDataSourceNode(typedNode.node_type)) {
-    return runDataSourceNode(supabase, typedNode);
+    return runDataSourceNode(supabase, typedNode, userId);
   }
 
   if (!typedNode.prompt.trim()) {
