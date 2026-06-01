@@ -240,7 +240,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
         () => (
           <RunAllProgressToast
             items={items}
-            elapsedMs={Date.now() - startedAt}
+            startedAt={startedAt}
             note={progressNote}
           />
         ),
@@ -431,7 +431,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
         () => (
           <RunAllProgressToast
             items={activeProgressItemsRef.current}
-            elapsedMs={Date.now() - startedAt}
+            startedAt={startedAt}
             note={cancelNote}
           />
         ),
@@ -466,7 +466,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
             () => (
               <RunAllProgressToast
                 items={activeProgressItemsRef.current}
-                elapsedMs={Date.now() - startedAt}
+                startedAt={startedAt}
               />
             ),
             {

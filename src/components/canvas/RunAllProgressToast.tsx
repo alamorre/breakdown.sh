@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,7 +20,7 @@ import { cn } from '@/lib/utils';
 
 interface RunAllProgressToastProps {
   items: RunProgressItem[];
-  elapsedMs: number;
+  startedAt: number;
   note?: string;
 }
 
@@ -79,10 +82,25 @@ function formatIssueCount(count: number) {
   return `${count} ${count === 1 ? 'issue' : 'issues'}`;
 }
 
-export function RunAllProgressToast({ items, elapsedMs, note }: RunAllProgressToastProps) {
+export function RunAllProgressToast({ items, startedAt, note }: RunAllProgressToastProps) {
   const summary = summarizeRunProgress(items);
   const waitingCount = summary.queued + summary.pending;
   const issueCount = summary.failed + summary.skipped + summary.cancelled;
+  const hasUnsettledWork = summary.running > 0 || waitingCount > 0;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const elapsedMs = nowMs - startedAt;
+
+  useEffect(() => {
+    if (!hasUnsettledWork) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [hasUnsettledWork]);
 
   return (
     <div className="w-[356px] max-w-[calc(100vw-32px)] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg">
