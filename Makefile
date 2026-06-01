@@ -1,24 +1,24 @@
 .PHONY: dev build lint typecheck test test-coverage format check
 
 dev:
-	npx next dev
+	pnpm run dev
 
 build:
-	npx next build
+	pnpm run build
 
 lint:
-	npx eslint .
+	pnpm run lint
 
 typecheck:
-	npx tsc --noEmit
+	pnpm run typecheck
 
 test:
-	npx vitest run
+	pnpm run test
 
 test-coverage:
-	npx vitest run --coverage
+	pnpm run test:coverage
 
 format:
-	npx prettier --write .
+	pnpm exec prettier --write .
 
 check: lint typecheck test-coverage build
