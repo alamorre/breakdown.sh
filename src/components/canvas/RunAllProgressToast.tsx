@@ -21,6 +21,7 @@ interface RunAllProgressToastProps {
   items: RunProgressItem[];
   startedAt: number;
   note?: string;
+  onItemClick?: (nodeId: string) => void;
 }
 
 const iconClassName = 'size-3.5';
@@ -151,7 +152,12 @@ function RunCompletionIndicator({
   );
 }
 
-export function RunAllProgressToast({ items, startedAt, note }: RunAllProgressToastProps) {
+export function RunAllProgressToast({
+  items,
+  startedAt,
+  note,
+  onItemClick,
+}: RunAllProgressToastProps) {
   const summary = summarizeRunProgress(items);
   const waitingCount = summary.queued + summary.pending;
   const issueCount = summary.failed + summary.skipped + summary.cancelled;
@@ -197,16 +203,8 @@ export function RunAllProgressToast({ items, startedAt, note }: RunAllProgressTo
           {items.map((item) => {
             const state = getRunProgressState(item);
             const title = [item.name, state.label, item.error].filter(Boolean).join(' - ');
-
-            return (
-              <div
-                key={item.nodeId}
-                title={title}
-                className={cn(
-                  'grid grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1.5 py-1.5',
-                  getRowClassName(state.tone),
-                )}
-              >
+            const rowContent = (
+              <>
                 <RunProgressIcon tone={state.tone} />
                 <div className="min-w-0">
                   <div className="truncate text-xs font-medium leading-4">{item.name}</div>
@@ -224,6 +222,32 @@ export function RunAllProgressToast({ items, startedAt, note }: RunAllProgressTo
                 >
                   {state.label}
                 </span>
+              </>
+            );
+            const rowClassName = cn(
+              'grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1.5 py-1.5',
+              onItemClick &&
+                'cursor-pointer text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              getRowClassName(state.tone),
+            );
+
+            if (onItemClick) {
+              return (
+                <button
+                  key={item.nodeId}
+                  type="button"
+                  title={title}
+                  className={rowClassName}
+                  onClick={() => onItemClick(item.nodeId)}
+                >
+                  {rowContent}
+                </button>
+              );
+            }
+
+            return (
+              <div key={item.nodeId} title={title} className={rowClassName}>
+                {rowContent}
               </div>
             );
           })}

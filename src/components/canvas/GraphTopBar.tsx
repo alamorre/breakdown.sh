@@ -151,7 +151,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
     resolveAnthropicModelId(initialLlmModel),
   );
 
-  const { nodes, edges, graph, setNodeRunState, updateGraphData } = useGraphStore();
+  const { nodes, edges, graph, selectNode, setNodeRunState, updateGraphData } = useGraphStore();
   const reactFlowInstance = useReactFlow();
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunStartedAtRef = useRef<number | null>(null);
@@ -162,6 +162,13 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   useEffect(() => {
     setSelectedModelId(resolveAnthropicModelId(initialLlmModel));
   }, [initialLlmModel]);
+
+  const handleProgressItemClick = useCallback(
+    (nodeId: string) => {
+      selectNode(nodeId);
+    },
+    [selectNode],
+  );
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -242,6 +249,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
             items={items}
             startedAt={startedAt}
             note={progressNote}
+            onItemClick={handleProgressItemClick}
           />
         ),
         {
@@ -415,7 +423,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
       setCancelRequested(false);
       setRunningAll(false);
     }
-  }, [graph, setNodeRunState]);
+  }, [graph, handleProgressItemClick, setNodeRunState]);
 
   const handleCancelRun = useCallback(() => {
     const runId = activeRunIdRef.current;
@@ -433,6 +441,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
             items={activeProgressItemsRef.current}
             startedAt={startedAt}
             note={cancelNote}
+            onItemClick={handleProgressItemClick}
           />
         ),
         {
@@ -467,6 +476,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
               <RunAllProgressToast
                 items={activeProgressItemsRef.current}
                 startedAt={startedAt}
+                onItemClick={handleProgressItemClick}
               />
             ),
             {
@@ -476,7 +486,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
           );
         }
       });
-  }, [cancelRequested, graph]);
+  }, [cancelRequested, graph, handleProgressItemClick]);
 
   const handleAutoLayout = useCallback(async () => {
     setLayouting(true);

@@ -101,6 +101,26 @@ describe('selectNode', () => {
 
     expect(useGraphStore.getState().selectedNodeId).toBeNull();
   });
+
+  it('should mark the matching canvas node as selected', () => {
+    const store = useGraphStore.getState();
+    store.hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
+    store.selectNode('node-2');
+
+    const state = useGraphStore.getState();
+    expect(state.nodes.find((node) => node.id === 'node-1')?.selected).toBe(false);
+    expect(state.nodes.find((node) => node.id === 'node-2')?.selected).toBe(true);
+    expect(state.edges[0].selected).toBe(false);
+  });
+
+  it('should clear canvas node selection when passed null', () => {
+    const store = useGraphStore.getState();
+    store.hydrate(mockGraph, [mockNode, mockNode2], []);
+    store.selectNode('node-2');
+    store.selectNode(null);
+
+    expect(useGraphStore.getState().nodes.every((node) => !node.selected)).toBe(true);
+  });
 });
 
 describe('selectEdge', () => {
@@ -112,6 +132,17 @@ describe('selectEdge', () => {
     const state = useGraphStore.getState();
     expect(state.selectedEdgeId).toBe('edge-1');
     expect(state.selectedNodeId).toBeNull();
+  });
+
+  it('should mark the matching canvas edge as selected', () => {
+    const store = useGraphStore.getState();
+    store.hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
+    store.selectNode('node-1');
+    store.selectEdge('edge-1');
+
+    const state = useGraphStore.getState();
+    expect(state.edges[0].selected).toBe(true);
+    expect(state.nodes.every((node) => !node.selected)).toBe(true);
   });
 });
 
