@@ -12,6 +12,9 @@ export interface RunAllSchedulerResult<TResult> {
   result?: TResult;
   error: string | null;
   upstreamNodeIds: string[];
+  startedAt?: string;
+  settledAt: string;
+  durationMs: number;
 }
 
 export interface RunAllSchedulerSummary<TResult> {
@@ -129,14 +132,23 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
   let runningCount = 0;
   let cancelled = false;
 
-  async function settleNode(result: RunAllSchedulerResult<TResult>) {
+  async function settleNode(
+    result: Omit<RunAllSchedulerResult<TResult>, 'durationMs' | 'settledAt'> &
+      Partial<Pick<RunAllSchedulerResult<TResult>, 'durationMs' | 'settledAt'>>,
+  ) {
     const node = nodeMap.get(result.nodeId);
     if (!node || results.has(result.nodeId)) {
       return;
     }
 
-    results.set(result.nodeId, result);
-    await onNodeSettled?.(result, node);
+    const settledResult: RunAllSchedulerResult<TResult> = {
+      ...result,
+      settledAt: result.settledAt ?? new Date().toISOString(),
+      durationMs: result.durationMs ?? 0,
+    };
+
+    results.set(result.nodeId, settledResult);
+    await onNodeSettled?.(settledResult, node);
 
     for (const dependentId of adjacency.get(result.nodeId) ?? []) {
       pendingDependencies.set(dependentId, (pendingDependencies.get(dependentId) ?? 0) - 1);
@@ -244,6 +256,8 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
 
             runningCount++;
             void (async () => {
+              const nodeStartedAt = Date.now();
+              const startedAt = new Date(nodeStartedAt).toISOString();
               try {
                 await onNodeStart?.(node);
                 const result = await runNode(node);
@@ -253,6 +267,8 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
                   result,
                   error: null,
                   upstreamNodeIds: [],
+                  startedAt,
+                  durationMs: Date.now() - nodeStartedAt,
                 });
               } catch (err) {
                 await settleNode({
@@ -260,6 +276,8 @@ export async function runDependencyAwareBatches<TNode extends DirectedNode, TRes
                   status: 'failed',
                   error: err instanceof Error ? err.message : 'Run failed',
                   upstreamNodeIds: [],
+                  startedAt,
+                  durationMs: Date.now() - nodeStartedAt,
                 });
               } finally {
                 runningCount--;
