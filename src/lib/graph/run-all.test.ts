@@ -109,6 +109,25 @@ describe('runDependencyAwareBatches', () => {
     expect(maxActiveCount).toBe(3);
   });
 
+  it('records per-node timing metadata', async () => {
+    const summary = await runDependencyAwareBatches({
+      nodes: [{ id: 'a' }],
+      edges: [],
+      runNode: async (node) => {
+        await wait(1);
+        return node.id;
+      },
+    });
+
+    expect(summary.results[0]).toMatchObject({
+      nodeId: 'a',
+      startedAt: expect.any(String),
+      settledAt: expect.any(String),
+      durationMs: expect.any(Number),
+    });
+    expect(summary.results[0].durationMs).toBeGreaterThanOrEqual(0);
+  });
+
   it('skips dependents after an upstream failure while independent work continues', async () => {
     const summary = await runDependencyAwareBatches({
       nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],

@@ -80,17 +80,25 @@ function mapSchedulerResultToNodeResult(
     result?: { output: string; summary?: string; lastRunAt: string };
     error: string | null;
     upstreamNodeIds: string[];
+    durationMs?: number;
   },
   nodeNames: Map<string, string>,
+  previousOutputs: Map<string, string | null>,
 ): RunGraphNodeResult {
+  const durationMs = Math.max(0, result.durationMs ?? 0);
+
   if (result.status === 'success') {
+    const output = result.result?.output ?? null;
+
     return {
       nodeId: result.nodeId,
       runStatus: 'success',
-      output: result.result?.output,
+      output,
       summary: result.result?.summary,
       lastRunAt: result.result?.lastRunAt,
       error: null,
+      durationMs,
+      outputChanged: (previousOutputs.get(result.nodeId) ?? null) !== output,
     };
   }
 
@@ -99,6 +107,8 @@ function mapSchedulerResultToNodeResult(
       nodeId: result.nodeId,
       runStatus: 'cancelled',
       error: 'Run cancelled before this node started.',
+      durationMs,
+      outputChanged: false,
     };
   }
 
@@ -107,6 +117,8 @@ function mapSchedulerResultToNodeResult(
       nodeId: result.nodeId,
       runStatus: 'skipped',
       error: formatSkippedError(result, nodeNames),
+      durationMs,
+      outputChanged: false,
     };
   }
 
@@ -114,6 +126,8 @@ function mapSchedulerResultToNodeResult(
     nodeId: result.nodeId,
     runStatus: 'error',
     error: result.error ?? 'Run failed',
+    durationMs,
+    outputChanged: false,
   };
 }
 
@@ -240,6 +254,7 @@ export async function runGraphWithScheduler(input: {
     const nodes = (nodesResult.data ?? []) as ThesisNode[];
     const edges = (edgesResult.data ?? []) as ThesisEdge[];
     const nodeNames = new Map(nodes.map((node) => [node.id, node.name]));
+    const previousOutputs = new Map(nodes.map((node) => [node.id, node.output ?? null]));
     const runEdges = edges.map((edge) => ({
       source: edge.source_node_id,
       target: edge.target_node_id,
@@ -295,7 +310,7 @@ export async function runGraphWithScheduler(input: {
       },
       onNodeSettled: async (result) => {
         const node = nodes.find((candidate) => candidate.id === result.nodeId);
-        const mappedResult = mapSchedulerResultToNodeResult(result, nodeNames);
+        const mappedResult = mapSchedulerResultToNodeResult(result, nodeNames, previousOutputs);
 
         if (mappedResult.runStatus !== 'success') {
           await setFailedSkippedOrCancelledNodeStatus(supabase, mappedResult);
@@ -324,7 +339,7 @@ export async function runGraphWithScheduler(input: {
     });
 
     const results = summary.results.map((result) =>
-      mapSchedulerResultToNodeResult(result, nodeNames),
+      mapSchedulerResultToNodeResult(result, nodeNames, previousOutputs),
     );
 
     return {
