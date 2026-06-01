@@ -144,6 +144,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   const [name, setName] = useState(initialName);
   const [editing, setEditing] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [layouting, setLayouting] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<AnthropicModelId>(
@@ -229,6 +230,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
     activeRunIdRef.current = runId;
     activeRunStartedAtRef.current = startedAt;
     activeRunProgressNoteRef.current = undefined;
+    setCancelRequested(false);
     setRunningAll(true);
 
     const showProgressToast = (items: RunProgressItem[], note?: string) => {
@@ -410,14 +412,16 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
         activeProgressItemsRef.current = [];
       }
       toast.dismiss(RUN_PROGRESS_TOAST_ID);
+      setCancelRequested(false);
       setRunningAll(false);
     }
   }, [graph, setNodeRunState]);
 
   const handleCancelRun = useCallback(() => {
     const runId = activeRunIdRef.current;
-    if (!graph || !runId) return;
+    if (!graph || !runId || cancelRequested) return;
 
+    setCancelRequested(true);
     if (activeProgressItemsRef.current.length > 0) {
       const startedAt = activeRunStartedAtRef.current ?? Date.now();
       const cancelNote =
@@ -450,8 +454,29 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to cancel run');
+        if (activeRunIdRef.current !== runId) {
+          return;
+        }
+
+        setCancelRequested(false);
+        activeRunProgressNoteRef.current = undefined;
+        if (activeProgressItemsRef.current.length > 0) {
+          const startedAt = activeRunStartedAtRef.current ?? Date.now();
+          toast.custom(
+            () => (
+              <RunAllProgressToast
+                items={activeProgressItemsRef.current}
+                elapsedMs={Date.now() - startedAt}
+              />
+            ),
+            {
+              id: RUN_PROGRESS_TOAST_ID,
+              duration: Infinity,
+            },
+          );
+        }
       });
-  }, [graph]);
+  }, [cancelRequested, graph]);
 
   const handleAutoLayout = useCallback(async () => {
     setLayouting(true);
@@ -572,9 +597,18 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
       </DropdownMenu>
 
       {runningAll ? (
-        <Button size="sm" variant="destructive" onClick={handleCancelRun}>
-          <Square className="size-3.5" />
-          Cancel
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleCancelRun}
+          disabled={cancelRequested}
+        >
+          {cancelRequested ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Square className="size-3.5" />
+          )}
+          {cancelRequested ? 'Canceling...' : 'Cancel'}
         </Button>
       ) : (
         <Button size="sm" onClick={handleRunAll}>
