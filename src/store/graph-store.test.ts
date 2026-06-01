@@ -13,6 +13,7 @@ const mockGraph: Graph = {
   user_id: 'user-1',
   name: 'Test Graph',
   description: null,
+  llm_model: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -123,6 +124,15 @@ describe('addNode', () => {
     expect(state.nodes).toHaveLength(1);
     expect(state.nodes[0].id).toBe('node-1');
     expect(state.nodes[0].data.thesisNode.name).toBe('Test Node');
+  });
+});
+
+describe('updateGraphData', () => {
+  it('should update graph-level fields', () => {
+    useGraphStore.getState().hydrate(mockGraph, [], []);
+    useGraphStore.getState().updateGraphData({ llm_model: 'claude-haiku-4-5-20251001' });
+
+    expect(useGraphStore.getState().graph?.llm_model).toBe('claude-haiku-4-5-20251001');
   });
 });
 

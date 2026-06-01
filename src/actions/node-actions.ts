@@ -5,6 +5,11 @@ import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { createClaudeClient } from '@/lib/ai/claude';
 import { buildRunPrompt, buildSummaryPrompt, type UpstreamInput } from '@/lib/ai/build-prompt';
+import {
+  ANTHROPIC_MODEL_IDS,
+  ANTHROPIC_SUMMARY_MODEL_ID,
+  resolveAnthropicModelId,
+} from '@/lib/ai/models';
 import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
 import { fetchWebUrl } from '@/lib/fetch/fetch-web-url';
 import { fetchGoogleDoc } from '@/lib/fetch/fetch-google-doc';
@@ -36,6 +41,7 @@ const deleteNodeSchema = z.object({
 
 const runNodeSchema = z.object({
   nodeId: z.string().uuid(),
+  llmModel: z.enum(ANTHROPIC_MODEL_IDS).optional(),
 });
 
 async function getUserId(): Promise<string> {
@@ -213,13 +219,11 @@ export async function deleteNode(
   return { error: null };
 }
 
-export async function runNode(
-  input: z.infer<typeof runNodeSchema>,
-): Promise<{
+export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
   data: { output: string; summary?: string; lastRunAt: string } | null;
   error: string | null;
 }> {
-  await getUserId();
+  const userId = await getUserId();
   const parsed = runNodeSchema.safeParse(input);
   if (!parsed.success) {
     return { data: null, error: parsed.error.message };
@@ -320,6 +324,21 @@ export async function runNode(
 
   const previousOutput = typedNode.output;
 
+  const { data: graph, error: graphError } = await supabase
+    .from('graphs')
+    .select('llm_model')
+    .eq('id', typedNode.graph_id)
+    .eq('user_id', userId)
+    .single();
+
+  if (graphError || !graph) {
+    return { data: null, error: graphError?.message ?? 'Graph not found' };
+  }
+
+  const executionModel =
+    parsed.data.llmModel ??
+    resolveAnthropicModelId((graph as { llm_model?: string | null }).llm_model);
+
   await supabase
     .from('nodes')
     .update({ run_status: 'running', updated_at: new Date().toISOString() })
@@ -330,7 +349,7 @@ export async function runNode(
   try {
     const claude = createClaudeClient();
     const response = await claude.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: executionModel,
       max_tokens: 4096,
       system:
         'You are a reasoning assistant in a node-based analysis tool. Produce clear, structured output.',
@@ -340,11 +359,11 @@ export async function runNode(
     const outputBlock = response.content.find((block) => block.type === 'text');
     const output = outputBlock && 'text' in outputBlock ? outputBlock.text : '';
 
-    // Generate a 1-sentence summary via a fast model
+    // Summary generation intentionally stays on Haiku for speed/cost and does not follow the graph model.
     let summary: string | undefined;
     try {
       const summaryResponse = await claude.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: ANTHROPIC_SUMMARY_MODEL_ID,
         max_tokens: 150,
         messages: [{ role: 'user', content: buildSummaryPrompt(output) }],
       });
@@ -381,7 +400,7 @@ export async function runNode(
       diff_summary: summary ?? null,
       skill_doc_id: null,
       llm_provider: 'anthropic',
-      llm_model: 'claude-sonnet-4-5-20250929',
+      llm_model: executionModel,
       prompt_tokens: response.usage.input_tokens,
       completion_tokens: response.usage.output_tokens,
       status: 'applied',

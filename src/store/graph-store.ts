@@ -57,6 +57,7 @@ interface GraphStoreActions {
   onNodesChange: (changes: NodeChange<CanvasNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<CanvasEdge>[]) => void;
   addNode: (node: ThesisNode) => void;
+  updateGraphData: (updates: Partial<Graph>) => void;
   updateNodeData: (nodeId: string, updates: Partial<ThesisNode>) => void;
   setNodeRunState: (
     nodeId: string,
@@ -122,6 +123,12 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   addNode: (node) => {
     set((state) => ({
       nodes: [...state.nodes, toCanvasNode(node)],
+    }));
+  },
+
+  updateGraphData: (updates) => {
+    set((state) => ({
+      graph: state.graph ? { ...state.graph, ...updates } : state.graph,
     }));
   },
 
