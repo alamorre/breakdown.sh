@@ -11,6 +11,7 @@ import {
   Square,
   BrainCircuit,
   ChevronDown,
+  ClipboardList,
 } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -31,6 +32,7 @@ import { sortTopologically } from '@/lib/graph/topological-sort';
 import { sortRunProgressItems, type RunProgressItem } from '@/lib/graph/run-progress';
 import { notifyRunCompletion } from '@/lib/notifications/run-completion';
 import { RunAllProgressToast } from '@/components/canvas/RunAllProgressToast';
+import { RunAllReportSheet, type RunAllReport } from '@/components/canvas/RunAllReportSheet';
 import { cn } from '@/lib/utils';
 import {
   ANTHROPIC_MODEL_OPTIONS,
@@ -39,6 +41,7 @@ import {
   type AnthropicModelId,
 } from '@/lib/ai/models';
 import type {
+  RunGraphData,
   RunGraphNodeResult,
   RunGraphResponse,
   RunGraphStatusNode,
@@ -100,6 +103,41 @@ function buildResultProgressItems(
   );
 }
 
+function buildRunAllReport({
+  graphName,
+  resultData,
+  orderedNodes,
+  startedAt,
+}: {
+  graphName: string;
+  resultData: RunGraphData;
+  orderedNodes: CanvasNode[];
+  startedAt: number;
+}): RunAllReport {
+  const nodeNames = new Map(orderedNodes.map((node) => [node.id, node.data.thesisNode.name]));
+  const orderedNodeIds = orderedNodes.map((node) => node.id);
+
+  return {
+    graphName,
+    startedAt: new Date(startedAt).toISOString(),
+    completedAt: new Date().toISOString(),
+    totalDurationMs: resultData.metrics.durationMs,
+    cancelled: resultData.cancelled,
+    metrics: resultData.metrics,
+    nodes: sortRunProgressItems(
+      resultData.results.map((result) => ({
+        nodeId: result.nodeId,
+        name: nodeNames.get(result.nodeId) ?? 'Unknown node',
+        runStatus: result.runStatus,
+        error: result.error,
+        durationMs: result.durationMs,
+        outputChanged: result.outputChanged,
+      })),
+      orderedNodeIds,
+    ),
+  };
+}
+
 async function readRunGraphStream(
   body: ReadableStream<Uint8Array>,
   onEvent: (event: RunGraphStreamEvent) => void,
@@ -147,11 +185,13 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   const [cancelRequested, setCancelRequested] = useState(false);
   const [layouting, setLayouting] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
+  const [lastRunReport, setLastRunReport] = useState<RunAllReport | null>(null);
+  const [runReportOpen, setRunReportOpen] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<AnthropicModelId>(
     resolveAnthropicModelId(initialLlmModel),
   );
 
-  const { nodes, edges, graph, setNodeRunState, updateGraphData } = useGraphStore();
+  const { nodes, edges, graph, selectNode, setNodeRunState, updateGraphData } = useGraphStore();
   const reactFlowInstance = useReactFlow();
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunStartedAtRef = useRef<number | null>(null);
@@ -162,6 +202,13 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   useEffect(() => {
     setSelectedModelId(resolveAnthropicModelId(initialLlmModel));
   }, [initialLlmModel]);
+
+  const handleProgressItemClick = useCallback(
+    (nodeId: string) => {
+      selectNode(nodeId);
+    },
+    [selectNode],
+  );
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -242,6 +289,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
             items={items}
             startedAt={startedAt}
             note={progressNote}
+            onItemClick={handleProgressItemClick}
           />
         ),
         {
@@ -374,6 +422,14 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
           ...(nodeResult.summary ? { metadata: { summary: nodeResult.summary } } : {}),
         });
       }
+      const runReport = buildRunAllReport({
+        graphName: graph.name,
+        resultData,
+        orderedNodes,
+        startedAt,
+      });
+      setLastRunReport(runReport);
+      setRunReportOpen(true);
       showProgressToast(buildResultProgressItems(resultData.results, orderedNodes));
 
       const { metrics } = resultData;
@@ -415,7 +471,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
       setCancelRequested(false);
       setRunningAll(false);
     }
-  }, [graph, setNodeRunState]);
+  }, [graph, handleProgressItemClick, setNodeRunState]);
 
   const handleCancelRun = useCallback(() => {
     const runId = activeRunIdRef.current;
@@ -433,6 +489,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
             items={activeProgressItemsRef.current}
             startedAt={startedAt}
             note={cancelNote}
+            onItemClick={handleProgressItemClick}
           />
         ),
         {
@@ -467,6 +524,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
               <RunAllProgressToast
                 items={activeProgressItemsRef.current}
                 startedAt={startedAt}
+                onItemClick={handleProgressItemClick}
               />
             ),
             {
@@ -476,7 +534,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
           );
         }
       });
-  }, [cancelRequested, graph]);
+  }, [cancelRequested, graph, handleProgressItemClick]);
 
   const handleAutoLayout = useCallback(async () => {
     setLayouting(true);
@@ -520,102 +578,118 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   }, [graph]);
 
   return (
-    <div className="flex h-12 items-center gap-3 border-b border-border px-4">
-      <Link href="/dashboard">
-        <Button variant="ghost" size="sm">
-          &larr; Back
-        </Button>
-      </Link>
+    <>
+      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
+        <Link href="/dashboard">
+          <Button variant="ghost" size="sm">
+            &larr; Back
+          </Button>
+        </Link>
 
-      {editing ? (
-        <Input
-          className="h-8 w-64"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void handleSave();
-            if (e.key === 'Escape') {
-              setName(initialName);
-              setEditing(false);
-            }
-          }}
-          autoFocus
-        />
-      ) : (
-        <button className="text-sm font-medium hover:underline" onClick={() => setEditing(true)}>
-          {name}
-        </button>
-      )}
-
-      <div className="flex-1" />
-
-      <Button variant="outline" size="sm" onClick={handleAutoLayout} disabled={layouting}>
-        {layouting ? (
-          <Loader2 className="size-3.5 animate-spin" />
+        {editing ? (
+          <Input
+            className="h-8 w-64"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleSave();
+              if (e.key === 'Escape') {
+                setName(initialName);
+                setEditing(false);
+              }
+            }}
+            autoFocus
+          />
         ) : (
-          <LayoutGrid className="size-3.5" />
+          <button className="text-sm font-medium hover:underline" onClick={() => setEditing(true)}>
+            {name}
+          </button>
         )}
-        Auto Layout
-      </Button>
 
-      <Button variant="outline" size="sm" onClick={handleExport}>
-        <Download className="size-3.5" />
-        Export
-      </Button>
+        <div className="flex-1" />
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(
-            buttonVariants({ variant: 'outline', size: 'sm' }),
-            'min-w-[6.75rem] justify-start',
-          )}
-          disabled={runningAll || savingModel}
-          title="Anthropic model"
-        >
-          {savingModel ? (
+        <Button variant="outline" size="sm" onClick={handleAutoLayout} disabled={layouting}>
+          {layouting ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <BrainCircuit className="size-3.5" />
+            <LayoutGrid className="size-3.5" />
           )}
-          <span>{selectedModel.label}</span>
-          <ChevronDown className="ml-auto size-3" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuRadioGroup
-            value={selectedModelId}
+          Auto Layout
+        </Button>
+
+        <Button variant="outline" size="sm" onClick={handleExport}>
+          <Download className="size-3.5" />
+          Export
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              buttonVariants({ variant: 'outline', size: 'sm' }),
+              'min-w-[6.75rem] justify-start',
+            )}
             disabled={runningAll || savingModel}
-            onValueChange={(value) => void handleModelSelect(value as AnthropicModelId)}
+            title="Anthropic model"
           >
-            {ANTHROPIC_MODEL_OPTIONS.map((option) => (
-              <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
-                {option.label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            {savingModel ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <BrainCircuit className="size-3.5" />
+            )}
+            <span>{selectedModel.label}</span>
+            <ChevronDown className="ml-auto size-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuRadioGroup
+              value={selectedModelId}
+              disabled={runningAll || savingModel}
+              onValueChange={(value) => void handleModelSelect(value as AnthropicModelId)}
+            >
+              {ANTHROPIC_MODEL_OPTIONS.map((option) => (
+                <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-      {runningAll ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleCancelRun}
-          disabled={cancelRequested}
-        >
-          {cancelRequested ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Square className="size-3.5" />
-          )}
-          {cancelRequested ? 'Canceling...' : 'Cancel'}
-        </Button>
-      ) : (
-        <Button size="sm" onClick={handleRunAll}>
-          <Play className="size-3.5" />
-          Run All
-        </Button>
-      )}
-    </div>
+        {lastRunReport && (
+          <Button variant="outline" size="sm" onClick={() => setRunReportOpen(true)}>
+            <ClipboardList className="size-3.5" />
+            Run Report
+          </Button>
+        )}
+
+        {runningAll ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleCancelRun}
+            disabled={cancelRequested}
+          >
+            {cancelRequested ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Square className="size-3.5" />
+            )}
+            {cancelRequested ? 'Canceling...' : 'Cancel'}
+          </Button>
+        ) : (
+          <Button size="sm" onClick={handleRunAll}>
+            <Play className="size-3.5" />
+            Run All
+          </Button>
+        )}
+      </div>
+
+      <RunAllReportSheet
+        report={lastRunReport}
+        open={runReportOpen}
+        onOpenChange={setRunReportOpen}
+        onItemClick={handleProgressItemClick}
+      />
+    </>
   );
 }

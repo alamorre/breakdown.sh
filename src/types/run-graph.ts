@@ -7,6 +7,8 @@ export interface RunGraphNodeResult {
   summary?: string;
   lastRunAt?: string | null;
   error: string | null;
+  durationMs: number;
+  outputChanged: boolean;
 }
 
 export interface RunGraphMetrics {

@@ -30,6 +30,7 @@ function toCanvasNode(node: ThesisNode): CanvasNode {
     type: 'thesis',
     position: { x: node.position_x, y: node.position_y },
     data: { thesisNode: node },
+    selected: false,
   };
 }
 
@@ -40,6 +41,7 @@ function toCanvasEdge(edge: ThesisEdge): CanvasEdge {
     target: edge.target_node_id,
     type: 'thesis',
     data: { thesisEdge: edge },
+    selected: false,
   };
 }
 
@@ -212,11 +214,33 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
 
   selectNode: (nodeId) => {
-    set({ selectedNodeId: nodeId, selectedEdgeId: null });
+    set((state) => ({
+      selectedNodeId: nodeId,
+      selectedEdgeId: null,
+      nodes: state.nodes.map((node) => ({
+        ...node,
+        selected: nodeId === node.id,
+      })),
+      edges: state.edges.map((edge) => ({
+        ...edge,
+        selected: false,
+      })),
+    }));
   },
 
   selectEdge: (edgeId) => {
-    set({ selectedEdgeId: edgeId, selectedNodeId: null });
+    set((state) => ({
+      selectedEdgeId: edgeId,
+      selectedNodeId: null,
+      nodes: state.nodes.map((node) => ({
+        ...node,
+        selected: false,
+      })),
+      edges: state.edges.map((edge) => ({
+        ...edge,
+        selected: edgeId === edge.id,
+      })),
+    }));
   },
 
   debouncedPositionSave: () => {
