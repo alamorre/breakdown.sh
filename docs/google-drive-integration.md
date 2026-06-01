@@ -71,6 +71,11 @@ visit settings just because a graph source needs reconnecting.
 Use a dedicated Google Drive OAuth connection for V1 rather than relying on the
 Clerk sign-in provider token.
 
+The current local Google OAuth client is approved for `http://localhost:3000`
+only. Before using the integration outside local development, add the production
+origin and `/api/integrations/google-drive/callback` redirect URI in Google
+Cloud Console and update the deployment environment variables.
+
 Reasons:
 
 - The app can request Drive-specific scopes only when the user needs Drive.
