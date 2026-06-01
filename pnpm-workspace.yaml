@@ -1,0 +1,8 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+allowBuilds:
+  '@clerk/shared': false
+  msw: false
+  sharp: false
+  unrs-resolver: false
