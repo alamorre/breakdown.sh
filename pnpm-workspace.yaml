@@ -1,6 +1,12 @@
 minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
+overrides:
+  fast-uri@3.1.0: 3.1.2
+  path-to-regexp@8.3.0: 8.4.0
+  picomatch@2.3.1: 2.3.2
+  picomatch@4.0.3: 4.0.4
+  vite@8.0.1: 8.0.5
 allowBuilds:
   '@clerk/shared': false
   msw: false
