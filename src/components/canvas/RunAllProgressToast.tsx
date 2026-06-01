@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
-  Circle,
   CircleDashed,
   CirclePause,
   Loader2,
@@ -82,6 +81,76 @@ function formatIssueCount(count: number) {
   return `${count} ${count === 1 ? 'issue' : 'issues'}`;
 }
 
+function RunCompletionIndicator({
+  summary,
+  issueCount,
+}: {
+  summary: ReturnType<typeof summarizeRunProgress>;
+  issueCount: number;
+}) {
+  const radius = 7;
+  const circumference = 2 * Math.PI * radius;
+  const progress = summary.total > 0 ? summary.settled / summary.total : 0;
+  const strokeOffset = circumference * (1 - progress);
+  const isComplete =
+    summary.total > 0 &&
+    summary.running === 0 &&
+    summary.queued === 0 &&
+    summary.pending === 0 &&
+    summary.settled === summary.total;
+
+  if (isComplete && issueCount === 0) {
+    return (
+      <CheckCircle2
+        role="progressbar"
+        aria-label="Run All progress"
+        aria-valuemin={0}
+        aria-valuemax={summary.total}
+        aria-valuenow={summary.settled}
+        className="mt-0.5 size-4 shrink-0 text-emerald-600"
+      />
+    );
+  }
+
+  return (
+    <span
+      role="progressbar"
+      aria-label="Run All progress"
+      aria-valuemin={0}
+      aria-valuemax={summary.total}
+      aria-valuenow={summary.settled}
+      className="mt-0.5 size-4 shrink-0 text-sky-600"
+    >
+      <svg className="size-4 -rotate-90" viewBox="0 0 16 16" aria-hidden="true">
+        <circle
+          cx="8"
+          cy="8"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-muted-foreground/20"
+        />
+        <circle
+          cx="8"
+          cy="8"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeOffset}
+          className={cn(
+            'transition-[stroke-dashoffset] duration-300',
+            isComplete && issueCount > 0 && 'text-amber-600',
+          )}
+        />
+      </svg>
+    </span>
+  );
+}
+
 export function RunAllProgressToast({ items, startedAt, note }: RunAllProgressToastProps) {
   const summary = summarizeRunProgress(items);
   const waitingCount = summary.queued + summary.pending;
@@ -120,11 +189,7 @@ export function RunAllProgressToast({ items, startedAt, note }: RunAllProgressTo
           </div>
           {note && <div className="mt-1 text-xs text-muted-foreground">{note}</div>}
         </div>
-        {summary.running === 0 && summary.settled === summary.total ? (
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-        ) : (
-          <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground/60" />
-        )}
+        <RunCompletionIndicator summary={summary} issueCount={issueCount} />
       </div>
 
       <div className="mt-3 max-h-72 overflow-y-auto pr-1">
