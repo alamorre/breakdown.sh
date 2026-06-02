@@ -5,6 +5,10 @@ import {
   getValidGoogleDriveAccessToken,
 } from '@/lib/integrations/google-drive/connections';
 import { isGoogleDriveConfigured } from '@/lib/integrations/google-drive/config';
+import {
+  getGoogleDriveApiErrorPayload,
+  getGoogleDriveApiErrorStatus,
+} from '@/lib/integrations/google-drive/setup-errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,23 +27,35 @@ export async function GET() {
     });
   }
 
-  const supabase = createServerClient();
-  const connection = await getActiveGoogleDriveConnection(supabase, userId);
+  try {
+    const supabase = createServerClient();
+    const connection = await getActiveGoogleDriveConnection(supabase, userId);
 
-  return Response.json({
-    configured,
-    connected: Boolean(connection),
-    connection: connection
-      ? {
-          id: connection.id,
-          accountEmail: connection.account_email,
-          scopes: connection.scopes,
-          lastConnectedAt: connection.last_connected_at,
-          lastRefreshAt: connection.last_refresh_at,
-          expiresAt: connection.access_token_expires_at,
-        }
-      : null,
-  });
+    return Response.json({
+      configured,
+      connected: Boolean(connection),
+      connection: connection
+        ? {
+            id: connection.id,
+            accountEmail: connection.account_email,
+            scopes: connection.scopes,
+            lastConnectedAt: connection.last_connected_at,
+            lastRefreshAt: connection.last_refresh_at,
+            expiresAt: connection.access_token_expires_at,
+          }
+        : null,
+    });
+  } catch (err) {
+    return Response.json(
+      {
+        configured,
+        connected: false,
+        connection: null,
+        ...getGoogleDriveApiErrorPayload(err),
+      },
+      { status: getGoogleDriveApiErrorStatus(err) },
+    );
+  }
 }
 
 export async function POST() {
@@ -52,16 +68,20 @@ export async function POST() {
     return Response.json({ error: 'Google Drive is not configured' }, { status: 400 });
   }
 
-  const supabase = createServerClient();
-  const connection = await getActiveGoogleDriveConnection(supabase, userId);
-  if (!connection) {
-    return Response.json({ error: 'Google Drive is not connected' }, { status: 404 });
-  }
-
   try {
+    const supabase = createServerClient();
+    const connection = await getActiveGoogleDriveConnection(supabase, userId);
+    if (!connection) {
+      return Response.json({ error: 'Google Drive is not connected' }, { status: 404 });
+    }
+
     await getValidGoogleDriveAccessToken(supabase, connection);
     return Response.json({ ok: true });
   } catch (err) {
+    if (getGoogleDriveApiErrorStatus(err) === 503) {
+      return Response.json(getGoogleDriveApiErrorPayload(err), { status: 503 });
+    }
+
     return Response.json(
       { error: err instanceof Error ? err.message : 'Failed to refresh Google Drive token' },
       { status: 400 },
