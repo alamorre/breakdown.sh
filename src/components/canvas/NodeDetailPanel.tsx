@@ -3,7 +3,18 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { toast } from 'sonner';
-import { Play, Loader2, Trash2, RefreshCw, Copy, Check, Save, ExternalLink } from 'lucide-react';
+import {
+  Play,
+  Loader2,
+  Trash2,
+  RefreshCw,
+  Copy,
+  Check,
+  Save,
+  ExternalLink,
+  Maximize2,
+  ChevronDown,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -32,6 +43,7 @@ import { useGraphStore, type CanvasNode, type CanvasEdge } from '@/store/graph-s
 import { updateNode, deleteNode, runNode } from '@/actions/node-actions';
 import type { ThesisNode } from '@/types/node';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
+import { cn } from '@/lib/utils';
 import {
   isDataSourceNode,
   getDataSourceType,
@@ -49,9 +61,64 @@ function CopyButton({ text }: { text: string }) {
   };
 
   return (
-    <Button variant="ghost" size="icon-sm" onClick={handleCopy}>
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      onClick={handleCopy}
+      title={copied ? 'Copied' : 'Copy output'}
+      aria-label={copied ? 'Copied' : 'Copy output'}
+    >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
     </Button>
+  );
+}
+
+interface OutputContentProps {
+  output: string | null;
+  isRunning: boolean;
+  isQueued: boolean;
+  isBlocked: boolean;
+  runError: string | null;
+  loadingLabel: string;
+  emptyLabel: string;
+  className?: string;
+}
+
+function OutputContent({
+  output,
+  isRunning,
+  isQueued,
+  isBlocked,
+  runError,
+  loadingLabel,
+  emptyLabel,
+  className,
+}: OutputContentProps) {
+  if (isRunning) {
+    return <p className="text-sm text-muted-foreground">{loadingLabel}</p>;
+  }
+
+  if (isQueued) {
+    return <p className="text-sm text-muted-foreground">{runError ?? 'Queued for Run All'}</p>;
+  }
+
+  if (isBlocked) {
+    return <p className="text-sm text-destructive">{runError ?? 'Error'}</p>;
+  }
+
+  if (!output) {
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
+
+  return (
+    <div
+      className={cn(
+        'prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-3 prose-pre:overflow-x-auto [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-border [&_th]:bg-muted/70 [&_th]:px-2 [&_th]:py-1.5',
+        className,
+      )}
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{output}</ReactMarkdown>
+    </div>
   );
 }
 
@@ -97,6 +164,8 @@ function NodeForm({
     (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '',
   );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [outputDialogOpen, setOutputDialogOpen] = useState(false);
+  const [secondaryOpen, setSecondaryOpen] = useState(!thesisNode.output);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -120,6 +189,9 @@ function NodeForm({
   useEffect(() => {
     setSheetName(storeSheetName);
   }, [storeSheetName]);
+  useEffect(() => {
+    setSecondaryOpen(!thesisNode.output);
+  }, [selectedNodeId, thesisNode.output]);
 
   const debouncedSave = useCallback(
     (
@@ -239,180 +311,198 @@ function NodeForm({
       : thesisNode.run_status === 'error'
         ? 'destructive'
         : 'secondary';
+  const outputLabel = isSource ? 'Fetched Content' : 'Output';
+  const loadingLabel =
+    isSource && sourceType === 'text' ? 'Saving...' : isSource ? 'Fetching...' : 'Running...';
+  const emptyLabel =
+    isSource && sourceType === 'text'
+      ? 'Not yet saved'
+      : isSource
+        ? 'Not yet fetched'
+        : 'Not yet run';
+  const runActionLabel = isSource && sourceType === 'text' ? 'Save' : isSource ? 'Refresh' : 'Run';
+  const runTimestampLabel =
+    isSource && sourceType === 'text' ? 'Last saved' : isSource ? 'Last fetched' : 'Last run';
+  const canCopyOutput = Boolean(thesisNode.output) && !isRunning && !isQueued && !isBlocked;
+  const secondarySectionLabel = isSource ? 'Source' : 'Prompt';
 
   return (
     <>
-      <SheetHeader>
-        <SheetTitle className="sr-only">{name}</SheetTitle>
-        <SheetDescription className="sr-only">
+      <SheetHeader className="sr-only">
+        <SheetTitle>{name}</SheetTitle>
+        <SheetDescription>
           Edit {isSource && sourceType ? DATA_SOURCE_LABELS[sourceType] : 'node'} details
         </SheetDescription>
       </SheetHeader>
 
-      <div className="flex flex-col gap-5 px-4 pb-4">
+      <div className="flex flex-col gap-4 px-4 pb-4">
         <div className="space-y-1.5">
           <Label htmlFor="node-name">Name</Label>
           <Input id="node-name" value={name} onChange={(e) => handleNameChange(e.target.value)} />
         </div>
 
-        {isSource && sourceType === 'text' ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="node-prompt">Content</Label>
-            <Textarea
-              id="node-prompt"
-              value={prompt}
-              onChange={(e) => handlePromptChange(e.target.value)}
-              placeholder="Paste or type your text here..."
-              rows={10}
-            />
-          </div>
-        ) : isSource && driveMetadata ? (
-          <div className="space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
-            <div className="grid gap-1.5">
-              <Label>Drive File</Label>
-              <div className="font-medium">{driveMetadata.fileName}</div>
-              <div className="text-muted-foreground">
-                {DATA_SOURCE_LABELS[sourceType ?? 'web-url']}
+        <section className="rounded-lg border bg-background p-3 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Label>{outputLabel}</Label>
+                <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
               </div>
-            </div>
-            <div className="grid gap-1.5 text-muted-foreground">
-              <div>
-                Account: <span className="text-foreground">{driveMetadata.accountEmail}</span>
-              </div>
-              {driveMetadata.lastKnownModifiedTime && (
-                <div>
-                  Last modified:{' '}
-                  <span className="text-foreground">
-                    {new Date(driveMetadata.lastKnownModifiedTime).toLocaleString()}
-                  </span>
-                </div>
+              {thesisNode.last_run_at && (
+                <p className="text-xs text-muted-foreground">
+                  {runTimestampLabel}: {new Date(thesisNode.last_run_at).toLocaleString()}
+                </p>
               )}
-              <div>
-                Export: <span className="text-foreground">{driveMetadata.exportMimeType}</span>
-              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <a
-                href={driveMetadata.webViewLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            <div className="flex items-center gap-1">
+              {canCopyOutput && <CopyButton text={thesisNode.output ?? ''} />}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setOutputDialogOpen(true)}
+                title="Open focused output"
+                aria-label="Open focused output"
               >
-                <ExternalLink className="size-3.5" />
-                Open in Drive
-              </a>
+                <Maximize2 className="size-3.5" />
+              </Button>
             </div>
           </div>
-        ) : isSource ? (
-          <>
-            <div className="space-y-1.5">
-              <Label htmlFor="source-url">Source URL</Label>
-              <Input
-                id="source-url"
-                value={sourceUrl}
-                onChange={(e) => handleSourceUrlChange(e.target.value)}
-                placeholder="Paste URL here..."
+
+          <ScrollArea className="mt-3 h-[clamp(320px,62vh,760px)] rounded-lg border bg-muted/30">
+            <div className="p-4">
+              <OutputContent
+                output={thesisNode.output}
+                isRunning={isRunning}
+                isQueued={isQueued}
+                isBlocked={isBlocked}
+                runError={thesisNode.run_error}
+                loadingLabel={loadingLabel}
+                emptyLabel={emptyLabel}
               />
             </div>
-            {sourceType === 'google-sheet' && (
+          </ScrollArea>
+
+          <div className="mt-3 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-end">
+            {needsReconnect ? (
+              <a className={cn(buttonVariants(), 'w-full sm:w-auto')} href={connectHref}>
+                Reconnect Google Drive
+              </a>
+            ) : (
+              <Button
+                onClick={handleRun}
+                disabled={isRunning || isQueued}
+                className="w-full sm:w-auto"
+              >
+                {isRunning ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : isSource && sourceType === 'text' ? (
+                  <Save className="size-4" />
+                ) : isSource ? (
+                  <RefreshCw className="size-4" />
+                ) : (
+                  <Play className="size-4" />
+                )}
+                {runActionLabel}
+              </Button>
+            )}
+          </div>
+        </section>
+
+        <details
+          open={secondaryOpen}
+          onToggle={(event) => setSecondaryOpen(event.currentTarget.open)}
+          className="group rounded-lg border bg-muted/20 p-3"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <span>{secondarySectionLabel}</span>
+            <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="mt-3 space-y-3">
+            {isSource && sourceType === 'text' ? (
               <div className="space-y-1.5">
-                <Label htmlFor="sheet-name">Sheet Name (optional)</Label>
-                <Input
-                  id="sheet-name"
-                  value={sheetName}
-                  onChange={(e) => handleSheetNameChange(e.target.value)}
-                  placeholder="e.g. Sheet1"
+                <Label htmlFor="node-prompt">Content</Label>
+                <Textarea
+                  id="node-prompt"
+                  value={prompt}
+                  onChange={(e) => handlePromptChange(e.target.value)}
+                  placeholder="Paste or type your text here..."
+                  rows={10}
+                />
+              </div>
+            ) : isSource && driveMetadata ? (
+              <div className="space-y-3 rounded-lg border bg-background p-3 text-sm">
+                <div className="grid gap-1.5">
+                  <Label>Drive File</Label>
+                  <div className="font-medium">{driveMetadata.fileName}</div>
+                  <div className="text-muted-foreground">
+                    {DATA_SOURCE_LABELS[sourceType ?? 'web-url']}
+                  </div>
+                </div>
+                <div className="grid gap-1.5 text-muted-foreground">
+                  <div>
+                    Account: <span className="text-foreground">{driveMetadata.accountEmail}</span>
+                  </div>
+                  {driveMetadata.lastKnownModifiedTime && (
+                    <div>
+                      Last modified:{' '}
+                      <span className="text-foreground">
+                        {new Date(driveMetadata.lastKnownModifiedTime).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    Export: <span className="text-foreground">{driveMetadata.exportMimeType}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={driveMetadata.webViewLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Open in Drive
+                  </a>
+                </div>
+              </div>
+            ) : isSource ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="source-url">Source URL</Label>
+                  <Input
+                    id="source-url"
+                    value={sourceUrl}
+                    onChange={(e) => handleSourceUrlChange(e.target.value)}
+                    placeholder="Paste URL here..."
+                  />
+                </div>
+                {sourceType === 'google-sheet' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="sheet-name">Sheet Name (optional)</Label>
+                    <Input
+                      id="sheet-name"
+                      value={sheetName}
+                      onChange={(e) => handleSheetNameChange(e.target.value)}
+                      placeholder="e.g. Sheet1"
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="node-prompt">Prompt</Label>
+                <Textarea
+                  id="node-prompt"
+                  value={prompt}
+                  onChange={(e) => handlePromptChange(e.target.value)}
+                  placeholder="Write your task or prompt..."
+                  rows={8}
                 />
               </div>
             )}
-          </>
-        ) : (
-          <div className="space-y-1.5">
-            <Label htmlFor="node-prompt">Prompt</Label>
-            <Textarea
-              id="node-prompt"
-              value={prompt}
-              onChange={(e) => handlePromptChange(e.target.value)}
-              placeholder="Write your task or prompt..."
-              rows={8}
-            />
           </div>
-        )}
-
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label>{isSource ? 'Fetched Content' : 'Output'}</Label>
-            {thesisNode.output && !isRunning && !isQueued && !isBlocked && (
-              <CopyButton text={thesisNode.output} />
-            )}
-          </div>
-          <ScrollArea className="h-80 rounded-lg border bg-muted/50 p-3">
-            {isRunning && (
-              <p className="text-sm text-muted-foreground">
-                {isSource && sourceType === 'text'
-                  ? 'Saving...'
-                  : isSource
-                    ? 'Fetching...'
-                    : 'Running...'}
-              </p>
-            )}
-            {isQueued && (
-              <p className="text-sm text-muted-foreground">
-                {thesisNode.run_error ?? 'Queued for Run All'}
-              </p>
-            )}
-            {isBlocked && (
-              <p className="text-sm text-destructive">{thesisNode.run_error ?? 'Error'}</p>
-            )}
-            {!isRunning && !isQueued && !isBlocked && thesisNode.output && (
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-base prose-headings:font-semibold prose-h1:text-lg prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-3">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{thesisNode.output}</ReactMarkdown>
-              </div>
-            )}
-            {!isRunning && !isQueued && !isBlocked && !thesisNode.output && (
-              <p className="text-sm text-muted-foreground">
-                {isSource && sourceType === 'text'
-                  ? 'Not yet saved'
-                  : isSource
-                    ? 'Not yet fetched'
-                    : 'Not yet run'}
-              </p>
-            )}
-          </ScrollArea>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
-          {thesisNode.last_run_at && (
-            <span className="text-xs text-muted-foreground">
-              {isSource && sourceType === 'text'
-                ? 'Last saved'
-                : isSource
-                  ? 'Last fetched'
-                  : 'Last run'}
-              : {new Date(thesisNode.last_run_at).toLocaleString()}
-            </span>
-          )}
-        </div>
-
-        {needsReconnect ? (
-          <a className={buttonVariants()} href={connectHref}>
-            Reconnect Google Drive
-          </a>
-        ) : (
-          <Button onClick={handleRun} disabled={isRunning || isQueued}>
-            {isRunning ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : isSource && sourceType === 'text' ? (
-              <Save className="size-4" />
-            ) : isSource ? (
-              <RefreshCw className="size-4" />
-            ) : (
-              <Play className="size-4" />
-            )}
-            {isSource && sourceType === 'text' ? 'Save' : isSource ? 'Refresh' : 'Run'}
-          </Button>
-        )}
+        </details>
 
         {(upstreamEdges.length > 0 || downstreamEdges.length > 0) && (
           <>
@@ -490,6 +580,29 @@ function NodeForm({
         </Button>
       </div>
 
+      <Dialog open={outputDialogOpen} onOpenChange={setOutputDialogOpen}>
+        <DialogContent className="flex h-[min(92vh,920px)] w-[min(96vw,1280px)] max-w-none flex-col gap-0 p-0 sm:max-w-none">
+          <DialogHeader className="border-b p-4 pr-12">
+            <DialogTitle>{outputLabel}</DialogTitle>
+            <DialogDescription>{name}</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="p-5 sm:p-6">
+              <OutputContent
+                output={thesisNode.output}
+                isRunning={isRunning}
+                isQueued={isQueued}
+                isBlocked={isBlocked}
+                runError={thesisNode.run_error}
+                loadingLabel={loadingLabel}
+                emptyLabel={emptyLabel}
+                className="prose-headings:text-lg prose-h1:text-2xl"
+              />
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -515,8 +628,8 @@ function NodeForm({
 
 const MIN_WIDTH = 480;
 const MAX_WIDTH = 1200;
-const DEFAULT_WIDTH = 640;
-const STORAGE_KEY = 'thesis-detail-panel-width';
+const DEFAULT_WIDTH = 760;
+const STORAGE_KEY = 'thesis-detail-panel-width-v2';
 
 function getStoredWidth(): number {
   if (typeof window === 'undefined') return DEFAULT_WIDTH;
@@ -584,12 +697,12 @@ export function NodeDetailPanel() {
       <SheetContent
         side="right"
         className="overflow-y-auto"
-        style={{ width: panelWidth, maxWidth: panelWidth }}
+        style={{ width: `min(100vw, ${panelWidth}px)`, maxWidth: `min(100vw, ${panelWidth}px)` }}
       >
         {/* Drag handle on left edge */}
         <div
           onMouseDown={handleMouseDown}
-          className="absolute inset-y-0 left-0 z-50 w-1.5 cursor-col-resize transition-colors hover:bg-primary/10 active:bg-primary/20"
+          className="absolute inset-y-0 left-0 z-50 hidden w-1.5 cursor-col-resize transition-colors hover:bg-primary/10 active:bg-primary/20 sm:block"
         />
         {thesisNode && selectedNodeId && (
           <NodeForm
