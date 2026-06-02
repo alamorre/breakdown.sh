@@ -7,7 +7,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-border px-6">
         <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
-          Thesis
+          breakdown.sh
         </Link>
         <div className="flex items-center gap-2">
           <Link href="/settings">
