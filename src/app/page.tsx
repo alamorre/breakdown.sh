@@ -34,7 +34,7 @@ export default function Home() {
 
           <div className="flex flex-wrap gap-3 text-sm">
             <Link
-              href="/sign-in"
+              href="/sign-in?redirect_url=/dashboard"
               className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Sign in
