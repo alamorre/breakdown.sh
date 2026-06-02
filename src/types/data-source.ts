@@ -1,11 +1,44 @@
 /** Data source node types */
-export type DataSourceType = 'web-url' | 'google-doc' | 'google-sheet' | 'text';
+export type DataSourceType =
+  | 'web-url'
+  | 'google-doc'
+  | 'google-sheet'
+  | 'google-presentation'
+  | 'text';
+
+export type GoogleDriveMimeType =
+  | 'application/vnd.google-apps.document'
+  | 'application/vnd.google-apps.spreadsheet'
+  | 'application/vnd.google-apps.presentation';
+
+export type GoogleDriveExtractionConfig =
+  | { kind: 'document'; format: 'markdown' | 'plain-text' }
+  | { kind: 'spreadsheet'; format: 'csv' }
+  | { kind: 'presentation'; format: 'plain-text' };
+
+/** Metadata stored in nodes.metadata for native Google Drive sources */
+export interface GoogleDriveSourceConfig {
+  provider: 'google-drive';
+  connectionId: string;
+  fileId: string;
+  fileName: string;
+  mimeType: GoogleDriveMimeType;
+  webViewLink: string;
+  iconLink?: string;
+  accountEmail: string;
+  exportMimeType: string;
+  lastKnownModifiedTime?: string;
+  lastFetchedModifiedTime?: string;
+  lastFetchedContentHash?: string;
+  extraction?: GoogleDriveExtractionConfig;
+}
 
 /** node_type values stored in the database for source nodes */
 export const SOURCE_NODE_TYPES = {
   'web-url': 'source-web-url',
   'google-doc': 'source-google-doc',
   'google-sheet': 'source-google-sheet',
+  'google-presentation': 'source-google-presentation',
   text: 'source-text',
 } as const satisfies Record<DataSourceType, string>;
 
@@ -34,6 +67,7 @@ export type DataSourceConfig =
   | WebUrlConfig
   | GoogleDocConfig
   | GoogleSheetConfig
+  | GoogleDriveSourceConfig
   | TextSourceConfig;
 
 /** Check if a node_type string represents a data source node */
@@ -54,6 +88,7 @@ export const DATA_SOURCE_LABELS: Record<DataSourceType, string> = {
   'web-url': 'Web URL',
   'google-doc': 'Google Doc',
   'google-sheet': 'Google Sheet',
+  'google-presentation': 'Google Presentation',
   text: 'Text',
 };
 
@@ -62,5 +97,20 @@ export const DATA_SOURCE_DEFAULT_NAMES: Record<DataSourceType, string> = {
   'web-url': 'Web Source',
   'google-doc': 'Google Doc',
   'google-sheet': 'Google Sheet',
+  'google-presentation': 'Google Presentation',
   text: 'Text Source',
 };
+
+export function isGoogleDriveSourceConfig(metadata: unknown): metadata is GoogleDriveSourceConfig {
+  const value = metadata as Partial<GoogleDriveSourceConfig> | null | undefined;
+  return (
+    value?.provider === 'google-drive' &&
+    typeof value.connectionId === 'string' &&
+    typeof value.fileId === 'string' &&
+    typeof value.fileName === 'string' &&
+    typeof value.mimeType === 'string' &&
+    typeof value.webViewLink === 'string' &&
+    typeof value.accountEmail === 'string' &&
+    typeof value.exportMimeType === 'string'
+  );
+}

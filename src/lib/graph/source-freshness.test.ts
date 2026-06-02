@@ -13,6 +13,7 @@ describe('source freshness', () => {
     expect(isRefreshableSourceNode('source-web-url')).toBe(true);
     expect(isRefreshableSourceNode('source-google-doc')).toBe(true);
     expect(isRefreshableSourceNode('source-google-sheet')).toBe(true);
+    expect(isRefreshableSourceNode('source-google-presentation')).toBe(true);
   });
 
   it('does not treat text sources or AI nodes as refreshable', () => {

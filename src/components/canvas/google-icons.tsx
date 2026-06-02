@@ -43,3 +43,23 @@ export function GoogleSheetsIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function GoogleSlidesIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 64 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Document body */}
+      <path
+        d="M4 8C4 3.58 7.58 0 12 0H40L60 20V80C60 84.42 56.42 88 52 88H12C7.58 88 4 84.42 4 80V8Z"
+        fill="#F9AB00"
+      />
+      {/* Folded corner */}
+      <path d="M40 0L60 20H48C43.58 20 40 16.42 40 12V0Z" fill="#FDD663" />
+      {/* Slide frame */}
+      <rect x="14" y="34" width="36" height="28" rx="2" fill="white" fillOpacity="0.92" />
+      <rect x="19" y="40" width="20" height="3" rx="1.5" fill="#F9AB00" />
+      <rect x="19" y="48" width="26" height="2.5" rx="1.25" fill="#F9AB00" fillOpacity="0.75" />
+      <rect x="19" y="55" width="16" height="2.5" rx="1.25" fill="#F9AB00" fillOpacity="0.75" />
+      <path d="M30 62H34V70H42" stroke="white" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
