@@ -164,7 +164,8 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const data = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!response.ok || !data) {
-    throw new Error(data?.error ?? 'Google Drive request failed');
+    const pathname = new URL(url, window.location.origin).pathname;
+    throw new Error(data?.error ?? `Google Drive request failed while calling ${pathname}`);
   }
 
   return data;
