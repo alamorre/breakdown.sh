@@ -16,8 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Thesis — Reasoning that propagates',
-  description: 'A node-based reasoning canvas for structured decision-making',
+  title: 'breakdown.sh — AI reasoning canvas',
+  description:
+    'breakdown.sh helps users organize source material, connect Google Drive files they choose, and run AI analysis across a reasoning graph.',
 };
 
 export default function RootLayout({

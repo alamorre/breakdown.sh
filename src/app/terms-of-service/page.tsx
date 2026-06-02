@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service | Breakdown',
+  title: 'Terms of Service | breakdown.sh',
   description: 'Terms of Service for breakdown.sh',
 };
 

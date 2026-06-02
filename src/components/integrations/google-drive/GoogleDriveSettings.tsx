@@ -135,7 +135,7 @@ export function GoogleDriveSettings() {
               <div>
                 Scope:{' '}
                 <span className="text-foreground">
-                  Files selected for Thesis plus account identity.
+                  Files selected for breakdown.sh plus account identity.
                 </span>
               </div>
             </div>
