@@ -10,6 +10,12 @@ import {
   DEFAULT_AI_PROVIDER_ID,
   getProviderForModel,
 } from '@/lib/ai/models';
+import {
+  getActiveAiProviderCredential,
+  getAiProviderCredentialsSetupError,
+  getProviderSetupPrompt,
+  hasAiProviderCredentialEncryption,
+} from '@/lib/ai/credentials';
 import type { Graph } from '@/types/graph';
 import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
@@ -106,7 +112,21 @@ export async function updateGraph(
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.llmModel !== undefined) {
-    updates.llm_provider = getProviderForModel(parsed.data.llmModel);
+    const providerId = getProviderForModel(parsed.data.llmModel);
+    if (!hasAiProviderCredentialEncryption()) {
+      return { data: null, error: 'Stored provider keys are not configured for this deployment.' };
+    }
+
+    try {
+      const credential = await getActiveAiProviderCredential(supabase, { userId, providerId });
+      if (!credential) {
+        return { data: null, error: getProviderSetupPrompt(providerId) };
+      }
+    } catch (err) {
+      return { data: null, error: getAiProviderCredentialsSetupError(err) };
+    }
+
+    updates.llm_provider = providerId;
     updates.llm_model = parsed.data.llmModel;
   }
 

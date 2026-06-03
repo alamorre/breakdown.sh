@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockAuth = vi.fn();
 const mockRevalidatePath = vi.fn();
+const mockGetActiveAiProviderCredential = vi.fn();
+const mockHasAiProviderCredentialEncryption = vi.fn();
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
@@ -9,6 +11,15 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+}));
+
+vi.mock('@/lib/ai/credentials', () => ({
+  getActiveAiProviderCredential: (...args: unknown[]) => mockGetActiveAiProviderCredential(...args),
+  getAiProviderCredentialsSetupError: (err: unknown) =>
+    err instanceof Error ? err.message : 'AI provider credentials could not be loaded.',
+  getProviderSetupPrompt: (providerId: string) =>
+    `Add your ${providerId === 'openai' ? 'OpenAI' : providerId === 'gemini' ? 'Gemini' : 'Anthropic'} API key in Settings before running ${providerId === 'openai' ? 'OpenAI' : providerId === 'gemini' ? 'Gemini' : 'Anthropic'} models.`,
+  hasAiProviderCredentialEncryption: () => mockHasAiProviderCredentialEncryption(),
 }));
 
 const mockSelect = vi.fn();
@@ -41,6 +52,8 @@ vi.mock('@/lib/supabase/server', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockReturnValue({ userId: 'user_123' });
+  mockGetActiveAiProviderCredential.mockResolvedValue({ id: 'credential_123' });
+  mockHasAiProviderCredentialEncryption.mockReturnValue(true);
 });
 
 describe('createGraph', () => {
@@ -154,6 +167,10 @@ describe('updateGraph', () => {
 
     expect(result.data).toEqual(updated);
     expect(result.error).toBeNull();
+    expect(mockGetActiveAiProviderCredential).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_123',
+      providerId: 'anthropic',
+    });
     expect(mockUpdate).toHaveBeenCalledWith({
       llm_provider: 'anthropic',
       llm_model: 'claude-haiku-4-5-20251001',
@@ -174,6 +191,10 @@ describe('updateGraph', () => {
 
     expect(result.data).toEqual(updated);
     expect(result.error).toBeNull();
+    expect(mockGetActiveAiProviderCredential).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_123',
+      providerId: 'openai',
+    });
     expect(mockUpdate).toHaveBeenCalledWith({
       llm_provider: 'openai',
       llm_model: 'gpt-5.4',
@@ -190,6 +211,29 @@ describe('updateGraph', () => {
 
     expect(result.data).toBeNull();
     expect(result.error).toBeTruthy();
+  });
+
+  it('should reject model updates for providers without a saved key', async () => {
+    mockGetActiveAiProviderCredential.mockResolvedValue(null);
+
+    const { updateGraphModel } = await import('@/actions/graph-actions');
+    const result = await updateGraphModel('550e8400-e29b-41d4-a716-446655440000', 'gemini-2.5-pro');
+
+    expect(result.data).toBeNull();
+    expect(result.error).toBe('Add your Gemini API key in Settings before running Gemini models.');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('should reject model updates when provider key storage is unavailable', async () => {
+    mockHasAiProviderCredentialEncryption.mockReturnValue(false);
+
+    const { updateGraphModel } = await import('@/actions/graph-actions');
+    const result = await updateGraphModel('550e8400-e29b-41d4-a716-446655440000', 'gpt-5.4');
+
+    expect(result.data).toBeNull();
+    expect(result.error).toBe('Stored provider keys are not configured for this deployment.');
+    expect(mockGetActiveAiProviderCredential).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useCallback, useRef, useEffect } from 'react';
+import { Fragment, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -48,6 +49,30 @@ import type {
 import { RUN_GRAPH_STREAM_CONTENT_TYPE } from '@/types/run-graph';
 
 const RUN_PROGRESS_TOAST_ID = 'run-all-progress';
+
+type ProviderStatus = {
+  provider: AiProviderId;
+  connected: boolean;
+};
+
+type AiProviderStatusResponse = {
+  configured: boolean;
+  providers: ProviderStatus[];
+  error?: string;
+};
+
+async function readAiProviderStatus(): Promise<AiProviderStatusResponse> {
+  const response = await fetch('/api/integrations/ai-providers/status', {
+    cache: 'no-store',
+  });
+  const data = (await response.json().catch(() => null)) as AiProviderStatusResponse | null;
+
+  if (!response.ok || !data) {
+    throw new Error(data?.error ?? 'Failed to load AI provider status');
+  }
+
+  return data;
+}
 
 function buildInitialProgressItems(
   nodes: CanvasNode[],
@@ -154,6 +179,9 @@ export function GraphTopBar({
   const [cancelRequested, setCancelRequested] = useState(false);
   const [layouting, setLayouting] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
+  const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[] | null>(null);
+  const [providerStatusLoading, setProviderStatusLoading] = useState(true);
+  const [providerStatusError, setProviderStatusError] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<AiModelId>(
     resolveAiModelSelection({
       providerId: initialLlmProvider,
@@ -168,6 +196,44 @@ export function GraphTopBar({
   const activeRunProgressNoteRef = useRef<string | undefined>(undefined);
   const activeProgressItemsRef = useRef<RunProgressItem[]>([]);
   const selectedModel = getAiModelOption(selectedModelId);
+
+  const loadProviderStatuses = useCallback(async () => {
+    setProviderStatusLoading(true);
+    try {
+      const result = await readAiProviderStatus();
+      setProviderStatuses(result.providers);
+      setProviderStatusError(result.error ?? null);
+    } catch (err) {
+      setProviderStatusError(
+        err instanceof Error ? err.message : 'Failed to load AI provider status',
+      );
+    } finally {
+      setProviderStatusLoading(false);
+    }
+  }, []);
+
+  const connectedProviderIds = useMemo(() => {
+    return new Set(
+      (providerStatuses ?? [])
+        .filter((status) => status.connected)
+        .map((status) => status.provider),
+    );
+  }, [providerStatuses]);
+
+  const selectableProviders = useMemo(() => {
+    if (!providerStatuses) {
+      return [];
+    }
+
+    return AI_PROVIDER_OPTIONS.filter((provider) => connectedProviderIds.has(provider.id));
+  }, [connectedProviderIds, providerStatuses]);
+
+  const selectedProviderAvailable =
+    !providerStatuses || connectedProviderIds.has(selectedModel.provider);
+
+  useEffect(() => {
+    void loadProviderStatuses();
+  }, [loadProviderStatuses]);
 
   useEffect(() => {
     setSelectedModelId(
@@ -570,7 +636,13 @@ export function GraphTopBar({
         Export
       </Button>
 
-      <DropdownMenu>
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) {
+            void loadProviderStatuses();
+          }
+        }}
+      >
         <DropdownMenuTrigger
           className={cn(
             buttonVariants({ variant: 'outline', size: 'sm' }),
@@ -584,34 +656,44 @@ export function GraphTopBar({
           ) : (
             <BrainCircuit className="size-3.5" />
           )}
-          <span>{selectedModel.label}</span>
+          <span className={cn(!selectedProviderAvailable && 'text-muted-foreground')}>
+            {selectedModel.label}
+          </span>
           <ChevronDown className="ml-auto size-3" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuRadioGroup
-            value={selectedModelId}
-            disabled={runningAll || savingModel}
-            onValueChange={(value) => void handleModelSelect(value as AiModelId)}
-          >
-            {AI_PROVIDER_OPTIONS.map((provider) => (
-              <Fragment key={provider.id}>
-                <DropdownMenuRadioItem
-                  value={`provider-${provider.id}`}
-                  disabled
-                  className="opacity-100 [&_[data-slot=dropdown-menu-radio-item-indicator]]:hidden"
-                >
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {provider.label}
-                  </span>
-                </DropdownMenuRadioItem>
-                {provider.models.map((option) => (
-                  <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
-                    {option.label}
+        <DropdownMenuContent align="end" className="w-56">
+          {providerStatusLoading && !providerStatuses ? (
+            <DropdownMenuItem disabled>Loading providers...</DropdownMenuItem>
+          ) : providerStatusError ? (
+            <DropdownMenuItem disabled>{providerStatusError}</DropdownMenuItem>
+          ) : selectableProviders.length === 0 ? (
+            <DropdownMenuItem disabled>Add a provider key in Settings</DropdownMenuItem>
+          ) : (
+            <DropdownMenuRadioGroup
+              value={selectedModelId}
+              disabled={runningAll || savingModel}
+              onValueChange={(value) => void handleModelSelect(value as AiModelId)}
+            >
+              {selectableProviders.map((provider) => (
+                <Fragment key={provider.id}>
+                  <DropdownMenuRadioItem
+                    value={`provider-${provider.id}`}
+                    disabled
+                    className="opacity-100 [&_[data-slot=dropdown-menu-radio-item-indicator]]:hidden"
+                  >
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {provider.label}
+                    </span>
                   </DropdownMenuRadioItem>
-                ))}
-              </Fragment>
-            ))}
-          </DropdownMenuRadioGroup>
+                  {provider.models.map((option) => (
+                    <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </Fragment>
+              ))}
+            </DropdownMenuRadioGroup>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
