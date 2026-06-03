@@ -17,19 +17,14 @@ import {
   isDataSourceNode,
   isGoogleDriveSourceConfig,
 } from '@/types/data-source';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 import type { Graph } from '@/types/graph';
-import type { ThesisActor } from './actor';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { assertGraphAccess, type SupabaseClient } from './graphs';
-import {
-  createNodeSchema,
-  runNodeSchema,
-  updateNodeSchema,
-  uuidSchema,
-} from './schemas';
+import { createNodeSchema, runNodeSchema, updateNodeSchema, uuidSchema } from './schemas';
 import { auditHeadlessOperation, assertTextByteLimit, HEADLESS_LIMITS } from './safety';
 import { createServerClient } from '@/lib/supabase/server';
 
@@ -40,31 +35,36 @@ function serviceClient() {
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
 
 export async function getNodeForActor(
   supabase: SupabaseClient,
-  actor: ThesisActor,
+  actor: BreakdownActor,
   nodeId: string,
-): Promise<{ node: ThesisNode; graph: Graph }> {
+): Promise<{ node: BreakdownNode; graph: Graph }> {
   const parsedNodeId = parseOrThrow(uuidSchema, nodeId);
   const { data, error } = await supabase.from('nodes').select('*').eq('id', parsedNodeId).single();
   if (error || !data) {
-    throw new ThesisServiceError('not_found', error?.message ?? 'Node not found', 404);
+    throw new BreakdownServiceError('not_found', error?.message ?? 'Node not found', 404);
   }
 
-  const node = data as ThesisNode;
+  const node = data as BreakdownNode;
   const graph = await assertGraphAccess(supabase, actor, node.graph_id);
   return { node, graph };
 }
 
 export async function createNodeForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof createNodeSchema>,
-): Promise<ThesisNode> {
+): Promise<BreakdownNode> {
   requireScope(actor, 'graphs:write');
   const parsed = parseOrThrow(createNodeSchema, input);
   assertTextByteLimit(parsed.prompt, HEADLESS_LIMITS.maxNodePromptBytes, 'Node prompt');
@@ -87,25 +87,29 @@ export async function createNodeForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('database_error', error?.message ?? 'Failed to create node', 400);
+    throw new BreakdownServiceError(
+      'database_error',
+      error?.message ?? 'Failed to create node',
+      400,
+    );
   }
 
   await auditHeadlessOperation(supabase, {
     actor,
     operation: 'node.create',
     targetType: 'node',
-    targetId: (data as ThesisNode).id,
+    targetId: (data as BreakdownNode).id,
     graphId: parsed.graphId,
     requestSummary: { name: parsed.name, nodeType: parsed.nodeType ?? 'default' },
   });
 
-  return data as ThesisNode;
+  return data as BreakdownNode;
 }
 
 export async function updateNodeForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof updateNodeSchema>,
-): Promise<ThesisNode> {
+): Promise<BreakdownNode> {
   requireScope(actor, 'graphs:write');
   const parsed = parseOrThrow(updateNodeSchema, input);
   assertTextByteLimit(parsed.prompt, HEADLESS_LIMITS.maxNodePromptBytes, 'Node prompt');
@@ -135,7 +139,11 @@ export async function updateNodeForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('database_error', error?.message ?? 'Failed to update node', 400);
+    throw new BreakdownServiceError(
+      'database_error',
+      error?.message ?? 'Failed to update node',
+      400,
+    );
   }
 
   await auditHeadlessOperation(supabase, {
@@ -150,17 +158,17 @@ export async function updateNodeForActor(
     }, {}),
   });
 
-  return data as ThesisNode;
+  return data as BreakdownNode;
 }
 
-export async function deleteNodeForActor(actor: ThesisActor, nodeId: string): Promise<void> {
+export async function deleteNodeForActor(actor: BreakdownActor, nodeId: string): Promise<void> {
   requireScope(actor, 'graphs:write');
   const supabase = serviceClient();
   const { node } = await getNodeForActor(supabase, actor, nodeId);
 
   const { error } = await supabase.from('nodes').delete().eq('id', node.id);
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   await auditHeadlessOperation(supabase, {
@@ -175,7 +183,7 @@ export async function deleteNodeForActor(actor: ThesisActor, nodeId: string): Pr
 
 async function runDataSourceNode(
   supabase: SupabaseClient,
-  node: ThesisNode,
+  node: BreakdownNode,
   userId: string,
 ): Promise<{
   output: string;
@@ -184,12 +192,16 @@ async function runDataSourceNode(
 }> {
   const sourceType = getDataSourceType(node.node_type);
   if (!sourceType) {
-    throw new ThesisServiceError('validation_error', `Unknown source type: ${node.node_type}`, 400);
+    throw new BreakdownServiceError(
+      'validation_error',
+      `Unknown source type: ${node.node_type}`,
+      400,
+    );
   }
 
   if (sourceType === 'text') {
     if (!node.prompt) {
-      throw new ThesisServiceError(
+      throw new BreakdownServiceError(
         'validation_error',
         'No text content. Paste or type your text first.',
         400,
@@ -246,13 +258,17 @@ async function runDataSourceNode(
           updated_at: new Date().toISOString(),
         })
         .eq('id', node.id);
-      throw new ThesisServiceError('execution_error', message, 400);
+      throw new BreakdownServiceError('execution_error', message, 400);
     }
   }
 
   const url = (metadata as { url?: string }).url;
   if (!url) {
-    throw new ThesisServiceError('validation_error', 'No URL configured. Enter a URL to fetch.', 400);
+    throw new BreakdownServiceError(
+      'validation_error',
+      'No URL configured. Enter a URL to fetch.',
+      400,
+    );
   }
 
   await supabase
@@ -299,12 +315,12 @@ async function runDataSourceNode(
         updated_at: new Date().toISOString(),
       })
       .eq('id', node.id);
-    throw new ThesisServiceError('execution_error', message, 400);
+    throw new BreakdownServiceError('execution_error', message, 400);
   }
 }
 
 export async function runNodeForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof runNodeSchema>,
 ): Promise<{
   output: string;
@@ -330,7 +346,7 @@ export async function runNodeForActor(
   }
 
   if (!typedNode.prompt.trim()) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'validation_error',
       'Node has no prompt. Write a task before running.',
       400,
@@ -343,10 +359,10 @@ export async function runNodeForActor(
     .eq('target_node_id', parsed.nodeId);
 
   if (edgesError) {
-    throw new ThesisServiceError('database_error', edgesError.message, 400);
+    throw new BreakdownServiceError('database_error', edgesError.message, 400);
   }
 
-  const typedEdges = (inboundEdges ?? []) as ThesisEdge[];
+  const typedEdges = (inboundEdges ?? []) as BreakdownEdge[];
   const upstreamInputs: UpstreamInput[] = [];
 
   if (typedEdges.length > 0) {
@@ -357,11 +373,11 @@ export async function runNodeForActor(
       .in('id', sourceIds);
 
     if (sourceError) {
-      throw new ThesisServiceError('database_error', sourceError.message, 400);
+      throw new BreakdownServiceError('database_error', sourceError.message, 400);
     }
 
-    const sourceMap = new Map<string, ThesisNode>();
-    for (const sourceNode of (sourceNodes ?? []) as ThesisNode[]) {
+    const sourceMap = new Map<string, BreakdownNode>();
+    for (const sourceNode of (sourceNodes ?? []) as BreakdownNode[]) {
       sourceMap.set(sourceNode.id, sourceNode);
     }
 
@@ -393,7 +409,7 @@ export async function runNodeForActor(
     }
 
     if (unavailableInputs.length > 0) {
-      throw new ThesisServiceError(
+      throw new BreakdownServiceError(
         'upstream_not_ready',
         `Upstream input not ready: ${unavailableInputs.join(', ')}. Run or refresh it first.`,
         409,
@@ -401,7 +417,7 @@ export async function runNodeForActor(
     }
 
     if (staleInputs.length > 0) {
-      throw new ThesisServiceError(
+      throw new BreakdownServiceError(
         'upstream_not_ready',
         `Stale source input: ${staleInputs.join(', ')}. Use Run All or refresh the source before running this node.`,
         409,
@@ -418,11 +434,15 @@ export async function runNodeForActor(
   try {
     apiKey = await getUserAiProviderApiKey(supabase, { userId: actor.userId, providerId });
   } catch (err) {
-    throw new ThesisServiceError('validation_error', getAiProviderCredentialsSetupError(err), 400);
+    throw new BreakdownServiceError(
+      'validation_error',
+      getAiProviderCredentialsSetupError(err),
+      400,
+    );
   }
 
   if (!apiKey) {
-    throw new ThesisServiceError('validation_error', getProviderSetupPrompt(providerId), 400);
+    throw new BreakdownServiceError('validation_error', getProviderSetupPrompt(providerId), 400);
   }
 
   await supabase
@@ -513,6 +533,6 @@ export async function runNodeForActor(
       })
       .eq('id', parsed.nodeId);
 
-    throw new ThesisServiceError('execution_error', message, 400);
+    throw new BreakdownServiceError('execution_error', message, 400);
   }
 }

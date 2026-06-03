@@ -2,20 +2,20 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { resolveClerkActor } from '@/lib/thesis-service/actor';
-import { getErrorResponse } from '@/lib/thesis-service/errors';
+import { resolveClerkActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse } from '@/lib/breakdown-service/errors';
 import {
   createGraphForActor,
   deleteGraphForActor,
   getGraphForActor,
   listGraphsForActor,
   updateGraphForActor,
-} from '@/lib/thesis-service/graphs';
-import { updateNodeForActor } from '@/lib/thesis-service/nodes';
-import { createGraphSchema, updateGraphSchema, uuidSchema } from '@/lib/thesis-service/schemas';
+} from '@/lib/breakdown-service/graphs';
+import { updateNodeForActor } from '@/lib/breakdown-service/nodes';
+import { createGraphSchema, updateGraphSchema, uuidSchema } from '@/lib/breakdown-service/schemas';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 
 function actionError(err: unknown) {
   const error = getErrorResponse(err);
@@ -77,7 +77,7 @@ export async function deleteGraph(input: { graphId: string }): Promise<{ error: 
 }
 
 export async function getGraph(input: { graphId: string }): Promise<{
-  data: { graph: Graph; nodes: ThesisNode[]; edges: ThesisEdge[] } | null;
+  data: { graph: Graph; nodes: BreakdownNode[]; edges: BreakdownEdge[] } | null;
   error: string | null;
 }> {
   try {

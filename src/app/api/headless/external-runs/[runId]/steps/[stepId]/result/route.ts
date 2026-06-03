@@ -1,5 +1,5 @@
-import { submitExternalStepResultForActor } from '@/lib/thesis-service/external-runs';
-import { submitExternalStepResultSchema } from '@/lib/thesis-service/schemas';
+import { submitExternalStepResultForActor } from '@/lib/breakdown-service/external-runs';
+import { submitExternalStepResultSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

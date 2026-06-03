@@ -1,4 +1,4 @@
-import { exportGraphForActor } from '@/lib/thesis-service/workflows';
+import { exportGraphForActor } from '@/lib/breakdown-service/workflows';
 import { withHeadlessActor } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

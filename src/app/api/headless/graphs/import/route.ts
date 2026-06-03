@@ -1,5 +1,5 @@
-import { importGraphForActor } from '@/lib/thesis-service/workflows';
-import { importGraphSchema } from '@/lib/thesis-service/schemas';
+import { importGraphForActor } from '@/lib/breakdown-service/workflows';
+import { importGraphSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

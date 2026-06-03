@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import {
-  DEFAULT_AI_MODEL_ID,
-  DEFAULT_AI_PROVIDER_ID,
-  getProviderForModel,
-} from '@/lib/ai/models';
+import { DEFAULT_AI_MODEL_ID, DEFAULT_AI_PROVIDER_ID, getProviderForModel } from '@/lib/ai/models';
 import {
   getActiveAiProviderCredential,
   getAiProviderCredentialsSetupError,
@@ -12,11 +8,11 @@ import {
   hasAiProviderCredentialEncryption,
 } from '@/lib/ai/credentials';
 import type { Graph, GraphWithData } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
-import type { ThesisActor } from './actor';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { auditHeadlessOperation } from './safety';
 import { createGraphSchema, updateGraphSchema, uuidSchema } from './schemas';
 
@@ -29,14 +25,19 @@ function serviceClient() {
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
 
 export async function assertGraphAccess(
   supabase: SupabaseClient,
-  actor: ThesisActor,
+  actor: BreakdownActor,
   graphId: string,
 ): Promise<Graph> {
   const parsedGraphId = parseOrThrow(uuidSchema, graphId);
@@ -48,13 +49,13 @@ export async function assertGraphAccess(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('not_found', error?.message ?? 'Graph not found', 404);
+    throw new BreakdownServiceError('not_found', error?.message ?? 'Graph not found', 404);
   }
 
   return data as Graph;
 }
 
-export async function listGraphsForActor(actor: ThesisActor): Promise<Graph[]> {
+export async function listGraphsForActor(actor: BreakdownActor): Promise<Graph[]> {
   requireScope(actor, 'graphs:read');
   const supabase = serviceClient();
   const { data, error } = await supabase
@@ -64,14 +65,14 @@ export async function listGraphsForActor(actor: ThesisActor): Promise<Graph[]> {
     .order('updated_at', { ascending: false });
 
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   return (data ?? []) as Graph[];
 }
 
 export async function createGraphForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof createGraphSchema>,
 ): Promise<Graph> {
   requireScope(actor, 'graphs:write');
@@ -93,7 +94,11 @@ export async function createGraphForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('database_error', error?.message ?? 'Failed to create graph', 400);
+    throw new BreakdownServiceError(
+      'database_error',
+      error?.message ?? 'Failed to create graph',
+      400,
+    );
   }
 
   await auditHeadlessOperation(supabase, {
@@ -109,7 +114,7 @@ export async function createGraphForActor(
 }
 
 export async function getGraphForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   graphId: string,
 ): Promise<GraphWithData> {
   requireScope(actor, 'graphs:read');
@@ -122,21 +127,21 @@ export async function getGraphForActor(
   ]);
 
   if (nodesResult.error) {
-    throw new ThesisServiceError('database_error', nodesResult.error.message, 400);
+    throw new BreakdownServiceError('database_error', nodesResult.error.message, 400);
   }
   if (edgesResult.error) {
-    throw new ThesisServiceError('database_error', edgesResult.error.message, 400);
+    throw new BreakdownServiceError('database_error', edgesResult.error.message, 400);
   }
 
   return {
     ...graph,
-    nodes: (nodesResult.data ?? []) as ThesisNode[],
-    edges: (edgesResult.data ?? []) as ThesisEdge[],
+    nodes: (nodesResult.data ?? []) as BreakdownNode[],
+    edges: (edgesResult.data ?? []) as BreakdownEdge[],
   };
 }
 
 export async function updateGraphForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof updateGraphSchema>,
 ): Promise<Graph> {
   requireScope(actor, 'graphs:write');
@@ -152,7 +157,7 @@ export async function updateGraphForActor(
   if (parsed.llmModel !== undefined) {
     const providerId = getProviderForModel(parsed.llmModel);
     if (!hasAiProviderCredentialEncryption()) {
-      throw new ThesisServiceError(
+      throw new BreakdownServiceError(
         'validation_error',
         'Stored provider keys are not configured for this deployment.',
         400,
@@ -165,11 +170,15 @@ export async function updateGraphForActor(
         providerId,
       });
       if (!credential) {
-        throw new ThesisServiceError('validation_error', getProviderSetupPrompt(providerId), 400);
+        throw new BreakdownServiceError(
+          'validation_error',
+          getProviderSetupPrompt(providerId),
+          400,
+        );
       }
     } catch (err) {
-      if (err instanceof ThesisServiceError) throw err;
-      throw new ThesisServiceError(
+      if (err instanceof BreakdownServiceError) throw err;
+      throw new BreakdownServiceError(
         'validation_error',
         getAiProviderCredentialsSetupError(err),
         400,
@@ -189,7 +198,11 @@ export async function updateGraphForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('database_error', error?.message ?? 'Failed to update graph', 400);
+    throw new BreakdownServiceError(
+      'database_error',
+      error?.message ?? 'Failed to update graph',
+      400,
+    );
   }
 
   await auditHeadlessOperation(supabase, {
@@ -207,14 +220,18 @@ export async function updateGraphForActor(
   return data as Graph;
 }
 
-export async function deleteGraphForActor(actor: ThesisActor, graphId: string): Promise<void> {
+export async function deleteGraphForActor(actor: BreakdownActor, graphId: string): Promise<void> {
   requireScope(actor, 'graphs:write');
   const supabase = serviceClient();
   const graph = await assertGraphAccess(supabase, actor, graphId);
 
-  const { error } = await supabase.from('graphs').delete().eq('id', graph.id).eq('user_id', actor.userId);
+  const { error } = await supabase
+    .from('graphs')
+    .delete()
+    .eq('id', graph.id)
+    .eq('user_id', actor.userId);
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   await auditHeadlessOperation(supabase, {

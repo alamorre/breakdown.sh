@@ -1,13 +1,13 @@
 import { z } from 'zod';
-import { type ThesisScope } from '@/lib/thesis-service/scopes';
-import { createExternalRunSchema, importGraphSchema } from '@/lib/thesis-service/schemas';
+import { type BreakdownScope } from '@/lib/breakdown-service/scopes';
+import { createExternalRunSchema, importGraphSchema } from '@/lib/breakdown-service/schemas';
 
 export const EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES = [
   'graphs:read',
   'graphs:write',
   'runs:external_execute',
   'runs:write_results',
-] as const satisfies readonly [ThesisScope, ...ThesisScope[]];
+] as const satisfies readonly [BreakdownScope, ...BreakdownScope[]];
 
 const externalConsoleScopeSchema = z.enum(EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES);
 
@@ -15,7 +15,10 @@ export const externalConsoleBootstrapSchema = z.object({
   clientName: z.string().trim().min(1).max(100).default('External console'),
   providerName: z.string().trim().min(1).max(100).optional(),
   tokenName: z.string().trim().min(1).max(100).optional(),
-  scopes: z.array(externalConsoleScopeSchema).min(1).default([...EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES]),
+  scopes: z
+    .array(externalConsoleScopeSchema)
+    .min(1)
+    .default([...EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES]),
   workflow: z
     .object({
       importGraph: importGraphSchema,

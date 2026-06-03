@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import type { ThesisActor } from '@/lib/thesis-service/actor';
-import { ThesisServiceError } from '@/lib/thesis-service/errors';
+import type { BreakdownActor } from '@/lib/breakdown-service/actor';
+import { BreakdownServiceError } from '@/lib/breakdown-service/errors';
 
 const {
   mockResolveHeadlessActor,
@@ -19,16 +19,16 @@ const {
   mockCompleteIdempotencyKey: vi.fn(),
 }));
 
-vi.mock('@/lib/thesis-service/actor', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/thesis-service/actor')>();
+vi.mock('@/lib/breakdown-service/actor', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/breakdown-service/actor')>();
   return {
     ...original,
     resolveHeadlessActor: mockResolveHeadlessActor,
   };
 });
 
-vi.mock('@/lib/thesis-service/safety', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/thesis-service/safety')>();
+vi.mock('@/lib/breakdown-service/safety', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/breakdown-service/safety')>();
   return {
     ...original,
     checkHeadlessRateLimit: mockCheckHeadlessRateLimit,
@@ -42,7 +42,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerClient: mockCreateServerClient,
 }));
 
-const actor: ThesisActor = {
+const actor: BreakdownActor = {
   userId: 'user_123',
   source: 'integration-token',
   scopes: ['graphs:read', 'graphs:write'],
@@ -82,7 +82,7 @@ describe('headless response helpers', () => {
     const { headlessError } = await import('./response');
 
     const response = headlessError(
-      new ThesisServiceError('forbidden', 'Missing required scope', 403, {
+      new BreakdownServiceError('forbidden', 'Missing required scope', 403, {
         requiredScope: 'graphs:write',
       }),
     );
@@ -105,7 +105,7 @@ describe('headless response helpers', () => {
 
     await expect(
       readJsonBody(jsonRequest({ name: '' }), z.object({ name: z.string().min(1) })),
-    ).rejects.toThrow(ThesisServiceError);
+    ).rejects.toThrow(BreakdownServiceError);
   });
 
   it('rejects oversized JSON bodies before validation', async () => {

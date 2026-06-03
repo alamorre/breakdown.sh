@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { wouldCreateCycle } from '@/lib/graph/detect-cycle';
-import type { ThesisEdge } from '@/types/edge';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisActor } from './actor';
+import type { BreakdownEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { assertGraphAccess, type SupabaseClient } from './graphs';
 import { createEdgeSchema, updateEdgeSchema, uuidSchema } from './schemas';
 import { auditHeadlessOperation } from './safety';
@@ -17,23 +17,28 @@ function serviceClient() {
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
 
 async function getEdgeForActor(
   supabase: SupabaseClient,
-  actor: ThesisActor,
+  actor: BreakdownActor,
   edgeId: string,
-): Promise<ThesisEdge> {
+): Promise<BreakdownEdge> {
   const parsedEdgeId = parseOrThrow(uuidSchema, edgeId);
   const { data, error } = await supabase.from('edges').select('*').eq('id', parsedEdgeId).single();
   if (error || !data) {
-    throw new ThesisServiceError('not_found', error?.message ?? 'Edge not found', 404);
+    throw new BreakdownServiceError('not_found', error?.message ?? 'Edge not found', 404);
   }
 
-  const edge = data as ThesisEdge;
+  const edge = data as BreakdownEdge;
   await assertGraphAccess(supabase, actor, edge.graph_id);
   return edge;
 }
@@ -45,7 +50,11 @@ async function assertEndpointNodes(
   targetNodeId: string,
 ) {
   if (sourceNodeId === targetNodeId) {
-    throw new ThesisServiceError('validation_error', 'Edges cannot connect a node to itself', 400);
+    throw new BreakdownServiceError(
+      'validation_error',
+      'Edges cannot connect a node to itself',
+      400,
+    );
   }
 
   const { data, error } = await supabase
@@ -54,15 +63,15 @@ async function assertEndpointNodes(
     .in('id', [sourceNodeId, targetNodeId]);
 
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
-  const nodes = (data ?? []) as Pick<ThesisNode, 'id' | 'graph_id'>[];
+  const nodes = (data ?? []) as Pick<BreakdownNode, 'id' | 'graph_id'>[];
   const source = nodes.find((node) => node.id === sourceNodeId);
   const target = nodes.find((node) => node.id === targetNodeId);
 
   if (!source || !target || source.graph_id !== graphId || target.graph_id !== graphId) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'validation_error',
       'Both edge endpoints must be nodes in the target graph',
       400,
@@ -83,15 +92,15 @@ async function assertAcyclicEdge(
     .eq('graph_id', graphId);
 
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
-  const existingEdges = ((data ?? []) as ThesisEdge[])
+  const existingEdges = ((data ?? []) as BreakdownEdge[])
     .filter((edge) => edge.id !== ignoredEdgeId)
     .map((edge) => ({ source: edge.source_node_id, target: edge.target_node_id }));
 
   if (wouldCreateCycle(existingEdges, sourceNodeId, targetNodeId)) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'conflict',
       'Edge would create a cycle. Breakdown graphs must stay acyclic.',
       409,
@@ -100,9 +109,9 @@ async function assertAcyclicEdge(
 }
 
 export async function createEdgeForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof createEdgeSchema>,
-): Promise<ThesisEdge> {
+): Promise<BreakdownEdge> {
   requireScope(actor, 'graphs:write');
   const parsed = parseOrThrow(createEdgeSchema, input);
   const supabase = serviceClient();
@@ -125,25 +134,29 @@ export async function createEdgeForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('database_error', error?.message ?? 'Failed to create edge', 400);
+    throw new BreakdownServiceError(
+      'database_error',
+      error?.message ?? 'Failed to create edge',
+      400,
+    );
   }
 
   await auditHeadlessOperation(supabase, {
     actor,
     operation: 'edge.create',
     targetType: 'edge',
-    targetId: (data as ThesisEdge).id,
+    targetId: (data as BreakdownEdge).id,
     graphId: parsed.graphId,
     requestSummary: { edgeType: parsed.edgeType },
   });
 
-  return data as ThesisEdge;
+  return data as BreakdownEdge;
 }
 
 export async function updateEdgeForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof updateEdgeSchema>,
-): Promise<ThesisEdge> {
+): Promise<BreakdownEdge> {
   requireScope(actor, 'graphs:write');
   const parsed = parseOrThrow(updateEdgeSchema, input);
   const supabase = serviceClient();
@@ -172,7 +185,11 @@ export async function updateEdgeForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('database_error', error?.message ?? 'Failed to update edge', 400);
+    throw new BreakdownServiceError(
+      'database_error',
+      error?.message ?? 'Failed to update edge',
+      400,
+    );
   }
 
   await auditHeadlessOperation(supabase, {
@@ -183,17 +200,17 @@ export async function updateEdgeForActor(
     graphId: existing.graph_id,
   });
 
-  return data as ThesisEdge;
+  return data as BreakdownEdge;
 }
 
-export async function deleteEdgeForActor(actor: ThesisActor, edgeId: string): Promise<void> {
+export async function deleteEdgeForActor(actor: BreakdownActor, edgeId: string): Promise<void> {
   requireScope(actor, 'graphs:write');
   const supabase = serviceClient();
   const edge = await getEdgeForActor(supabase, actor, edgeId);
 
   const { error } = await supabase.from('edges').delete().eq('id', edge.id);
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   await auditHeadlessOperation(supabase, {

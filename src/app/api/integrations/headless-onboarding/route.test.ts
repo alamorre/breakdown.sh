@@ -1,24 +1,21 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  mockBootstrapExternalConsoleForActor,
-  mockCreateServerClient,
-  mockResolveClerkActor,
-} = vi.hoisted(() => ({
-  mockBootstrapExternalConsoleForActor: vi.fn(),
-  mockCreateServerClient: vi.fn(),
-  mockResolveClerkActor: vi.fn(),
-}));
+const { mockBootstrapExternalConsoleForActor, mockCreateServerClient, mockResolveClerkActor } =
+  vi.hoisted(() => ({
+    mockBootstrapExternalConsoleForActor: vi.fn(),
+    mockCreateServerClient: vi.fn(),
+    mockResolveClerkActor: vi.fn(),
+  }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: mockCreateServerClient,
 }));
 
-vi.mock('@/lib/thesis-service/actor', () => ({
+vi.mock('@/lib/breakdown-service/actor', () => ({
   resolveClerkActor: mockResolveClerkActor,
 }));
 
-vi.mock('@/lib/thesis-service/onboarding', () => ({
+vi.mock('@/lib/breakdown-service/onboarding', () => ({
   bootstrapExternalConsoleForActor: mockBootstrapExternalConsoleForActor,
 }));
 

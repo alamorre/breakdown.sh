@@ -1,10 +1,10 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { createThesisMcpServer } from '@/lib/mcp/thesis-server';
-import { resolveHeadlessActor } from '@/lib/thesis-service/actor';
-import type { ThesisActor } from '@/lib/thesis-service/actor';
-import { getErrorResponse } from '@/lib/thesis-service/errors';
-import { checkHeadlessRateLimit } from '@/lib/thesis-service/safety';
+import { createBreakdownMcpServer } from '@/lib/mcp/breakdown-server';
+import { resolveHeadlessActor } from '@/lib/breakdown-service/actor';
+import type { BreakdownActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse } from '@/lib/breakdown-service/errors';
+import { checkHeadlessRateLimit } from '@/lib/breakdown-service/safety';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -54,7 +54,7 @@ function mcpErrorResponse(
   );
 }
 
-function actorAuthInfo(actor: ThesisActor): AuthInfo {
+function actorAuthInfo(actor: BreakdownActor): AuthInfo {
   return {
     token: actor.tokenId ?? actor.userId,
     clientId: actor.clientId ?? actor.tokenName ?? actor.source,
@@ -74,7 +74,7 @@ async function resolveMcpActor(request: Request) {
 }
 
 async function handleMcpRequest(request: Request) {
-  let actor: ThesisActor;
+  let actor: BreakdownActor;
   try {
     actor = await resolveMcpActor(request);
   } catch (err) {
@@ -92,7 +92,7 @@ async function handleMcpRequest(request: Request) {
   }
 
   try {
-    const server = createThesisMcpServer(actor);
+    const server = createBreakdownMcpServer(actor);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

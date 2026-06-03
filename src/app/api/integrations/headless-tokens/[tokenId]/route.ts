@@ -1,12 +1,12 @@
 import { auth } from '@clerk/nextjs/server';
 import { createServerClient } from '@/lib/supabase/server';
-import { ThesisServiceError } from '@/lib/thesis-service/errors';
-import { revokeIntegrationToken } from '@/lib/thesis-service/tokens';
+import { BreakdownServiceError } from '@/lib/breakdown-service/errors';
+import { revokeIntegrationToken } from '@/lib/breakdown-service/tokens';
 
 export const dynamic = 'force-dynamic';
 
 function errorResponse(err: unknown) {
-  if (err instanceof ThesisServiceError) {
+  if (err instanceof BreakdownServiceError) {
     return Response.json({ error: err.message }, { status: err.status });
   }
 

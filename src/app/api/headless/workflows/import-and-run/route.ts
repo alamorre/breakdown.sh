@@ -2,7 +2,7 @@ import { withHeadlessJson } from '@/lib/headless/response';
 import {
   importAndRunExternalWorkflowSchema,
   importGraphAndCreateExternalRunForActor,
-} from '@/lib/thesis-service/workflow-runs';
+} from '@/lib/breakdown-service/workflow-runs';
 
 export const dynamic = 'force-dynamic';
 

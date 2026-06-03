@@ -1,4 +1,4 @@
-import { getRunStatusForActor } from '@/lib/thesis-service/runs';
+import { getRunStatusForActor } from '@/lib/breakdown-service/runs';
 import { withHeadlessActor } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

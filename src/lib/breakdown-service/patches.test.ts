@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
 
 const {
   mockGetGraphForActor,
@@ -46,7 +46,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerClient: mockCreateServerClient,
 }));
 
-const actor: ThesisActor = {
+const actor: BreakdownActor = {
   userId: 'user_123',
   source: 'integration-token',
   scopes: ['graphs:write'],
@@ -99,7 +99,7 @@ const graph = {
       id: '44444444-4444-4444-8444-444444444444',
       graph_id: '11111111-1111-4111-8111-111111111111',
       node_type: 'default',
-      name: 'Synthesis',
+      name: 'Composition',
       prompt: 'Synthesize answer',
       output: null,
       metadata: {},
@@ -218,7 +218,7 @@ describe('applyGraphPatchForActor', () => {
           },
         ],
       }),
-    ).rejects.toThrow(ThesisServiceError);
+    ).rejects.toThrow(BreakdownServiceError);
   });
 
   it('applies non-dry-run operations and audits the patch', async () => {

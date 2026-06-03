@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import { resolveHeadlessActor } from '@/lib/thesis-service/actor';
-import type { ThesisActor } from '@/lib/thesis-service/actor';
-import { getErrorResponse, ThesisServiceError } from '@/lib/thesis-service/errors';
-import type { ThesisScope } from '@/lib/thesis-service/scopes';
+import { resolveHeadlessActor } from '@/lib/breakdown-service/actor';
+import type { BreakdownActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse, BreakdownServiceError } from '@/lib/breakdown-service/errors';
+import type { BreakdownScope } from '@/lib/breakdown-service/scopes';
 import {
   checkHeadlessRateLimit,
   completeIdempotencyKey,
@@ -11,9 +11,9 @@ import {
   hashPayload,
   HEADLESS_LIMITS,
   reserveIdempotencyKey,
-} from '@/lib/thesis-service/safety';
+} from '@/lib/breakdown-service/safety';
 
-export type HeadlessHandler<T> = (actor: ThesisActor) => Promise<T>;
+export type HeadlessHandler<T> = (actor: BreakdownActor) => Promise<T>;
 
 export function headlessOk<T>(data: T, status = 200) {
   return Response.json({ data, error: null }, { status });
@@ -36,7 +36,7 @@ export function headlessError(err: unknown) {
 
 export async function withHeadlessActor<T>(
   request: Request,
-  requiredScopes: ThesisScope | ThesisScope[],
+  requiredScopes: BreakdownScope | BreakdownScope[],
   handler: HeadlessHandler<T>,
 ) {
   try {
@@ -54,7 +54,7 @@ export async function readJsonBody<TSchema extends z.ZodType>(
 ): Promise<z.infer<TSchema>> {
   const raw = await request.text();
   if (Buffer.byteLength(raw, 'utf8') > HEADLESS_LIMITS.maxJsonBodyBytes) {
-    throw new ThesisServiceError('payload_too_large', 'Request body is too large', 413, {
+    throw new BreakdownServiceError('payload_too_large', 'Request body is too large', 413, {
       limitBytes: HEADLESS_LIMITS.maxJsonBodyBytes,
     });
   }
@@ -62,7 +62,12 @@ export async function readJsonBody<TSchema extends z.ZodType>(
   const parsedJson = raw.trim() ? JSON.parse(raw) : {};
   const parsed = schema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
 
   return parsed.data;
@@ -70,9 +75,9 @@ export async function readJsonBody<TSchema extends z.ZodType>(
 
 export async function withHeadlessJson<TSchema extends z.ZodType, TData>(
   request: Request,
-  requiredScopes: ThesisScope | ThesisScope[],
+  requiredScopes: BreakdownScope | BreakdownScope[],
   schema: TSchema,
-  handler: (actor: ThesisActor, body: z.infer<TSchema>) => Promise<TData>,
+  handler: (actor: BreakdownActor, body: z.infer<TSchema>) => Promise<TData>,
   options: { idempotent?: boolean } = {},
 ) {
   try {
@@ -80,7 +85,7 @@ export async function withHeadlessJson<TSchema extends z.ZodType, TData>(
     checkHeadlessRateLimit(actor);
     const raw = await request.text();
     if (Buffer.byteLength(raw, 'utf8') > HEADLESS_LIMITS.maxJsonBodyBytes) {
-      throw new ThesisServiceError('payload_too_large', 'Request body is too large', 413, {
+      throw new BreakdownServiceError('payload_too_large', 'Request body is too large', 413, {
         limitBytes: HEADLESS_LIMITS.maxJsonBodyBytes,
       });
     }
@@ -88,7 +93,7 @@ export async function withHeadlessJson<TSchema extends z.ZodType, TData>(
     const json = raw.trim() ? JSON.parse(raw) : {};
     const parsed = schema.safeParse(json);
     if (!parsed.success) {
-      throw new ThesisServiceError(
+      throw new BreakdownServiceError(
         'validation_error',
         parsed.error.message,
         400,

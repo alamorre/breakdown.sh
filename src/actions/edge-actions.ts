@@ -1,15 +1,15 @@
 'use server';
 
 import { z } from 'zod';
-import { resolveClerkActor } from '@/lib/thesis-service/actor';
-import { getErrorResponse } from '@/lib/thesis-service/errors';
+import { resolveClerkActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse } from '@/lib/breakdown-service/errors';
 import {
   createEdgeForActor,
   deleteEdgeForActor,
   updateEdgeForActor,
-} from '@/lib/thesis-service/edges';
-import { createEdgeSchema, updateEdgeSchema, uuidSchema } from '@/lib/thesis-service/schemas';
-import type { ThesisEdge } from '@/types/edge';
+} from '@/lib/breakdown-service/edges';
+import { createEdgeSchema, updateEdgeSchema, uuidSchema } from '@/lib/breakdown-service/schemas';
+import type { BreakdownEdge } from '@/types/edge';
 
 function actionError(err: unknown) {
   const error = getErrorResponse(err);
@@ -21,7 +21,7 @@ function actionError(err: unknown) {
 
 export async function createEdge(
   input: z.input<typeof createEdgeSchema>,
-): Promise<{ data: ThesisEdge | null; error: string | null }> {
+): Promise<{ data: BreakdownEdge | null; error: string | null }> {
   try {
     const actor = await resolveClerkActor();
     return { data: await createEdgeForActor(actor, input), error: null };
@@ -32,7 +32,7 @@ export async function createEdge(
 
 export async function updateEdge(
   input: z.input<typeof updateEdgeSchema>,
-): Promise<{ data: ThesisEdge | null; error: string | null }> {
+): Promise<{ data: BreakdownEdge | null; error: string | null }> {
   try {
     const actor = await resolveClerkActor();
     return { data: await updateEdgeForActor(actor, input), error: null };

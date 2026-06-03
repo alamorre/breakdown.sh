@@ -2,31 +2,31 @@ import { randomUUID } from 'crypto';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { AI_MODEL_IDS } from '@/lib/ai/models';
-import type { ThesisActor } from '@/lib/thesis-service/actor';
+import type { BreakdownActor } from '@/lib/breakdown-service/actor';
 import {
   createGraphForActor,
   deleteGraphForActor,
   getGraphForActor,
   listGraphsForActor,
   updateGraphForActor,
-} from '@/lib/thesis-service/graphs';
+} from '@/lib/breakdown-service/graphs';
 import {
   createNodeForActor,
   deleteNodeForActor,
   runNodeForActor,
   updateNodeForActor,
-} from '@/lib/thesis-service/nodes';
+} from '@/lib/breakdown-service/nodes';
 import {
   createEdgeForActor,
   deleteEdgeForActor,
   updateEdgeForActor,
-} from '@/lib/thesis-service/edges';
-import { applyGraphPatchForActor } from '@/lib/thesis-service/patches';
+} from '@/lib/breakdown-service/edges';
+import { applyGraphPatchForActor } from '@/lib/breakdown-service/patches';
 import {
   cancelGraphRunForActor,
   getRunStatusForActor,
   runGraphForActor,
-} from '@/lib/thesis-service/runs';
+} from '@/lib/breakdown-service/runs';
 import {
   createExternalRunForActor,
   blockExternalStepForActor,
@@ -35,17 +35,17 @@ import {
   getExternalStepContextForActor,
   getNextExternalStepForActor,
   submitExternalStepResultForActor,
-} from '@/lib/thesis-service/external-runs';
+} from '@/lib/breakdown-service/external-runs';
 import {
   exportGraphForActor,
   getWorkflowManifestForActor,
   importGraphForActor,
-} from '@/lib/thesis-service/workflows';
-import { applyGraphPatchSchema, importGraphSchema } from '@/lib/thesis-service/schemas';
+} from '@/lib/breakdown-service/workflows';
+import { applyGraphPatchSchema, importGraphSchema } from '@/lib/breakdown-service/schemas';
 import {
   importAndRunExternalWorkflowSchema,
   importGraphAndCreateExternalRunForActor,
-} from '@/lib/thesis-service/workflow-runs';
+} from '@/lib/breakdown-service/workflow-runs';
 
 function textResult(data: unknown = { ok: true }) {
   return {
@@ -132,9 +132,9 @@ const runAnnotations = {
   openWorldHint: true,
 };
 
-export function createThesisMcpServer(actor: ThesisActor) {
+export function createBreakdownMcpServer(actor: BreakdownActor) {
   const server = new McpServer({
-    name: 'breakdown-thesis-remote-mcp',
+    name: 'breakdown-remote-mcp',
     version: '0.1.0',
   });
 
@@ -598,7 +598,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'graphs',
-    'thesis://graphs',
+    'breakdown://graphs',
     {
       title: 'Breakdown Graphs',
       mimeType: 'application/json',
@@ -609,7 +609,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'graph',
-    new ResourceTemplate('thesis://graphs/{graphId}', { list: undefined }),
+    new ResourceTemplate('breakdown://graphs/{graphId}', { list: undefined }),
     {
       title: 'Breakdown Graph',
       mimeType: 'application/json',
@@ -621,7 +621,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'graph_manifest',
-    new ResourceTemplate('thesis://graphs/{graphId}/manifest', { list: undefined }),
+    new ResourceTemplate('breakdown://graphs/{graphId}/manifest', { list: undefined }),
     {
       title: 'Breakdown Workflow Manifest',
       mimeType: 'application/json',
@@ -633,7 +633,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'graph_node',
-    new ResourceTemplate('thesis://graphs/{graphId}/nodes/{nodeId}', { list: undefined }),
+    new ResourceTemplate('breakdown://graphs/{graphId}/nodes/{nodeId}', { list: undefined }),
     {
       title: 'Breakdown Graph Node',
       mimeType: 'application/json',
@@ -650,7 +650,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'graph_run_status',
-    new ResourceTemplate('thesis://graphs/{graphId}/runs/latest', { list: undefined }),
+    new ResourceTemplate('breakdown://graphs/{graphId}/runs/latest', { list: undefined }),
     {
       title: 'Breakdown Latest Run Status',
       mimeType: 'application/json',
@@ -662,7 +662,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'external_run',
-    new ResourceTemplate('thesis://external-runs/{runId}', { list: undefined }),
+    new ResourceTemplate('breakdown://external-runs/{runId}', { list: undefined }),
     {
       title: 'Breakdown External Run',
       mimeType: 'application/json',
@@ -674,7 +674,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
 
   server.registerResource(
     'external_run_step',
-    new ResourceTemplate('thesis://external-runs/{runId}/steps/{stepId}', { list: undefined }),
+    new ResourceTemplate('breakdown://external-runs/{runId}/steps/{stepId}', { list: undefined }),
     {
       title: 'Breakdown External Step',
       mimeType: 'application/json',
@@ -707,7 +707,7 @@ export function createThesisMcpServer(actor: ThesisActor) {
   );
 
   server.registerPrompt(
-    'follow_thesis_breakdown',
+    'follow_breakdown_graph',
     {
       title: 'Follow Breakdown',
       description: 'Execute an existing Breakdown externally step by step.',

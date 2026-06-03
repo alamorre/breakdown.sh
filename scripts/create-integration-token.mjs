@@ -32,7 +32,9 @@ const scopes = (readArg('scopes') ?? ALL_SCOPES.join(','))
   .filter(Boolean);
 
 if (!userId) {
-  console.error('Usage: pnpm headless:token -- --user-id user_123 [--name "Local MCP"] [--scopes graphs:read,graphs:write]');
+  console.error(
+    'Usage: pnpm headless:token -- --user-id user_123 [--name "Local MCP"] [--scopes graphs:read,graphs:write]',
+  );
   process.exit(1);
 }
 

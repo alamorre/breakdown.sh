@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import type { createServerClient } from '@/lib/supabase/server';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
 
 type SupabaseClient = ReturnType<typeof createServerClient>;
 
@@ -14,7 +14,7 @@ export const HEADLESS_LIMITS = {
 };
 
 const RATE_WINDOW_MS = 60_000;
-const RATE_LIMIT_BY_SOURCE: Record<ThesisActor['source'], number> = {
+const RATE_LIMIT_BY_SOURCE: Record<BreakdownActor['source'], number> = {
   'clerk-session': 600,
   'integration-token': 240,
   'oauth-client': 240,
@@ -22,20 +22,26 @@ const RATE_LIMIT_BY_SOURCE: Record<ThesisActor['source'], number> = {
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
-export function assertTextByteLimit(value: string | null | undefined, limit: number, label: string) {
+export function assertTextByteLimit(
+  value: string | null | undefined,
+  limit: number,
+  label: string,
+) {
   if (!value) return;
   if (Buffer.byteLength(value, 'utf8') > limit) {
-    throw new ThesisServiceError('payload_too_large', `${label} is too large`, 413, {
+    throw new BreakdownServiceError('payload_too_large', `${label} is too large`, 413, {
       limitBytes: limit,
     });
   }
 }
 
 export function hashPayload(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value ?? null), 'utf8').digest('hex');
+  return createHash('sha256')
+    .update(JSON.stringify(value ?? null), 'utf8')
+    .digest('hex');
 }
 
-export function checkHeadlessRateLimit(actor: ThesisActor) {
+export function checkHeadlessRateLimit(actor: BreakdownActor) {
   const now = Date.now();
   const key = `${actor.source}:${actor.tokenId ?? actor.userId}`;
   const bucket = rateBuckets.get(key);
@@ -48,7 +54,7 @@ export function checkHeadlessRateLimit(actor: ThesisActor) {
 
   bucket.count += 1;
   if (bucket.count > limit) {
-    throw new ThesisServiceError('rate_limited', 'Too many headless requests', 429, {
+    throw new BreakdownServiceError('rate_limited', 'Too many headless requests', 429, {
       retryAfterSeconds: Math.ceil((bucket.resetAt - now) / 1000),
     });
   }
@@ -57,7 +63,7 @@ export function checkHeadlessRateLimit(actor: ThesisActor) {
 export async function auditHeadlessOperation(
   supabase: SupabaseClient,
   input: {
-    actor: ThesisActor;
+    actor: BreakdownActor;
     operation: string;
     targetType: string;
     targetId?: string | null;
@@ -86,7 +92,7 @@ export async function auditHeadlessOperation(
 export async function getIdempotentResponse(
   supabase: SupabaseClient,
   input: {
-    actor: ThesisActor;
+    actor: BreakdownActor;
     key: string | null;
     method: string;
     path: string;
@@ -112,7 +118,7 @@ export async function getIdempotentResponse(
   };
 
   if (record.request_hash !== input.requestHash) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'idempotency_conflict',
       'Idempotency key was already used with a different request body',
       409,
@@ -126,7 +132,7 @@ export async function getIdempotentResponse(
     };
   }
 
-  throw new ThesisServiceError(
+  throw new BreakdownServiceError(
     'idempotency_conflict',
     'An idempotent request with this key is still in progress',
     409,
@@ -136,7 +142,7 @@ export async function getIdempotentResponse(
 export async function reserveIdempotencyKey(
   supabase: SupabaseClient,
   input: {
-    actor: ThesisActor;
+    actor: BreakdownActor;
     key: string | null;
     method: string;
     path: string;
@@ -156,14 +162,14 @@ export async function reserveIdempotencyKey(
   if (error) {
     const replay = await getIdempotentResponse(supabase, input);
     if (replay) return;
-    throw new ThesisServiceError('idempotency_conflict', error.message, 409);
+    throw new BreakdownServiceError('idempotency_conflict', error.message, 409);
   }
 }
 
 export async function completeIdempotencyKey(
   supabase: SupabaseClient,
   input: {
-    actor: ThesisActor;
+    actor: BreakdownActor;
     key: string | null;
     status: number;
     body: unknown;

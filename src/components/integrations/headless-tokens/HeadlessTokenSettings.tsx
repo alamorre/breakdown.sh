@@ -7,13 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ALL_THESIS_SCOPES, type ThesisScope } from '@/lib/thesis-service/scopes';
+import { ALL_BREAKDOWN_SCOPES, type BreakdownScope } from '@/lib/breakdown-service/scopes';
 
 type HeadlessToken = {
   id: string;
   name: string;
   tokenPrefix: string;
-  scopes: ThesisScope[];
+  scopes: BreakdownScope[];
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -21,7 +21,7 @@ type HeadlessToken = {
 
 type HeadlessTokensResponse = {
   configured: boolean;
-  scopes: ThesisScope[];
+  scopes: BreakdownScope[];
   tokens: HeadlessToken[];
   error?: string;
 };
@@ -32,7 +32,7 @@ type CreatedTokenResponse = {
   error?: string;
 };
 
-const SCOPE_LABELS: Record<ThesisScope, string> = {
+const SCOPE_LABELS: Record<BreakdownScope, string> = {
   'graphs:read': 'Read graphs',
   'graphs:write': 'Edit graphs',
   'runs:execute': 'Run graphs',
@@ -56,8 +56,8 @@ function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : 'Never';
 }
 
-function formatScopes(scopes: ThesisScope[]) {
-  if (scopes.length === ALL_THESIS_SCOPES.length) {
+function formatScopes(scopes: BreakdownScope[]) {
+  if (scopes.length === ALL_BREAKDOWN_SCOPES.length) {
     return 'Full MCP access';
   }
 
@@ -66,8 +66,8 @@ function formatScopes(scopes: ThesisScope[]) {
 
 export function HeadlessTokenSettings() {
   const [configured, setConfigured] = useState(true);
-  const [availableScopes, setAvailableScopes] = useState<ThesisScope[]>(ALL_THESIS_SCOPES);
-  const [selectedScopes, setSelectedScopes] = useState<ThesisScope[]>(ALL_THESIS_SCOPES);
+  const [availableScopes, setAvailableScopes] = useState<BreakdownScope[]>(ALL_BREAKDOWN_SCOPES);
+  const [selectedScopes, setSelectedScopes] = useState<BreakdownScope[]>(ALL_BREAKDOWN_SCOPES);
   const [tokens, setTokens] = useState<HeadlessToken[]>([]);
   const [name, setName] = useState('MCP client');
   const [createdToken, setCreatedToken] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export function HeadlessTokenSettings() {
     try {
       const result = await readTokens();
       setConfigured(result.configured);
-      setAvailableScopes(result.scopes.length > 0 ? result.scopes : ALL_THESIS_SCOPES);
+      setAvailableScopes(result.scopes.length > 0 ? result.scopes : ALL_BREAKDOWN_SCOPES);
       setTokens(result.tokens);
       if (result.error) {
         toast.error(result.error);
@@ -98,7 +98,7 @@ export function HeadlessTokenSettings() {
     void refreshTokens();
   }, [refreshTokens]);
 
-  const toggleScope = (scope: ThesisScope) => {
+  const toggleScope = (scope: BreakdownScope) => {
     setSelectedScopes((current) =>
       current.includes(scope)
         ? current.filter((selectedScope) => selectedScope !== scope)

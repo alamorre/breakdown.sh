@@ -1,5 +1,5 @@
-import { applyGraphPatchForActor } from '@/lib/thesis-service/patches';
-import { applyGraphPatchSchema } from '@/lib/thesis-service/schemas';
+import { applyGraphPatchForActor } from '@/lib/breakdown-service/patches';
+import { applyGraphPatchSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

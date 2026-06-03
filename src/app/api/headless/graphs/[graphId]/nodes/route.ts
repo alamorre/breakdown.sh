@@ -1,5 +1,5 @@
-import { createNodeForActor } from '@/lib/thesis-service/nodes';
-import { createNodeSchema } from '@/lib/thesis-service/schemas';
+import { createNodeForActor } from '@/lib/breakdown-service/nodes';
+import { createNodeSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

@@ -4,8 +4,8 @@ import {
   EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES,
   externalConsoleBootstrapSchema,
 } from '@/lib/headless/onboarding';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
 import { mintIntegrationToken, type PublicIntegrationTokenRecord } from './tokens';
 import { importGraphForActor } from './workflows';
 import { importGraphAndCreateExternalRunForActor } from './workflow-runs';
@@ -15,7 +15,12 @@ type SupabaseClient = ReturnType<typeof createServerClient>;
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
@@ -49,7 +54,7 @@ type BootstrappedWorkflow =
 
 export async function bootstrapExternalConsoleForActor(
   supabase: SupabaseClient,
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: unknown,
   origin: string,
 ) {

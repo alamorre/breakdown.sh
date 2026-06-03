@@ -1,16 +1,21 @@
 'use server';
 
 import { z } from 'zod';
-import { resolveClerkActor } from '@/lib/thesis-service/actor';
-import { getErrorResponse } from '@/lib/thesis-service/errors';
+import { resolveClerkActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse } from '@/lib/breakdown-service/errors';
 import {
   createNodeForActor,
   deleteNodeForActor,
   runNodeForActor,
   updateNodeForActor,
-} from '@/lib/thesis-service/nodes';
-import { createNodeSchema, runNodeSchema, updateNodeSchema, uuidSchema } from '@/lib/thesis-service/schemas';
-import type { ThesisNode } from '@/types/node';
+} from '@/lib/breakdown-service/nodes';
+import {
+  createNodeSchema,
+  runNodeSchema,
+  updateNodeSchema,
+  uuidSchema,
+} from '@/lib/breakdown-service/schemas';
+import type { BreakdownNode } from '@/types/node';
 
 function actionError(err: unknown) {
   const error = getErrorResponse(err);
@@ -22,7 +27,7 @@ function actionError(err: unknown) {
 
 export async function createNode(
   input: z.input<typeof createNodeSchema>,
-): Promise<{ data: ThesisNode | null; error: string | null }> {
+): Promise<{ data: BreakdownNode | null; error: string | null }> {
   try {
     const actor = await resolveClerkActor();
     return { data: await createNodeForActor(actor, input), error: null };
@@ -33,7 +38,7 @@ export async function createNode(
 
 export async function updateNode(
   input: z.input<typeof updateNodeSchema>,
-): Promise<{ data: ThesisNode | null; error: string | null }> {
+): Promise<{ data: BreakdownNode | null; error: string | null }> {
   try {
     const actor = await resolveClerkActor();
     return { data: await updateNodeForActor(actor, input), error: null };

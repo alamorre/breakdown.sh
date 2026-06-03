@@ -1,19 +1,19 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { cancelRun } from '@/lib/graph/run-cancellation';
 import { getGraphRunStatus, runGraphWithScheduler } from '@/lib/graph/run-graph-execution';
-import type { ThesisActor } from './actor';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { assertGraphAccess } from './graphs';
 import { auditHeadlessOperation } from './safety';
 
-export async function getRunStatusForActor(actor: ThesisActor, graphId: string) {
+export async function getRunStatusForActor(actor: BreakdownActor, graphId: string) {
   requireScope(actor, 'graphs:read');
   return getGraphRunStatus(graphId, actor);
 }
 
 export async function runGraphForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: { graphId: string; runId: string },
 ) {
   requireScope(actor, 'runs:execute');
@@ -38,7 +38,7 @@ export async function runGraphForActor(
   return result;
 }
 
-export async function cancelGraphRunForActor(actor: ThesisActor, graphId: string) {
+export async function cancelGraphRunForActor(actor: BreakdownActor, graphId: string) {
   requireScope(actor, 'runs:cancel');
   const supabase = createServerClient();
   await assertGraphAccess(supabase, actor, graphId);
@@ -46,7 +46,7 @@ export async function cancelGraphRunForActor(actor: ThesisActor, graphId: string
   try {
     await cancelRun(supabase, { graphId });
   } catch (err) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'execution_error',
       err instanceof Error ? err.message : 'Failed to cancel run',
       400,

@@ -1,14 +1,14 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ThesisActor } from '@/lib/thesis-service/actor';
-import { ThesisServiceError } from '@/lib/thesis-service/errors';
+import type { BreakdownActor } from '@/lib/breakdown-service/actor';
+import { BreakdownServiceError } from '@/lib/breakdown-service/errors';
 
 const { mockResolveHeadlessActor, mockCreateServerClient } = vi.hoisted(() => ({
   mockResolveHeadlessActor: vi.fn(),
   mockCreateServerClient: vi.fn(),
 }));
 
-vi.mock('@/lib/thesis-service/actor', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/thesis-service/actor')>();
+vi.mock('@/lib/breakdown-service/actor', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/breakdown-service/actor')>();
   return {
     ...original,
     resolveHeadlessActor: mockResolveHeadlessActor,
@@ -22,7 +22,7 @@ vi.mock('@/lib/supabase/server', () => ({
 let OPTIONS: typeof import('./route').OPTIONS;
 let POST: typeof import('./route').POST;
 
-const readOnlyActor: ThesisActor = {
+const readOnlyActor: BreakdownActor = {
   userId: 'user_123',
   source: 'integration-token',
   tokenId: '550e8400-e29b-41d4-a716-446655440000',
@@ -148,7 +148,7 @@ describe('/api/mcp Streamable HTTP route', () => {
 
   it('fails closed when bearer authentication is missing or invalid', async () => {
     mockResolveHeadlessActor.mockRejectedValue(
-      new ThesisServiceError('unauthorized', 'Missing bearer token', 401),
+      new BreakdownServiceError('unauthorized', 'Missing bearer token', 401),
     );
 
     const response = await POST(
@@ -181,7 +181,7 @@ describe('/api/mcp Streamable HTTP route', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(body.result.serverInfo.name).toBe('breakdown-thesis-remote-mcp');
+    expect(body.result.serverInfo.name).toBe('breakdown-remote-mcp');
 
     const tools = await postRpc({
       jsonrpc: '2.0',

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
 import {
   assertTextByteLimit,
   auditHeadlessOperation,
@@ -20,7 +20,7 @@ function chainWithSingle(result: unknown) {
   return chain;
 }
 
-const actor: ThesisActor = {
+const actor: BreakdownActor = {
   userId: 'user_123',
   source: 'integration-token',
   scopes: ['graphs:read'],
@@ -30,7 +30,7 @@ const actor: ThesisActor = {
 describe('headless safety helpers', () => {
   it('enforces text byte limits', () => {
     expect(() => assertTextByteLimit('short', 10, 'Prompt')).not.toThrow();
-    expect(() => assertTextByteLimit('too long', 3, 'Prompt')).toThrow(ThesisServiceError);
+    expect(() => assertTextByteLimit('too long', 3, 'Prompt')).toThrow(BreakdownServiceError);
   });
 
   it('hashes payloads deterministically', () => {

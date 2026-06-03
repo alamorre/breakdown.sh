@@ -1,16 +1,16 @@
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { resolveIntegrationToken } from './tokens';
-import { ALL_THESIS_SCOPES, type ThesisScope } from './scopes';
+import { ALL_BREAKDOWN_SCOPES, type BreakdownScope } from './scopes';
 
-export type ThesisActorSource = 'clerk-session' | 'integration-token' | 'oauth-client';
+export type BreakdownActorSource = 'clerk-session' | 'integration-token' | 'oauth-client';
 
-export interface ThesisActor {
+export interface BreakdownActor {
   userId: string;
-  source: ThesisActorSource;
-  scopes: ThesisScope[];
+  source: BreakdownActorSource;
+  scopes: BreakdownScope[];
   tokenId?: string;
   tokenName?: string;
   clientId?: string;
@@ -18,10 +18,12 @@ export interface ThesisActor {
 
 export const actorSourceSchema = z.enum(['clerk-session', 'integration-token', 'oauth-client']);
 
-export async function resolveClerkActor(scopes: ThesisScope[] = ALL_THESIS_SCOPES): Promise<ThesisActor> {
+export async function resolveClerkActor(
+  scopes: BreakdownScope[] = ALL_BREAKDOWN_SCOPES,
+): Promise<BreakdownActor> {
   const { userId } = await auth();
   if (!userId) {
-    throw new ThesisServiceError('unauthorized', 'Unauthorized', 401);
+    throw new BreakdownServiceError('unauthorized', 'Unauthorized', 401);
   }
 
   return {
@@ -35,7 +37,7 @@ function readBearerToken(request: Request): string {
   const header = request.headers.get('authorization') ?? '';
   const match = header.match(/^Bearer\s+(.+)$/i);
   if (!match?.[1]) {
-    throw new ThesisServiceError('unauthorized', 'Missing bearer token', 401);
+    throw new BreakdownServiceError('unauthorized', 'Missing bearer token', 401);
   }
 
   return match[1].trim();
@@ -43,8 +45,8 @@ function readBearerToken(request: Request): string {
 
 export async function resolveHeadlessActor(
   request: Request,
-  requiredScopes: ThesisScope | ThesisScope[],
-): Promise<ThesisActor> {
+  requiredScopes: BreakdownScope | BreakdownScope[],
+): Promise<BreakdownActor> {
   const token = readBearerToken(request);
   const supabase = createServerClient();
   const actor = await resolveIntegrationToken(supabase, token);
@@ -57,19 +59,17 @@ export async function resolveHeadlessActor(
   return actor;
 }
 
-export function requireScope(actor: ThesisActor, scope: ThesisScope) {
+export function requireScope(actor: BreakdownActor, scope: BreakdownScope) {
   if (!actor.scopes.includes(scope)) {
-    throw new ThesisServiceError(
-      'forbidden',
-      `Missing required scope: ${scope}`,
-      403,
-      { requiredScope: scope, actorScopes: actor.scopes },
-    );
+    throw new BreakdownServiceError('forbidden', `Missing required scope: ${scope}`, 403, {
+      requiredScope: scope,
+      actorScopes: actor.scopes,
+    });
   }
 }
 
-export function assertSameUser(actor: ThesisActor, userId: string) {
+export function assertSameUser(actor: BreakdownActor, userId: string) {
   if (actor.userId !== userId) {
-    throw new ThesisServiceError('not_found', 'Resource not found', 404);
+    throw new BreakdownServiceError('not_found', 'Resource not found', 404);
   }
 }

@@ -6,11 +6,11 @@ const mockUpdateNodeForActor = vi.fn();
 const mockDeleteNodeForActor = vi.fn();
 const mockRunNodeForActor = vi.fn();
 
-vi.mock('@/lib/thesis-service/actor', () => ({
+vi.mock('@/lib/breakdown-service/actor', () => ({
   resolveClerkActor: () => mockResolveClerkActor(),
 }));
 
-vi.mock('@/lib/thesis-service/nodes', () => ({
+vi.mock('@/lib/breakdown-service/nodes', () => ({
   createNodeForActor: (...args: unknown[]) => mockCreateNodeForActor(...args),
   updateNodeForActor: (...args: unknown[]) => mockUpdateNodeForActor(...args),
   deleteNodeForActor: (...args: unknown[]) => mockDeleteNodeForActor(...args),

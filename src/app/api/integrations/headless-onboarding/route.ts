@@ -1,8 +1,8 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { getExternalConsoleOnboardingMetadata } from '@/lib/headless/onboarding';
-import { resolveClerkActor } from '@/lib/thesis-service/actor';
-import { getErrorResponse } from '@/lib/thesis-service/errors';
-import { bootstrapExternalConsoleForActor } from '@/lib/thesis-service/onboarding';
+import { resolveClerkActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse } from '@/lib/breakdown-service/errors';
+import { bootstrapExternalConsoleForActor } from '@/lib/breakdown-service/onboarding';
 
 export const dynamic = 'force-dynamic';
 

@@ -2,8 +2,8 @@ import {
   deleteGraphForActor,
   getGraphForActor,
   updateGraphForActor,
-} from '@/lib/thesis-service/graphs';
-import { updateGraphSchema } from '@/lib/thesis-service/schemas';
+} from '@/lib/breakdown-service/graphs';
+import { updateGraphSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessActor, withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';
@@ -18,8 +18,11 @@ export async function PATCH(
   { params }: { params: Promise<{ graphId: string }> },
 ) {
   const { graphId } = await params;
-  return withHeadlessJson(request, 'graphs:write', updateGraphSchema.omit({ graphId: true }), (actor, body) =>
-    updateGraphForActor(actor, { graphId, ...body }),
+  return withHeadlessJson(
+    request,
+    'graphs:write',
+    updateGraphSchema.omit({ graphId: true }),
+    (actor, body) => updateGraphForActor(actor, { graphId, ...body }),
   );
 }
 

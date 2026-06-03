@@ -1,16 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
 
-const {
-  mockCreateExternalRunForActor,
-  mockGetNextExternalStepForActor,
-  mockImportGraphForActor,
-} = vi.hoisted(() => ({
-  mockCreateExternalRunForActor: vi.fn(),
-  mockGetNextExternalStepForActor: vi.fn(),
-  mockImportGraphForActor: vi.fn(),
-}));
+const { mockCreateExternalRunForActor, mockGetNextExternalStepForActor, mockImportGraphForActor } =
+  vi.hoisted(() => ({
+    mockCreateExternalRunForActor: vi.fn(),
+    mockGetNextExternalStepForActor: vi.fn(),
+    mockImportGraphForActor: vi.fn(),
+  }));
 
 vi.mock('./external-runs', () => ({
   createExternalRunForActor: mockCreateExternalRunForActor,
@@ -21,7 +18,7 @@ vi.mock('./workflows', () => ({
   importGraphForActor: mockImportGraphForActor,
 }));
 
-const actor: ThesisActor = {
+const actor: BreakdownActor = {
   userId: 'user_123',
   source: 'integration-token',
   scopes: ['graphs:write', 'runs:external_execute'],
@@ -136,7 +133,7 @@ describe('import-and-run external workflow helper', () => {
         { ...actor, scopes: ['graphs:write'] },
         { importGraph },
       ),
-    ).rejects.toThrow(ThesisServiceError);
+    ).rejects.toThrow(BreakdownServiceError);
     expect(mockImportGraphForActor).not.toHaveBeenCalled();
     expect(mockCreateExternalRunForActor).not.toHaveBeenCalled();
   });

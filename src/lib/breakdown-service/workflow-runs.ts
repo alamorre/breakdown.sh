@@ -1,11 +1,8 @@
 import { z } from 'zod';
-import type { ThesisActor } from './actor';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
-import {
-  createExternalRunForActor,
-  getNextExternalStepForActor,
-} from './external-runs';
+import { BreakdownServiceError } from './errors';
+import { createExternalRunForActor, getNextExternalStepForActor } from './external-runs';
 import { createExternalRunSchema, importGraphSchema } from './schemas';
 import { importGraphForActor } from './workflows';
 
@@ -17,7 +14,12 @@ export const importAndRunExternalWorkflowSchema = z.object({
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
@@ -27,7 +29,7 @@ function graphUrl(graphId: string, origin?: string) {
 }
 
 export async function importGraphAndCreateExternalRunForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: unknown,
   origin?: string,
 ) {
@@ -36,11 +38,7 @@ export async function importGraphAndCreateExternalRunForActor(
 
   const parsed = parseOrThrow(importAndRunExternalWorkflowSchema, input);
   const imported = await importGraphForActor(actor, parsed.importGraph);
-  const run = await createExternalRunForActor(
-    actor,
-    imported.graphId,
-    parsed.externalRun ?? {},
-  );
+  const run = await createExternalRunForActor(actor, imported.graphId, parsed.externalRun ?? {});
   const nextStep = await getNextExternalStepForActor(actor, run.runId);
 
   return {
@@ -52,7 +50,7 @@ export async function importGraphAndCreateExternalRunForActor(
     externalRun: {
       runId: run.runId,
       status: run.status,
-      runResourceUri: `thesis://external-runs/${run.runId}`,
+      runResourceUri: `breakdown://external-runs/${run.runId}`,
       nextStep,
     },
   };

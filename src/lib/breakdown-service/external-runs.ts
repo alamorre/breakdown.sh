@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
-import type { ThesisActor } from './actor';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { getGraphForActor } from './graphs';
 import {
   blockExternalStepSchema,
@@ -73,7 +73,12 @@ function serviceClient() {
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
@@ -81,9 +86,9 @@ function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T
 function contextVersionForNode(input: {
   runId: string;
   manifestVersion: string;
-  node: ThesisNode;
-  inboundEdges: ThesisEdge[];
-  upstreamNodes: ThesisNode[];
+  node: BreakdownNode;
+  inboundEdges: BreakdownEdge[];
+  upstreamNodes: BreakdownNode[];
 }) {
   return hashPayload({
     runId: input.runId,
@@ -106,7 +111,7 @@ function contextVersionForNode(input: {
   });
 }
 
-function hostToolInstructionsForNode(node: ThesisNode) {
+function hostToolInstructionsForNode(node: BreakdownNode) {
   const metadata = node.metadata as {
     hostToolInstructions?: string;
     requiresCurrentData?: boolean;
@@ -134,10 +139,7 @@ function hostToolInstructionsForNode(node: ThesisNode) {
   return 'Perform this step in the current agent console. Use available host tools when the prompt requires facts beyond the provided context, and submit citations for any external facts used.';
 }
 
-async function getRunForActor(
-  actor: ThesisActor,
-  runId: string,
-): Promise<ExternalRunRecord> {
+async function getRunForActor(actor: BreakdownActor, runId: string): Promise<ExternalRunRecord> {
   const parsedRunId = parseOrThrow(uuidSchema, runId);
   const supabase = serviceClient();
   const { data, error } = await supabase
@@ -148,7 +150,7 @@ async function getRunForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('not_found', error?.message ?? 'External run not found', 404);
+    throw new BreakdownServiceError('not_found', error?.message ?? 'External run not found', 404);
   }
 
   return data as ExternalRunRecord;
@@ -163,7 +165,7 @@ async function getRunSteps(runId: string): Promise<ExternalRunStepRecord[]> {
     .order('sequence_index', { ascending: true });
 
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   return (data ?? []) as ExternalRunStepRecord[];
@@ -181,7 +183,7 @@ async function advanceReadySteps(run: ExternalRunRecord) {
   const steps = await getRunSteps(run.id);
   const stepByNodeId = new Map(steps.map((step) => [step.node_id, step]));
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const inboundByNodeId = new Map<string, ThesisEdge[]>();
+  const inboundByNodeId = new Map<string, BreakdownEdge[]>();
   for (const node of graph.nodes) inboundByNodeId.set(node.id, []);
   for (const edge of graph.edges) inboundByNodeId.get(edge.target_node_id)?.push(edge);
 
@@ -207,13 +209,13 @@ async function advanceReadySteps(run: ExternalRunRecord) {
       .update({ status: 'ready', updated_at: new Date().toISOString() })
       .in('id', readyStepIds);
     if (error) {
-      throw new ThesisServiceError('database_error', error.message, 400);
+      throw new BreakdownServiceError('database_error', error.message, 400);
     }
   }
 }
 
 export async function createExternalRunForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   graphId: string,
   input: z.input<typeof createExternalRunSchema>,
 ) {
@@ -222,7 +224,7 @@ export async function createExternalRunForActor(
   const manifest = await getWorkflowManifestForActor(actor, graphId, 'external_evaluator');
   const graph = await getGraphForActor(actor, graphId);
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const inboundByNodeId = new Map<string, ThesisEdge[]>();
+  const inboundByNodeId = new Map<string, BreakdownEdge[]>();
   for (const node of graph.nodes) inboundByNodeId.set(node.id, []);
   for (const edge of graph.edges) inboundByNodeId.get(edge.target_node_id)?.push(edge);
 
@@ -245,7 +247,7 @@ export async function createExternalRunForActor(
     .single();
 
   if (runError || !runData) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'database_error',
       runError?.message ?? 'Failed to create external run',
       400,
@@ -258,7 +260,7 @@ export async function createExternalRunForActor(
     const inboundEdges = inboundByNodeId.get(nodeId) ?? [];
     const upstreamNodes = inboundEdges
       .map((edge) => nodeById.get(edge.source_node_id))
-      .filter((node): node is ThesisNode => Boolean(node));
+      .filter((node): node is BreakdownNode => Boolean(node));
     return {
       external_run_id: run.id,
       graph_id: graph.id,
@@ -278,7 +280,7 @@ export async function createExternalRunForActor(
   if (stepRows.length > 0) {
     const { error: stepsError } = await supabase.from('external_run_steps').insert(stepRows);
     if (stepsError) {
-      throw new ThesisServiceError('database_error', stepsError.message, 400);
+      throw new BreakdownServiceError('database_error', stepsError.message, 400);
     }
   }
 
@@ -299,7 +301,7 @@ export async function createExternalRunForActor(
   };
 }
 
-export async function getExternalRunForActor(actor: ThesisActor, runId: string) {
+export async function getExternalRunForActor(actor: BreakdownActor, runId: string) {
   requireScope(actor, 'runs:external_execute');
   const run = await getRunForActor(actor, runId);
   const steps = await getRunSteps(run.id);
@@ -310,7 +312,7 @@ export async function getExternalRunForActor(actor: ThesisActor, runId: string) 
   };
 }
 
-export async function getNextExternalStepForActor(actor: ThesisActor, runId: string) {
+export async function getNextExternalStepForActor(actor: BreakdownActor, runId: string) {
   requireScope(actor, 'runs:external_execute');
   const run = await getRunForActor(actor, runId);
   if (run.status !== 'active') {
@@ -335,7 +337,7 @@ export async function getNextExternalStepForActor(actor: ThesisActor, runId: str
 }
 
 export async function getExternalStepContextForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   runId: string,
   stepId: string,
 ) {
@@ -351,11 +353,15 @@ export async function getExternalStepContextForActor(
     .single();
 
   if (stepError || !stepData) {
-    throw new ThesisServiceError('not_found', stepError?.message ?? 'External run step not found', 404);
+    throw new BreakdownServiceError(
+      'not_found',
+      stepError?.message ?? 'External run step not found',
+      404,
+    );
   }
   const step = stepData as ExternalRunStepRecord;
   if (!['ready', 'in_progress', 'submitted', 'blocked'].includes(step.status)) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'external_run_state',
       'Step is not ready yet because upstream dependencies are incomplete',
       409,
@@ -368,13 +374,13 @@ export async function getExternalStepContextForActor(
   );
   const node = graph.nodes.find((candidate) => candidate.id === step.node_id);
   if (!node) {
-    throw new ThesisServiceError('not_found', 'Step node not found', 404);
+    throw new BreakdownServiceError('not_found', 'Step node not found', 404);
   }
 
   const inboundEdges = graph.edges.filter((edge) => edge.target_node_id === node.id);
   const sourceNodes = inboundEdges
     .map((edge) => graph.nodes.find((candidate) => candidate.id === edge.source_node_id))
-    .filter((candidate): candidate is ThesisNode => Boolean(candidate));
+    .filter((candidate): candidate is BreakdownNode => Boolean(candidate));
   const sourceById = new Map(sourceNodes.map((sourceNode) => [sourceNode.id, sourceNode]));
   const upstreamByEdgeType: Record<string, Array<Record<string, unknown>>> = {};
 
@@ -429,8 +435,8 @@ export async function getExternalStepContextForActor(
         warning: `${sourceNode.name} is ${formatSourceAge(sourceNode.last_run_at)}.`,
       })),
     expectedOutput:
-      (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown }).expectedOutput ??
-      null,
+      (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown })
+        .expectedOutput ?? null,
     acceptanceCriteria:
       (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown })
         .acceptanceCriteria ?? null,
@@ -452,11 +458,15 @@ async function assertStepCanReceiveResult(run: ExternalRunRecord, stepId: string
     .eq('external_run_id', run.id)
     .single();
   if (error || !data) {
-    throw new ThesisServiceError('not_found', error?.message ?? 'External run step not found', 404);
+    throw new BreakdownServiceError(
+      'not_found',
+      error?.message ?? 'External run step not found',
+      404,
+    );
   }
   const step = data as ExternalRunStepRecord;
   if (!['ready', 'in_progress'].includes(step.status)) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'external_run_state',
       `Step cannot receive a result while it is ${step.status}`,
       409,
@@ -466,7 +476,7 @@ async function assertStepCanReceiveResult(run: ExternalRunRecord, stepId: string
 }
 
 export async function submitExternalStepResultForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   runId: string,
   stepId: string,
   input: z.input<typeof submitExternalStepResultSchema>,
@@ -475,12 +485,12 @@ export async function submitExternalStepResultForActor(
   const parsed = parseOrThrow(submitExternalStepResultSchema, input);
   const run = await getRunForActor(actor, runId);
   if (run.status !== 'active') {
-    throw new ThesisServiceError('external_run_state', 'External run is not active', 409);
+    throw new BreakdownServiceError('external_run_state', 'External run is not active', 409);
   }
 
   const step = await assertStepCanReceiveResult(run, parseOrThrow(uuidSchema, stepId));
   if (step.context_version !== parsed.contextVersion) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'stale_context',
       'Step context is stale. Fetch the step context again before submitting a result.',
       409,
@@ -494,9 +504,9 @@ export async function submitExternalStepResultForActor(
     .eq('id', step.node_id)
     .single();
   if (nodeError || !nodeData) {
-    throw new ThesisServiceError('not_found', nodeError?.message ?? 'Node not found', 404);
+    throw new BreakdownServiceError('not_found', nodeError?.message ?? 'Node not found', 404);
   }
-  const node = nodeData as ThesisNode;
+  const node = nodeData as BreakdownNode;
   const previousOutput = node.output;
   const lastRunAt = new Date().toISOString();
 
@@ -529,7 +539,7 @@ export async function submitExternalStepResultForActor(
     })
     .eq('id', step.id);
   if (stepUpdateError) {
-    throw new ThesisServiceError('database_error', stepUpdateError.message, 400);
+    throw new BreakdownServiceError('database_error', stepUpdateError.message, 400);
   }
 
   const { error: nodeUpdateError } = await supabase
@@ -544,7 +554,7 @@ export async function submitExternalStepResultForActor(
     })
     .eq('id', node.id);
   if (nodeUpdateError) {
-    throw new ThesisServiceError('database_error', nodeUpdateError.message, 400);
+    throw new BreakdownServiceError('database_error', nodeUpdateError.message, 400);
   }
 
   await supabase.from('evaluations').insert({
@@ -587,7 +597,7 @@ export async function submitExternalStepResultForActor(
 }
 
 export async function blockExternalStepForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   runId: string,
   stepId: string,
   input: z.input<typeof blockExternalStepSchema>,
@@ -596,12 +606,12 @@ export async function blockExternalStepForActor(
   const parsed = parseOrThrow(blockExternalStepSchema, input);
   const run = await getRunForActor(actor, runId);
   if (run.status !== 'active') {
-    throw new ThesisServiceError('external_run_state', 'External run is not active', 409);
+    throw new BreakdownServiceError('external_run_state', 'External run is not active', 409);
   }
 
   const step = await assertStepCanReceiveResult(run, parseOrThrow(uuidSchema, stepId));
   if (step.context_version !== parsed.contextVersion) {
-    throw new ThesisServiceError('stale_context', 'Step context is stale', 409);
+    throw new BreakdownServiceError('stale_context', 'Step context is stale', 409);
   }
 
   const now = new Date().toISOString();
@@ -621,7 +631,7 @@ export async function blockExternalStepForActor(
     })
     .eq('id', step.id);
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   await supabase
@@ -646,7 +656,7 @@ export async function blockExternalStepForActor(
 }
 
 export async function finalizeExternalRunForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   runId: string,
   input: z.input<typeof finalizeExternalRunSchema>,
 ) {
@@ -654,9 +664,11 @@ export async function finalizeExternalRunForActor(
   const parsed = parseOrThrow(finalizeExternalRunSchema, input);
   const run = await getRunForActor(actor, runId);
   const steps = await getRunSteps(run.id);
-  const incomplete = steps.filter((step) => ['pending', 'ready', 'in_progress'].includes(step.status));
+  const incomplete = steps.filter((step) =>
+    ['pending', 'ready', 'in_progress'].includes(step.status),
+  );
   if (incomplete.length > 0 && !parsed.allowIncomplete) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'external_run_state',
       'External run still has incomplete steps',
       409,
@@ -678,7 +690,7 @@ export async function finalizeExternalRunForActor(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'database_error',
       error?.message ?? 'Failed to finalize external run',
       400,

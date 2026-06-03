@@ -1,5 +1,5 @@
-import { finalizeExternalRunForActor } from '@/lib/thesis-service/external-runs';
-import { finalizeExternalRunSchema } from '@/lib/thesis-service/schemas';
+import { finalizeExternalRunForActor } from '@/lib/breakdown-service/external-runs';
+import { finalizeExternalRunSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

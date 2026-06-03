@@ -1,5 +1,5 @@
-import { blockExternalStepForActor } from '@/lib/thesis-service/external-runs';
-import { blockExternalStepSchema } from '@/lib/thesis-service/schemas';
+import { blockExternalStepForActor } from '@/lib/breakdown-service/external-runs';
+import { blockExternalStepSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

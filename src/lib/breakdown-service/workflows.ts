@@ -3,11 +3,11 @@ import { createServerClient } from '@/lib/supabase/server';
 import { sortTopologically } from '@/lib/graph/topological-sort';
 import { isStaleSourceNode, formatSourceAge } from '@/lib/graph/source-freshness';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
-import type { ThesisActor } from './actor';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { getGraphForActor } from './graphs';
 import { importGraphSchema } from './schemas';
 import { auditHeadlessOperation } from './safety';
@@ -19,7 +19,12 @@ function serviceClient() {
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
@@ -103,22 +108,26 @@ export interface WorkflowManifest {
   };
 }
 
-function getManifestVersion(graph: Graph, nodes: ThesisNode[], edges: ThesisEdge[]) {
-  const latestUpdatedAt = [graph.updated_at, ...nodes.map((node) => node.updated_at), ...edges.map((edge) => edge.updated_at)]
+function getManifestVersion(graph: Graph, nodes: BreakdownNode[], edges: BreakdownEdge[]) {
+  const latestUpdatedAt = [
+    graph.updated_at,
+    ...nodes.map((node) => node.updated_at),
+    ...edges.map((edge) => edge.updated_at),
+  ]
     .filter(Boolean)
     .sort()
     .at(-1);
   return `graph:${graph.id}:${latestUpdatedAt ?? graph.updated_at}:${nodes.length}:${edges.length}`;
 }
 
-function validateAcyclic(nodes: ThesisNode[], edges: ThesisEdge[]) {
+function validateAcyclic(nodes: BreakdownNode[], edges: BreakdownEdge[]) {
   const { sortedNodes, unsortedNodeIds } = sortTopologically(
     nodes,
     edges.map((edge) => ({ source: edge.source_node_id, target: edge.target_node_id })),
   );
 
   if (unsortedNodeIds.length > 0) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'conflict',
       'Graph contains a cycle and cannot be used as a DAG workflow',
       409,
@@ -129,9 +138,9 @@ function validateAcyclic(nodes: ThesisNode[], edges: ThesisEdge[]) {
   return sortedNodes;
 }
 
-function getReadyNodeIds(nodes: ThesisNode[], edges: ThesisEdge[]) {
+function getReadyNodeIds(nodes: BreakdownNode[], edges: BreakdownEdge[]) {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-  const inbound = new Map<string, ThesisEdge[]>();
+  const inbound = new Map<string, BreakdownEdge[]>();
   for (const node of nodes) inbound.set(node.id, []);
   for (const edge of edges) inbound.get(edge.target_node_id)?.push(edge);
 
@@ -147,7 +156,7 @@ function getReadyNodeIds(nodes: ThesisNode[], edges: ThesisEdge[]) {
 }
 
 export async function exportGraphForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   graphId: string,
 ): Promise<HeadlessGraphExport> {
   requireScope(actor, 'graphs:read');
@@ -195,7 +204,7 @@ export async function exportGraphForActor(
 }
 
 export async function getWorkflowManifestForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   graphId: string,
   mode: 'internal_runner' | 'external_evaluator' = 'external_evaluator',
 ): Promise<WorkflowManifest> {
@@ -255,7 +264,7 @@ export async function getWorkflowManifestForActor(
 }
 
 export async function importGraphForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   input: z.input<typeof importGraphSchema>,
 ): Promise<{ graphId: string; nodeIdMap: Record<string, string>; edgeCount: number }> {
   requireScope(actor, 'graphs:write');
@@ -277,7 +286,7 @@ export async function importGraphForActor(
         position_y: node.position.y,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }) as ThesisNode,
+      }) as BreakdownNode,
   );
   const importEdges = parsed.edges.map(
     (edge, index) =>
@@ -292,13 +301,13 @@ export async function importGraphForActor(
         transform: edge.transform ?? null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }) as ThesisEdge,
+      }) as BreakdownEdge,
   );
 
   const importNodeIds = new Set(importNodes.map((node) => node.id));
   for (const edge of importEdges) {
     if (!importNodeIds.has(edge.source_node_id) || !importNodeIds.has(edge.target_node_id)) {
-      throw new ThesisServiceError(
+      throw new BreakdownServiceError(
         'validation_error',
         'Import edge references an unknown node id',
         400,
@@ -312,7 +321,11 @@ export async function importGraphForActor(
   let graphId = parsed.graphId;
   if (parsed.mode === 'replace') {
     if (!graphId) {
-      throw new ThesisServiceError('validation_error', 'graphId is required in replace mode', 400);
+      throw new BreakdownServiceError(
+        'validation_error',
+        'graphId is required in replace mode',
+        400,
+      );
     }
     await getGraphForActor(actor, graphId);
     const { error: graphUpdateError } = await supabase
@@ -325,11 +338,11 @@ export async function importGraphForActor(
       .eq('id', graphId)
       .eq('user_id', actor.userId);
     if (graphUpdateError) {
-      throw new ThesisServiceError('database_error', graphUpdateError.message, 400);
+      throw new BreakdownServiceError('database_error', graphUpdateError.message, 400);
     }
     const { error: deleteError } = await supabase.from('nodes').delete().eq('graph_id', graphId);
     if (deleteError) {
-      throw new ThesisServiceError('database_error', deleteError.message, 400);
+      throw new BreakdownServiceError('database_error', deleteError.message, 400);
     }
   } else {
     const { data: graph, error } = await supabase
@@ -344,7 +357,11 @@ export async function importGraphForActor(
       .select('id')
       .single();
     if (error || !graph) {
-      throw new ThesisServiceError('database_error', error?.message ?? 'Failed to import graph', 400);
+      throw new BreakdownServiceError(
+        'database_error',
+        error?.message ?? 'Failed to import graph',
+        400,
+      );
     }
     graphId = (graph as { id: string }).id;
   }
@@ -369,7 +386,11 @@ export async function importGraphForActor(
       .select('id')
       .single();
     if (error || !data) {
-      throw new ThesisServiceError('database_error', error?.message ?? 'Failed to import node', 400);
+      throw new BreakdownServiceError(
+        'database_error',
+        error?.message ?? 'Failed to import node',
+        400,
+      );
     }
     nodeIdMap[node.id] = (data as { id: string }).id;
   }
@@ -385,7 +406,7 @@ export async function importGraphForActor(
       transform: edge.transform,
     });
     if (error) {
-      throw new ThesisServiceError('database_error', error.message, 400);
+      throw new BreakdownServiceError('database_error', error.message, 400);
     }
   }
 

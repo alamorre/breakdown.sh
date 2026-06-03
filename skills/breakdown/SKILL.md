@@ -1,6 +1,6 @@
 # Breakdown Headless Workflow Skill
 
-Use this skill when a user asks to create, inspect, improve, or execute a Breakdown/Thesis reasoning graph through the MCP tools or headless API.
+Use this skill when a user asks to create, inspect, improve, or execute a Breakdown/breakdown.sh reasoning graph through the MCP tools or headless API.
 
 ## Operating Model
 
@@ -30,7 +30,7 @@ Breakdown is the workflow memory and DAG layer. The host agent console does the 
 ### decompose_reasoning_chain
 
 1. Turn the user goal into 5-12 named steps.
-2. Separate current-data/source retrieval from analysis and synthesis.
+2. Separate current-data/source retrieval from analysis and composition.
 3. Add edges that make the graph acyclic and executable.
 4. Create or patch the graph only after showing the preview when changes are substantial.
 
@@ -42,7 +42,7 @@ Look for missing source checks, stale assumptions, weak dependencies, duplicate 
 
 Use `apply_graph_patch` with `dryRun: true`. Summarize added, updated, rewired, and destructive operations. Apply only after user confirmation.
 
-### follow_thesis_breakdown
+### follow_breakdown_graph
 
 1. Call `create_external_run`.
 2. Loop: `get_next_step`, then `get_step_context`.

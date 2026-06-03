@@ -20,10 +20,10 @@ pnpm dev
 Set the local base URL used by scripts and the MCP package:
 
 ```bash
-export THESIS_BASE_URL=http://localhost:3000
+export BREAKDOWN_BASE_URL=http://localhost:3000
 ```
 
-When using the local scripts, the dev server should be reachable at `THESIS_BASE_URL`. The scripts do not provision hosted services and do not call any vendor market-data provider.
+When using the local scripts, the dev server should be reachable at `BREAKDOWN_BASE_URL`. The scripts do not provision hosted services and do not call any vendor market-data provider.
 
 ## Tokens
 
@@ -54,19 +54,19 @@ pnpm headless:token -- \
 Use the token:
 
 ```bash
-export THESIS_API_TOKEN=bdk_...
+export BREAKDOWN_API_TOKEN=bdk_...
 ```
 
 Scopes:
 
-| Scope | Allows |
-| --- | --- |
-| `graphs:read` | List, read, export, and inspect workflow manifests. |
-| `graphs:write` | Create, update, delete, import, and patch graphs, nodes, and edges. |
-| `runs:execute` | Run nodes or graphs internally using the user's configured model provider. |
-| `runs:external_execute` | Create, read, and finalize external-evaluator runs. |
-| `runs:write_results` | Submit or block external step results. |
-| `runs:cancel` | Cancel internal graph runs. |
+| Scope                   | Allows                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `graphs:read`           | List, read, export, and inspect workflow manifests.                        |
+| `graphs:write`          | Create, update, delete, import, and patch graphs, nodes, and edges.        |
+| `runs:execute`          | Run nodes or graphs internally using the user's configured model provider. |
+| `runs:external_execute` | Create, read, and finalize external-evaluator runs.                        |
+| `runs:write_results`    | Submit or block external step results.                                     |
+| `runs:cancel`           | Cancel internal graph runs.                                                |
 
 Revocation:
 
@@ -77,8 +77,8 @@ Revocation:
 Quick auth check:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Accept: application/json"
 ```
 
@@ -87,7 +87,7 @@ curl "$THESIS_BASE_URL/api/headless/graphs" \
 Build the stdio MCP package:
 
 ```bash
-pnpm --filter @breakdown/thesis-mcp build
+pnpm --filter @breakdown/mcp build
 ```
 
 Claude Desktop-style config:
@@ -97,10 +97,10 @@ Claude Desktop-style config:
   "mcpServers": {
     "breakdown": {
       "command": "node",
-      "args": ["/absolute/path/to/breakdown.sh/packages/thesis-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/breakdown.sh/packages/breakdown-mcp/dist/index.js"],
       "env": {
-        "THESIS_BASE_URL": "http://localhost:3000",
-        "THESIS_API_TOKEN": "bdk_..."
+        "BREAKDOWN_BASE_URL": "http://localhost:3000",
+        "BREAKDOWN_API_TOKEN": "bdk_..."
       }
     }
   }
@@ -122,8 +122,8 @@ DELETE /api/mcp
 Local example:
 
 ```bash
-curl "$THESIS_BASE_URL/api/mcp" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/mcp" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Accept: application/json, text/event-stream" \
   -H "Content-Type: application/json" \
   -d '{
@@ -234,8 +234,8 @@ Internal runs execute with the user's configured model provider. They are useful
 Create a graph:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: graph-$(uuidgen)" \
   -d '{"name":"Internal runner example","description":"Local headless graph"}'
@@ -244,8 +244,8 @@ curl "$THESIS_BASE_URL/api/headless/graphs" \
 Run a graph internally after adding nodes:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs/$GRAPH_ID/run" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"runId":"local-run-1"}'
 ```
@@ -253,16 +253,16 @@ curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run" \
 Poll status:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run-status" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs/$GRAPH_ID/run-status" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Accept: application/json"
 ```
 
 Cancel queued work:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run-cancel" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs/$GRAPH_ID/run-cancel" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -282,8 +282,8 @@ External-evaluator mode keeps reasoning in the host console:
 Import a local example graph and start the run in one call:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/workflows/import-and-run" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/workflows/import-and-run" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: import-run-$(uuidgen)" \
   -d "{
@@ -299,22 +299,22 @@ curl "$THESIS_BASE_URL/api/headless/workflows/import-and-run" \
 Fetch the next step:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/next-step" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN"
+curl "$BREAKDOWN_BASE_URL/api/headless/external-runs/$RUN_ID/next-step" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN"
 ```
 
 Fetch context:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/context" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN"
+curl "$BREAKDOWN_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/context" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN"
 ```
 
 Submit a result using `examples/headless/external-step-result.json` as the body after replacing the context version:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/result" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/result" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: result-$(uuidgen)" \
   -d @examples/headless/external-step-result.json
@@ -323,8 +323,8 @@ curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/result"
 Block a step when host tools or current data are unavailable:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/block" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/block" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: block-$(uuidgen)" \
   -d '{
@@ -339,8 +339,8 @@ curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/block" 
 Finalize:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/finalize" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/external-runs/$RUN_ID/finalize" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"allowIncomplete":true}'
 ```
@@ -350,8 +350,8 @@ curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/finalize" \
 Use the checked-in example graph for a generic create/improve/summarize DAG:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs/import" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs/import" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: graph-import-$(uuidgen)" \
   -d @examples/headless/create-improve-summarize.graph.json
@@ -360,8 +360,8 @@ curl "$THESIS_BASE_URL/api/headless/graphs/import" \
 Replace `REPLACE_WITH_SUMMARIZE_NODE_ID` in the patch example with the real `summarize-delta` node id from the import response or graph readback. Then preview the improvement patch:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: patch-preview-$(uuidgen)" \
   -d @examples/headless/improve.patch.json
@@ -370,8 +370,8 @@ curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
 Apply the same patch only after reviewing the preview:
 
 ```bash
-curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
-  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+curl "$BREAKDOWN_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: patch-apply-$(uuidgen)" \
   -d @examples/headless/improve-apply.patch.json
@@ -381,7 +381,7 @@ MCP prompts that support this workflow:
 
 - `decompose_reasoning_chain`: turn a goal into a DAG outline.
 - `extend_graph_from_research`: propose a dry-run graph patch from findings.
-- `follow_thesis_breakdown`: execute a graph through external-evaluator steps.
+- `follow_breakdown_graph`: execute a graph through external-evaluator steps.
 - `refresh_sources_and_propagate`: refresh stale/current-data nodes and downstream reasoning.
 - `summarize_graph_delta`: summarize changed outputs, blocked steps, citations, and open questions.
 
@@ -391,7 +391,7 @@ Do not add a first-party market-data provider for the external-console flow. For
 
 ## Local Verification
 
-With a dev server running and `THESIS_API_TOKEN` set, run the full local interface verification:
+With a dev server running and `BREAKDOWN_API_TOKEN` set, run the full local interface verification:
 
 ```bash
 pnpm headless:verify
@@ -423,6 +423,6 @@ pnpm typecheck
 pnpm test
 pnpm test:coverage
 pnpm build
-pnpm --filter @breakdown/thesis-mcp typecheck
-pnpm --filter @breakdown/thesis-mcp build
+pnpm --filter @breakdown/mcp typecheck
+pnpm --filter @breakdown/mcp build
 ```

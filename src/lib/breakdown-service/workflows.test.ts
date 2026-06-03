@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
 
 const { mockGetGraphForActor } = vi.hoisted(() => ({
   mockGetGraphForActor: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('./graphs', async (importOriginal) => {
   };
 });
 
-const actor: ThesisActor = {
+const actor: BreakdownActor = {
   userId: 'user_123',
   source: 'integration-token',
   scopes: ['graphs:read'],
@@ -68,7 +68,7 @@ const graph = {
       graph_id: '11111111-1111-4111-8111-111111111111',
       node_type: 'default',
       name: 'Synthesize',
-      prompt: 'Write final synthesis',
+      prompt: 'Write final composition',
       output: null,
       metadata: {},
       run_status: 'skipped',
@@ -180,6 +180,8 @@ describe('headless workflow helpers', () => {
       ],
     });
 
-    await expect(getWorkflowManifestForActor(actor, graph.id)).rejects.toThrow(ThesisServiceError);
+    await expect(getWorkflowManifestForActor(actor, graph.id)).rejects.toThrow(
+      BreakdownServiceError,
+    );
   });
 });

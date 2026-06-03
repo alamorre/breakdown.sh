@@ -1,4 +1,4 @@
-import { getExternalRunForActor } from '@/lib/thesis-service/external-runs';
+import { getExternalRunForActor } from '@/lib/breakdown-service/external-runs';
 import { withHeadlessActor } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

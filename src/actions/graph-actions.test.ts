@@ -9,7 +9,7 @@ const mockDeleteGraphForActor = vi.fn();
 const mockGetGraphForActor = vi.fn();
 const mockUpdateNodeForActor = vi.fn();
 
-vi.mock('@/lib/thesis-service/actor', () => ({
+vi.mock('@/lib/breakdown-service/actor', () => ({
   resolveClerkActor: () => mockResolveClerkActor(),
 }));
 
@@ -17,7 +17,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
 
-vi.mock('@/lib/thesis-service/graphs', () => ({
+vi.mock('@/lib/breakdown-service/graphs', () => ({
   createGraphForActor: (...args: unknown[]) => mockCreateGraphForActor(...args),
   listGraphsForActor: (...args: unknown[]) => mockListGraphsForActor(...args),
   updateGraphForActor: (...args: unknown[]) => mockUpdateGraphForActor(...args),
@@ -25,7 +25,7 @@ vi.mock('@/lib/thesis-service/graphs', () => ({
   getGraphForActor: (...args: unknown[]) => mockGetGraphForActor(...args),
 }));
 
-vi.mock('@/lib/thesis-service/nodes', () => ({
+vi.mock('@/lib/breakdown-service/nodes', () => ({
   updateNodeForActor: (...args: unknown[]) => mockUpdateNodeForActor(...args),
 }));
 

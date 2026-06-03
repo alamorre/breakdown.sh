@@ -7,7 +7,7 @@ import {
   resolveIntegrationToken,
   revokeIntegrationToken,
 } from './tokens';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 
 const mockSingle = vi.fn();
 const mockIs = vi.fn();
@@ -153,7 +153,7 @@ describe('integration token helpers', () => {
 
     await expect(
       resolveIntegrationToken(createMockSupabase() as never, 'bdk_test_secret'),
-    ).rejects.toThrow(ThesisServiceError);
+    ).rejects.toThrow(BreakdownServiceError);
   });
 
   it('rejects invalid token prefixes before hitting storage', async () => {

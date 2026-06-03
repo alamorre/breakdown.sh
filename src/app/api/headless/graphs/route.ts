@@ -1,5 +1,5 @@
-import { createGraphForActor, listGraphsForActor } from '@/lib/thesis-service/graphs';
-import { createGraphSchema } from '@/lib/thesis-service/schemas';
+import { createGraphForActor, listGraphsForActor } from '@/lib/breakdown-service/graphs';
+import { createGraphSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessActor, withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

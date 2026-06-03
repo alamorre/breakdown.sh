@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ThesisScope } from '@/lib/thesis-service/scopes';
+import type { BreakdownScope } from '@/lib/breakdown-service/scopes';
 
 const {
   mockAuth,
@@ -23,8 +23,8 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerClient: mockCreateServerClient,
 }));
 
-vi.mock('@/lib/thesis-service/tokens', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/thesis-service/tokens')>();
+vi.mock('@/lib/breakdown-service/tokens', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/breakdown-service/tokens')>();
   return {
     ...original,
     listIntegrationTokens: mockListIntegrationTokens,
@@ -42,7 +42,7 @@ const safeRecord = {
   user_id: 'user_123',
   name: 'Preview MCP',
   token_prefix: 'bdk_preview',
-  scopes: ['graphs:read', 'graphs:write'] as ThesisScope[],
+  scopes: ['graphs:read', 'graphs:write'] as BreakdownScope[],
   created_at: '2026-06-03T00:00:00Z',
   last_used_at: null,
   revoked_at: null,

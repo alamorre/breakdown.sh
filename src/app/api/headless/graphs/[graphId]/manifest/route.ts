@@ -1,4 +1,4 @@
-import { getWorkflowManifestForActor } from '@/lib/thesis-service/workflows';
+import { getWorkflowManifestForActor } from '@/lib/breakdown-service/workflows';
 import { withHeadlessActor } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

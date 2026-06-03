@@ -1,5 +1,5 @@
-import { createEdgeForActor } from '@/lib/thesis-service/edges';
-import { createEdgeSchema } from '@/lib/thesis-service/schemas';
+import { createEdgeForActor } from '@/lib/breakdown-service/edges';
+import { createEdgeSchema } from '@/lib/breakdown-service/schemas';
 import { withHeadlessJson } from '@/lib/headless/response';
 
 export const dynamic = 'force-dynamic';

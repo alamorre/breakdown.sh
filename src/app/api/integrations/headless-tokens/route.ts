@@ -5,15 +5,15 @@ import {
   listIntegrationTokens,
   mintIntegrationToken,
   type PublicIntegrationTokenRecord,
-} from '@/lib/thesis-service/tokens';
-import { ALL_THESIS_SCOPES, THESIS_SCOPES } from '@/lib/thesis-service/scopes';
-import { ThesisServiceError } from '@/lib/thesis-service/errors';
+} from '@/lib/breakdown-service/tokens';
+import { ALL_BREAKDOWN_SCOPES, BREAKDOWN_SCOPES } from '@/lib/breakdown-service/scopes';
+import { BreakdownServiceError } from '@/lib/breakdown-service/errors';
 
 export const dynamic = 'force-dynamic';
 
 const createTokenBodySchema = z.object({
   name: z.string().trim().min(1).max(100),
-  scopes: z.array(z.enum(THESIS_SCOPES)).min(1).default(ALL_THESIS_SCOPES),
+  scopes: z.array(z.enum(BREAKDOWN_SCOPES)).min(1).default(ALL_BREAKDOWN_SCOPES),
 });
 
 function isTokenStorageConfigured() {
@@ -36,7 +36,7 @@ function storageNotConfiguredResponse(status = 200) {
   return Response.json(
     {
       configured: false,
-      scopes: ALL_THESIS_SCOPES,
+      scopes: ALL_BREAKDOWN_SCOPES,
       tokens: [],
       error: 'Integration token storage is not configured for this deployment.',
     },
@@ -45,7 +45,7 @@ function storageNotConfiguredResponse(status = 200) {
 }
 
 function errorResponse(err: unknown) {
-  if (err instanceof ThesisServiceError) {
+  if (err instanceof BreakdownServiceError) {
     return Response.json({ error: err.message }, { status: err.status });
   }
 
@@ -70,7 +70,7 @@ export async function GET() {
     const tokens = await listIntegrationTokens(supabase, userId);
     return Response.json({
       configured: true,
-      scopes: ALL_THESIS_SCOPES,
+      scopes: ALL_BREAKDOWN_SCOPES,
       tokens: tokens.map(serializeToken),
     });
   } catch (err) {

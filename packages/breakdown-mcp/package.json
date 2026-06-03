@@ -1,10 +1,10 @@
 {
-  "name": "@breakdown/thesis-mcp",
+  "name": "@breakdown/mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "thesis-mcp": "./dist/index.js"
+    "breakdown-mcp": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

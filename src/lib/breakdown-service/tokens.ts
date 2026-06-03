@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import type { createServerClient } from '@/lib/supabase/server';
-import type { ThesisActor } from './actor';
-import { ThesisServiceError } from './errors';
-import { ALL_THESIS_SCOPES, THESIS_SCOPES, type ThesisScope } from './scopes';
+import type { BreakdownActor } from './actor';
+import { BreakdownServiceError } from './errors';
+import { ALL_BREAKDOWN_SCOPES, BREAKDOWN_SCOPES, type BreakdownScope } from './scopes';
 
 type SupabaseClient = ReturnType<typeof createServerClient>;
 
@@ -13,7 +13,7 @@ const TOKEN_SECRET_BYTES = 32;
 export const createIntegrationTokenSchema = z.object({
   userId: z.string().min(1),
   name: z.string().min(1).max(100),
-  scopes: z.array(z.enum(THESIS_SCOPES)).min(1).default(ALL_THESIS_SCOPES),
+  scopes: z.array(z.enum(BREAKDOWN_SCOPES)).min(1).default(ALL_BREAKDOWN_SCOPES),
 });
 
 export const revokeIntegrationTokenSchema = z.object({
@@ -26,7 +26,7 @@ export interface IntegrationTokenRecord {
   name: string;
   token_hash: string;
   token_prefix: string;
-  scopes: ThesisScope[];
+  scopes: BreakdownScope[];
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
@@ -56,7 +56,7 @@ export async function mintIntegrationToken(
 }> {
   const parsed = createIntegrationTokenSchema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'validation_error',
       parsed.error.message,
       400,
@@ -79,7 +79,7 @@ export async function mintIntegrationToken(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'database_error',
       error?.message ?? 'Failed to create integration token',
       400,
@@ -103,7 +103,7 @@ export async function listIntegrationTokens(
     .order('created_at', { ascending: false });
 
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 
   return (data ?? []) as PublicIntegrationTokenRecord[];
@@ -112,9 +112,9 @@ export async function listIntegrationTokens(
 export async function resolveIntegrationToken(
   supabase: SupabaseClient,
   token: string,
-): Promise<ThesisActor> {
+): Promise<BreakdownActor> {
   if (!token.startsWith(`${TOKEN_PREFIX}_`)) {
-    throw new ThesisServiceError('unauthorized', 'Invalid bearer token', 401);
+    throw new BreakdownServiceError('unauthorized', 'Invalid bearer token', 401);
   }
 
   const tokenHash = hashIntegrationToken(token);
@@ -125,7 +125,7 @@ export async function resolveIntegrationToken(
     .single();
 
   if (error || !data) {
-    throw new ThesisServiceError('unauthorized', 'Invalid bearer token', 401);
+    throw new BreakdownServiceError('unauthorized', 'Invalid bearer token', 401);
   }
 
   const record = data as Pick<
@@ -133,7 +133,7 @@ export async function resolveIntegrationToken(
     'id' | 'user_id' | 'name' | 'scopes' | 'revoked_at'
   >;
   if (record.revoked_at) {
-    throw new ThesisServiceError('unauthorized', 'Integration token has been revoked', 401);
+    throw new BreakdownServiceError('unauthorized', 'Integration token has been revoked', 401);
   }
 
   await supabase
@@ -158,7 +158,7 @@ export async function revokeIntegrationToken(
 ): Promise<void> {
   const parsed = revokeIntegrationTokenSchema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'validation_error',
       parsed.error.message,
       400,
@@ -174,6 +174,6 @@ export async function revokeIntegrationToken(
     .is('revoked_at', null);
 
   if (error) {
-    throw new ThesisServiceError('database_error', error.message, 400);
+    throw new BreakdownServiceError('database_error', error.message, 400);
   }
 }

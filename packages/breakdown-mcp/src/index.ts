@@ -17,11 +17,11 @@ interface HeadlessEnvelope<T = unknown> {
   };
 }
 
-const BASE_URL = process.env.THESIS_BASE_URL ?? 'http://localhost:3000';
-const API_TOKEN = process.env.THESIS_API_TOKEN;
+const BASE_URL = process.env.BREAKDOWN_BASE_URL ?? 'http://localhost:3000';
+const API_TOKEN = process.env.BREAKDOWN_API_TOKEN;
 
 if (!API_TOKEN) {
-  console.error('THESIS_API_TOKEN is required to start the Breakdown MCP server.');
+  console.error('BREAKDOWN_API_TOKEN is required to start the Breakdown MCP server.');
   process.exit(1);
 }
 
@@ -29,11 +29,7 @@ function endpoint(path: string) {
   return new URL(path, BASE_URL).toString();
 }
 
-async function headlessRequest<T>(
-  method: HttpMethod,
-  path: string,
-  body?: unknown,
-): Promise<T> {
+async function headlessRequest<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
   const response = await fetch(endpoint(path), {
     method,
     headers: {
@@ -101,7 +97,7 @@ const runInput = {
 };
 
 const server = new McpServer({
-  name: 'breakdown-thesis-mcp',
+  name: 'breakdown-mcp',
   version: '0.1.0',
 });
 
@@ -122,7 +118,8 @@ server.registerTool(
     description: 'Read a graph with its nodes and edges.',
     inputSchema: graphInput,
   },
-  async ({ graphId }) => textResult(await headlessRequest('GET', `/api/headless/graphs/${graphId}`)),
+  async ({ graphId }) =>
+    textResult(await headlessRequest('GET', `/api/headless/graphs/${graphId}`)),
 );
 
 server.registerTool(
@@ -210,12 +207,12 @@ server.registerTool(
   'delete_node',
   {
     title: 'Delete Breakdown Node',
-    description:
-      'Delete a node and incident edges. Use only after explicit user confirmation.',
+    description: 'Delete a node and incident edges. Use only after explicit user confirmation.',
     inputSchema: nodeInput,
     annotations: { destructiveHint: true },
   },
-  async ({ nodeId }) => textResult(await headlessRequest('DELETE', `/api/headless/nodes/${nodeId}`)),
+  async ({ nodeId }) =>
+    textResult(await headlessRequest('DELETE', `/api/headless/nodes/${nodeId}`)),
 );
 
 server.registerTool(
@@ -264,7 +261,8 @@ server.registerTool(
     inputSchema: edgeInput,
     annotations: { destructiveHint: true },
   },
-  async ({ edgeId }) => textResult(await headlessRequest('DELETE', `/api/headless/edges/${edgeId}`)),
+  async ({ edgeId }) =>
+    textResult(await headlessRequest('DELETE', `/api/headless/edges/${edgeId}`)),
 );
 
 server.registerTool(
@@ -401,7 +399,9 @@ server.registerTool(
     },
   },
   async ({ graphId, ...body }) =>
-    textResult(await headlessRequest('POST', `/api/headless/graphs/${graphId}/external-runs`, body)),
+    textResult(
+      await headlessRequest('POST', `/api/headless/graphs/${graphId}/external-runs`, body),
+    ),
 );
 
 server.registerTool(
@@ -511,10 +511,10 @@ server.registerTool(
     inputSchema: runInput,
   },
   async ({ runId }) => {
-    const run = await headlessRequest<{ steps: Array<{ status: string }>; run: { status: string } }>(
-      'GET',
-      `/api/headless/external-runs/${runId}`,
-    );
+    const run = await headlessRequest<{
+      steps: Array<{ status: string }>;
+      run: { status: string };
+    }>('GET', `/api/headless/external-runs/${runId}`);
     const counts = run.steps.reduce<Record<string, number>>((acc, step) => {
       acc[step.status] = (acc[step.status] ?? 0) + 1;
       return acc;
@@ -531,7 +531,7 @@ server.registerTool(
 
 server.registerResource(
   'graphs',
-  'thesis://graphs',
+  'breakdown://graphs',
   {
     title: 'Breakdown Graphs',
     mimeType: 'application/json',
@@ -542,7 +542,7 @@ server.registerResource(
 
 server.registerResource(
   'graph',
-  new ResourceTemplate('thesis://graphs/{graphId}', { list: undefined }),
+  new ResourceTemplate('breakdown://graphs/{graphId}', { list: undefined }),
   {
     title: 'Breakdown Graph',
     mimeType: 'application/json',
@@ -554,7 +554,7 @@ server.registerResource(
 
 server.registerResource(
   'graph_manifest',
-  new ResourceTemplate('thesis://graphs/{graphId}/manifest', { list: undefined }),
+  new ResourceTemplate('breakdown://graphs/{graphId}/manifest', { list: undefined }),
   {
     title: 'Breakdown Workflow Manifest',
     mimeType: 'application/json',
@@ -569,7 +569,7 @@ server.registerResource(
 
 server.registerResource(
   'graph_node',
-  new ResourceTemplate('thesis://graphs/{graphId}/nodes/{nodeId}', { list: undefined }),
+  new ResourceTemplate('breakdown://graphs/{graphId}/nodes/{nodeId}', { list: undefined }),
   {
     title: 'Breakdown Graph Node',
     mimeType: 'application/json',
@@ -580,16 +580,13 @@ server.registerResource(
       'GET',
       `/api/headless/graphs/${variables.graphId}`,
     );
-    return resourceText(
-      uri,
-      graph.nodes.find((node) => node.id === variables.nodeId) ?? null,
-    );
+    return resourceText(uri, graph.nodes.find((node) => node.id === variables.nodeId) ?? null);
   },
 );
 
 server.registerResource(
   'graph_run_status',
-  new ResourceTemplate('thesis://graphs/{graphId}/runs/latest', { list: undefined }),
+  new ResourceTemplate('breakdown://graphs/{graphId}/runs/latest', { list: undefined }),
   {
     title: 'Breakdown Latest Run Status',
     mimeType: 'application/json',
@@ -604,19 +601,22 @@ server.registerResource(
 
 server.registerResource(
   'external_run',
-  new ResourceTemplate('thesis://external-runs/{runId}', { list: undefined }),
+  new ResourceTemplate('breakdown://external-runs/{runId}', { list: undefined }),
   {
     title: 'Breakdown External Run',
     mimeType: 'application/json',
     description: 'External-evaluator run state.',
   },
   async (uri, variables) =>
-    resourceText(uri, await headlessRequest('GET', `/api/headless/external-runs/${variables.runId}`)),
+    resourceText(
+      uri,
+      await headlessRequest('GET', `/api/headless/external-runs/${variables.runId}`),
+    ),
 );
 
 server.registerResource(
   'external_run_step',
-  new ResourceTemplate('thesis://external-runs/{runId}/steps/{stepId}', { list: undefined }),
+  new ResourceTemplate('breakdown://external-runs/{runId}/steps/{stepId}', { list: undefined }),
   {
     title: 'Breakdown External Step',
     mimeType: 'application/json',
@@ -659,7 +659,7 @@ server.registerPrompt(
 );
 
 server.registerPrompt(
-  'follow_thesis_breakdown',
+  'follow_breakdown_graph',
   {
     title: 'Follow Breakdown',
     description: 'Execute an existing Breakdown externally step by step.',
@@ -693,7 +693,8 @@ server.registerPrompt(
   'refresh_sources_and_propagate',
   {
     title: 'Refresh Sources And Propagate',
-    description: 'Refresh source/current-data steps using host tools and propagate downstream work.',
+    description:
+      'Refresh source/current-data steps using host tools and propagate downstream work.',
     argsSchema: {
       graphId: uuid,
     },

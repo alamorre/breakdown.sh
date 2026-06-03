@@ -1,4 +1,4 @@
-export type ThesisErrorCode =
+export type BreakdownErrorCode =
   | 'unauthorized'
   | 'forbidden'
   | 'validation_error'
@@ -13,14 +13,14 @@ export type ThesisErrorCode =
   | 'database_error'
   | 'execution_error';
 
-export class ThesisServiceError extends Error {
-  readonly code: ThesisErrorCode;
+export class BreakdownServiceError extends Error {
+  readonly code: BreakdownErrorCode;
   readonly status: number;
   readonly details?: unknown;
 
-  constructor(code: ThesisErrorCode, message: string, status = 400, details?: unknown) {
+  constructor(code: BreakdownErrorCode, message: string, status = 400, details?: unknown) {
     super(message);
-    this.name = 'ThesisServiceError';
+    this.name = 'BreakdownServiceError';
     this.code = code;
     this.status = status;
     this.details = details;
@@ -28,12 +28,12 @@ export class ThesisServiceError extends Error {
 }
 
 export function getErrorResponse(err: unknown): {
-  code: ThesisErrorCode;
+  code: BreakdownErrorCode;
   message: string;
   status: number;
   details?: unknown;
 } {
-  if (err instanceof ThesisServiceError) {
+  if (err instanceof BreakdownServiceError) {
     return {
       code: err.code,
       message: err.message,
@@ -58,5 +58,5 @@ export function getErrorResponse(err: unknown): {
 }
 
 export function throwDbError(message: string): never {
-  throw new ThesisServiceError('database_error', message, 400);
+  throw new BreakdownServiceError('database_error', message, 400);
 }

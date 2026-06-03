@@ -5,11 +5,11 @@ const mockCreateEdgeForActor = vi.fn();
 const mockUpdateEdgeForActor = vi.fn();
 const mockDeleteEdgeForActor = vi.fn();
 
-vi.mock('@/lib/thesis-service/actor', () => ({
+vi.mock('@/lib/breakdown-service/actor', () => ({
   resolveClerkActor: () => mockResolveClerkActor(),
 }));
 
-vi.mock('@/lib/thesis-service/edges', () => ({
+vi.mock('@/lib/breakdown-service/edges', () => ({
   createEdgeForActor: (...args: unknown[]) => mockCreateEdgeForActor(...args),
   updateEdgeForActor: (...args: unknown[]) => mockUpdateEdgeForActor(...args),
   deleteEdgeForActor: (...args: unknown[]) => mockDeleteEdgeForActor(...args),

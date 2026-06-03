@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ThesisActor } from './actor';
+import type { BreakdownActor } from './actor';
 
 const {
   mockImportGraphAndCreateExternalRunForActor,
@@ -23,15 +23,10 @@ vi.mock('./workflows', () => ({
   importGraphForActor: mockImportGraphForActor,
 }));
 
-const actor: ThesisActor = {
+const actor: BreakdownActor = {
   userId: 'user_123',
   source: 'clerk-session',
-  scopes: [
-    'graphs:read',
-    'graphs:write',
-    'runs:external_execute',
-    'runs:write_results',
-  ],
+  scopes: ['graphs:read', 'graphs:write', 'runs:external_execute', 'runs:write_results'],
 };
 
 const safeRecord = {
@@ -87,7 +82,7 @@ describe('external-console onboarding service', () => {
       externalRun: {
         runId: '33333333-3333-4333-8333-333333333333',
         status: 'active',
-        runResourceUri: 'thesis://external-runs/33333333-3333-4333-8333-333333333333',
+        runResourceUri: 'breakdown://external-runs/33333333-3333-4333-8333-333333333333',
         nextStep: { step: { status: 'ready' } },
       },
     });

@@ -3,8 +3,8 @@
 
 import { randomUUID } from 'node:crypto';
 
-const BASE_URL = process.env.THESIS_BASE_URL ?? 'http://localhost:3000';
-const API_TOKEN = process.env.THESIS_API_TOKEN;
+const BASE_URL = process.env.BREAKDOWN_BASE_URL ?? 'http://localhost:3000';
+const API_TOKEN = process.env.BREAKDOWN_API_TOKEN;
 
 function readArg(name) {
   const flag = `--${name}`;
@@ -17,7 +17,7 @@ const goal = readArg('goal') ?? 'Analyze a public company using current evidence
 const mode = readArg('mode') ?? 'block';
 
 if (!API_TOKEN) {
-  console.error('THESIS_API_TOKEN is required.');
+  console.error('BREAKDOWN_API_TOKEN is required.');
   process.exit(1);
 }
 
@@ -77,7 +77,8 @@ function smokeGraphImport() {
           suggestedHostTools: ['web/search', 'filings', 'market data', 'workspace connectors'],
           hostToolInstructions:
             'Use available host-console tools for current facts. If unavailable, block this step as a data gap instead of using model memory.',
-          expectedOutput: 'Current evidence packet with citations, source timestamps, or data gaps.',
+          expectedOutput:
+            'Current evidence packet with citations, source timestamps, or data gaps.',
         },
         position: { x: 0, y: 0 },
       },
@@ -92,7 +93,8 @@ function smokeGraphImport() {
         metadata: {
           hostToolInstructions:
             'Use upstream outputs first. Cite any additional external facts gathered in the host console.',
-          expectedOutput: 'Concise synthesis with facts, assumptions, uncertainty, and open questions.',
+          expectedOutput:
+            'Concise composition with facts, assumptions, uncertainty, and open questions.',
         },
         position: { x: 320, y: 0 },
       },

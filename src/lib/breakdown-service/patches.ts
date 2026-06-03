@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { sortTopologically } from '@/lib/graph/topological-sort';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
-import type { ThesisActor } from './actor';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
+import type { BreakdownActor } from './actor';
 import { requireScope } from './actor';
-import { ThesisServiceError } from './errors';
+import { BreakdownServiceError } from './errors';
 import { getGraphForActor } from './graphs';
 import { createNodeForActor, deleteNodeForActor, updateNodeForActor } from './nodes';
 import { createEdgeForActor, deleteEdgeForActor, updateEdgeForActor } from './edges';
@@ -15,7 +15,12 @@ import { auditHeadlessOperation, HEADLESS_LIMITS } from './safety';
 function parseOrThrow<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
   return parsed.data;
 }
@@ -35,42 +40,42 @@ export interface GraphPatchResult {
   applied: boolean;
 }
 
-function assertGraphIsAcyclic(nodes: ThesisNode[], edges: ThesisEdge[]) {
+function assertGraphIsAcyclic(nodes: BreakdownNode[], edges: BreakdownEdge[]) {
   const { unsortedNodeIds } = sortTopologically(
     nodes,
     edges.map((edge) => ({ source: edge.source_node_id, target: edge.target_node_id })),
   );
   if (unsortedNodeIds.length > 0) {
-    throw new ThesisServiceError('conflict', 'Patch would create a cycle', 409, {
+    throw new BreakdownServiceError('conflict', 'Patch would create a cycle', 409, {
       nodeIds: unsortedNodeIds,
     });
   }
 }
 
-function findNode(nodes: ThesisNode[], nodeId: string) {
+function findNode(nodes: BreakdownNode[], nodeId: string) {
   const node = nodes.find((candidate) => candidate.id === nodeId);
   if (!node) {
-    throw new ThesisServiceError('validation_error', `Unknown node id: ${nodeId}`, 400);
+    throw new BreakdownServiceError('validation_error', `Unknown node id: ${nodeId}`, 400);
   }
   return node;
 }
 
-function findEdge(edges: ThesisEdge[], edgeId: string) {
+function findEdge(edges: BreakdownEdge[], edgeId: string) {
   const edge = edges.find((candidate) => candidate.id === edgeId);
   if (!edge) {
-    throw new ThesisServiceError('validation_error', `Unknown edge id: ${edgeId}`, 400);
+    throw new BreakdownServiceError('validation_error', `Unknown edge id: ${edgeId}`, 400);
   }
   return edge;
 }
 
 function resolvePatchNodeRef(
-  nodes: ThesisNode[],
+  nodes: BreakdownNode[],
   clientNodeIds: Set<string>,
   nodeId: string | undefined,
   clientId: string | undefined,
 ) {
   if (nodeId && clientId) {
-    throw new ThesisServiceError(
+    throw new BreakdownServiceError(
       'validation_error',
       'Use either nodeId or clientId for a patch endpoint, not both',
       400,
@@ -82,21 +87,29 @@ function resolvePatchNodeRef(
   }
   if (clientId) {
     if (!clientNodeIds.has(clientId)) {
-      throw new ThesisServiceError('validation_error', `Unknown client node id: ${clientId}`, 400);
+      throw new BreakdownServiceError(
+        'validation_error',
+        `Unknown client node id: ${clientId}`,
+        400,
+      );
     }
     return `client:${clientId}`;
   }
-  throw new ThesisServiceError('validation_error', 'Patch edge endpoint is missing a node reference', 400);
+  throw new BreakdownServiceError(
+    'validation_error',
+    'Patch edge endpoint is missing a node reference',
+    400,
+  );
 }
 
 function simulatePatch(
   graphId: string,
-  nodes: ThesisNode[],
-  edges: ThesisEdge[],
+  nodes: BreakdownNode[],
+  edges: BreakdownEdge[],
   patch: ParsedPatch,
 ): GraphPatchResult {
   if (patch.operations.length > HEADLESS_LIMITS.maxPatchOperations) {
-    throw new ThesisServiceError('payload_too_large', 'Patch has too many operations', 413);
+    throw new BreakdownServiceError('payload_too_large', 'Patch has too many operations', 413);
   }
 
   const simulatedNodes = nodes.map((node) => ({ ...node }));
@@ -109,7 +122,11 @@ function simulatePatch(
       case 'add_node': {
         const clientId = operation.clientId ?? `node-${clientNodeIds.size + 1}`;
         if (clientNodeIds.has(clientId)) {
-          throw new ThesisServiceError('validation_error', `Duplicate client node id: ${clientId}`, 400);
+          throw new BreakdownServiceError(
+            'validation_error',
+            `Duplicate client node id: ${clientId}`,
+            400,
+          );
         }
         clientNodeIds.add(clientId);
         simulatedNodes.push({
@@ -154,7 +171,9 @@ function simulatePatch(
       }
       case 'delete_node': {
         const node = findNode(simulatedNodes, operation.nodeId);
-        const nodeIndex = simulatedNodes.findIndex((candidate) => candidate.id === operation.nodeId);
+        const nodeIndex = simulatedNodes.findIndex(
+          (candidate) => candidate.id === operation.nodeId,
+        );
         simulatedNodes.splice(nodeIndex, 1);
         for (let index = simulatedEdges.length - 1; index >= 0; index--) {
           if (
@@ -186,14 +205,14 @@ function simulatePatch(
           operation.targetClientId,
         );
         if (sourceNodeId === targetNodeId) {
-          throw new ThesisServiceError('validation_error', 'Patch cannot add a self edge', 400);
+          throw new BreakdownServiceError('validation_error', 'Patch cannot add a self edge', 400);
         }
         simulatedEdges.push({
           id: `patch-edge-${simulatedEdges.length + 1}`,
           graph_id: graphId,
           source_node_id: sourceNodeId,
           target_node_id: targetNodeId,
-          edge_type: operation.edgeType as ThesisEdge['edge_type'],
+          edge_type: operation.edgeType as BreakdownEdge['edge_type'],
           weight: operation.weight ?? 1,
           condition: operation.condition ?? null,
           transform: operation.transform ?? null,
@@ -218,7 +237,8 @@ function simulatePatch(
           findNode(simulatedNodes, operation.targetNodeId);
           edge.target_node_id = operation.targetNodeId;
         }
-        if (operation.edgeType !== undefined) edge.edge_type = operation.edgeType as ThesisEdge['edge_type'];
+        if (operation.edgeType !== undefined)
+          edge.edge_type = operation.edgeType as BreakdownEdge['edge_type'];
         if (operation.weight !== undefined) edge.weight = operation.weight;
         if (operation.condition !== undefined) edge.condition = operation.condition;
         if (operation.transform !== undefined) edge.transform = operation.transform;
@@ -232,7 +252,9 @@ function simulatePatch(
       }
       case 'delete_edge': {
         findEdge(simulatedEdges, operation.edgeId);
-        const edgeIndex = simulatedEdges.findIndex((candidate) => candidate.id === operation.edgeId);
+        const edgeIndex = simulatedEdges.findIndex(
+          (candidate) => candidate.id === operation.edgeId,
+        );
         simulatedEdges.splice(edgeIndex, 1);
         changes.push({
           op: operation.op,
@@ -257,7 +279,7 @@ function simulatePatch(
 }
 
 export async function applyGraphPatchForActor(
-  actor: ThesisActor,
+  actor: BreakdownActor,
   graphId: string,
   input: z.input<typeof applyGraphPatchSchema>,
 ): Promise<GraphPatchResult> {
@@ -301,10 +323,12 @@ export async function applyGraphPatchForActor(
         await deleteNodeForActor(actor, operation.nodeId);
         break;
       case 'add_edge': {
-        const sourceNodeId = operation.sourceNodeId ?? createdNodeIds[operation.sourceClientId ?? ''];
-        const targetNodeId = operation.targetNodeId ?? createdNodeIds[operation.targetClientId ?? ''];
+        const sourceNodeId =
+          operation.sourceNodeId ?? createdNodeIds[operation.sourceClientId ?? ''];
+        const targetNodeId =
+          operation.targetNodeId ?? createdNodeIds[operation.targetClientId ?? ''];
         if (!sourceNodeId || !targetNodeId) {
-          throw new ThesisServiceError(
+          throw new BreakdownServiceError(
             'validation_error',
             'Patch add_edge references a node that was not created',
             400,

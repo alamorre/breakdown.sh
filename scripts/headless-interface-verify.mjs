@@ -3,9 +3,9 @@
 
 import { randomUUID } from 'node:crypto';
 
-const BASE_URL = process.env.THESIS_BASE_URL ?? 'http://localhost:3000';
-const API_TOKEN = process.env.THESIS_API_TOKEN;
-const INVALID_TOKEN = process.env.THESIS_INVALID_TOKEN ?? 'bdk_invalid_token';
+const BASE_URL = process.env.BREAKDOWN_BASE_URL ?? 'http://localhost:3000';
+const API_TOKEN = process.env.BREAKDOWN_API_TOKEN;
+const INVALID_TOKEN = process.env.BREAKDOWN_INVALID_TOKEN ?? 'bdk_invalid_token';
 
 const requiredMcpTools = [
   'list_graphs',
@@ -86,7 +86,10 @@ async function headlessRequest(method, path, body, options = {}) {
   }
 
   assert(response.ok, `${method} ${path} returned ${response.status}: ${JSON.stringify(envelope)}`);
-  assert(envelope?.error === null, `${method} ${path} returned an error: ${JSON.stringify(envelope)}`);
+  assert(
+    envelope?.error === null,
+    `${method} ${path} returned an error: ${JSON.stringify(envelope)}`,
+  );
   return envelope.data;
 }
 
@@ -148,7 +151,9 @@ async function verifyMcpToolSchemaWiring() {
 
 async function main() {
   if (!API_TOKEN) {
-    console.error('THESIS_API_TOKEN is required. Create one with pnpm headless:token or Settings > MCP Access.');
+    console.error(
+      'BREAKDOWN_API_TOKEN is required. Create one with pnpm headless:token or Settings > MCP Access.',
+    );
     process.exit(1);
   }
 
@@ -250,7 +255,10 @@ async function main() {
       ...patch,
     });
     assert(applied.applied === true, 'Patch apply should report applied=true');
-    assert(applied.createdNodeIds?.summary, 'Patch apply should return the created summary node id');
+    assert(
+      applied.createdNodeIds?.summary,
+      'Patch apply should return the created summary node id',
+    );
     logStep('patch preview and apply');
 
     const runStatus = await headlessRequest('GET', `/api/headless/graphs/${graphId}/run-status`);
@@ -258,15 +266,22 @@ async function main() {
     assert(statusNodes.length === 3, 'Internal run status should include patched graph nodes');
     logStep('internal run status polling');
 
-    const externalRun = await headlessRequest('POST', `/api/headless/graphs/${graphId}/external-runs`, {
-      clientName: 'headless-interface-verify',
-      providerName: 'local script',
-      metadata: { purpose: 'local verification' },
-    });
+    const externalRun = await headlessRequest(
+      'POST',
+      `/api/headless/graphs/${graphId}/external-runs`,
+      {
+        clientName: 'headless-interface-verify',
+        providerName: 'local script',
+        metadata: { purpose: 'local verification' },
+      },
+    );
     const runId = externalRun.runId;
     assert(runId, 'External run did not include runId');
 
-    const firstStep = await headlessRequest('GET', `/api/headless/external-runs/${runId}/next-step`);
+    const firstStep = await headlessRequest(
+      'GET',
+      `/api/headless/external-runs/${runId}/next-step`,
+    );
     assert(firstStep.step?.stepId, 'Expected a first ready external step');
     const firstContext = await headlessRequest(
       'GET',
@@ -291,7 +306,10 @@ async function main() {
       },
     );
 
-    const secondStep = await headlessRequest('GET', `/api/headless/external-runs/${runId}/next-step`);
+    const secondStep = await headlessRequest(
+      'GET',
+      `/api/headless/external-runs/${runId}/next-step`,
+    );
     assert(secondStep.step?.stepId, 'Expected a second ready external step after submission');
     const secondContext = await headlessRequest(
       'GET',
