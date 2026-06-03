@@ -19,7 +19,8 @@
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run build",
     "ci:secrets": "doppler run -- sh -c 'pnpm secrets:check && pnpm ci'",
     "secrets:check": "node scripts/check-env.mjs",
-    "headless:token": "node scripts/create-integration-token.mjs"
+    "headless:token": "node scripts/create-integration-token.mjs",
+    "headless:smoke": "node scripts/headless-external-run-smoke.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
