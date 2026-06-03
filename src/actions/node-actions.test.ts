@@ -341,12 +341,10 @@ describe('runNode', () => {
       updated_at: '2026-05-31T00:00:00Z',
     };
 
-    mockSingle
-      .mockResolvedValueOnce({ data: aiNode, error: null })
-      .mockResolvedValueOnce({
-        data: { llm_provider: 'openai', llm_model: 'gpt-5.4' },
-        error: null,
-      });
+    mockSingle.mockResolvedValueOnce({ data: aiNode, error: null }).mockResolvedValueOnce({
+      data: { llm_provider: 'openai', llm_model: 'gpt-5.4' },
+      error: null,
+    });
     mockGetUserAiProviderApiKey.mockResolvedValueOnce(null);
 
     const { runNode } = await import('@/actions/node-actions');

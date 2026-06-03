@@ -1,5 +1,5 @@
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 import type { AiModelId, AiProviderId } from '@/lib/ai/models';
 
 export interface Graph {
@@ -14,8 +14,8 @@ export interface Graph {
 }
 
 export interface GraphWithData extends Graph {
-  nodes: ThesisNode[];
-  edges: ThesisEdge[];
+  nodes: BreakdownNode[];
+  edges: BreakdownEdge[];
 }
 
 export type TriggerType = 'manual' | 'upstream_change' | 'scheduled' | 'event';

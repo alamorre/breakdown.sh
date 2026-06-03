@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { useGraphStore, type CanvasNode, type CanvasEdge } from '@/store/graph-store';
 import { updateNode, deleteNode, runNode } from '@/actions/node-actions';
-import type { ThesisNode } from '@/types/node';
+import type { BreakdownNode } from '@/types/node';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
 import { cn } from '@/lib/utils';
 import {
@@ -123,15 +123,15 @@ function OutputContent({
 }
 
 interface NodeFormProps {
-  thesisNode: ThesisNode;
+  breakdownNode: BreakdownNode;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   selectedNodeId: string;
-  updateNodeData: (nodeId: string, updates: Partial<ThesisNode>) => void;
+  updateNodeData: (nodeId: string, updates: Partial<BreakdownNode>) => void;
   setNodeRunState: (
     nodeId: string,
     state: {
-      run_status: ThesisNode['run_status'];
+      run_status: BreakdownNode['run_status'];
       output?: string | null;
       run_error?: string | null;
       last_run_at?: string | null;
@@ -142,7 +142,7 @@ interface NodeFormProps {
 }
 
 function NodeForm({
-  thesisNode,
+  breakdownNode,
   nodes,
   edges,
   selectedNodeId,
@@ -150,33 +150,35 @@ function NodeForm({
   setNodeRunState,
   removeNode,
 }: NodeFormProps) {
-  const isSource = isDataSourceNode(thesisNode.node_type);
-  const sourceType = getDataSourceType(thesisNode.node_type);
-  const driveMetadata = isGoogleDriveSourceConfig(thesisNode.metadata) ? thesisNode.metadata : null;
+  const isSource = isDataSourceNode(breakdownNode.node_type);
+  const sourceType = getDataSourceType(breakdownNode.node_type);
+  const driveMetadata = isGoogleDriveSourceConfig(breakdownNode.metadata)
+    ? breakdownNode.metadata
+    : null;
   const pathname = usePathname();
 
-  const [name, setName] = useState(thesisNode.name);
-  const [prompt, setPrompt] = useState(thesisNode.prompt);
+  const [name, setName] = useState(breakdownNode.name);
+  const [prompt, setPrompt] = useState(breakdownNode.prompt);
   const [sourceUrl, setSourceUrl] = useState(
-    driveMetadata?.webViewLink ?? (thesisNode.metadata as { url?: string })?.url ?? '',
+    driveMetadata?.webViewLink ?? (breakdownNode.metadata as { url?: string })?.url ?? '',
   );
   const [sheetName, setSheetName] = useState(
-    (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '',
+    (breakdownNode.metadata as { sheetName?: string })?.sheetName ?? '',
   );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [outputDialogOpen, setOutputDialogOpen] = useState(false);
-  const [secondaryOpen, setSecondaryOpen] = useState(!thesisNode.output);
+  const [secondaryOpen, setSecondaryOpen] = useState(!breakdownNode.output);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when store changes from outside (e.g. card edits)
-  const storeName = thesisNode.name;
-  const storePrompt = thesisNode.prompt;
+  const storeName = breakdownNode.name;
+  const storePrompt = breakdownNode.prompt;
   const storeUrl =
-    (isGoogleDriveSourceConfig(thesisNode.metadata)
-      ? thesisNode.metadata.webViewLink
-      : (thesisNode.metadata as { url?: string })?.url) ?? '';
-  const storeSheetName = (thesisNode.metadata as { sheetName?: string })?.sheetName ?? '';
+    (isGoogleDriveSourceConfig(breakdownNode.metadata)
+      ? breakdownNode.metadata.webViewLink
+      : (breakdownNode.metadata as { url?: string })?.url) ?? '';
+  const storeSheetName = (breakdownNode.metadata as { sheetName?: string })?.sheetName ?? '';
   useEffect(() => {
     setName(storeName);
   }, [storeName]);
@@ -190,12 +192,12 @@ function NodeForm({
     setSheetName(storeSheetName);
   }, [storeSheetName]);
   useEffect(() => {
-    setSecondaryOpen(!thesisNode.output);
-  }, [selectedNodeId, thesisNode.output]);
+    setSecondaryOpen(!breakdownNode.output);
+  }, [selectedNodeId, breakdownNode.output]);
 
   const debouncedSave = useCallback(
     (
-      updates: Partial<Pick<ThesisNode, 'name' | 'prompt'>> & {
+      updates: Partial<Pick<BreakdownNode, 'name' | 'prompt'>> & {
         metadata?: Record<string, unknown>;
       },
     ) => {
@@ -237,13 +239,13 @@ function NodeForm({
 
   const handleSourceUrlChange = (value: string) => {
     setSourceUrl(value);
-    const newMetadata = { ...thesisNode.metadata, url: value };
+    const newMetadata = { ...breakdownNode.metadata, url: value };
     debouncedSave({ metadata: newMetadata });
   };
 
   const handleSheetNameChange = (value: string) => {
     setSheetName(value);
-    const newMetadata = { ...thesisNode.metadata, sheetName: value || undefined };
+    const newMetadata = { ...breakdownNode.metadata, sheetName: value || undefined };
     debouncedSave({ metadata: newMetadata });
   };
 
@@ -286,29 +288,31 @@ function NodeForm({
     setDeleteConfirmOpen(false);
   };
 
-  const upstreamEdges = edges.filter((e) => e.data.thesisEdge.target_node_id === selectedNodeId);
-  const downstreamEdges = edges.filter((e) => e.data.thesisEdge.source_node_id === selectedNodeId);
+  const upstreamEdges = edges.filter((e) => e.data.breakdownEdge.target_node_id === selectedNodeId);
+  const downstreamEdges = edges.filter(
+    (e) => e.data.breakdownEdge.source_node_id === selectedNodeId,
+  );
 
   const getNodeName = (nodeId: string): string => {
     const node = nodes.find((n) => n.id === nodeId);
-    return node?.data.thesisNode.name ?? 'Unknown';
+    return node?.data.breakdownNode.name ?? 'Unknown';
   };
 
-  const isRunning = thesisNode.run_status === 'running';
-  const isQueued = thesisNode.run_status === 'queued';
-  const isSkipped = thesisNode.run_status === 'skipped';
-  const isCancelled = thesisNode.run_status === 'cancelled';
-  const isBlocked = thesisNode.run_status === 'error' || isSkipped || isCancelled;
+  const isRunning = breakdownNode.run_status === 'running';
+  const isQueued = breakdownNode.run_status === 'queued';
+  const isSkipped = breakdownNode.run_status === 'skipped';
+  const isCancelled = breakdownNode.run_status === 'cancelled';
+  const isBlocked = breakdownNode.run_status === 'error' || isSkipped || isCancelled;
   const needsReconnect =
     Boolean(driveMetadata) &&
     isBlocked &&
-    (thesisNode.run_error ?? '').includes('Reconnect Google Drive');
+    (breakdownNode.run_error ?? '').includes('Reconnect Google Drive');
   const connectHref = `/api/integrations/google-drive/connect?returnTo=${encodeURIComponent(pathname)}`;
 
   const statusVariant =
-    thesisNode.run_status === 'success'
+    breakdownNode.run_status === 'success'
       ? 'default'
-      : thesisNode.run_status === 'error'
+      : breakdownNode.run_status === 'error'
         ? 'destructive'
         : 'secondary';
   const outputLabel = isSource ? 'Fetched Content' : 'Output';
@@ -323,7 +327,7 @@ function NodeForm({
   const runActionLabel = isSource && sourceType === 'text' ? 'Save' : isSource ? 'Refresh' : 'Run';
   const runTimestampLabel =
     isSource && sourceType === 'text' ? 'Last saved' : isSource ? 'Last fetched' : 'Last run';
-  const canCopyOutput = Boolean(thesisNode.output) && !isRunning && !isQueued && !isBlocked;
+  const canCopyOutput = Boolean(breakdownNode.output) && !isRunning && !isQueued && !isBlocked;
   const secondarySectionLabel = isSource ? 'Source' : 'Prompt';
 
   return (
@@ -346,16 +350,16 @@ function NodeForm({
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <Label>{outputLabel}</Label>
-                <Badge variant={statusVariant}>{thesisNode.run_status}</Badge>
+                <Badge variant={statusVariant}>{breakdownNode.run_status}</Badge>
               </div>
-              {thesisNode.last_run_at && (
+              {breakdownNode.last_run_at && (
                 <p className="text-xs text-muted-foreground">
-                  {runTimestampLabel}: {new Date(thesisNode.last_run_at).toLocaleString()}
+                  {runTimestampLabel}: {new Date(breakdownNode.last_run_at).toLocaleString()}
                 </p>
               )}
             </div>
             <div className="flex items-center gap-1">
-              {canCopyOutput && <CopyButton text={thesisNode.output ?? ''} />}
+              {canCopyOutput && <CopyButton text={breakdownNode.output ?? ''} />}
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -371,11 +375,11 @@ function NodeForm({
           <ScrollArea className="mt-3 h-[clamp(320px,62vh,760px)] rounded-lg border bg-muted/30">
             <div className="p-4">
               <OutputContent
-                output={thesisNode.output}
+                output={breakdownNode.output}
                 isRunning={isRunning}
                 isQueued={isQueued}
                 isBlocked={isBlocked}
-                runError={thesisNode.run_error}
+                runError={breakdownNode.run_error}
                 loadingLabel={loadingLabel}
                 emptyLabel={emptyLabel}
               />
@@ -515,7 +519,7 @@ function NodeForm({
                     Upstream (inputs)
                   </p>
                   {upstreamEdges.map((e) => {
-                    const edgeConfig = EDGE_TYPE_CONFIG[e.data.thesisEdge.edge_type as EdgeType];
+                    const edgeConfig = EDGE_TYPE_CONFIG[e.data.breakdownEdge.edge_type as EdgeType];
                     return (
                       <div
                         key={e.id}
@@ -525,7 +529,7 @@ function NodeForm({
                           className="h-0.5 w-3 rounded-full"
                           style={{ backgroundColor: edgeConfig?.color }}
                         />
-                        <span>{getNodeName(e.data.thesisEdge.source_node_id)}</span>
+                        <span>{getNodeName(e.data.breakdownEdge.source_node_id)}</span>
                         <Badge variant="outline" className="h-4 text-[10px]">
                           {edgeConfig?.label}
                         </Badge>
@@ -540,7 +544,7 @@ function NodeForm({
                     Downstream (outputs)
                   </p>
                   {downstreamEdges.map((e) => {
-                    const edgeConfig = EDGE_TYPE_CONFIG[e.data.thesisEdge.edge_type as EdgeType];
+                    const edgeConfig = EDGE_TYPE_CONFIG[e.data.breakdownEdge.edge_type as EdgeType];
                     return (
                       <div
                         key={e.id}
@@ -550,7 +554,7 @@ function NodeForm({
                           className="h-0.5 w-3 rounded-full"
                           style={{ backgroundColor: edgeConfig?.color }}
                         />
-                        <span>{getNodeName(e.data.thesisEdge.target_node_id)}</span>
+                        <span>{getNodeName(e.data.breakdownEdge.target_node_id)}</span>
                         <Badge variant="outline" className="h-4 text-[10px]">
                           {edgeConfig?.label}
                         </Badge>
@@ -566,7 +570,7 @@ function NodeForm({
         <Separator />
 
         <div className="space-y-1 text-xs text-muted-foreground">
-          <p>Created: {new Date(thesisNode.created_at).toLocaleDateString()}</p>
+          <p>Created: {new Date(breakdownNode.created_at).toLocaleDateString()}</p>
         </div>
 
         <Button
@@ -589,11 +593,11 @@ function NodeForm({
           <ScrollArea className="min-h-0 flex-1">
             <div className="p-5 sm:p-6">
               <OutputContent
-                output={thesisNode.output}
+                output={breakdownNode.output}
                 isRunning={isRunning}
                 isQueued={isQueued}
                 isBlocked={isBlocked}
-                runError={thesisNode.run_error}
+                runError={breakdownNode.run_error}
                 loadingLabel={loadingLabel}
                 emptyLabel={emptyLabel}
                 className="prose-headings:text-lg prose-h1:text-2xl"
@@ -608,8 +612,8 @@ function NodeForm({
           <DialogHeader>
             <DialogTitle>Delete Node</DialogTitle>
             <DialogDescription>
-              This will permanently delete &ldquo;{thesisNode.name}&rdquo; and all its connections.
-              This action cannot be undone.
+              This will permanently delete &ldquo;{breakdownNode.name}&rdquo; and all its
+              connections. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -629,7 +633,7 @@ function NodeForm({
 const MIN_WIDTH = 480;
 const MAX_WIDTH = 1200;
 const DEFAULT_WIDTH = 760;
-const STORAGE_KEY = 'thesis-detail-panel-width-v2';
+const STORAGE_KEY = 'breakdown-detail-panel-width-v2';
 
 function getStoredWidth(): number {
   if (typeof window === 'undefined') return DEFAULT_WIDTH;
@@ -685,11 +689,11 @@ export function NodeDetailPanel() {
   }, []);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
-  const thesisNode = selectedNode?.data.thesisNode ?? null;
+  const breakdownNode = selectedNode?.data.breakdownNode ?? null;
 
   return (
     <Sheet
-      open={selectedNodeId !== null && thesisNode !== null}
+      open={selectedNodeId !== null && breakdownNode !== null}
       onOpenChange={(open) => {
         if (!open) selectNode(null);
       }}
@@ -704,10 +708,10 @@ export function NodeDetailPanel() {
           onMouseDown={handleMouseDown}
           className="absolute inset-y-0 left-0 z-50 hidden w-1.5 cursor-col-resize transition-colors hover:bg-primary/10 active:bg-primary/20 sm:block"
         />
-        {thesisNode && selectedNodeId && (
+        {breakdownNode && selectedNodeId && (
           <NodeForm
             key={selectedNodeId}
-            thesisNode={thesisNode}
+            breakdownNode={breakdownNode}
             nodes={nodes}
             edges={edges}
             selectedNodeId={selectedNodeId}

@@ -3,7 +3,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownEdge } from '@/types/edge';
 
 const createEdgeSchema = z.object({
   graphId: z.string().uuid(),
@@ -32,7 +32,7 @@ async function getUserId(): Promise<string> {
 
 export async function createEdge(
   input: z.infer<typeof createEdgeSchema>,
-): Promise<{ data: ThesisEdge | null; error: string | null }> {
+): Promise<{ data: BreakdownEdge | null; error: string | null }> {
   await getUserId();
   const parsed = createEdgeSchema.safeParse(input);
   if (!parsed.success) {
@@ -55,12 +55,12 @@ export async function createEdge(
     return { data: null, error: error.message };
   }
 
-  return { data: data as ThesisEdge, error: null };
+  return { data: data as BreakdownEdge, error: null };
 }
 
 export async function updateEdge(
   input: z.infer<typeof updateEdgeSchema>,
-): Promise<{ data: ThesisEdge | null; error: string | null }> {
+): Promise<{ data: BreakdownEdge | null; error: string | null }> {
   await getUserId();
   const parsed = updateEdgeSchema.safeParse(input);
   if (!parsed.success) {
@@ -86,7 +86,7 @@ export async function updateEdge(
     return { data: null, error: error.message };
   }
 
-  return { data: data as ThesisEdge, error: null };
+  return { data: data as BreakdownEdge, error: null };
 }
 
 export async function deleteEdge(

@@ -44,12 +44,12 @@ failure states.
 
 1. User opens a graph.
 2. User clicks the add-source control and chooses `Google Drive`.
-3. If no Drive account is connected, Thesis opens a Google Drive connection
+3. If no Drive account is connected, Breakdown opens a Google Drive connection
    prompt inline.
-4. After connection, Thesis opens Google Picker filtered to Docs, Sheets, and
+4. After connection, Breakdown opens Google Picker filtered to Docs, Sheets, and
    Presentations.
 5. User selects one or more files.
-6. Thesis creates one source node per selected file near the current canvas
+6. Breakdown creates one source node per selected file near the current canvas
    viewport.
 7. User clicks `Refresh` on a source, or `Run All` refreshes stale sources before
    downstream AI nodes run.
@@ -289,7 +289,7 @@ for public-link compatibility but should be visually secondary.
 | Pick Docs, Sheets, and Presentations from Drive  |
 | without making them public.                      |
 |                                                  |
-| Scope: files you select for Thesis               |
+| Scope: files you select for Breakdown               |
 |                                                  |
 | [Cancel]                         [Connect Drive] |
 +--------------------------------------------------+
@@ -317,7 +317,7 @@ durable account-management view.
 ```
 
 Use native Google Picker for the actual file list. This sketch describes the
-state Thesis should create around it: account clarity, type filtering, and a
+state Breakdown should create around it: account clarity, type filtering, and a
 multi-select add action.
 
 ### Drive-Backed Source Card
@@ -529,6 +529,6 @@ Manual verification:
 - Drive `files.export`: https://developers.google.com/workspace/drive/api/reference/rest/v3/files/export
 - Workspace export MIME types: https://developers.google.com/workspace/drive/api/guides/ref-export-formats
 - Current source type model: `src/types/data-source.ts`
-- Current source card UI: `src/components/canvas/ThesisNode.tsx`
+- Current source card UI: `src/components/canvas/BreakdownNode.tsx`
 - Current detail panel source controls: `src/components/canvas/NodeDetailPanel.tsx`
 - Current source freshness helper: `src/lib/graph/source-freshness.ts`

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /Users/adamlamorre/Work/Adam/thesis && make format && make check"
+            "command": "cd /Users/adamlamorre/Work/Adam/breakdown.sh && make format && make check"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /Users/adamlamorre/Work/Adam/thesis && npx prettier --write $CLAUDE_FILE_PATH"
+            "command": "cd /Users/adamlamorre/Work/Adam/breakdown.sh && npx prettier --write $CLAUDE_FILE_PATH"
           }
         ]
       }

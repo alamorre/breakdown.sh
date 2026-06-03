@@ -18,23 +18,23 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGraphStore, type CanvasNode, type CanvasEdge } from '@/store/graph-store';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 import { EdgeType } from '@/types/edge';
 import { createNode, deleteNode } from '@/actions/node-actions';
 import { createEdge, deleteEdge } from '@/actions/edge-actions';
 import { wouldCreateCycle } from '@/lib/graph/detect-cycle';
-import { ThesisNodeMemo } from '@/components/canvas/ThesisNode';
-import { ThesisEdgeMemo } from '@/components/canvas/ThesisEdge';
+import { BreakdownNodeMemo } from '@/components/canvas/BreakdownNode';
+import { BreakdownEdgeMemo } from '@/components/canvas/BreakdownEdge';
 import { EdgeTypePicker } from '@/components/canvas/EdgeTypePicker';
 
-const nodeTypes = { thesis: ThesisNodeMemo };
-const edgeTypes = { thesis: ThesisEdgeMemo };
+const nodeTypes = { breakdown: BreakdownNodeMemo };
+const edgeTypes = { breakdown: BreakdownEdgeMemo };
 
 interface GraphCanvasProps {
   graph: Graph;
-  initialNodes: ThesisNode[];
-  initialEdges: ThesisEdge[];
+  initialNodes: BreakdownNode[];
+  initialEdges: BreakdownEdge[];
 }
 
 export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasProps) {
@@ -136,10 +136,10 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
     async (event: React.DragEvent) => {
       event.preventDefault();
 
-      const nodeType = event.dataTransfer.getData('application/thesis-node-type');
+      const nodeType = event.dataTransfer.getData('application/breakdown-node-type');
       if (!nodeType) return;
 
-      const nodeName = event.dataTransfer.getData('application/thesis-node-name') || 'New Node';
+      const nodeName = event.dataTransfer.getData('application/breakdown-node-name') || 'New Node';
 
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!bounds) return;
@@ -210,7 +210,7 @@ export function GraphCanvas({ graph, initialNodes, initialEdges }: GraphCanvasPr
     [selectNode, selectEdge, removeNode, removeEdge],
   );
 
-  const defaultEdgeOptions = useMemo(() => ({ type: 'thesis' as const }), []);
+  const defaultEdgeOptions = useMemo(() => ({ type: 'breakdown' as const }), []);
 
   return (
     <div className="h-full w-full" ref={reactFlowWrapper} onKeyDown={handleKeyDown}>
