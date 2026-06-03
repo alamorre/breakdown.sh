@@ -43,6 +43,46 @@ const graphRows = [
   },
 ];
 
+const requiredHeadlessTools = [
+  'list_graphs',
+  'get_graph',
+  'create_graph',
+  'update_graph',
+  'delete_graph',
+  'create_node',
+  'update_node',
+  'delete_node',
+  'connect_nodes',
+  'update_edge',
+  'delete_edge',
+  'export_graph',
+  'import_graph',
+  'import_graph_and_create_external_run',
+  'get_workflow_manifest',
+  'apply_graph_patch',
+  'run_node',
+  'run_graph',
+  'get_run_status',
+  'cancel_run',
+  'create_external_run',
+  'get_next_step',
+  'get_step_context',
+  'submit_step_result',
+  'mark_step_blocked',
+  'finalize_external_run',
+  'summarize_run_delta',
+];
+
+interface McpToolListEntry {
+  name: string;
+  inputSchema?: {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+  annotations?: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
+}
+
 function createMockSupabase() {
   const graphsOrder = vi.fn().mockResolvedValue({ data: graphRows, error: null });
   const graphsEq = vi.fn(() => ({ order: graphsOrder }));
@@ -158,6 +198,40 @@ describe('/api/mcp Streamable HTTP route', () => {
       tools.body.result.tools.find((tool: { name: string }) => tool.name === 'delete_graph')
         .annotations.destructiveHint,
     ).toBe(true);
+  });
+
+  it('advertises complete tool schemas, scope metadata, and safety annotations', async () => {
+    const { body } = await postRpc({
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/list',
+      params: {},
+    });
+    const tools = body.result.tools as McpToolListEntry[];
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(requiredHeadlessTools));
+    for (const toolName of requiredHeadlessTools) {
+      expect(byName.get(toolName)?.inputSchema).toBeTruthy();
+    }
+
+    expect(byName.get('list_graphs')?.annotations?.readOnlyHint).toBe(true);
+    expect(byName.get('delete_graph')?.annotations?.destructiveHint).toBe(true);
+    expect(byName.get('apply_graph_patch')?.annotations?.destructiveHint).toBe(true);
+    expect(byName.get('run_graph')?.annotations?.openWorldHint).toBe(true);
+
+    expect(byName.get('apply_graph_patch')?._meta?.['breakdown/requiredScope']).toBe(
+      'graphs:write',
+    );
+    expect(
+      byName.get('import_graph_and_create_external_run')?._meta?.['breakdown/requiredScope'],
+    ).toEqual(['graphs:write', 'runs:external_execute']);
+
+    const submitProperties = byName.get('submit_step_result')?.inputSchema?.properties ?? {};
+    expect(submitProperties).toHaveProperty('runId');
+    expect(submitProperties).toHaveProperty('stepId');
+    expect(submitProperties).toHaveProperty('contextVersion');
+    expect(submitProperties).toHaveProperty('output');
   });
 
   it('calls a read-only tool with bearer-token actor context', async () => {
