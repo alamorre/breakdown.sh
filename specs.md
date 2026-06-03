@@ -1,4 +1,4 @@
-# breakdown.sh — Product Specification
+# Breakdown — Product Specification
 
 > Reasoning that propagates.
 
@@ -23,9 +23,9 @@ No existing tool combines structured reasoning primitives, visual flow-based com
 
 ### Core Concept
 
-breakdown.sh applies the **ElevenLabs Flows model** — a node-based visual canvas where outputs flow between connected nodes — to **reasoning and decision-making** instead of creative media pipelines.
+Breakdown applies the **ElevenLabs Flows model** — a node-based visual canvas where outputs flow between connected nodes — to **reasoning and decision-making** instead of creative media pipelines.
 
-| ElevenLabs Flows                            | breakdown.sh                                                |
+| ElevenLabs Flows                            | Breakdown                                                   |
 | ------------------------------------------- | ----------------------------------------------------------- |
 | Node = generative model (image, video, TTS) | Node = reasoning unit (claim, assumption, data source)      |
 | Edge = media asset (image → video input)    | Edge = typed conclusion (supports, contradicts, depends on) |
@@ -58,18 +58,18 @@ breakdown.sh applies the **ElevenLabs Flows model** — a node-based visual canv
 
 | Node Type           | Description                                     | Example                                                         |
 | ------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| **Sub-claim**       | Scoped conclusion with evidence and confidence  | "AI will compress mid-tier SE roles within 5-8 years"           |
+| **Claim**           | Scoped conclusion with evidence and confidence  | "AI will compress mid-tier SE roles within 5-8 years"           |
 | **Comparison**      | Evaluate alternatives against criteria          | "Galena Bay lot vs. boat-access parcels"                        |
 | **Risk Assessment** | Quantified exposure with probability and impact | "D1 zoning reclassification risk: low probability, high impact" |
 | **Timeline**        | Sequenced events with dependencies              | "HELOC → inheritance deployment → land acquisition"             |
 
 ### 3.3 Composition Nodes (Outputs)
 
-| Node Type           | Description                                    | Example                                                                             |
-| ------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Composite claim** | Aggregated conclusion from multiple sub-claims | "BC rural land is a viable hard-asset hedge given 3-5 year peak income window"      |
-| **Decision Point**  | Actionable choice with trigger conditions      | "Make offer on Lot 55 when: price ≤ $X AND HELOC approved AND strata fee confirmed" |
-| **Watchlist**       | Monitoring set with alert thresholds           | "Track CRWV debt/equity ratio, ASML order backlog, Arrow Lakes listing inventory"   |
+| Node Type                | Description                                | Example                                                                             |
+| ------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Composite Conclusion** | Aggregated conclusion from multiple claims | "BC rural land is a viable hard-asset hedge given 3-5 year peak income window"      |
+| **Decision Point**       | Actionable choice with trigger conditions  | "Make offer on Lot 55 when: price ≤ $X AND HELOC approved AND strata fee confirmed" |
+| **Watchlist**            | Monitoring set with alert thresholds       | "Track CRWV debt/equity ratio, ASML order backlog, Arrow Lakes listing inventory"   |
 
 ---
 
@@ -152,7 +152,7 @@ Skill docs define how agents interact with each node type. They are the "source 
 ```yaml
 name: real-estate-market-analysis
 version: 1.0.0
-node_type: sub_claim
+node_type: claim
 description: Evaluate real estate market conditions for a specific region
 
 inputs:
@@ -160,7 +160,7 @@ inputs:
     type: data_source
     description: Current MLS listings and price history
   - name: macro_conditions
-    type: sub_claim
+    type: claim
     description: Broader economic conditions affecting real estate
 
 output:
@@ -248,7 +248,7 @@ CREATE TABLE graphs (
 CREATE TABLE nodes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   graph_id UUID REFERENCES graphs(id) ON DELETE CASCADE,
-  node_type TEXT NOT NULL,           -- 'data_source', 'sub_claim', 'decision_point', etc.
+  node_type TEXT NOT NULL,           -- 'data_source', 'claim', 'decision_point', etc.
   name TEXT NOT NULL,
   position_x FLOAT NOT NULL,        -- Canvas position
   position_y FLOAT NOT NULL,
@@ -425,7 +425,7 @@ export const checkStaleness = task({
 **Goal:** User can build a reasoning graph and evaluate individual nodes with AI.
 
 - Canvas with React Flow: create, connect, and arrange nodes
-- Node types: assumption, sub-claim, comparison, decision point
+- Node types: assumption, claim, comparison, decision point
 - Manual node evaluation: click "Evaluate" → Claude analyzes based on upstream inputs
 - Basic edge types: supports, contradicts, depends_on
 - Save/load graphs to Supabase
@@ -473,7 +473,7 @@ export const checkStaleness = task({
 
 ## 10. Competitive Positioning
 
-| Tool                 | What it does well                               | What breakdown.sh adds                                                  |
+| Tool                 | What it does well                               | What Breakdown adds                                                     |
 | -------------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
 | **Heptabase**        | Visual canvas, card connections, PDF annotation | Typed reasoning primitives, computational propagation, agent evaluation |
 | **Obsidian**         | Local-first, bidirectional links, graph view    | Structured node types, confidence scoring, staleness detection          |
@@ -483,7 +483,7 @@ export const checkStaleness = task({
 | **Claude Projects**  | Deep reasoning, long context                    | Persistent reasoning graph, agent-driven updates, temporal awareness    |
 | **Argument Mapper**  | Structured argument visualization               | Dynamic updates, AI evaluation, multi-claim composition                 |
 
-### The Gap breakdown.sh Fills
+### The Gap Breakdown Fills
 
 Nobody combines:
 

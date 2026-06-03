@@ -1,219 +1,94 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { resolveClerkActor } from '@/lib/breakdown-service/actor';
+import { getErrorResponse } from '@/lib/breakdown-service/errors';
 import {
-  AI_MODEL_IDS,
-  DEFAULT_AI_MODEL_ID,
-  DEFAULT_AI_PROVIDER_ID,
-  getProviderForModel,
-} from '@/lib/ai/models';
-import {
-  getActiveAiProviderCredential,
-  getAiProviderCredentialsSetupError,
-  getProviderSetupPrompt,
-  hasAiProviderCredentialEncryption,
-} from '@/lib/ai/credentials';
+  createGraphForActor,
+  deleteGraphForActor,
+  getGraphForActor,
+  listGraphsForActor,
+  updateGraphForActor,
+} from '@/lib/breakdown-service/graphs';
+import { updateNodeForActor } from '@/lib/breakdown-service/nodes';
+import { createGraphSchema, updateGraphSchema, uuidSchema } from '@/lib/breakdown-service/schemas';
 import type { Graph } from '@/types/graph';
 import type { BreakdownNode } from '@/types/node';
 import type { BreakdownEdge } from '@/types/edge';
 
-const createGraphSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().max(1000).optional(),
-});
-
-const updateGraphSchema = z.object({
-  graphId: z.string().uuid(),
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).optional(),
-  llmModel: z.enum(AI_MODEL_IDS).optional(),
-});
-
-const deleteGraphSchema = z.object({
-  graphId: z.string().uuid(),
-});
-
-const getGraphSchema = z.object({
-  graphId: z.string().uuid(),
-});
-
-async function getUserId(): Promise<string> {
-  const { userId } = await auth();
-  if (!userId) {
-    throw new Error('Unauthorized');
+function actionError(err: unknown) {
+  const error = getErrorResponse(err);
+  if (error.code === 'unauthorized') {
+    throw new Error(error.message);
   }
-  return userId;
+  return error.message;
 }
 
 export async function createGraph(
-  input: z.infer<typeof createGraphSchema>,
+  input: z.input<typeof createGraphSchema>,
 ): Promise<{ data: Graph | null; error: string | null }> {
-  const userId = await getUserId();
-  const parsed = createGraphSchema.safeParse(input);
-  if (!parsed.success) {
-    return { data: null, error: parsed.error.message };
+  try {
+    const actor = await resolveClerkActor();
+    const data = await createGraphForActor(actor, input);
+    revalidatePath('/dashboard');
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: actionError(err) };
   }
-
-  const supabase = createServerClient();
-  const { data, error } = await supabase
-    .from('graphs')
-    .insert({
-      user_id: userId,
-      name: parsed.data.name,
-      description: parsed.data.description ?? null,
-      llm_provider: DEFAULT_AI_PROVIDER_ID,
-      llm_model: DEFAULT_AI_MODEL_ID,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    return { data: null, error: error.message };
-  }
-
-  revalidatePath('/dashboard');
-  return { data: data as Graph, error: null };
 }
 
 export async function getUserGraphs(): Promise<{
   data: Graph[];
   error: string | null;
 }> {
-  const userId = await getUserId();
-  const supabase = createServerClient();
-
-  const { data, error } = await supabase
-    .from('graphs')
-    .select('*')
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false });
-
-  if (error) {
-    return { data: [], error: error.message };
+  try {
+    const actor = await resolveClerkActor();
+    return { data: await listGraphsForActor(actor), error: null };
+  } catch (err) {
+    return { data: [], error: actionError(err) };
   }
-
-  return { data: (data ?? []) as Graph[], error: null };
 }
 
 export async function updateGraph(
-  input: z.infer<typeof updateGraphSchema>,
+  input: z.input<typeof updateGraphSchema>,
 ): Promise<{ data: Graph | null; error: string | null }> {
-  const userId = await getUserId();
-  const parsed = updateGraphSchema.safeParse(input);
-  if (!parsed.success) {
-    return { data: null, error: parsed.error.message };
+  try {
+    const actor = await resolveClerkActor();
+    const data = await updateGraphForActor(actor, input);
+    revalidatePath('/dashboard');
+    revalidatePath(`/graph/${input.graphId}`);
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: actionError(err) };
   }
-
-  const supabase = createServerClient();
-  const updates: Record<string, unknown> = {};
-  if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-  if (parsed.data.description !== undefined) updates.description = parsed.data.description;
-  if (parsed.data.llmModel !== undefined) {
-    const providerId = getProviderForModel(parsed.data.llmModel);
-    if (!hasAiProviderCredentialEncryption()) {
-      return { data: null, error: 'Stored provider keys are not configured for this deployment.' };
-    }
-
-    try {
-      const credential = await getActiveAiProviderCredential(supabase, { userId, providerId });
-      if (!credential) {
-        return { data: null, error: getProviderSetupPrompt(providerId) };
-      }
-    } catch (err) {
-      return { data: null, error: getAiProviderCredentialsSetupError(err) };
-    }
-
-    updates.llm_provider = providerId;
-    updates.llm_model = parsed.data.llmModel;
-  }
-
-  const { data, error } = await supabase
-    .from('graphs')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', parsed.data.graphId)
-    .eq('user_id', userId)
-    .select()
-    .single();
-
-  if (error) {
-    return { data: null, error: error.message };
-  }
-
-  revalidatePath('/dashboard');
-  revalidatePath(`/graph/${parsed.data.graphId}`);
-  return { data: data as Graph, error: null };
 }
 
-export async function deleteGraph(
-  input: z.infer<typeof deleteGraphSchema>,
-): Promise<{ error: string | null }> {
-  const userId = await getUserId();
-  const parsed = deleteGraphSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.message };
+export async function deleteGraph(input: { graphId: string }): Promise<{ error: string | null }> {
+  try {
+    const graphId = uuidSchema.parse(input.graphId);
+    const actor = await resolveClerkActor();
+    await deleteGraphForActor(actor, graphId);
+    revalidatePath('/dashboard');
+    return { error: null };
+  } catch (err) {
+    return { error: actionError(err) };
   }
-
-  const supabase = createServerClient();
-  const { error } = await supabase
-    .from('graphs')
-    .delete()
-    .eq('id', parsed.data.graphId)
-    .eq('user_id', userId);
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  revalidatePath('/dashboard');
-  return { error: null };
 }
 
-export async function getGraph(input: z.infer<typeof getGraphSchema>): Promise<{
+export async function getGraph(input: { graphId: string }): Promise<{
   data: { graph: Graph; nodes: BreakdownNode[]; edges: BreakdownEdge[] } | null;
   error: string | null;
 }> {
-  const userId = await getUserId();
-  const parsed = getGraphSchema.safeParse(input);
-  if (!parsed.success) {
-    return { data: null, error: parsed.error.message };
+  try {
+    const graphId = uuidSchema.parse(input.graphId);
+    const actor = await resolveClerkActor();
+    const graphWithData = await getGraphForActor(actor, graphId);
+    const { nodes, edges, ...graph } = graphWithData;
+    return { data: { graph, nodes, edges }, error: null };
+  } catch (err) {
+    return { data: null, error: actionError(err) };
   }
-
-  const supabase = createServerClient();
-
-  const { data: graph, error: graphError } = await supabase
-    .from('graphs')
-    .select('*')
-    .eq('id', parsed.data.graphId)
-    .eq('user_id', userId)
-    .single();
-
-  if (graphError) {
-    return { data: null, error: graphError.message };
-  }
-
-  const [nodesResult, edgesResult] = await Promise.all([
-    supabase.from('nodes').select('*').eq('graph_id', parsed.data.graphId),
-    supabase.from('edges').select('*').eq('graph_id', parsed.data.graphId),
-  ]);
-
-  if (nodesResult.error) {
-    return { data: null, error: nodesResult.error.message };
-  }
-  if (edgesResult.error) {
-    return { data: null, error: edgesResult.error.message };
-  }
-
-  return {
-    data: {
-      graph: graph as Graph,
-      nodes: (nodesResult.data ?? []) as BreakdownNode[],
-      edges: (edgesResult.data ?? []) as BreakdownEdge[],
-    },
-    error: null,
-  };
 }
 
 export async function updateGraphName(
@@ -226,7 +101,7 @@ export async function updateGraphName(
 
 export async function updateGraphModel(
   graphId: string,
-  llmModel: z.infer<typeof updateGraphSchema>['llmModel'],
+  llmModel: z.input<typeof updateGraphSchema>['llmModel'],
 ): Promise<{ data: Graph | null; error: string | null }> {
   if (!llmModel) {
     return { data: null, error: 'Model is required' };
@@ -238,23 +113,13 @@ export async function updateGraphModel(
 export async function batchUpdateNodePositions(
   updates: { nodeId: string; x: number; y: number }[],
 ): Promise<{ error: string | null }> {
-  await getUserId();
-  const supabase = createServerClient();
-
-  for (const { nodeId, x, y } of updates) {
-    const { error } = await supabase
-      .from('nodes')
-      .update({
-        position_x: x,
-        position_y: y,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', nodeId);
-
-    if (error) {
-      return { error: error.message };
+  try {
+    const actor = await resolveClerkActor();
+    for (const { nodeId, x, y } of updates) {
+      await updateNodeForActor(actor, { nodeId, positionX: x, positionY: y });
     }
+    return { error: null };
+  } catch (err) {
+    return { error: actionError(err) };
   }
-
-  return { error: null };
 }

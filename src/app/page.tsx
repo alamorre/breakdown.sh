@@ -6,9 +6,7 @@ export default function Home() {
       <section className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center px-6 py-16">
         <div className="space-y-8">
           <div className="space-y-4">
-            <p className="text-sm font-medium text-muted-foreground">
-              Public homepage for breakdown.sh
-            </p>
+            <p className="text-sm font-medium text-muted-foreground">A bicycle for the LLM</p>
             <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">breakdown.sh</h1>
             <p className="max-w-2xl text-base leading-7 text-muted-foreground">
               breakdown.sh is an AI reasoning canvas that helps users organize source material,

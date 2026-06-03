@@ -1,4 +1,4 @@
-# breakdown.sh — v1 Implementation Plan
+# Breakdown — v1 Implementation Plan
 
 v1 scope = **Phase 1 (MVP)**: a user can build an AI reasoning pipeline on a visual canvas. Nodes are computational units with an optional input, a prompt/task, and a generated output. Connecting nodes wires outputs to inputs. Clicking "Run" on a node sends its prompt + upstream outputs to Claude and generates a result. Running the full graph executes nodes in topological order.
 

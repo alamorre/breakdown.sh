@@ -43,7 +43,7 @@ function assertTextSize(content: string): string {
     return content;
   }
 
-  return `${content.slice(0, MAX_EXPORTED_CHARACTERS)}\n\n[Truncated by breakdown.sh: exported Google Drive content exceeded ${MAX_EXPORTED_CHARACTERS.toLocaleString()} characters.]`;
+  return `${content.slice(0, MAX_EXPORTED_CHARACTERS)}\n\n[Truncated by Breakdown: exported Google Drive content exceeded ${MAX_EXPORTED_CHARACTERS.toLocaleString()} characters.]`;
 }
 
 function getGoogleDriveContentHash(content: string): string {

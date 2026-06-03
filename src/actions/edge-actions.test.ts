@@ -1,46 +1,35 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockAuth = vi.fn();
+const mockResolveClerkActor = vi.fn();
+const mockCreateEdgeForActor = vi.fn();
+const mockUpdateEdgeForActor = vi.fn();
+const mockDeleteEdgeForActor = vi.fn();
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
+vi.mock('@/lib/breakdown-service/actor', () => ({
+  resolveClerkActor: () => mockResolveClerkActor(),
 }));
 
-const mockSelect = vi.fn();
-const mockSingle = vi.fn();
-const mockInsert = vi.fn();
-const mockUpdate = vi.fn();
-const mockDelete = vi.fn();
-const mockEq = vi.fn();
-
-function createChain() {
-  return {
-    select: mockSelect.mockReturnThis(),
-    single: mockSingle,
-    insert: mockInsert.mockReturnThis(),
-    update: mockUpdate.mockReturnThis(),
-    delete: mockDelete.mockReturnThis(),
-    eq: mockEq.mockReturnThis(),
-  };
-}
-
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: () => ({
-    from: () => createChain(),
-  }),
+vi.mock('@/lib/breakdown-service/edges', () => ({
+  createEdgeForActor: (...args: unknown[]) => mockCreateEdgeForActor(...args),
+  updateEdgeForActor: (...args: unknown[]) => mockUpdateEdgeForActor(...args),
+  deleteEdgeForActor: (...args: unknown[]) => mockDeleteEdgeForActor(...args),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAuth.mockReturnValue({ userId: 'user_123' });
+  mockResolveClerkActor.mockResolvedValue({
+    userId: 'user_123',
+    source: 'clerk-session',
+    scopes: ['graphs:read', 'graphs:write'],
+  });
 });
 
 const UUID1 = '550e8400-e29b-41d4-a716-446655440001';
 const UUID2 = '550e8400-e29b-41d4-a716-446655440002';
 const UUID3 = '550e8400-e29b-41d4-a716-446655440003';
 
-describe('createEdge', () => {
-  it('should create an edge and return data', async () => {
+describe('edge actions', () => {
+  it('creates an edge through the service layer', async () => {
     const edge = {
       id: UUID1,
       graph_id: UUID2,
@@ -48,7 +37,7 @@ describe('createEdge', () => {
       target_node_id: UUID3,
       edge_type: 'supports',
     };
-    mockSingle.mockResolvedValue({ data: edge, error: null });
+    mockCreateEdgeForActor.mockResolvedValue(edge);
 
     const { createEdge } = await import('@/actions/edge-actions');
     const result = await createEdge({
@@ -58,25 +47,17 @@ describe('createEdge', () => {
       edgeType: 'supports',
     });
 
-    expect(result.data).toEqual(edge);
-    expect(result.error).toBeNull();
-  });
-
-  it('should return error for invalid input', async () => {
-    const { createEdge } = await import('@/actions/edge-actions');
-    const result = await createEdge({
-      graphId: 'not-a-uuid',
+    expect(result).toEqual({ data: edge, error: null });
+    expect(mockCreateEdgeForActor).toHaveBeenCalledWith(expect.any(Object), {
+      graphId: UUID2,
       sourceNodeId: UUID2,
       targetNodeId: UUID3,
       edgeType: 'supports',
     });
-
-    expect(result.data).toBeNull();
-    expect(result.error).toBeTruthy();
   });
 
-  it('should throw when not authenticated', async () => {
-    mockAuth.mockReturnValue({ userId: null });
+  it('throws when not authenticated to preserve existing server action behavior', async () => {
+    mockResolveClerkActor.mockRejectedValue(new Error('Unauthorized'));
 
     const { createEdge } = await import('@/actions/edge-actions');
     await expect(
@@ -88,49 +69,24 @@ describe('createEdge', () => {
       }),
     ).rejects.toThrow('Unauthorized');
   });
-});
 
-describe('updateEdge', () => {
-  it('should update edge type', async () => {
+  it('updates an edge through the service layer', async () => {
     const updated = { id: UUID1, edge_type: 'contradicts' };
-    mockSingle.mockResolvedValue({ data: updated, error: null });
+    mockUpdateEdgeForActor.mockResolvedValue(updated);
 
     const { updateEdge } = await import('@/actions/edge-actions');
-    const result = await updateEdge({
-      edgeId: UUID1,
-      edgeType: 'contradicts',
-    });
+    const result = await updateEdge({ edgeId: UUID1, edgeType: 'contradicts' });
 
-    expect(result.data).toEqual(updated);
-    expect(result.error).toBeNull();
+    expect(result).toEqual({ data: updated, error: null });
   });
 
-  it('should return error for invalid edgeId', async () => {
-    const { updateEdge } = await import('@/actions/edge-actions');
-    const result = await updateEdge({
-      edgeId: 'not-a-uuid',
-      edgeType: 'supports',
-    });
-
-    expect(result.data).toBeNull();
-    expect(result.error).toBeTruthy();
-  });
-});
-
-describe('deleteEdge', () => {
-  it('should delete an edge', async () => {
-    mockEq.mockResolvedValue({ error: null });
+  it('deletes an edge through the service layer', async () => {
+    mockDeleteEdgeForActor.mockResolvedValue(undefined);
 
     const { deleteEdge } = await import('@/actions/edge-actions');
     const result = await deleteEdge({ edgeId: UUID1 });
 
     expect(result.error).toBeNull();
-  });
-
-  it('should return error for invalid edgeId', async () => {
-    const { deleteEdge } = await import('@/actions/edge-actions');
-    const result = await deleteEdge({ edgeId: 'not-a-uuid' });
-
-    expect(result.error).toBeTruthy();
+    expect(mockDeleteEdgeForActor).toHaveBeenCalledWith(expect.any(Object), UUID1);
   });
 });

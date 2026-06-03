@@ -1,8 +1,12 @@
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import { runNode } from '@/actions/node-actions';
 import { resolveAiModelSelection } from '@/lib/ai/models';
+import {
+  resolveClerkActor,
+  requireScope,
+  type BreakdownActor,
+} from '@/lib/breakdown-service/actor';
+import { runNodeForActor } from '@/lib/breakdown-service/nodes';
 import type { RunStatus, BreakdownNode } from '@/types/node';
 import type { BreakdownEdge } from '@/types/edge';
 import type {
@@ -39,12 +43,10 @@ async function publishProgress(
   }
 }
 
-async function getUserId(): Promise<string> {
-  const { userId } = await auth();
-  if (!userId) {
-    throw new Error('Unauthorized');
-  }
-  return userId;
+async function getActor(actor: BreakdownActor | undefined, scope: 'graphs:read' | 'runs:execute') {
+  const resolvedActor = actor ?? (await resolveClerkActor());
+  requireScope(resolvedActor, scope);
+  return resolvedActor;
 }
 
 function formatSkippedError(result: { upstreamNodeIds: string[] }, nodeNames: Map<string, string>) {
@@ -160,16 +162,19 @@ async function markNodesQueued(
   }
 }
 
-export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatusResponse> {
+export async function getGraphRunStatus(
+  graphId: string,
+  actor?: BreakdownActor,
+): Promise<RunGraphStatusResponse> {
   try {
-    const userId = await getUserId();
+    const resolvedActor = await getActor(actor, 'graphs:read');
     const supabase = createServerClient();
 
     const { data: graph, error: graphError } = await supabase
       .from('graphs')
       .select('id')
       .eq('id', graphId)
-      .eq('user_id', userId)
+      .eq('user_id', resolvedActor.userId)
       .single();
 
     if (graphError || !graph) {
@@ -199,6 +204,7 @@ export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatus
 export async function runGraphWithScheduler(input: {
   graphId: string;
   runId: string;
+  actor?: BreakdownActor;
   onProgress?: RunGraphProgressHandler;
 }): Promise<RunGraphResponse> {
   const parsed = runGraphInputSchema.safeParse(input);
@@ -206,7 +212,7 @@ export async function runGraphWithScheduler(input: {
     return { data: null, error: parsed.error.message };
   }
   try {
-    const userId = await getUserId();
+    const actor = await getActor(input.actor, 'runs:execute');
     const startedAt = Date.now();
     const supabase = createServerClient();
 
@@ -214,7 +220,7 @@ export async function runGraphWithScheduler(input: {
       .from('graphs')
       .select('*')
       .eq('id', parsed.data.graphId)
-      .eq('user_id', userId)
+      .eq('user_id', actor.userId)
       .single();
 
     if (graphError || !graph) {
@@ -316,11 +322,7 @@ export async function runGraphWithScheduler(input: {
         }
       },
       runNode: async (node) => {
-        const result = await runNode({ nodeId: node.id, llmModel: executionModel });
-        if (result.error || !result.data) {
-          throw new Error(result.error ?? 'Run failed');
-        }
-        return result.data;
+        return runNodeForActor(actor, { nodeId: node.id, llmModel: executionModel });
       },
     });
 

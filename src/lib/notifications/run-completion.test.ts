@@ -122,7 +122,7 @@ describe('notifyRunCompletion', () => {
     activeBrowser = installBrowserGlobals({
       focused: false,
       notificationApi: notification.api,
-      title: 'breakdown.sh',
+      title: 'Breakdown',
       visible: false,
     });
 
@@ -135,13 +135,13 @@ describe('notifyRunCompletion', () => {
 
     expect(notification.requestPermission).toHaveBeenCalledTimes(1);
     expect(notification.instances).toHaveLength(0);
-    expect(activeBrowser.document.title).toBe('[Done] breakdown.sh');
+    expect(activeBrowser.document.title).toBe('[Done] Breakdown');
 
     activeBrowser.setFocused(true);
     activeBrowser.setVisibility('visible');
     activeBrowser.emitDocument('visibilitychange');
 
-    expect(activeBrowser.document.title).toBe('breakdown.sh');
+    expect(activeBrowser.document.title).toBe('Breakdown');
   });
 });
 
@@ -180,7 +180,7 @@ function installBrowserGlobals({
   focused,
   href = 'https://app.test/graph/graph-1',
   notificationApi,
-  title = 'breakdown.sh',
+  title = 'Breakdown',
   visible,
 }: {
   focused: boolean;
