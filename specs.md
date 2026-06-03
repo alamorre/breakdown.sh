@@ -1,4 +1,4 @@
-# Thesis — Product Specification
+# breakdown.sh — Product Specification
 
 > Reasoning that propagates.
 
@@ -23,11 +23,11 @@ No existing tool combines structured reasoning primitives, visual flow-based com
 
 ### Core Concept
 
-Thesis applies the **ElevenLabs Flows model** — a node-based visual canvas where outputs flow between connected nodes — to **reasoning and decision-making** instead of creative media pipelines.
+breakdown.sh applies the **ElevenLabs Flows model** — a node-based visual canvas where outputs flow between connected nodes — to **reasoning and decision-making** instead of creative media pipelines.
 
-| ElevenLabs Flows                            | Thesis                                                      |
+| ElevenLabs Flows                            | breakdown.sh                                                |
 | ------------------------------------------- | ----------------------------------------------------------- |
-| Node = generative model (image, video, TTS) | Node = reasoning unit (thesis, assumption, data source)     |
+| Node = generative model (image, video, TTS) | Node = reasoning unit (claim, assumption, data source)      |
 | Edge = media asset (image → video input)    | Edge = typed conclusion (supports, contradicts, depends on) |
 | Re-run one node, downstream updates         | Re-evaluate one node, downstream conclusions propagate      |
 | Swap inputs for variations                  | New data triggers re-evaluation                             |
@@ -58,18 +58,18 @@ Thesis applies the **ElevenLabs Flows model** — a node-based visual canvas whe
 
 | Node Type           | Description                                     | Example                                                         |
 | ------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| **Sub-thesis**      | Scoped conclusion with evidence and confidence  | "AI will compress mid-tier SE roles within 5-8 years"           |
+| **Sub-claim**       | Scoped conclusion with evidence and confidence  | "AI will compress mid-tier SE roles within 5-8 years"           |
 | **Comparison**      | Evaluate alternatives against criteria          | "Galena Bay lot vs. boat-access parcels"                        |
 | **Risk Assessment** | Quantified exposure with probability and impact | "D1 zoning reclassification risk: low probability, high impact" |
 | **Timeline**        | Sequenced events with dependencies              | "HELOC → inheritance deployment → land acquisition"             |
 
-### 3.3 Synthesis Nodes (Outputs)
+### 3.3 Composition Nodes (Outputs)
 
-| Node Type            | Description                                    | Example                                                                             |
-| -------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Composite Thesis** | Aggregated conclusion from multiple sub-theses | "BC rural land is a viable hard-asset hedge given 3-5 year peak income window"      |
-| **Decision Point**   | Actionable choice with trigger conditions      | "Make offer on Lot 55 when: price ≤ $X AND HELOC approved AND strata fee confirmed" |
-| **Watchlist**        | Monitoring set with alert thresholds           | "Track CRWV debt/equity ratio, ASML order backlog, Arrow Lakes listing inventory"   |
+| Node Type           | Description                                    | Example                                                                             |
+| ------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Composite claim** | Aggregated conclusion from multiple sub-claims | "BC rural land is a viable hard-asset hedge given 3-5 year peak income window"      |
+| **Decision Point**  | Actionable choice with trigger conditions      | "Make offer on Lot 55 when: price ≤ $X AND HELOC approved AND strata fee confirmed" |
+| **Watchlist**       | Monitoring set with alert thresholds           | "Track CRWV debt/equity ratio, ASML order backlog, Arrow Lakes listing inventory"   |
 
 ---
 
@@ -152,7 +152,7 @@ Skill docs define how agents interact with each node type. They are the "source 
 ```yaml
 name: real-estate-market-analysis
 version: 1.0.0
-node_type: sub_thesis
+node_type: sub_claim
 description: Evaluate real estate market conditions for a specific region
 
 inputs:
@@ -160,7 +160,7 @@ inputs:
     type: data_source
     description: Current MLS listings and price history
   - name: macro_conditions
-    type: sub_thesis
+    type: sub_claim
     description: Broader economic conditions affecting real estate
 
 output:
@@ -248,7 +248,7 @@ CREATE TABLE graphs (
 CREATE TABLE nodes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   graph_id UUID REFERENCES graphs(id) ON DELETE CASCADE,
-  node_type TEXT NOT NULL,           -- 'data_source', 'sub_thesis', 'decision_point', etc.
+  node_type TEXT NOT NULL,           -- 'data_source', 'sub_claim', 'decision_point', etc.
   name TEXT NOT NULL,
   position_x FLOAT NOT NULL,        -- Canvas position
   position_y FLOAT NOT NULL,
@@ -425,7 +425,7 @@ export const checkStaleness = task({
 **Goal:** User can build a reasoning graph and evaluate individual nodes with AI.
 
 - Canvas with React Flow: create, connect, and arrange nodes
-- Node types: assumption, sub-thesis, comparison, decision point
+- Node types: assumption, sub-claim, comparison, decision point
 - Manual node evaluation: click "Evaluate" → Claude analyzes based on upstream inputs
 - Basic edge types: supports, contradicts, depends_on
 - Save/load graphs to Supabase
@@ -452,10 +452,10 @@ export const checkStaleness = task({
 **Goal:** Agents don't just update nodes — they propose new ones and identify gaps.
 
 - Skill doc system with YAML schema
-- Agent-proposed nodes: "Your thesis is missing a node for X"
+- Agent-proposed nodes: "Your graph is missing a node for X"
 - Chat import: paste a Claude/ChatGPT conversation URL, agent extracts reasoning into nodes
 - Community skill doc library
-- Graph templates for common patterns (investment thesis, career decision, product strategy)
+- Graph templates for common patterns (investment analysis, career decision, product strategy)
 - Weekly reasoning digest via email
 
 **Ship in:** 6-8 weeks after Phase 2
@@ -473,17 +473,17 @@ export const checkStaleness = task({
 
 ## 10. Competitive Positioning
 
-| Tool                 | What it does well                               | What Thesis adds                                                         |
-| -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------ |
-| **Heptabase**        | Visual canvas, card connections, PDF annotation | Typed reasoning primitives, computational propagation, agent evaluation  |
-| **Obsidian**         | Local-first, bidirectional links, graph view    | Structured node types, confidence scoring, staleness detection           |
-| **Tana**             | Supertags, structured data, AI features         | Flow-based composition, propagation engine, skill docs                   |
-| **NotebookLM**       | Source-grounded answers, podcast generation     | Evolving reasoning over time, decision tracking, multi-thesis management |
-| **ChatGPT Projects** | Persistent context, file upload                 | Explicit reasoning structure, visual graph, automated re-evaluation      |
-| **Claude Projects**  | Deep reasoning, long context                    | Persistent reasoning graph, agent-driven updates, temporal awareness     |
-| **Argument Mapper**  | Structured argument visualization               | Dynamic updates, AI evaluation, multi-thesis composition                 |
+| Tool                 | What it does well                               | What breakdown.sh adds                                                  |
+| -------------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
+| **Heptabase**        | Visual canvas, card connections, PDF annotation | Typed reasoning primitives, computational propagation, agent evaluation |
+| **Obsidian**         | Local-first, bidirectional links, graph view    | Structured node types, confidence scoring, staleness detection          |
+| **Tana**             | Supertags, structured data, AI features         | Flow-based composition, propagation engine, skill docs                  |
+| **NotebookLM**       | Source-grounded answers, podcast generation     | Evolving reasoning over time, decision tracking, multi-claim management |
+| **ChatGPT Projects** | Persistent context, file upload                 | Explicit reasoning structure, visual graph, automated re-evaluation     |
+| **Claude Projects**  | Deep reasoning, long context                    | Persistent reasoning graph, agent-driven updates, temporal awareness    |
+| **Argument Mapper**  | Structured argument visualization               | Dynamic updates, AI evaluation, multi-claim composition                 |
 
-### The Gap Thesis Fills
+### The Gap breakdown.sh Fills
 
 Nobody combines:
 

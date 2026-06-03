@@ -1,4 +1,4 @@
--- Core tables for Thesis: graphs, nodes, edges, evaluations
+-- Core tables for breakdown.sh: graphs, nodes, edges, evaluations
 -- Includes RLS policies scoped to Clerk user_id, indexes for graph traversal,
 -- and ON DELETE CASCADE for child tables.
 

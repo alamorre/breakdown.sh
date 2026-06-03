@@ -80,28 +80,30 @@ const SOURCE_TYPE_LABELS: Record<DataSourceType, string> = {
   text: 'Text',
 };
 
-function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
-  const { thesisNode } = data;
+function BreakdownNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
+  const { breakdownNode } = data;
   const { updateNodeData, setNodeRunState, removeNode } = useGraphStore();
 
-  const isSource = isDataSourceNode(thesisNode.node_type);
-  const sourceType = getDataSourceType(thesisNode.node_type);
-  const driveMetadata = isGoogleDriveSourceConfig(thesisNode.metadata) ? thesisNode.metadata : null;
+  const isSource = isDataSourceNode(breakdownNode.node_type);
+  const sourceType = getDataSourceType(breakdownNode.node_type);
+  const driveMetadata = isGoogleDriveSourceConfig(breakdownNode.metadata)
+    ? breakdownNode.metadata
+    : null;
 
-  const [prompt, setPrompt] = useState(thesisNode.prompt);
+  const [prompt, setPrompt] = useState(breakdownNode.prompt);
   const [sourceUrl, setSourceUrl] = useState(
-    driveMetadata?.webViewLink ?? (thesisNode.metadata as { url?: string })?.url ?? '',
+    driveMetadata?.webViewLink ?? (breakdownNode.metadata as { url?: string })?.url ?? '',
   );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [urlEditing, setUrlEditing] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when store changes from outside (e.g. detail panel edits)
-  const storePrompt = thesisNode.prompt;
+  const storePrompt = breakdownNode.prompt;
   const storeUrl =
-    (isGoogleDriveSourceConfig(thesisNode.metadata)
-      ? thesisNode.metadata.webViewLink
-      : (thesisNode.metadata as { url?: string })?.url) ?? '';
+    (isGoogleDriveSourceConfig(breakdownNode.metadata)
+      ? breakdownNode.metadata.webViewLink
+      : (breakdownNode.metadata as { url?: string })?.url) ?? '';
   useEffect(() => {
     setPrompt(storePrompt);
   }, [storePrompt]);
@@ -112,7 +114,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
   const handlePromptChange = useCallback(
     (value: string) => {
       setPrompt(value);
-      updateNodeData(thesisNode.id, { prompt: value });
+      updateNodeData(breakdownNode.id, { prompt: value });
 
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -120,7 +122,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
 
       saveTimeoutRef.current = setTimeout(async () => {
         const { error } = await updateNode({
-          nodeId: thesisNode.id,
+          nodeId: breakdownNode.id,
           prompt: value,
         });
         if (error) {
@@ -128,14 +130,14 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
         }
       }, 500);
     },
-    [thesisNode.id, updateNodeData],
+    [breakdownNode.id, updateNodeData],
   );
 
   const handleSourceUrlChange = useCallback(
     (value: string) => {
       setSourceUrl(value);
-      const newMetadata = { ...thesisNode.metadata, url: value };
-      updateNodeData(thesisNode.id, { metadata: newMetadata });
+      const newMetadata = { ...breakdownNode.metadata, url: value };
+      updateNodeData(breakdownNode.id, { metadata: newMetadata });
 
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -143,7 +145,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
 
       saveTimeoutRef.current = setTimeout(async () => {
         const { error } = await updateNode({
-          nodeId: thesisNode.id,
+          nodeId: breakdownNode.id,
           metadata: newMetadata,
         });
         if (error) {
@@ -151,22 +153,22 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
         }
       }, 500);
     },
-    [thesisNode.id, thesisNode.metadata, updateNodeData],
+    [breakdownNode.id, breakdownNode.metadata, updateNodeData],
   );
 
   const handleRun = useCallback(async () => {
-    setNodeRunState(thesisNode.id, { run_status: 'running' });
+    setNodeRunState(breakdownNode.id, { run_status: 'running' });
 
-    const { data: result, error } = await runNode({ nodeId: thesisNode.id });
+    const { data: result, error } = await runNode({ nodeId: breakdownNode.id });
 
     if (error || !result) {
-      setNodeRunState(thesisNode.id, {
+      setNodeRunState(breakdownNode.id, {
         run_status: 'error',
         run_error: error ?? 'Run failed',
       });
       toast.error(error ?? 'Run failed');
     } else {
-      setNodeRunState(thesisNode.id, {
+      setNodeRunState(breakdownNode.id, {
         run_status: 'success',
         output: result.output,
         run_error: null,
@@ -181,30 +183,30 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
           : {}),
       });
     }
-  }, [thesisNode.id, setNodeRunState]);
+  }, [breakdownNode.id, setNodeRunState]);
 
   const handleDelete = useCallback(async () => {
-    const { error } = await deleteNode({ nodeId: thesisNode.id });
+    const { error } = await deleteNode({ nodeId: breakdownNode.id });
     if (error) {
       toast.error('Failed to delete node');
       return;
     }
-    removeNode(thesisNode.id);
+    removeNode(breakdownNode.id);
     setDeleteConfirmOpen(false);
-  }, [thesisNode.id, removeNode]);
+  }, [breakdownNode.id, removeNode]);
 
-  const isRunning = thesisNode.run_status === 'running';
-  const isQueued = thesisNode.run_status === 'queued';
-  const isError = thesisNode.run_status === 'error';
-  const isSkipped = thesisNode.run_status === 'skipped';
-  const isCancelled = thesisNode.run_status === 'cancelled';
+  const isRunning = breakdownNode.run_status === 'running';
+  const isQueued = breakdownNode.run_status === 'queued';
+  const isError = breakdownNode.run_status === 'error';
+  const isSkipped = breakdownNode.run_status === 'skipped';
+  const isCancelled = breakdownNode.run_status === 'cancelled';
   const isBlocked = isError || isSkipped || isCancelled;
-  const isFetched = thesisNode.run_status === 'success' && thesisNode.output;
+  const isFetched = breakdownNode.run_status === 'success' && breakdownNode.output;
 
   // --- Text Source Node ---
   if (isSource && sourceType === 'text') {
-    const isTextSaved = thesisNode.run_status === 'success' && thesisNode.output;
-    const hasUnsavedChanges = prompt !== (thesisNode.output ?? '');
+    const isTextSaved = breakdownNode.run_status === 'success' && breakdownNode.output;
+    const hasUnsavedChanges = prompt !== (breakdownNode.output ?? '');
 
     return (
       <>
@@ -245,7 +247,9 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
               </DropdownMenu>
             </div>
 
-            <h3 className="mb-2 truncate text-sm font-semibold leading-tight">{thesisNode.name}</h3>
+            <h3 className="mb-2 truncate text-sm font-semibold leading-tight">
+              {breakdownNode.name}
+            </h3>
 
             <Textarea
               value={prompt}
@@ -266,7 +270,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 <>
                   <AlertCircle className="size-3 text-destructive" />
                   <span className="truncate text-destructive">
-                    {thesisNode.run_error ?? 'Error'}
+                    {breakdownNode.run_error ?? 'Error'}
                   </span>
                 </>
               )}
@@ -274,9 +278,9 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 <>
                   <Check className="size-3 text-emerald-500" />
                   <span className="text-muted-foreground">Saved</span>
-                  {thesisNode.last_run_at && (
+                  {breakdownNode.last_run_at && (
                     <span className="text-muted-foreground/60">
-                      {formatTimeAgo(thesisNode.last_run_at)}
+                      {formatTimeAgo(breakdownNode.last_run_at)}
                     </span>
                   )}
                 </>
@@ -325,7 +329,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             <DialogHeader>
               <DialogTitle>Delete Node</DialogTitle>
               <DialogDescription>
-                This will permanently delete &ldquo;{thesisNode.name}&rdquo; and all its
+                This will permanently delete &ldquo;{breakdownNode.name}&rdquo; and all its
                 connections. This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
@@ -354,7 +358,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
     const needsReconnect =
       Boolean(driveMetadata) &&
       isBlocked &&
-      (thesisNode.run_error ?? '').includes('Reconnect Google Drive');
+      (breakdownNode.run_error ?? '').includes('Reconnect Google Drive');
     const returnTo = typeof window === 'undefined' ? '/dashboard' : window.location.pathname;
     const connectHref = `/api/integrations/google-drive/connect?returnTo=${encodeURIComponent(returnTo)}`;
 
@@ -428,7 +432,9 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             </div>
 
             {/* File name */}
-            <h3 className="mb-1 truncate text-sm font-semibold leading-tight">{thesisNode.name}</h3>
+            <h3 className="mb-1 truncate text-sm font-semibold leading-tight">
+              {breakdownNode.name}
+            </h3>
 
             {/* Domain, URL, or connected account hint */}
             {(domain || driveMetadata?.accountEmail) && !urlEditing && (
@@ -480,7 +486,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 <>
                   <AlertCircle className="size-3 text-destructive" />
                   <span className="truncate text-destructive">
-                    {thesisNode.run_error ?? 'Error'}
+                    {breakdownNode.run_error ?? 'Error'}
                   </span>
                 </>
               )}
@@ -488,9 +494,9 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
                 <>
                   <Check className="size-3 text-emerald-500" />
                   <span className="text-muted-foreground">Fetched</span>
-                  {thesisNode.last_run_at && (
+                  {breakdownNode.last_run_at && (
                     <span className="text-muted-foreground/60">
-                      {formatTimeAgo(thesisNode.last_run_at)}
+                      {formatTimeAgo(breakdownNode.last_run_at)}
                     </span>
                   )}
                 </>
@@ -559,7 +565,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             <DialogHeader>
               <DialogTitle>Delete Node</DialogTitle>
               <DialogDescription>
-                This will permanently delete &ldquo;{thesisNode.name}&rdquo; and all its
+                This will permanently delete &ldquo;{breakdownNode.name}&rdquo; and all its
                 connections. This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
@@ -596,7 +602,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
 
         {/* Header: name, run button, overflow menu */}
         <div className="flex items-center justify-between border-b px-3 py-1.5">
-          <span className="truncate text-sm font-medium">{thesisNode.name}</span>
+          <span className="truncate text-sm font-medium">{breakdownNode.name}</span>
           <div className="flex items-center gap-1">
             <Button
               size="sm"
@@ -635,7 +641,7 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
           </span>
           <div className="max-h-[72px] overflow-hidden rounded-lg bg-muted/50 px-3 py-2 text-sm">
             <p className="line-clamp-3 whitespace-pre-wrap text-muted-foreground">
-              {thesisNode.prompt || 'No prompt yet'}
+              {breakdownNode.prompt || 'No prompt yet'}
             </p>
           </div>
         </div>
@@ -656,18 +662,18 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             {isRunning && <p className="text-muted-foreground">Running...</p>}
             {isQueued && !isRunning && (
               <p className="text-muted-foreground">
-                {thesisNode.run_error ?? 'Queued for Run All'}
+                {breakdownNode.run_error ?? 'Queued for Run All'}
               </p>
             )}
             {isBlocked && (
-              <p className="line-clamp-3 text-destructive">{thesisNode.run_error ?? 'Error'}</p>
+              <p className="line-clamp-3 text-destructive">{breakdownNode.run_error ?? 'Error'}</p>
             )}
-            {!isQueued && !isRunning && !isBlocked && thesisNode.output && (
+            {!isQueued && !isRunning && !isBlocked && breakdownNode.output && (
               <p className="line-clamp-3 leading-snug">
-                {(thesisNode.metadata as { summary?: string })?.summary ?? thesisNode.output}
+                {(breakdownNode.metadata as { summary?: string })?.summary ?? breakdownNode.output}
               </p>
             )}
-            {!isQueued && !isRunning && !isBlocked && !thesisNode.output && (
+            {!isQueued && !isRunning && !isBlocked && !breakdownNode.output && (
               <p className="text-muted-foreground">No output yet</p>
             )}
           </div>
@@ -689,21 +695,23 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
             {isBlocked && !isRunning && (
               <>
                 <AlertCircle className="size-3 text-destructive" />
-                <span className="truncate text-destructive">{thesisNode.run_error ?? 'Error'}</span>
+                <span className="truncate text-destructive">
+                  {breakdownNode.run_error ?? 'Error'}
+                </span>
               </>
             )}
-            {thesisNode.run_status === 'success' && !isRunning && !isQueued && !isBlocked && (
+            {breakdownNode.run_status === 'success' && !isRunning && !isQueued && !isBlocked && (
               <>
                 <Check className="size-3 text-emerald-500" />
                 <span className="text-muted-foreground">Run</span>
-                {thesisNode.last_run_at && (
+                {breakdownNode.last_run_at && (
                   <span className="text-muted-foreground/60">
-                    {formatTimeAgo(thesisNode.last_run_at)}
+                    {formatTimeAgo(breakdownNode.last_run_at)}
                   </span>
                 )}
               </>
             )}
-            {thesisNode.run_status === 'idle' && !isRunning && !isQueued && !isBlocked && (
+            {breakdownNode.run_status === 'idle' && !isRunning && !isQueued && !isBlocked && (
               <>
                 <CircleDashed className="size-3 text-muted-foreground/50" />
                 <span className="text-muted-foreground/60">Not run</span>
@@ -724,8 +732,8 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
           <DialogHeader>
             <DialogTitle>Delete Node</DialogTitle>
             <DialogDescription>
-              This will permanently delete &ldquo;{thesisNode.name}&rdquo; and all its connections.
-              This action cannot be undone.
+              This will permanently delete &ldquo;{breakdownNode.name}&rdquo; and all its
+              connections. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -742,4 +750,4 @@ function ThesisNodeComponent({ data, selected }: NodeProps<CanvasNode>) {
   );
 }
 
-export const ThesisNodeMemo = React.memo(ThesisNodeComponent);
+export const BreakdownNodeMemo = React.memo(BreakdownNodeComponent);

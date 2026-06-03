@@ -30,16 +30,16 @@ export function exportGraph(graph: Graph, nodes: CanvasNode[], edges: CanvasEdge
     description: graph.description,
     nodes: nodes.map((n) => ({
       id: n.id,
-      name: n.data.thesisNode.name,
-      prompt: n.data.thesisNode.prompt,
-      output: n.data.thesisNode.output,
+      name: n.data.breakdownNode.name,
+      prompt: n.data.breakdownNode.prompt,
+      output: n.data.breakdownNode.output,
       position: { x: n.position.x, y: n.position.y },
     })),
     edges: edges.map((e) => ({
       source: e.source!,
       target: e.target!,
-      type: e.data.thesisEdge.edge_type,
-      weight: e.data.thesisEdge.weight,
+      type: e.data.breakdownEdge.edge_type,
+      weight: e.data.breakdownEdge.weight,
     })),
     exported_at: new Date().toISOString(),
   };

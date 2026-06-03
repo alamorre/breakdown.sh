@@ -20,7 +20,7 @@ Scaffold a new node type end-to-end: enum, React Flow component, config map entr
    - Add the new type to the `NodeType` enum in `src/types/node.ts`
    - Add a corresponding entry in the `NODE_TYPE_CONFIG` map with:
      - `label`: human-readable display name
-     - `category`: "source" | "analysis" | "synthesis"
+     - `category`: "source" | "analysis" | "composition"
      - `color`: a Tailwind color class
      - `icon`: icon identifier
      - `description`: one-line description of the node type
@@ -38,7 +38,7 @@ Scaffold a new node type end-to-end: enum, React Flow component, config map entr
 
 5. **Update the sidebar**
    - Add the new node type to the node creation sidebar (`src/components/canvas/NodeSidebar.tsx`)
-   - Place it in the correct category group (Source / Analysis / Synthesis)
+   - Place it in the correct category group (Source / Analysis / Composition)
 
 6. **Write tests**
    - Create `src/components/canvas/<TypeName>Node.test.tsx`

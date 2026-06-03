@@ -1,4 +1,4 @@
-# Thesis
+# breakdown.sh
 
 A node-based reasoning canvas where hypotheses, assumptions, and conclusions are structured as a DAG. When upstream data changes, agents propagate updates through the graph, re-evaluating downstream conclusions and surfacing what's changed.
 

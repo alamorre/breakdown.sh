@@ -28,7 +28,7 @@ function stripHtml(html: string): string {
 /** Fetch a web URL and return its content as plain text */
 export async function fetchWebUrl(url: string): Promise<FetchResult> {
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'Thesis/1.0 (reasoning-canvas)' },
+    headers: { 'User-Agent': 'breakdown.sh/1.0 (reasoning-canvas)' },
     signal: AbortSignal.timeout(15_000),
   });
 

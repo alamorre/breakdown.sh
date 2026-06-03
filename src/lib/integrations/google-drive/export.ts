@@ -1,14 +1,12 @@
 import { createHash } from 'crypto';
 import type { createServerClient } from '@/lib/supabase/server';
 import { isGoogleDriveSourceConfig, type GoogleDriveSourceConfig } from '@/types/data-source';
-import type { ThesisNode } from '@/types/node';
+import type { BreakdownNode } from '@/types/node';
 import {
   getGoogleDriveConnectionById,
   getValidGoogleDriveAccessToken,
 } from '@/lib/integrations/google-drive/connections';
-import {
-  GOOGLE_DRIVE_MIME_TYPES,
-} from '@/lib/integrations/google-drive/source';
+import { GOOGLE_DRIVE_MIME_TYPES } from '@/lib/integrations/google-drive/source';
 
 const DRIVE_API_BASE_URL = 'https://www.googleapis.com/drive/v3';
 const MAX_EXPORTED_CHARACTERS = 200_000;
@@ -45,7 +43,7 @@ function assertTextSize(content: string): string {
     return content;
   }
 
-  return `${content.slice(0, MAX_EXPORTED_CHARACTERS)}\n\n[Truncated by Thesis: exported Google Drive content exceeded ${MAX_EXPORTED_CHARACTERS.toLocaleString()} characters.]`;
+  return `${content.slice(0, MAX_EXPORTED_CHARACTERS)}\n\n[Truncated by breakdown.sh: exported Google Drive content exceeded ${MAX_EXPORTED_CHARACTERS.toLocaleString()} characters.]`;
 }
 
 function getGoogleDriveContentHash(content: string): string {
@@ -136,7 +134,7 @@ function getExportMimeType(metadata: GoogleDriveSourceConfig): string {
 
 export async function fetchGoogleDriveSource(
   supabase: SupabaseClient,
-  input: { node: ThesisNode; userId: string },
+  input: { node: BreakdownNode; userId: string },
 ): Promise<GoogleDriveFetchResult> {
   if (!isGoogleDriveSourceConfig(input.node.metadata)) {
     throw new Error('Google Drive source is missing file metadata.');

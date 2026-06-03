@@ -9,7 +9,7 @@ export type RunStatus =
   | 'cancelled';
 
 /** A node on the canvas — a computational unit with prompt and generated output */
-export interface ThesisNode {
+export interface BreakdownNode {
   id: string;
   graph_id: string;
   node_type: string;

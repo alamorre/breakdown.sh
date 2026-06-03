@@ -11,8 +11,8 @@ export const GOOGLE_DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
 ] as const;
 
-export const GOOGLE_DRIVE_OAUTH_STATE_COOKIE = 'thesis_google_drive_oauth_state';
-export const GOOGLE_DRIVE_OAUTH_RETURN_COOKIE = 'thesis_google_drive_oauth_return_to';
+export const GOOGLE_DRIVE_OAUTH_STATE_COOKIE = 'breakdown_google_drive_oauth_state';
+export const GOOGLE_DRIVE_OAUTH_RETURN_COOKIE = 'breakdown_google_drive_oauth_return_to';
 
 export type GoogleDriveServerConfig = {
   clientId: string;

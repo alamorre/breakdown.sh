@@ -7,7 +7,7 @@ import {
   getNodeTypeForDriveMimeType,
 } from '@/lib/integrations/google-drive/source';
 import { getActiveGoogleDriveConnection } from '@/lib/integrations/google-drive/connections';
-import type { ThesisNode } from '@/types/node';
+import type { BreakdownNode } from '@/types/node';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,5 +84,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ gra
     return Response.json({ error: error.message }, { status: 400 });
   }
 
-  return Response.json({ data: (data ?? []) as ThesisNode[] });
+  return Response.json({ data: (data ?? []) as BreakdownNode[] });
 }
