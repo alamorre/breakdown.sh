@@ -1,0 +1,113 @@
+# Secrets Management
+
+This project uses Doppler as the source of truth for environment variables and
+secrets. Keep `.env.local.example` in the repo as the variable inventory only;
+real values belong in Doppler.
+
+## Doppler Structure
+
+Create a Doppler project named `breakdown-sh` and use the default root configs:
+
+| App environment | Doppler config | Consumer |
+| --- | --- | --- |
+| Local development | `dev` | `pnpm dev:secrets` via the Doppler CLI |
+| Staging | `stg` | Vercel Preview environment sync |
+| Production | `prd` | Vercel Production environment sync |
+
+Doppler creates `dev`, `stg`, and `prd` by default for new projects. Use branch
+configs only for short-lived overrides; promote stable changes back to the root
+config.
+
+## Required Variables
+
+Every config must define these variables:
+
+| Group | Variables |
+| --- | --- |
+| Clerk | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` |
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| Google Drive | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY`, `NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY`, `NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID` |
+
+`GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY` must decode to 32 bytes. Generate a value
+with:
+
+```sh
+openssl rand -base64 32
+```
+
+`NEXT_PUBLIC_*` values are public browser configuration, but they still belong
+in Doppler so each environment has one source of truth. Next.js inlines these
+values at build time, so staging and production must receive them before
+`next build` runs.
+
+## Local Development
+
+Install and authenticate the Doppler CLI once:
+
+```sh
+brew install gnupg
+brew install dopplerhq/cli/doppler
+doppler login
+```
+
+From the repository root, bind this directory to the `breakdown-sh` project and
+`dev` config:
+
+```sh
+doppler setup
+```
+
+The checked-in `doppler.yaml` preselects `project: breakdown-sh` and
+`config: dev`. After setup, run the app with:
+
+```sh
+pnpm dev:secrets
+```
+
+Validate that all required variables are present with:
+
+```sh
+doppler run -- pnpm secrets:check
+```
+
+## Staging And Production
+
+Connect Doppler to Vercel with one sync per environment:
+
+| Vercel environment | Doppler config |
+| --- | --- |
+| Preview | `stg` |
+| Production | `prd` |
+
+Use Vercel's Sensitive environment variable type for synced values. After each
+sync is configured, Doppler should be the place where values are added, edited,
+removed, or rotated. Do not make follow-up edits directly in the Vercel
+environment variable UI unless you are recovering from an incident.
+
+After changing any `NEXT_PUBLIC_*` value, redeploy the affected Vercel
+environment so the browser bundle is rebuilt with the new value.
+
+## Updating Or Rotating A Secret
+
+1. Update the value in the relevant Doppler config.
+2. Confirm Doppler syncs the change to Vercel for `stg` and `prd`, when
+   applicable.
+3. Redeploy the environment if the value is consumed at build time or starts a
+   long-lived server process.
+4. Run the smoke test for the affected integration.
+5. Remove or revoke the old credential in the upstream provider.
+
+## Manual Setup Checklist
+
+- [ ] Create or sign in to the Doppler workspace.
+- [ ] Create the `breakdown-sh` project.
+- [ ] Import local development values into `dev`.
+- [ ] Import staging values into `stg`.
+- [ ] Import production values into `prd`.
+- [ ] Run `doppler setup` locally from this repo and verify `pnpm dev:secrets`.
+- [ ] Configure the Doppler Vercel sync for Preview from `stg`.
+- [ ] Configure the Doppler Vercel sync for Production from `prd`.
+- [ ] Remove any duplicate manually managed Vercel variables after sync is
+      verified.
+- [ ] Redeploy Preview and Production.

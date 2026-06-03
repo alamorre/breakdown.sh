@@ -5,15 +5,20 @@
   "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev": "next dev",
+    "dev:secrets": "doppler run -- pnpm dev",
     "build": "next build",
+    "build:secrets": "doppler run -- sh -c 'pnpm secrets:check && pnpm build'",
     "start": "next start",
+    "start:secrets": "doppler run -- pnpm start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "audit:high": "pnpm audit --audit-level high",
-    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run build"
+    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run build",
+    "ci:secrets": "doppler run -- sh -c 'pnpm secrets:check && pnpm ci'",
+    "secrets:check": "node scripts/check-env.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

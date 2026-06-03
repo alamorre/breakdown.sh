@@ -24,9 +24,10 @@ migration includes:
 NOTIFY pgrst, 'reload schema';
 ```
 
-## Vercel
+## Secrets
 
-Set these variables for the Production environment, then redeploy:
+Manage these variables in Doppler, then sync the `prd` config to the Vercel
+Production environment:
 
 ```text
 GOOGLE_DRIVE_CLIENT_ID
@@ -45,8 +46,14 @@ openssl rand -base64 32
 `NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID` is the Google Cloud project number. Because
 the picker values are public build-time variables, redeploy after changing them.
 
-Also confirm `breakdown.sh` and `www.breakdown.sh` point at the intended Vercel
-project and latest production deployment.
+See `docs/secrets-management.md` for the full local, staging, and production
+secrets workflow.
+
+## Vercel
+
+Confirm `breakdown.sh` and `www.breakdown.sh` point at the intended Vercel
+project and latest production deployment. Environment variables should come from
+the Doppler Vercel sync, not manually maintained Vercel dashboard values.
 
 ## Google Cloud Console
 
@@ -80,7 +87,8 @@ If `breakdown.sh` is a production domain, configure Clerk accordingly:
 - Use the intended production Clerk environment variables in Vercel:
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
   - `CLERK_SECRET_KEY`
-- Redeploy after changing Clerk variables.
+- Manage the production Clerk environment variables in Doppler `prd`, then
+  redeploy after changing them.
 
 ## Smoke Test
 

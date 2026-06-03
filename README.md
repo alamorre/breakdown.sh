@@ -12,7 +12,7 @@ pnpm install
 Then run the development server:
 
 ```bash
-pnpm dev
+pnpm dev:secrets
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
@@ -20,6 +20,24 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Environment Secrets
+
+Runtime configuration is managed in Doppler. Use `.env.local.example` as the
+variable inventory, but do not put real secret values in the repo.
+
+For first-time setup:
+
+```bash
+brew install gnupg
+brew install dopplerhq/cli/doppler
+doppler login
+doppler setup
+pnpm dev:secrets
+```
+
+See [docs/secrets-management.md](docs/secrets-management.md) for the local,
+staging, and production workflow.
 
 ## Package Security
 
