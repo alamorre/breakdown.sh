@@ -49,7 +49,7 @@ export const EDGE_TYPE_CONFIG: Record<EdgeType, EdgeTypeConfig> = {
   },
 };
 
-export interface ThesisEdge {
+export interface BreakdownEdge {
   id: string;
   graph_id: string;
   source_node_id: string;
@@ -61,3 +61,5 @@ export interface ThesisEdge {
   created_at: string;
   updated_at: string;
 }
+
+export type ThesisEdge = BreakdownEdge;

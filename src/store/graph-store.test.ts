@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useGraphStore } from '@/store/graph-store';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import { EdgeType, type ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import { EdgeType, type BreakdownEdge } from '@/types/edge';
 
 vi.mock('@/actions/graph-actions', () => ({
   batchUpdateNodePositions: vi.fn().mockResolvedValue({ error: null }),
@@ -19,7 +19,7 @@ const mockGraph: Graph = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-const mockNode: ThesisNode = {
+const mockNode: BreakdownNode = {
   id: 'node-1',
   graph_id: 'graph-1',
   node_type: 'default',
@@ -36,7 +36,7 @@ const mockNode: ThesisNode = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-const mockNode2: ThesisNode = {
+const mockNode2: BreakdownNode = {
   ...mockNode,
   id: 'node-2',
   name: 'Second Node',
@@ -44,7 +44,7 @@ const mockNode2: ThesisNode = {
   position_y: 400,
 };
 
-const mockEdge: ThesisEdge = {
+const mockEdge: BreakdownEdge = {
   id: 'edge-1',
   graph_id: 'graph-1',
   source_node_id: 'node-1',
@@ -124,7 +124,7 @@ describe('addNode', () => {
     const state = useGraphStore.getState();
     expect(state.nodes).toHaveLength(1);
     expect(state.nodes[0].id).toBe('node-1');
-    expect(state.nodes[0].data.thesisNode.name).toBe('Test Node');
+    expect(state.nodes[0].data.breakdownNode.name).toBe('Test Node');
   });
 });
 
@@ -141,13 +141,13 @@ describe('updateGraphData', () => {
 });
 
 describe('updateNodeData', () => {
-  it('should update thesis node data', () => {
+  it('should update breakdown node data', () => {
     useGraphStore.getState().hydrate(mockGraph, [mockNode], []);
     useGraphStore.getState().updateNodeData('node-1', { name: 'Updated', prompt: 'New prompt' });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.name).toBe('Updated');
-    expect(state.nodes[0].data.thesisNode.prompt).toBe('New prompt');
+    expect(state.nodes[0].data.breakdownNode.name).toBe('Updated');
+    expect(state.nodes[0].data.breakdownNode.prompt).toBe('New prompt');
   });
 
   it('should not affect other nodes', () => {
@@ -155,8 +155,8 @@ describe('updateNodeData', () => {
     useGraphStore.getState().updateNodeData('node-1', { name: 'Updated' });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.name).toBe('Updated');
-    expect(state.nodes[1].data.thesisNode.name).toBe('Second Node');
+    expect(state.nodes[0].data.breakdownNode.name).toBe('Updated');
+    expect(state.nodes[1].data.breakdownNode.name).toBe('Second Node');
   });
 
   it('should update metadata for data source nodes', () => {
@@ -166,7 +166,7 @@ describe('updateNodeData', () => {
     });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.metadata).toEqual({ url: 'https://example.com' });
+    expect(state.nodes[0].data.breakdownNode.metadata).toEqual({ url: 'https://example.com' });
   });
 });
 
@@ -176,7 +176,7 @@ describe('setNodeRunState', () => {
     useGraphStore.getState().setNodeRunState('node-1', { run_status: 'running' });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.run_status).toBe('running');
+    expect(state.nodes[0].data.breakdownNode.run_status).toBe('running');
   });
 
   it('should set node to success state with output', () => {
@@ -189,10 +189,10 @@ describe('setNodeRunState', () => {
     });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.run_status).toBe('success');
-    expect(state.nodes[0].data.thesisNode.output).toBe('Generated result');
-    expect(state.nodes[0].data.thesisNode.run_error).toBeNull();
-    expect(state.nodes[0].data.thesisNode.last_run_at).toBe('2026-01-01T12:00:00Z');
+    expect(state.nodes[0].data.breakdownNode.run_status).toBe('success');
+    expect(state.nodes[0].data.breakdownNode.output).toBe('Generated result');
+    expect(state.nodes[0].data.breakdownNode.run_error).toBeNull();
+    expect(state.nodes[0].data.breakdownNode.last_run_at).toBe('2026-01-01T12:00:00Z');
   });
 
   it('should set node to error state', () => {
@@ -203,8 +203,8 @@ describe('setNodeRunState', () => {
     });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.run_status).toBe('error');
-    expect(state.nodes[0].data.thesisNode.run_error).toBe('API timeout');
+    expect(state.nodes[0].data.breakdownNode.run_status).toBe('error');
+    expect(state.nodes[0].data.breakdownNode.run_error).toBe('API timeout');
   });
 
   it('should preserve metadata when updating run state', () => {
@@ -220,9 +220,9 @@ describe('setNodeRunState', () => {
     });
 
     const state = useGraphStore.getState();
-    expect(state.nodes[0].data.thesisNode.metadata).toEqual({ url: 'https://example.com' });
-    expect(state.nodes[0].data.thesisNode.output).toBe('Fetched content');
-    expect(state.nodes[0].data.thesisNode.run_status).toBe('success');
+    expect(state.nodes[0].data.breakdownNode.metadata).toEqual({ url: 'https://example.com' });
+    expect(state.nodes[0].data.breakdownNode.output).toBe('Fetched content');
+    expect(state.nodes[0].data.breakdownNode.run_status).toBe('success');
   });
 });
 
@@ -259,12 +259,12 @@ describe('addEdge', () => {
 });
 
 describe('updateEdgeData', () => {
-  it('should update thesis edge data', () => {
+  it('should update breakdown edge data', () => {
     useGraphStore.getState().hydrate(mockGraph, [mockNode, mockNode2], [mockEdge]);
     useGraphStore.getState().updateEdgeData('edge-1', { edge_type: EdgeType.Contradicts });
 
     const state = useGraphStore.getState();
-    expect(state.edges[0].data.thesisEdge.edge_type).toBe(EdgeType.Contradicts);
+    expect(state.edges[0].data.breakdownEdge.edge_type).toBe(EdgeType.Contradicts);
   });
 });
 

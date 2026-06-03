@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { EDGE_TYPE_CONFIG, type EdgeType } from '@/types/edge';
 import type { CanvasEdge } from '@/store/graph-store';
 
-function ThesisEdgeComponent({
+function BreakdownEdgeComponent({
   id,
   sourceX,
   sourceY,
@@ -26,7 +26,7 @@ function ThesisEdgeComponent({
     targetPosition,
   });
 
-  const config = data ? EDGE_TYPE_CONFIG[data.thesisEdge.edge_type as EdgeType] : null;
+  const config = data ? EDGE_TYPE_CONFIG[data.breakdownEdge.edge_type as EdgeType] : null;
   const strokeColor = config?.color ?? '#888';
   const dashArray = config?.dashArray;
   const label = config?.label ?? '';
@@ -62,4 +62,4 @@ function ThesisEdgeComponent({
   );
 }
 
-export const ThesisEdgeMemo = React.memo(ThesisEdgeComponent);
+export const BreakdownEdgeMemo = React.memo(BreakdownEdgeComponent);

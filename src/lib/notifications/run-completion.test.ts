@@ -102,7 +102,7 @@ describe('notifyRunCompletion', () => {
     expect(notification.instances[0].title).toBe('Reasoning chain complete');
     expect(notification.instances[0].options).toMatchObject({
       body: 'Research canvas finished running 2 nodes.',
-      tag: 'thesis-run-completion',
+      tag: 'breakdown-run-completion',
     });
 
     notification.instances[0].onclick?.call(
@@ -122,7 +122,7 @@ describe('notifyRunCompletion', () => {
     activeBrowser = installBrowserGlobals({
       focused: false,
       notificationApi: notification.api,
-      title: 'Thesis',
+      title: 'Breakdown',
       visible: false,
     });
 
@@ -135,13 +135,13 @@ describe('notifyRunCompletion', () => {
 
     expect(notification.requestPermission).toHaveBeenCalledTimes(1);
     expect(notification.instances).toHaveLength(0);
-    expect(activeBrowser.document.title).toBe('[Done] Thesis');
+    expect(activeBrowser.document.title).toBe('[Done] Breakdown');
 
     activeBrowser.setFocused(true);
     activeBrowser.setVisibility('visible');
     activeBrowser.emitDocument('visibilitychange');
 
-    expect(activeBrowser.document.title).toBe('Thesis');
+    expect(activeBrowser.document.title).toBe('Breakdown');
   });
 });
 
@@ -180,7 +180,7 @@ function installBrowserGlobals({
   focused,
   href = 'https://app.test/graph/graph-1',
   notificationApi,
-  title = 'Thesis',
+  title = 'Breakdown',
   visible,
 }: {
   focused: boolean;
@@ -243,21 +243,13 @@ function installBrowserGlobals({
   };
 }
 
-function addListener(
-  listeners: Map<string, Set<Listener>>,
-  event: string,
-  listener: Listener,
-) {
+function addListener(listeners: Map<string, Set<Listener>>, event: string, listener: Listener) {
   const eventListeners = listeners.get(event) ?? new Set<Listener>();
   eventListeners.add(listener);
   listeners.set(event, eventListeners);
 }
 
-function removeListener(
-  listeners: Map<string, Set<Listener>>,
-  event: string,
-  listener: Listener,
-) {
+function removeListener(listeners: Map<string, Set<Listener>>, event: string, listener: Listener) {
   listeners.get(event)?.delete(listener);
 }
 

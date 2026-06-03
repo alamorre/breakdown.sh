@@ -1,4 +1,4 @@
-# Thesis — v1 Implementation Plan
+# Breakdown — v1 Implementation Plan
 
 v1 scope = **Phase 1 (MVP)**: a user can build an AI reasoning pipeline on a visual canvas. Nodes are computational units with an optional input, a prompt/task, and a generated output. Connecting nodes wires outputs to inputs. Clicking "Run" on a node sends its prompt + upstream outputs to Claude and generates a result. Running the full graph executes nodes in topological order.
 
@@ -18,8 +18,8 @@ The following are **done** and should not be rebuilt:
 
 - `components/canvas/GraphCanvas.tsx` — main React Flow canvas (needs modification)
 - `components/canvas/GraphEditor.tsx` — layout wrapper with sidebar + canvas + detail panel (needs modification)
-- `components/canvas/ThesisNode.tsx` — custom node component (needs **full rewrite**)
-- `components/canvas/ThesisEdge.tsx` — custom edge component (keep as-is)
+- `components/canvas/BreakdownNode.tsx` — custom node component (needs **full rewrite**)
+- `components/canvas/BreakdownEdge.tsx` — custom edge component (keep as-is)
 - `components/canvas/NodeDetailPanel.tsx` — right-side sheet (needs **full rewrite**)
 - `components/canvas/NodeSidebar.tsx` — left sidebar with draggable node types (needs **full rewrite**)
 - `components/canvas/EdgeTypePicker.tsx` — dialog for picking edge type on connect (keep as-is)
@@ -107,7 +107,7 @@ Update `src/types/node.ts`:
 export type RunStatus = 'idle' | 'running' | 'success' | 'error';
 
 /** A node on the canvas — a computational unit with prompt and generated output */
-export interface ThesisNode {
+export interface BreakdownNode {
   id: string;
   graph_id: string;
   node_type: string; // 'default' for v1 — extensible later
@@ -132,7 +132,7 @@ export interface ThesisNode {
 
 Remove from `types/node.ts`: `NodeType` enum, `NODE_TYPE_CONFIG`, `AutonomyLevel`, `EvidenceItem`, `EvaluationHistoryEntry`, node category groupings.
 
-Keep `types/edge.ts` unchanged — `EdgeType`, `EDGE_TYPE_CONFIG`, and `ThesisEdge` all stay.
+Keep `types/edge.ts` unchanged — `EdgeType`, `EDGE_TYPE_CONFIG`, and `BreakdownEdge` all stay.
 
 Keep `types/graph.ts` unchanged — `Graph`, `GraphWithData`, `Evaluation` types stay.
 
@@ -148,8 +148,8 @@ Update `src/actions/node-actions.ts`:
 
 Update `src/store/graph-store.ts`:
 
-- `CanvasNode.data.thesisNode` now uses the new `ThesisNode` shape.
-- `updateNodeData(nodeId, updates)` — accepts `Partial<Pick<ThesisNode, 'name' | 'prompt'>>` for user edits.
+- `CanvasNode.data.breakdownNode` now uses the new `BreakdownNode` shape.
+- `updateNodeData(nodeId, updates)` — accepts `Partial<Pick<BreakdownNode, 'name' | 'prompt'>>` for user edits.
 - Add `setNodeRunStatus(nodeId, status, output?, error?)` — used by the run action to update a node's output and status in real time.
 
 ### Tests
@@ -162,9 +162,9 @@ Update `src/store/graph-store.test.ts` and `src/actions/node-actions.test.ts` to
 
 ## Section 7: Node Component — Execution Card
 
-Rewrite the `ThesisNode` component to match the ElevenLabs Flows card design: output on top, prompt/task in the middle, input handles at the bottom, run button visible.
+Rewrite the `BreakdownNode` component to match the ElevenLabs Flows card design: output on top, prompt/task in the middle, input handles at the bottom, run button visible.
 
-### Component: `src/components/canvas/ThesisNode.tsx`
+### Component: `src/components/canvas/BreakdownNode.tsx`
 
 Full rewrite. The node card layout (top to bottom):
 
@@ -243,10 +243,10 @@ Edges are **data pipes**. The output of the source node flows into the target no
 
 ### What's Already Built (Keep)
 
-- `ThesisEdge.tsx` — custom edge with color/dash per type, label badge. **Keep as-is.**
+- `BreakdownEdge.tsx` — custom edge with color/dash per type, label badge. **Keep as-is.**
 - `EdgeTypePicker.tsx` — dialog for selecting edge type on connect. **Keep as-is.**
 - `edge-actions.ts` — `createEdge`, `updateEdge`, `deleteEdge` server actions. **Keep as-is.**
-- `types/edge.ts` — `EdgeType` enum, `EDGE_TYPE_CONFIG`, `ThesisEdge` interface. **Keep as-is.**
+- `types/edge.ts` — `EdgeType` enum, `EDGE_TYPE_CONFIG`, `BreakdownEdge` interface. **Keep as-is.**
 - `detect-cycle.ts` — cycle detection on connect. **Keep as-is.**
 
 ### What Changes
@@ -363,7 +363,7 @@ export async function runGraph(input: { graphId: string }): Promise<{
 
 ### UI: Run Button on Node
 
-The "Run" button on the `ThesisNode` card and the `NodeDetailPanel` both call `runNode`. The flow:
+The "Run" button on the `BreakdownNode` card and the `NodeDetailPanel` both call `runNode`. The flow:
 
 1. User clicks "Run ▸"
 2. Optimistically set `run_status: 'running'` in the Zustand store (shows spinner on button, shimmer on output area)
@@ -389,7 +389,7 @@ setNodeRunState(nodeId: string, state: {
 }): void
 ```
 
-This action updates the `thesisNode` data inside the React Flow node, triggering a re-render of only that node card.
+This action updates the `breakdownNode` data inside the React Flow node, triggering a re-render of only that node card.
 
 ### Tests
 
@@ -550,7 +550,7 @@ For evaluations, map the fields:
 | File                                        | What changes                                                                                                                 |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `src/types/node.ts`                         | Remove NodeType enum, categories, confidence, evidence, assumptions. Add prompt, output, run_status, run_error, last_run_at. |
-| `src/components/canvas/ThesisNode.tsx`      | Full rewrite: output on top, editable task in middle, run button, handles top/bottom. 320px wide card.                       |
+| `src/components/canvas/BreakdownNode.tsx`   | Full rewrite: output on top, editable task in middle, run button, handles top/bottom. 320px wide card.                       |
 | `src/components/canvas/NodeDetailPanel.tsx` | Full rewrite: name input, prompt textarea, read-only output, run status, connections, run button, delete.                    |
 | `src/components/canvas/NodeSidebar.tsx`     | Simplify to single "Add Node" button/draggable item, no categories.                                                          |
 
@@ -562,7 +562,7 @@ For evaluations, map the fields:
 | `src/store/graph-store.test.ts`          | Update tests for new node shape.                                                                      |
 | `src/actions/node-actions.ts`            | Update `createNode`/`updateNode` for new fields, add `runNode` and `runGraph` actions.                |
 | `src/actions/node-actions.test.ts`       | Update tests, add run action tests.                                                                   |
-| `src/components/canvas/GraphCanvas.tsx`  | Update node creation on drop (new fields), ensure new ThesisNode type registered.                     |
+| `src/components/canvas/GraphCanvas.tsx`  | Update node creation on drop (new fields), ensure new BreakdownNode type registered.                  |
 | `src/components/canvas/GraphEditor.tsx`  | Adjust layout for simpler sidebar.                                                                    |
 | `src/components/canvas/GraphTopBar.tsx`  | Add "Run All" and "Auto Layout" and "Export" buttons.                                                 |
 | `src/app/(app)/graph/[graphId]/page.tsx` | Ensure new node fields passed through.                                                                |
@@ -571,7 +571,7 @@ For evaluations, map the fields:
 
 | File                                       | Why                            |
 | ------------------------------------------ | ------------------------------ |
-| `src/components/canvas/ThesisEdge.tsx`     | Edge rendering is correct      |
+| `src/components/canvas/BreakdownEdge.tsx`  | Edge rendering is correct      |
 | `src/components/canvas/EdgeTypePicker.tsx` | Edge type selection is correct |
 | `src/types/edge.ts`                        | Edge types are correct         |
 | `src/types/graph.ts`                       | Graph types are correct        |
