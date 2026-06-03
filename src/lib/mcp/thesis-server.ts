@@ -42,6 +42,10 @@ import {
   importGraphForActor,
 } from '@/lib/thesis-service/workflows';
 import { applyGraphPatchSchema, importGraphSchema } from '@/lib/thesis-service/schemas';
+import {
+  importAndRunExternalWorkflowSchema,
+  importGraphAndCreateExternalRunForActor,
+} from '@/lib/thesis-service/workflow-runs';
 
 function textResult(data: unknown = { ok: true }) {
   return {
@@ -355,6 +359,22 @@ export function createThesisMcpServer(actor: ThesisActor) {
       },
     },
     async (input) => textResult(await importGraphForActor(actor, input)),
+  );
+
+  server.registerTool(
+    'import_graph_and_create_external_run',
+    {
+      title: 'Import Graph And Create External Run',
+      description:
+        'Create or replace a graph from a generic import shape, then start an external-evaluator run for host-console execution.',
+      inputSchema: importAndRunExternalWorkflowSchema,
+      annotations: destructiveAnnotations,
+      _meta: {
+        'breakdown/requiredScope': ['graphs:write', 'runs:external_execute'],
+        'breakdown/confirmation': 'Confirm before using replace mode.',
+      },
+    },
+    async (input) => textResult(await importGraphAndCreateExternalRunForActor(actor, input)),
   );
 
   server.registerTool(

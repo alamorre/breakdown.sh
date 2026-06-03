@@ -295,6 +295,22 @@ server.registerTool(
 );
 
 server.registerTool(
+  'import_graph_and_create_external_run',
+  {
+    title: 'Import Graph And Create External Run',
+    description:
+      'Create or replace a graph from a generic import shape, then start an external-evaluator run for host-console execution.',
+    inputSchema: {
+      importGraph: jsonRecord,
+      externalRun: jsonRecord.optional(),
+    },
+    annotations: { destructiveHint: true },
+  },
+  async (input) =>
+    textResult(await headlessRequest('POST', '/api/headless/workflows/import-and-run', input)),
+);
+
+server.registerTool(
   'get_workflow_manifest',
   {
     title: 'Get Workflow Manifest',

@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/headless(.*)',
+  '/api/integrations/headless-onboarding(.*)',
   '/api/mcp(.*)',
 ]);
 

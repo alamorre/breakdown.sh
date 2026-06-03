@@ -2,9 +2,74 @@
 
 Breakdown can be used as a headless DAG and reasoning workflow layer through REST routes, a local stdio MCP server, and a Streamable HTTP MCP endpoint.
 
+## First-Time External Console Onboarding
+
+Hosted or desktop agent consoles can discover the generic onboarding contract:
+
+```text
+GET https://your-breakdown-host/api/integrations/headless-onboarding
+```
+
+The response includes sign-in/sign-up URLs, the session bootstrap endpoint, the Streamable HTTP MCP URL, the headless REST base URL, and the default external-console scopes:
+
+- `graphs:read`
+- `graphs:write`
+- `runs:external_execute`
+- `runs:write_results`
+
+After the user signs in to Breakdown in a browser session, the console or bridge can bootstrap usable credentials without asking the user to manually create a Settings token:
+
+```text
+POST https://your-breakdown-host/api/integrations/headless-onboarding
+```
+
+Minimal body:
+
+```json
+{
+  "clientName": "Claude Desktop",
+  "providerName": "Anthropic"
+}
+```
+
+The response returns a raw bearer token once, the `/api/mcp` URL, the `/api/headless` REST base URL, and the authorization header value to use in the console integration.
+
+The same bootstrap call can also import a generic DAG and start an external-evaluator run:
+
+```json
+{
+  "clientName": "Codex",
+  "workflow": {
+    "importGraph": {
+      "mode": "create",
+      "graph": {
+        "name": "External console research",
+        "description": "A generic external-evaluator DAG."
+      },
+      "nodes": [
+        {
+          "id": "current-evidence",
+          "name": "Gather current evidence",
+          "nodeType": "external-current-data",
+          "prompt": "Use host-console tools for current facts. If unavailable, block this step as a data gap.",
+          "metadata": {
+            "requiresCurrentData": true,
+            "hostToolInstructions": "Use available host-console tools. Do not rely on model memory for current facts."
+          },
+          "position": { "x": 0, "y": 0 }
+        }
+      ],
+      "edges": []
+    }
+  }
+}
+```
+
+This path is intentionally provider-neutral. OAuth metadata, consent screens, and hosted marketplace registration can sit on top of it later; this checkpoint keeps the local and self-hosted path testable.
+
 ## Local Setup
 
-Create an integration token from the app:
+For local development you can still create an integration token from the app:
 
 1. Sign in to Breakdown.
 2. Open `/settings`.
@@ -84,6 +149,13 @@ Invalid, revoked, or missing bearer tokens return `401` with a `WWW-Authenticate
 - Destructive tools include MCP `destructiveHint` annotations and confirmation text in descriptions/metadata. Clients should still ask the user before deleting graphs, nodes, edges, replacing imports, applying destructive patches, or cancelling runs.
 - External-evaluator tools are preferred when the host console has its own web, filing, market-data, or connector tools. If a host lacks required current-data tools, mark the step blocked instead of fabricating data.
 
+### Cross-Console Paths
+
+- ChatGPT/OpenAI-style hosted consoles: use the onboarding metadata endpoint for discovery, send users through the sign-in/sign-up URL, then use the session bootstrap response to configure `/api/mcp` or REST calls. Native OAuth/app-store registration is deferred.
+- Claude Desktop and Codex: use the local stdio MCP server or the Streamable HTTP MCP endpoint. The `import_graph_and_create_external_run` tool creates a DAG and starts the external-evaluator run in one call.
+- Claude.ai, Gemini, and Gemini-like hosted consoles: prefer the same Streamable HTTP MCP endpoint when supported. If the host requires a bridge, preserve the same bearer-token and headless REST semantics.
+- Consoles with market data, web, filing, workspace, or other connectors should perform current-data steps in the host console and submit cited results back. Consoles without the required tools should mark those steps blocked with required data.
+
 ## Token Scopes
 
 - `graphs:read`: list/read/export graphs and manifests.
@@ -129,6 +201,7 @@ Use `Idempotency-Key` on create/import/patch/result requests when an agent may r
 - `DELETE /api/headless/edges/:edgeId`
 - `GET /api/headless/graphs/:graphId/export`
 - `POST /api/headless/graphs/import`
+- `POST /api/headless/workflows/import-and-run`
 - `GET /api/headless/graphs/:graphId/manifest`
 - `POST /api/headless/graphs/:graphId/apply-patch`
 
@@ -164,4 +237,14 @@ Routes:
 
 ## Financial/Stock Analysis
 
-Do not add a first-party market-data provider for the external-console flow. Add current-data steps that tell the host agent to use available host tools such as FMP, filings/search, or market-data connectors. If unavailable, the step should be blocked or recorded as a data gap.
+Do not add a first-party market-data provider for the external-console flow. If a user asks a console to analyze a stock, the console should create a generic DAG with current-data steps that tell the host agent to use available host tools such as FMP, filings/search, or market-data connectors. If unavailable, the step should be blocked or recorded as a data gap before any investment conclusion is produced.
+
+## Local Smoke
+
+With a dev server running and `THESIS_API_TOKEN` set, run a no-console external-evaluator smoke:
+
+```bash
+pnpm headless:smoke -- --goal "Research a public company with current evidence" --mode block
+```
+
+The smoke imports a generic two-step DAG, starts an external run, fetches the first step context, blocks or submits that step depending on `--mode`, finalizes with `allowIncomplete`, and prints the saved graph/run ids.
