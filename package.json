@@ -20,7 +20,8 @@
     "ci:secrets": "doppler run -- sh -c 'pnpm secrets:check && pnpm ci'",
     "secrets:check": "node scripts/check-env.mjs",
     "headless:token": "node scripts/create-integration-token.mjs",
-    "headless:smoke": "node scripts/headless-external-run-smoke.mjs"
+    "headless:smoke": "node scripts/headless-external-run-smoke.mjs",
+    "headless:verify": "node scripts/headless-interface-verify.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

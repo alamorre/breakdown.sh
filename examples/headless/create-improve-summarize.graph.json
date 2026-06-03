@@ -1,0 +1,58 @@
+{
+  "mode": "create",
+  "graph": {
+    "name": "Create, improve, summarize example",
+    "description": "A local-first headless DAG for external-evaluator workflows."
+  },
+  "nodes": [
+    {
+      "id": "current-evidence",
+      "name": "Gather current evidence",
+      "nodeType": "external-current-data",
+      "prompt": "Use host-console tools for current evidence. If the tools are unavailable, block this step and list required data.",
+      "metadata": {
+        "requiresCurrentData": true,
+        "suggestedHostTools": ["web/search", "filings", "workspace connectors"],
+        "hostToolInstructions": "Use available host-console tools. Do not rely on model memory for current facts.",
+        "expectedOutput": "Evidence packet with citations, timestamps, and data gaps."
+      },
+      "position": { "x": 0, "y": 0 }
+    },
+    {
+      "id": "improve-analysis",
+      "name": "Improve analysis",
+      "nodeType": "external-evaluator",
+      "prompt": "Use the evidence packet to improve the current answer. Separate facts, assumptions, uncertainty, and open questions.",
+      "metadata": {
+        "expectedOutput": "Improved answer with cited facts, assumptions, uncertainty, and open questions."
+      },
+      "position": { "x": 320, "y": 0 }
+    },
+    {
+      "id": "summarize-delta",
+      "name": "Summarize delta",
+      "nodeType": "external-evaluator",
+      "prompt": "Summarize what changed, what remains blocked, and what should be checked next.",
+      "metadata": {
+        "expectedOutput": "Brief change summary with blocked items and next checks."
+      },
+      "position": { "x": 640, "y": 0 }
+    }
+  ],
+  "edges": [
+    {
+      "sourceNodeId": "current-evidence",
+      "targetNodeId": "improve-analysis",
+      "edgeType": "inputs_to",
+      "weight": 1,
+      "condition": "Use current evidence or explicit data gaps."
+    },
+    {
+      "sourceNodeId": "improve-analysis",
+      "targetNodeId": "summarize-delta",
+      "edgeType": "inputs_to",
+      "weight": 1,
+      "condition": "Summarize the improved analysis."
+    }
+  ]
+}
