@@ -57,6 +57,7 @@ describe('createGraph', () => {
       user_id: 'user_123',
       name: 'Test Graph',
       description: null,
+      llm_provider: 'anthropic',
       llm_model: 'claude-sonnet-4-6',
     });
     expect(mockRevalidatePath).toHaveBeenCalledWith('/dashboard');
@@ -154,7 +155,28 @@ describe('updateGraph', () => {
     expect(result.data).toEqual(updated);
     expect(result.error).toBeNull();
     expect(mockUpdate).toHaveBeenCalledWith({
+      llm_provider: 'anthropic',
       llm_model: 'claude-haiku-4-5-20251001',
+      updated_at: expect.any(String),
+    });
+  });
+
+  it('should store the provider that owns the selected graph model', async () => {
+    const updated = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      llm_provider: 'openai',
+      llm_model: 'gpt-5.4',
+    };
+    mockSingle.mockResolvedValue({ data: updated, error: null });
+
+    const { updateGraphModel } = await import('@/actions/graph-actions');
+    const result = await updateGraphModel('550e8400-e29b-41d4-a716-446655440000', 'gpt-5.4');
+
+    expect(result.data).toEqual(updated);
+    expect(result.error).toBeNull();
+    expect(mockUpdate).toHaveBeenCalledWith({
+      llm_provider: 'openai',
+      llm_model: 'gpt-5.4',
       updated_at: expect.any(String),
     });
   });

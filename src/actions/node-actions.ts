@@ -3,13 +3,14 @@
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import { createClaudeClient } from '@/lib/ai/claude';
 import { buildRunPrompt, buildSummaryPrompt, type UpstreamInput } from '@/lib/ai/build-prompt';
+import { AI_MODEL_IDS, getSummaryModelId, resolveAiModelSelection } from '@/lib/ai/models';
 import {
-  ANTHROPIC_MODEL_IDS,
-  ANTHROPIC_SUMMARY_MODEL_ID,
-  resolveAnthropicModelId,
-} from '@/lib/ai/models';
+  getAiProviderCredentialsSetupError,
+  getProviderSetupPrompt,
+  getUserAiProviderApiKey,
+} from '@/lib/ai/credentials';
+import { createAiCompletion } from '@/lib/ai/provider-completion';
 import { isDataSourceNode, getDataSourceType } from '@/types/data-source';
 import { fetchWebUrl } from '@/lib/fetch/fetch-web-url';
 import { fetchGoogleDoc } from '@/lib/fetch/fetch-google-doc';
@@ -43,7 +44,7 @@ const deleteNodeSchema = z.object({
 
 const runNodeSchema = z.object({
   nodeId: z.string().uuid(),
-  llmModel: z.enum(ANTHROPIC_MODEL_IDS).optional(),
+  llmModel: z.enum(AI_MODEL_IDS).optional(),
 });
 
 async function getUserId(): Promise<string> {
@@ -386,7 +387,7 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
 
   const { data: graph, error: graphError } = await supabase
     .from('graphs')
-    .select('llm_model')
+    .select('llm_provider,llm_model')
     .eq('id', typedNode.graph_id)
     .eq('user_id', userId)
     .single();
@@ -395,9 +396,21 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
     return { data: null, error: graphError?.message ?? 'Graph not found' };
   }
 
-  const executionModel =
-    parsed.data.llmModel ??
-    resolveAnthropicModelId((graph as { llm_model?: string | null }).llm_model);
+  const { providerId, modelId: executionModel } = resolveAiModelSelection({
+    providerId: (graph as { llm_provider?: string | null }).llm_provider,
+    modelId: parsed.data.llmModel ?? (graph as { llm_model?: string | null }).llm_model,
+  });
+
+  let apiKey: string | null;
+  try {
+    apiKey = await getUserAiProviderApiKey(supabase, { userId, providerId });
+  } catch (err) {
+    return { data: null, error: getAiProviderCredentialsSetupError(err) };
+  }
+
+  if (!apiKey) {
+    return { data: null, error: getProviderSetupPrompt(providerId) };
+  }
 
   await supabase
     .from('nodes')
@@ -407,30 +420,31 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
   const prompt = buildRunPrompt(typedNode.prompt, upstreamInputs);
 
   try {
-    const claude = createClaudeClient();
-    const response = await claude.messages.create({
-      model: executionModel,
-      max_tokens: 4096,
+    const response = await createAiCompletion({
+      apiKey,
+      providerId,
+      modelId: executionModel,
+      maxTokens: 4096,
       system:
         'You are a reasoning assistant in a node-based analysis tool. Produce clear, structured output.',
-      messages: [{ role: 'user', content: prompt }],
+      prompt,
     });
 
-    const outputBlock = response.content.find((block) => block.type === 'text');
-    const output = outputBlock && 'text' in outputBlock ? outputBlock.text : '';
+    const output = response.output;
 
-    // Summary generation intentionally stays on Haiku for speed/cost and does not follow the graph model.
+    // Summary generation uses the same provider so each user only needs the key they selected.
     let summary: string | undefined;
     try {
-      const summaryResponse = await claude.messages.create({
-        model: ANTHROPIC_SUMMARY_MODEL_ID,
-        max_tokens: 150,
-        messages: [{ role: 'user', content: buildSummaryPrompt(output) }],
+      const summaryResponse = await createAiCompletion({
+        apiKey,
+        providerId,
+        modelId: getSummaryModelId(providerId),
+        maxTokens: 150,
+        prompt: buildSummaryPrompt(output),
       });
-      const summaryBlock = summaryResponse.content.find((block) => block.type === 'text');
-      summary = summaryBlock && 'text' in summaryBlock ? summaryBlock.text.trim() : undefined;
+      summary = summaryResponse.output.trim() || undefined;
     } catch {
-      // Summary is non-critical — proceed without it
+      // Summary is non-critical; proceed without it.
     }
 
     const updatedMetadata = { ...typedNode.metadata, ...(summary ? { summary } : {}) };
@@ -459,10 +473,10 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
       new_confidence: null,
       diff_summary: summary ?? null,
       skill_doc_id: null,
-      llm_provider: 'anthropic',
+      llm_provider: providerId,
       llm_model: executionModel,
-      prompt_tokens: response.usage.input_tokens,
-      completion_tokens: response.usage.output_tokens,
+      prompt_tokens: response.inputTokens,
+      completion_tokens: response.outputTokens,
       status: 'applied',
     });
 

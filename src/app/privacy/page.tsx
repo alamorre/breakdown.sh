@@ -95,7 +95,7 @@ export default function PrivacyPage() {
           <h2>AI Processing</h2>
           <p>
             When you run analysis, Breakdown may send prompts, graph context, selected source
-            content, and related outputs to AI model providers such as Anthropic to generate the
+            content, and related outputs to the AI model provider you select to generate the
             requested result. Do not connect or submit content that you are not authorized to
             process with Breakdown or its service providers.
           </p>

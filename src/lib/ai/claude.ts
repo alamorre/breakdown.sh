@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-export function createClaudeClient(): Anthropic {
+export function createClaudeClient(apiKey: string): Anthropic {
   return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey,
   });
 }

@@ -1,3 +1,9 @@
+import {
+  getIntegrationTokenEncryptionKey,
+  hasIntegrationTokenEncryptionKey,
+  PRIMARY_KEY_NAME,
+} from '@/lib/security/encryption-key';
+
 export const GOOGLE_DRIVE_SCOPES = [
   'openid',
   'email',
@@ -22,15 +28,14 @@ export type GoogleDrivePickerConfig = {
 export function getGoogleDriveServerConfig(): GoogleDriveServerConfig {
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
-  const encryptionKey = process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY;
 
-  if (!clientId || !clientSecret || !encryptionKey) {
+  if (!clientId || !clientSecret || !hasIntegrationTokenEncryptionKey()) {
     throw new Error(
-      'Missing Google Drive server configuration. Set GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY.',
+      `Missing Google Drive server configuration. Set GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, and ${PRIMARY_KEY_NAME}.`,
     );
   }
 
-  return { clientId, clientSecret, encryptionKey };
+  return { clientId, clientSecret, encryptionKey: getIntegrationTokenEncryptionKey() };
 }
 
 export function getGoogleDrivePickerConfig(): GoogleDrivePickerConfig {
@@ -50,7 +55,7 @@ export function isGoogleDriveConfigured(): boolean {
   return Boolean(
     process.env.GOOGLE_DRIVE_CLIENT_ID &&
     process.env.GOOGLE_DRIVE_CLIENT_SECRET &&
-    process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY &&
+    hasIntegrationTokenEncryptionKey() &&
     process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY &&
     process.env.NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID,
   );

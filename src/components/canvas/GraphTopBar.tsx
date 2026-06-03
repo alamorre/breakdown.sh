@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -33,10 +34,11 @@ import { notifyRunCompletion } from '@/lib/notifications/run-completion';
 import { RunAllProgressToast } from '@/components/canvas/RunAllProgressToast';
 import { cn } from '@/lib/utils';
 import {
-  ANTHROPIC_MODEL_OPTIONS,
-  getAnthropicModelOption,
-  resolveAnthropicModelId,
-  type AnthropicModelId,
+  AI_PROVIDER_OPTIONS,
+  getAiModelOption,
+  resolveAiModelSelection,
+  type AiModelId,
+  type AiProviderId,
 } from '@/lib/ai/models';
 import type {
   RunGraphNodeResult,
@@ -137,18 +139,27 @@ async function readRunGraphStream(
 interface GraphTopBarProps {
   graphId: string;
   initialName: string;
-  initialLlmModel: AnthropicModelId | null;
+  initialLlmProvider: AiProviderId | null;
+  initialLlmModel: AiModelId | null;
 }
 
-export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopBarProps) {
+export function GraphTopBar({
+  graphId,
+  initialName,
+  initialLlmProvider,
+  initialLlmModel,
+}: GraphTopBarProps) {
   const [name, setName] = useState(initialName);
   const [editing, setEditing] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
   const [cancelRequested, setCancelRequested] = useState(false);
   const [layouting, setLayouting] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
-  const [selectedModelId, setSelectedModelId] = useState<AnthropicModelId>(
-    resolveAnthropicModelId(initialLlmModel),
+  const [selectedModelId, setSelectedModelId] = useState<AiModelId>(
+    resolveAiModelSelection({
+      providerId: initialLlmProvider,
+      modelId: initialLlmModel,
+    }).modelId,
   );
 
   const { nodes, edges, graph, setNodeRunState, updateGraphData } = useGraphStore();
@@ -157,11 +168,16 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   const activeRunStartedAtRef = useRef<number | null>(null);
   const activeRunProgressNoteRef = useRef<string | undefined>(undefined);
   const activeProgressItemsRef = useRef<RunProgressItem[]>([]);
-  const selectedModel = getAnthropicModelOption(selectedModelId);
+  const selectedModel = getAiModelOption(selectedModelId);
 
   useEffect(() => {
-    setSelectedModelId(resolveAnthropicModelId(initialLlmModel));
-  }, [initialLlmModel]);
+    setSelectedModelId(
+      resolveAiModelSelection({
+        providerId: initialLlmProvider,
+        modelId: initialLlmModel,
+      }).modelId,
+    );
+  }, [initialLlmModel, initialLlmProvider]);
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -178,7 +194,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   }, [name, initialName, graphId]);
 
   const handleModelSelect = useCallback(
-    async (modelId: AnthropicModelId) => {
+    async (modelId: AiModelId) => {
       if (modelId === selectedModelId || runningAll) return;
 
       const previousModelId = selectedModelId;
@@ -237,13 +253,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
       const progressNote = note ?? activeRunProgressNoteRef.current;
       activeProgressItemsRef.current = items;
       toast.custom(
-        () => (
-          <RunAllProgressToast
-            items={items}
-            startedAt={startedAt}
-            note={progressNote}
-          />
-        ),
+        () => <RunAllProgressToast items={items} startedAt={startedAt} note={progressNote} />,
         {
           id: RUN_PROGRESS_TOAST_ID,
           duration: Infinity,
@@ -464,10 +474,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
           const startedAt = activeRunStartedAtRef.current ?? Date.now();
           toast.custom(
             () => (
-              <RunAllProgressToast
-                items={activeProgressItemsRef.current}
-                startedAt={startedAt}
-              />
+              <RunAllProgressToast items={activeProgressItemsRef.current} startedAt={startedAt} />
             ),
             {
               id: RUN_PROGRESS_TOAST_ID,
@@ -571,7 +578,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
             'min-w-[6.75rem] justify-start',
           )}
           disabled={runningAll || savingModel}
-          title="Anthropic model"
+          title="AI model"
         >
           {savingModel ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -581,16 +588,21 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
           <span>{selectedModel.label}</span>
           <ChevronDown className="ml-auto size-3" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuRadioGroup
             value={selectedModelId}
             disabled={runningAll || savingModel}
-            onValueChange={(value) => void handleModelSelect(value as AnthropicModelId)}
+            onValueChange={(value) => void handleModelSelect(value as AiModelId)}
           >
-            {ANTHROPIC_MODEL_OPTIONS.map((option) => (
-              <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
-                {option.label}
-              </DropdownMenuRadioItem>
+            {AI_PROVIDER_OPTIONS.map((provider) => (
+              <div key={provider.id}>
+                <DropdownMenuLabel>{provider.label}</DropdownMenuLabel>
+                {provider.models.map((option) => (
+                  <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
+                    {option.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </div>
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
