@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { Fragment, useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -18,7 +18,6 @@ import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -595,14 +594,22 @@ export function GraphTopBar({
             onValueChange={(value) => void handleModelSelect(value as AiModelId)}
           >
             {AI_PROVIDER_OPTIONS.map((provider) => (
-              <div key={provider.id}>
-                <DropdownMenuLabel>{provider.label}</DropdownMenuLabel>
+              <Fragment key={provider.id}>
+                <DropdownMenuRadioItem
+                  value={`provider-${provider.id}`}
+                  disabled
+                  className="opacity-100 [&_[data-slot=dropdown-menu-radio-item-indicator]]:hidden"
+                >
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {provider.label}
+                  </span>
+                </DropdownMenuRadioItem>
                 {provider.models.map((option) => (
                   <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
                     {option.label}
                   </DropdownMenuRadioItem>
                 ))}
-              </div>
+              </Fragment>
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
