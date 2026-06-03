@@ -87,6 +87,8 @@ If `breakdown.sh` is a production domain, configure Clerk accordingly:
 - Use the intended production Clerk environment variables in Vercel:
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
   - `CLERK_SECRET_KEY`
+  - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`
+  - `NEXT_PUBLIC_CLERK_SIGN_UP_URL`
 - Manage the production Clerk environment variables in Doppler `prd`, then
   redeploy after changing them.
 

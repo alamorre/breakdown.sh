@@ -3,7 +3,12 @@
 const requiredGroups = [
   {
     name: 'Clerk',
-    keys: ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY'],
+    keys: [
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      'CLERK_SECRET_KEY',
+      'NEXT_PUBLIC_CLERK_SIGN_IN_URL',
+      'NEXT_PUBLIC_CLERK_SIGN_UP_URL',
+    ],
   },
   {
     name: 'Supabase',
