@@ -1,10 +1,10 @@
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import { runNode } from '@/actions/node-actions';
 import { resolveAiModelSelection } from '@/lib/ai/models';
-import type { RunStatus, BreakdownNode } from '@/types/node';
-import type { BreakdownEdge } from '@/types/edge';
+import { resolveClerkActor, requireScope, type ThesisActor } from '@/lib/thesis-service/actor';
+import { runNodeForActor } from '@/lib/thesis-service/nodes';
+import type { RunStatus, ThesisNode } from '@/types/node';
+import type { ThesisEdge } from '@/types/edge';
 import type {
   RunGraphNodeResult,
   RunGraphResponse,
@@ -39,12 +39,10 @@ async function publishProgress(
   }
 }
 
-async function getUserId(): Promise<string> {
-  const { userId } = await auth();
-  if (!userId) {
-    throw new Error('Unauthorized');
-  }
-  return userId;
+async function getActor(actor: ThesisActor | undefined, scope: 'graphs:read' | 'runs:execute') {
+  const resolvedActor = actor ?? (await resolveClerkActor());
+  requireScope(resolvedActor, scope);
+  return resolvedActor;
 }
 
 function formatSkippedError(result: { upstreamNodeIds: string[] }, nodeNames: Map<string, string>) {
@@ -54,12 +52,12 @@ function formatSkippedError(result: { upstreamNodeIds: string[] }, nodeNames: Ma
   return `Skipped because upstream did not complete: ${upstreamNames.join(', ')}`;
 }
 
-function getNodeSummary(node: BreakdownNode) {
+function getNodeSummary(node: ThesisNode) {
   return (node.metadata as { summary?: string } | null)?.summary;
 }
 
 function toStatusNode(
-  node: BreakdownNode,
+  node: ThesisNode,
   overrides: Partial<Omit<RunGraphStatusNode, 'nodeId' | 'name'>> = {},
 ): RunGraphStatusNode {
   return {
@@ -137,7 +135,7 @@ async function setFailedSkippedOrCancelledNodeStatus(
 
 async function markNodesQueued(
   supabase: ReturnType<typeof createServerClient>,
-  nodes: BreakdownNode[],
+  nodes: ThesisNode[],
 ) {
   if (nodes.length === 0) {
     return;
@@ -160,16 +158,19 @@ async function markNodesQueued(
   }
 }
 
-export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatusResponse> {
+export async function getGraphRunStatus(
+  graphId: string,
+  actor?: ThesisActor,
+): Promise<RunGraphStatusResponse> {
   try {
-    const userId = await getUserId();
+    const resolvedActor = await getActor(actor, 'graphs:read');
     const supabase = createServerClient();
 
     const { data: graph, error: graphError } = await supabase
       .from('graphs')
       .select('id')
       .eq('id', graphId)
-      .eq('user_id', userId)
+      .eq('user_id', resolvedActor.userId)
       .single();
 
     if (graphError || !graph) {
@@ -187,7 +188,7 @@ export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatus
 
     return {
       data: {
-        nodes: ((nodes ?? []) as BreakdownNode[]).map((node) => toStatusNode(node)),
+        nodes: ((nodes ?? []) as ThesisNode[]).map((node) => toStatusNode(node)),
       },
       error: null,
     };
@@ -199,6 +200,7 @@ export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatus
 export async function runGraphWithScheduler(input: {
   graphId: string;
   runId: string;
+  actor?: ThesisActor;
   onProgress?: RunGraphProgressHandler;
 }): Promise<RunGraphResponse> {
   const parsed = runGraphInputSchema.safeParse(input);
@@ -206,7 +208,7 @@ export async function runGraphWithScheduler(input: {
     return { data: null, error: parsed.error.message };
   }
   try {
-    const userId = await getUserId();
+    const actor = await getActor(input.actor, 'runs:execute');
     const startedAt = Date.now();
     const supabase = createServerClient();
 
@@ -214,7 +216,7 @@ export async function runGraphWithScheduler(input: {
       .from('graphs')
       .select('*')
       .eq('id', parsed.data.graphId)
-      .eq('user_id', userId)
+      .eq('user_id', actor.userId)
       .single();
 
     if (graphError || !graph) {
@@ -238,8 +240,8 @@ export async function runGraphWithScheduler(input: {
       return { data: null, error: edgesResult.error.message };
     }
 
-    const nodes = (nodesResult.data ?? []) as BreakdownNode[];
-    const edges = (edgesResult.data ?? []) as BreakdownEdge[];
+    const nodes = (nodesResult.data ?? []) as ThesisNode[];
+    const edges = (edgesResult.data ?? []) as ThesisEdge[];
     const nodeNames = new Map(nodes.map((node) => [node.id, node.name]));
     const runEdges = edges.map((edge) => ({
       source: edge.source_node_id,
@@ -270,7 +272,7 @@ export async function runGraphWithScheduler(input: {
     });
 
     const summary = await runDependencyAwareBatches<
-      BreakdownNode,
+      ThesisNode,
       { output: string; summary?: string; lastRunAt: string }
     >({
       nodes,
@@ -316,11 +318,7 @@ export async function runGraphWithScheduler(input: {
         }
       },
       runNode: async (node) => {
-        const result = await runNode({ nodeId: node.id, llmModel: executionModel });
-        if (result.error || !result.data) {
-          throw new Error(result.error ?? 'Run failed');
-        }
-        return result.data;
+        return runNodeForActor(actor, { nodeId: node.id, llmModel: executionModel });
       },
     });
 

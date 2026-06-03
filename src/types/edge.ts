@@ -61,3 +61,5 @@ export interface BreakdownEdge {
   created_at: string;
   updated_at: string;
 }
+
+export type ThesisEdge = BreakdownEdge;

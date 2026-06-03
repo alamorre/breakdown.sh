@@ -1,0 +1,428 @@
+# Headless Agents
+
+Breakdown can be used as a headless DAG and reasoning workflow layer through REST routes, a local stdio MCP server, and a Streamable HTTP MCP endpoint. The local path is intentionally first-class: a developer can run the app, mint a scoped token, verify REST and MCP contracts, and exercise external-evaluator runs without adding hosted/vendor dependencies.
+
+## Local Setup
+
+Prerequisites:
+
+- Node and pnpm from `package.json`.
+- The app environment needed for local Supabase access.
+- A signed-in Breakdown user id, such as `user_...`, for CLI token creation.
+
+Install and start the app:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Set the local base URL used by scripts and the MCP package:
+
+```bash
+export THESIS_BASE_URL=http://localhost:3000
+```
+
+When using the local scripts, the dev server should be reachable at `THESIS_BASE_URL`. The scripts do not provision hosted services and do not call any vendor market-data provider.
+
+## Tokens
+
+Headless REST and MCP calls use opaque bearer tokens with the `bdk_...` prefix. Raw tokens are shown once. Breakdown stores only a token hash plus metadata.
+
+Create a token in the app:
+
+1. Sign in to Breakdown.
+2. Open `/settings`.
+3. Use **MCP Access** to create a token.
+4. Copy the raw `bdk_...` token when it is shown.
+
+Create a token from the local CLI when Supabase service-role env vars are available:
+
+```bash
+pnpm headless:token -- --user-id user_123 --name "Local MCP"
+```
+
+Create a narrowed token:
+
+```bash
+pnpm headless:token -- \
+  --user-id user_123 \
+  --name "Read-only MCP" \
+  --scopes graphs:read
+```
+
+Use the token:
+
+```bash
+export THESIS_API_TOKEN=bdk_...
+```
+
+Scopes:
+
+| Scope | Allows |
+| --- | --- |
+| `graphs:read` | List, read, export, and inspect workflow manifests. |
+| `graphs:write` | Create, update, delete, import, and patch graphs, nodes, and edges. |
+| `runs:execute` | Run nodes or graphs internally using the user's configured model provider. |
+| `runs:external_execute` | Create, read, and finalize external-evaluator runs. |
+| `runs:write_results` | Submit or block external step results. |
+| `runs:cancel` | Cancel internal graph runs. |
+
+Revocation:
+
+- In the app, return to `/settings` and revoke the token from **MCP Access**.
+- The backing storage sets `integration_tokens.revoked_at`.
+- Revoked, missing, malformed, or unknown tokens fail closed with `401`.
+
+Quick auth check:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Accept: application/json"
+```
+
+## Claude Desktop MCP
+
+Build the stdio MCP package:
+
+```bash
+pnpm --filter @breakdown/thesis-mcp build
+```
+
+Claude Desktop-style config:
+
+```json
+{
+  "mcpServers": {
+    "breakdown": {
+      "command": "node",
+      "args": ["/absolute/path/to/breakdown.sh/packages/thesis-mcp/dist/index.js"],
+      "env": {
+        "THESIS_BASE_URL": "http://localhost:3000",
+        "THESIS_API_TOKEN": "bdk_..."
+      }
+    }
+  }
+}
+```
+
+After restarting Claude Desktop, ask it to list Breakdown graphs or use the `decompose_reasoning_chain` prompt. Destructive MCP tools include destructive annotations and confirmation text, but clients should still ask before deleting, replacing imports, applying destructive patches, or cancelling runs.
+
+## Remote MCP And Hosted Consoles
+
+The Streamable HTTP MCP endpoint is:
+
+```text
+POST /api/mcp
+GET /api/mcp
+DELETE /api/mcp
+```
+
+Local example:
+
+```bash
+curl "$THESIS_BASE_URL/api/mcp" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+Hosted or desktop agent consoles can discover onboarding metadata:
+
+```text
+GET https://your-breakdown-host/api/integrations/headless-onboarding
+```
+
+After the user signs in to Breakdown in a browser session, a console or bridge can bootstrap a one-time bearer token:
+
+```text
+POST https://your-breakdown-host/api/integrations/headless-onboarding
+```
+
+Minimal body:
+
+```json
+{
+  "clientName": "Claude Desktop",
+  "providerName": "Anthropic"
+}
+```
+
+The response includes the raw bearer token once, the `/api/mcp` URL, the `/api/headless` REST base URL, and an authorization header value. OAuth-compatible consent screens, hosted marketplace registration, and vendor-specific setup are intentionally deferred; this endpoint keeps the local and self-hosted path provider-neutral.
+
+Hosted console guidance:
+
+- Use `/api/mcp` over HTTPS when the host supports Streamable HTTP MCP.
+- Use bearer tokens for this checkpoint.
+- Use external-evaluator mode when the host has its own web, filing, market-data, or workspace connectors.
+- If the host lacks required current-data tools, mark the step blocked instead of fabricating data.
+
+## REST Envelope
+
+Successful responses:
+
+```json
+{ "data": {}, "error": null }
+```
+
+Errors:
+
+```json
+{
+  "data": null,
+  "error": { "code": "forbidden", "message": "Missing required scope: graphs:write" }
+}
+```
+
+Use `Idempotency-Key` on create/import/patch/result requests when an agent may retry.
+
+## Core REST Routes
+
+Graph CRUD:
+
+- `GET /api/headless/graphs`
+- `POST /api/headless/graphs`
+- `GET /api/headless/graphs/:graphId`
+- `PATCH /api/headless/graphs/:graphId`
+- `DELETE /api/headless/graphs/:graphId`
+
+Node and edge CRUD:
+
+- `POST /api/headless/graphs/:graphId/nodes`
+- `PATCH /api/headless/nodes/:nodeId`
+- `DELETE /api/headless/nodes/:nodeId`
+- `POST /api/headless/graphs/:graphId/edges`
+- `PATCH /api/headless/edges/:edgeId`
+- `DELETE /api/headless/edges/:edgeId`
+
+Workflow helpers:
+
+- `GET /api/headless/graphs/:graphId/export`
+- `POST /api/headless/graphs/import`
+- `POST /api/headless/workflows/import-and-run`
+- `GET /api/headless/graphs/:graphId/manifest`
+- `POST /api/headless/graphs/:graphId/apply-patch`
+
+Internal runner:
+
+- `POST /api/headless/nodes/:nodeId/run`
+- `POST /api/headless/graphs/:graphId/run`
+- `GET /api/headless/graphs/:graphId/run-status`
+- `POST /api/headless/graphs/:graphId/run-cancel`
+
+External evaluator:
+
+- `POST /api/headless/graphs/:graphId/external-runs`
+- `GET /api/headless/external-runs/:runId`
+- `GET /api/headless/external-runs/:runId/next-step`
+- `GET /api/headless/external-runs/:runId/steps/:stepId/context`
+- `POST /api/headless/external-runs/:runId/steps/:stepId/result`
+- `POST /api/headless/external-runs/:runId/steps/:stepId/block`
+- `POST /api/headless/external-runs/:runId/finalize`
+
+## Internal-Run Examples
+
+Internal runs execute with the user's configured model provider. They are useful when Breakdown should do the model work itself. For local verification without model calls, poll run status.
+
+Create a graph:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: graph-$(uuidgen)" \
+  -d '{"name":"Internal runner example","description":"Local headless graph"}'
+```
+
+Run a graph internally after adding nodes:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"runId":"local-run-1"}'
+```
+
+Poll status:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run-status" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Accept: application/json"
+```
+
+Cancel queued work:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/run-cancel" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+## External-Evaluator Examples
+
+External-evaluator mode keeps reasoning in the host console:
+
+1. Create or import a graph.
+2. Create an external run.
+3. Fetch the next ready step.
+4. Fetch step context.
+5. Use host-console tools/connectors to do the work.
+6. Submit output and citations, or block the step with required data.
+7. Finalize the run.
+
+Import a local example graph and start the run in one call:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/workflows/import-and-run" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: import-run-$(uuidgen)" \
+  -d "{
+    \"importGraph\": $(cat examples/headless/create-improve-summarize.graph.json),
+    \"externalRun\": {
+      \"clientName\": \"Claude Desktop\",
+      \"providerName\": \"Anthropic\",
+      \"metadata\": { \"goal\": \"Improve and summarize a researched answer\" }
+    }
+  }"
+```
+
+Fetch the next step:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/next-step" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN"
+```
+
+Fetch context:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/context" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN"
+```
+
+Submit a result using `examples/headless/external-step-result.json` as the body after replacing the context version:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/result" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: result-$(uuidgen)" \
+  -d @examples/headless/external-step-result.json
+```
+
+Block a step when host tools or current data are unavailable:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/steps/$STEP_ID/block" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: block-$(uuidgen)" \
+  -d '{
+    "contextVersion": "REPLACE_WITH_CONTEXT_VERSION",
+    "reason": "Required current filings connector is unavailable in this console.",
+    "requiredData": ["latest filing", "current market data"],
+    "clientName": "Claude Desktop",
+    "providerName": "Anthropic"
+  }'
+```
+
+Finalize:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/external-runs/$RUN_ID/finalize" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"allowIncomplete":true}'
+```
+
+## Create, Improve, Summarize Workflow
+
+Use the checked-in example graph for a generic create/improve/summarize DAG:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs/import" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: graph-import-$(uuidgen)" \
+  -d @examples/headless/create-improve-summarize.graph.json
+```
+
+Replace `REPLACE_WITH_SUMMARIZE_NODE_ID` in the patch example with the real `summarize-delta` node id from the import response or graph readback. Then preview the improvement patch:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: patch-preview-$(uuidgen)" \
+  -d @examples/headless/improve.patch.json
+```
+
+Apply the same patch only after reviewing the preview:
+
+```bash
+curl "$THESIS_BASE_URL/api/headless/graphs/$GRAPH_ID/apply-patch" \
+  -H "Authorization: Bearer $THESIS_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: patch-apply-$(uuidgen)" \
+  -d @examples/headless/improve-apply.patch.json
+```
+
+MCP prompts that support this workflow:
+
+- `decompose_reasoning_chain`: turn a goal into a DAG outline.
+- `extend_graph_from_research`: propose a dry-run graph patch from findings.
+- `follow_thesis_breakdown`: execute a graph through external-evaluator steps.
+- `refresh_sources_and_propagate`: refresh stale/current-data nodes and downstream reasoning.
+- `summarize_graph_delta`: summarize changed outputs, blocked steps, citations, and open questions.
+
+## Financial And Current-Data Workflows
+
+Do not add a first-party market-data provider for the external-console flow. For stock, market, filing, or current-events work, the graph should include current-data nodes that instruct the host console to use its available tools/connectors. If those tools are unavailable, the host should submit an explicit data-gap result or block the step before producing any conclusion.
+
+## Local Verification
+
+With a dev server running and `THESIS_API_TOKEN` set, run the full local interface verification:
+
+```bash
+pnpm headless:verify
+```
+
+The verification script covers:
+
+- token authentication failure for an invalid bearer token
+- graph, node, and edge CRUD
+- graph patch dry-run preview and apply
+- internal run status polling
+- external step context, result submission, blocking, and finalization
+- Streamable HTTP MCP `tools/list` schema wiring
+
+For a smaller external-run smoke:
+
+```bash
+pnpm headless:smoke -- --goal "Research a public company with current evidence" --mode block
+pnpm headless:smoke -- --goal "Research a public company with current evidence" --mode submit
+```
+
+The smoke imports a generic two-step DAG, starts an external run, fetches the first step context, blocks or submits that step depending on `--mode`, finalizes with `allowIncomplete`, and prints the saved graph/run ids.
+
+CI-oriented checks:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+pnpm build
+pnpm --filter @breakdown/thesis-mcp typecheck
+pnpm --filter @breakdown/thesis-mcp build
+```

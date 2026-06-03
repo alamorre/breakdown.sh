@@ -1,0 +1,24 @@
+{
+  "dryRun": true,
+  "operations": [
+    {
+      "op": "add_node",
+      "clientId": "risk-review",
+      "name": "Review risks",
+      "nodeType": "external-evaluator",
+      "prompt": "Review the improved answer for missing evidence, stale claims, and unresolved risks.",
+      "metadata": {
+        "expectedOutput": "Risk review with missing evidence, stale claims, and unresolved risks."
+      },
+      "positionX": 960,
+      "positionY": 0
+    },
+    {
+      "op": "add_edge",
+      "sourceNodeId": "REPLACE_WITH_SUMMARIZE_NODE_ID",
+      "targetClientId": "risk-review",
+      "edgeType": "inputs_to",
+      "condition": "Review the summarized delta."
+    }
+  ]
+}
