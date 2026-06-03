@@ -263,21 +263,23 @@ Keep the current behavior: warn on cycle but don't block. In v1, if a user creat
 
 ---
 
-## Section 9: Node Execution — Run with Claude
+## Section 9: Node Execution — Run with User-Configured AI Providers
 
-The core feature. Clicking "Run" on a node sends its prompt + upstream context to Claude and writes the generated output.
+The core feature. Clicking "Run" on a node sends its prompt + upstream context
+to the user's selected AI provider and writes the generated output.
 
 ### AI Client
 
-Create `src/lib/ai/claude.ts`:
+Create provider clients that accept a user-scoped API key:
 
 ```typescript
-import Anthropic from '@anthropic-ai/sdk';
-
-export function createClaudeClient(): Anthropic {
-  return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+export async function createAiCompletion(input: {
+  providerId: 'anthropic' | 'openai' | 'gemini';
+  modelId: string;
+  apiKey: string;
+  prompt: string;
+}) {
+  // Call the selected provider with the user's stored key.
 }
 ```
 
@@ -465,7 +467,7 @@ Ship it.
 - Toast notifications: save failure, run complete, run error
 - Global error boundary
 - Deploy frontend to Vercel
-- Configure Vercel environment variables: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`
+- Configure Vercel environment variables: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `INTEGRATION_TOKEN_ENCRYPTION_KEY`
 - Verify production build end-to-end: auth → dashboard → create graph → add nodes → connect → edit prompts → run → see output → export
 
 **Done when:** The app is live. A new user can sign up, create a graph, add nodes, write prompts, connect them, run the graph, see AI-generated outputs, and export.

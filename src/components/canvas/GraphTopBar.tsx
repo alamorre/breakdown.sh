@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { Fragment, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -33,10 +34,11 @@ import { notifyRunCompletion } from '@/lib/notifications/run-completion';
 import { RunAllProgressToast } from '@/components/canvas/RunAllProgressToast';
 import { cn } from '@/lib/utils';
 import {
-  ANTHROPIC_MODEL_OPTIONS,
-  getAnthropicModelOption,
-  resolveAnthropicModelId,
-  type AnthropicModelId,
+  AI_PROVIDER_OPTIONS,
+  getAiModelOption,
+  resolveAiModelSelection,
+  type AiModelId,
+  type AiProviderId,
 } from '@/lib/ai/models';
 import type {
   RunGraphNodeResult,
@@ -47,6 +49,30 @@ import type {
 import { RUN_GRAPH_STREAM_CONTENT_TYPE } from '@/types/run-graph';
 
 const RUN_PROGRESS_TOAST_ID = 'run-all-progress';
+
+type ProviderStatus = {
+  provider: AiProviderId;
+  connected: boolean;
+};
+
+type AiProviderStatusResponse = {
+  configured: boolean;
+  providers: ProviderStatus[];
+  error?: string;
+};
+
+async function readAiProviderStatus(): Promise<AiProviderStatusResponse> {
+  const response = await fetch('/api/integrations/ai-providers/status', {
+    cache: 'no-store',
+  });
+  const data = (await response.json().catch(() => null)) as AiProviderStatusResponse | null;
+
+  if (!response.ok || !data) {
+    throw new Error(data?.error ?? 'Failed to load AI provider status');
+  }
+
+  return data;
+}
 
 function buildInitialProgressItems(
   nodes: CanvasNode[],
@@ -137,18 +163,30 @@ async function readRunGraphStream(
 interface GraphTopBarProps {
   graphId: string;
   initialName: string;
-  initialLlmModel: AnthropicModelId | null;
+  initialLlmProvider: AiProviderId | null;
+  initialLlmModel: AiModelId | null;
 }
 
-export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopBarProps) {
+export function GraphTopBar({
+  graphId,
+  initialName,
+  initialLlmProvider,
+  initialLlmModel,
+}: GraphTopBarProps) {
   const [name, setName] = useState(initialName);
   const [editing, setEditing] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
   const [cancelRequested, setCancelRequested] = useState(false);
   const [layouting, setLayouting] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
-  const [selectedModelId, setSelectedModelId] = useState<AnthropicModelId>(
-    resolveAnthropicModelId(initialLlmModel),
+  const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[] | null>(null);
+  const [providerStatusLoading, setProviderStatusLoading] = useState(true);
+  const [providerStatusError, setProviderStatusError] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<AiModelId>(
+    resolveAiModelSelection({
+      providerId: initialLlmProvider,
+      modelId: initialLlmModel,
+    }).modelId,
   );
 
   const { nodes, edges, graph, setNodeRunState, updateGraphData } = useGraphStore();
@@ -157,11 +195,54 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   const activeRunStartedAtRef = useRef<number | null>(null);
   const activeRunProgressNoteRef = useRef<string | undefined>(undefined);
   const activeProgressItemsRef = useRef<RunProgressItem[]>([]);
-  const selectedModel = getAnthropicModelOption(selectedModelId);
+  const selectedModel = getAiModelOption(selectedModelId);
+
+  const loadProviderStatuses = useCallback(async () => {
+    setProviderStatusLoading(true);
+    try {
+      const result = await readAiProviderStatus();
+      setProviderStatuses(result.providers);
+      setProviderStatusError(result.error ?? null);
+    } catch (err) {
+      setProviderStatusError(
+        err instanceof Error ? err.message : 'Failed to load AI provider status',
+      );
+    } finally {
+      setProviderStatusLoading(false);
+    }
+  }, []);
+
+  const connectedProviderIds = useMemo(() => {
+    return new Set(
+      (providerStatuses ?? [])
+        .filter((status) => status.connected)
+        .map((status) => status.provider),
+    );
+  }, [providerStatuses]);
+
+  const selectableProviders = useMemo(() => {
+    if (!providerStatuses) {
+      return [];
+    }
+
+    return AI_PROVIDER_OPTIONS.filter((provider) => connectedProviderIds.has(provider.id));
+  }, [connectedProviderIds, providerStatuses]);
+
+  const selectedProviderAvailable =
+    !providerStatuses || connectedProviderIds.has(selectedModel.provider);
 
   useEffect(() => {
-    setSelectedModelId(resolveAnthropicModelId(initialLlmModel));
-  }, [initialLlmModel]);
+    void loadProviderStatuses();
+  }, [loadProviderStatuses]);
+
+  useEffect(() => {
+    setSelectedModelId(
+      resolveAiModelSelection({
+        providerId: initialLlmProvider,
+        modelId: initialLlmModel,
+      }).modelId,
+    );
+  }, [initialLlmModel, initialLlmProvider]);
 
   const handleSave = useCallback(async () => {
     setEditing(false);
@@ -178,7 +259,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
   }, [name, initialName, graphId]);
 
   const handleModelSelect = useCallback(
-    async (modelId: AnthropicModelId) => {
+    async (modelId: AiModelId) => {
       if (modelId === selectedModelId || runningAll) return;
 
       const previousModelId = selectedModelId;
@@ -237,13 +318,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
       const progressNote = note ?? activeRunProgressNoteRef.current;
       activeProgressItemsRef.current = items;
       toast.custom(
-        () => (
-          <RunAllProgressToast
-            items={items}
-            startedAt={startedAt}
-            note={progressNote}
-          />
-        ),
+        () => <RunAllProgressToast items={items} startedAt={startedAt} note={progressNote} />,
         {
           id: RUN_PROGRESS_TOAST_ID,
           duration: Infinity,
@@ -464,10 +539,7 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
           const startedAt = activeRunStartedAtRef.current ?? Date.now();
           toast.custom(
             () => (
-              <RunAllProgressToast
-                items={activeProgressItemsRef.current}
-                startedAt={startedAt}
-              />
+              <RunAllProgressToast items={activeProgressItemsRef.current} startedAt={startedAt} />
             ),
             {
               id: RUN_PROGRESS_TOAST_ID,
@@ -564,35 +636,64 @@ export function GraphTopBar({ graphId, initialName, initialLlmModel }: GraphTopB
         Export
       </Button>
 
-      <DropdownMenu>
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) {
+            void loadProviderStatuses();
+          }
+        }}
+      >
         <DropdownMenuTrigger
           className={cn(
             buttonVariants({ variant: 'outline', size: 'sm' }),
             'min-w-[6.75rem] justify-start',
           )}
           disabled={runningAll || savingModel}
-          title="Anthropic model"
+          title="AI model"
         >
           {savingModel ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <BrainCircuit className="size-3.5" />
           )}
-          <span>{selectedModel.label}</span>
+          <span className={cn(!selectedProviderAvailable && 'text-muted-foreground')}>
+            {selectedModel.label}
+          </span>
           <ChevronDown className="ml-auto size-3" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuRadioGroup
-            value={selectedModelId}
-            disabled={runningAll || savingModel}
-            onValueChange={(value) => void handleModelSelect(value as AnthropicModelId)}
-          >
-            {ANTHROPIC_MODEL_OPTIONS.map((option) => (
-              <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
-                {option.label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+        <DropdownMenuContent align="end" className="w-56">
+          {providerStatusLoading && !providerStatuses ? (
+            <DropdownMenuItem disabled>Loading providers...</DropdownMenuItem>
+          ) : providerStatusError ? (
+            <DropdownMenuItem disabled>{providerStatusError}</DropdownMenuItem>
+          ) : selectableProviders.length === 0 ? (
+            <DropdownMenuItem disabled>Add a provider key in Settings</DropdownMenuItem>
+          ) : (
+            <DropdownMenuRadioGroup
+              value={selectedModelId}
+              disabled={runningAll || savingModel}
+              onValueChange={(value) => void handleModelSelect(value as AiModelId)}
+            >
+              {selectableProviders.map((provider) => (
+                <Fragment key={provider.id}>
+                  <DropdownMenuRadioItem
+                    value={`provider-${provider.id}`}
+                    disabled
+                    className="opacity-100 [&_[data-slot=dropdown-menu-radio-item-indicator]]:hidden"
+                  >
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {provider.label}
+                    </span>
+                  </DropdownMenuRadioItem>
+                  {provider.models.map((option) => (
+                    <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick>
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </Fragment>
+              ))}
+            </DropdownMenuRadioGroup>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

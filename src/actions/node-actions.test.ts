@@ -13,7 +13,8 @@ const mockUpdate = vi.fn();
 const mockDelete = vi.fn();
 const mockEq = vi.fn();
 const mockIn = vi.fn();
-const mockClaudeCreate = vi.fn();
+const mockGetUserAiProviderApiKey = vi.fn();
+const mockCreateAiCompletion = vi.fn();
 
 function createChain() {
   return {
@@ -33,12 +34,16 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 
-vi.mock('@/lib/ai/claude', () => ({
-  createClaudeClient: () => ({
-    messages: {
-      create: mockClaudeCreate,
-    },
-  }),
+vi.mock('@/lib/ai/credentials', () => ({
+  getAiProviderCredentialsSetupError: (err: unknown) =>
+    err instanceof Error ? err.message : 'Credential setup failed',
+  getProviderSetupPrompt: (providerId: string) =>
+    `Add your ${providerId} API key in Settings before running ${providerId} models.`,
+  getUserAiProviderApiKey: (...args: unknown[]) => mockGetUserAiProviderApiKey(...args),
+}));
+
+vi.mock('@/lib/ai/provider-completion', () => ({
+  createAiCompletion: (...args: unknown[]) => mockCreateAiCompletion(...args),
 }));
 
 vi.mock('@/lib/ai/build-prompt', () => ({
@@ -49,9 +54,11 @@ vi.mock('@/lib/ai/build-prompt', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockReturnValue({ userId: 'user_123' });
-  mockClaudeCreate.mockResolvedValue({
-    content: [{ type: 'text', text: 'Generated output' }],
-    usage: { input_tokens: 100, output_tokens: 50 },
+  mockGetUserAiProviderApiKey.mockResolvedValue('sk-provider-test');
+  mockCreateAiCompletion.mockResolvedValue({
+    output: 'Generated output',
+    inputTokens: 100,
+    outputTokens: 50,
   });
 });
 
@@ -213,13 +220,17 @@ describe('runNode', () => {
     const result = await runNode({ nodeId });
 
     expect(result.error).toBeNull();
-    expect(mockClaudeCreate).toHaveBeenNthCalledWith(
+    expect(mockGetUserAiProviderApiKey).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_123',
+      providerId: 'anthropic',
+    });
+    expect(mockCreateAiCompletion).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ model: 'claude-opus-4-8' }),
+      expect.objectContaining({ providerId: 'anthropic', modelId: 'claude-opus-4-8' }),
     );
-    expect(mockClaudeCreate).toHaveBeenNthCalledWith(
+    expect(mockCreateAiCompletion).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ model: 'claude-haiku-4-5-20251001' }),
+      expect.objectContaining({ providerId: 'anthropic', modelId: 'claude-haiku-4-5-20251001' }),
     );
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({ llm_model: 'claude-opus-4-8' }),
@@ -251,9 +262,9 @@ describe('runNode', () => {
     const result = await runNode({ nodeId });
 
     expect(result.error).toBeNull();
-    expect(mockClaudeCreate).toHaveBeenNthCalledWith(
+    expect(mockCreateAiCompletion).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ model: 'claude-sonnet-4-6' }),
+      expect.objectContaining({ providerId: 'anthropic', modelId: 'claude-sonnet-4-6' }),
     );
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({ llm_model: 'claude-sonnet-4-6' }),
@@ -311,5 +322,38 @@ describe('runNode', () => {
     expect(result.data).toBeNull();
     expect(result.error).toContain('Stale source input: Market Source');
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('should return a setup prompt when the selected provider key is missing', async () => {
+    const nodeId = '550e8400-e29b-41d4-a716-446655440010';
+    const aiNode = {
+      id: nodeId,
+      graph_id: '550e8400-e29b-41d4-a716-446655440001',
+      node_type: 'default',
+      name: 'Analysis Node',
+      prompt: 'Analyze source',
+      output: null,
+      run_status: 'idle',
+      run_error: null,
+      last_run_at: null,
+      metadata: {},
+      created_at: '2026-05-31T00:00:00Z',
+      updated_at: '2026-05-31T00:00:00Z',
+    };
+
+    mockSingle
+      .mockResolvedValueOnce({ data: aiNode, error: null })
+      .mockResolvedValueOnce({
+        data: { llm_provider: 'openai', llm_model: 'gpt-5.4' },
+        error: null,
+      });
+    mockGetUserAiProviderApiKey.mockResolvedValueOnce(null);
+
+    const { runNode } = await import('@/actions/node-actions');
+    const result = await runNode({ nodeId });
+
+    expect(result.data).toBeNull();
+    expect(result.error).toContain('Add your openai API key in Settings');
+    expect(mockCreateAiCompletion).not.toHaveBeenCalled();
   });
 });

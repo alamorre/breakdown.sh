@@ -226,7 +226,7 @@ Skill docs are portable text files. Users can:
 - **Database — Supabase (PostgreSQL):** Full Postgres with JSONB for flexible node data, recursive CTEs for graph traversal, Row Level Security for multi-tenancy, pgvector for future semantic search, real-time subscriptions for live collaboration.
 - **Auth — Clerk:** Fast integration, social logins, org/team support, webhook events. Faster MVP path than WorkOS.
 - **Agent Orchestration — Trigger.dev v3:** Durable TypeScript tasks with automatic retries, checkpointing, queue-based concurrency. Open-source (Apache 2.0), self-hostable. Handles long-running LLM calls, fan-out for graph propagation, and scheduled staleness checks.
-- **LLM Provider — Anthropic Claude API (primary), OpenAI (fallback):** Skill docs are provider-agnostic prompt templates. Claude for deep reasoning, GPT for fast evaluations.
+- **LLM Providers — Anthropic, OpenAI, and Gemini:** Skill docs are provider-agnostic prompt templates, and users manage their own provider keys.
 - **File Storage — Supabase Storage (S3-compatible):** Document sources, exported graphs, skill doc library.
 - **Hosting — Vercel (frontend) + Supabase (backend) + Trigger.dev Cloud (jobs):** Standard Next.js deployment. Supabase handles DB + auth + storage. Trigger.dev handles background agent work.
 - **Caching — Vercel KV (Upstash Redis):** Cache frequently accessed graph structures, rate limit LLM calls.

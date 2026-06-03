@@ -23,6 +23,7 @@ export function GraphEditor({ graph, initialNodes, initialEdges }: GraphEditorPr
         <GraphTopBar
           graphId={graph.id}
           initialName={graph.name}
+          initialLlmProvider={graph.llm_provider}
           initialLlmModel={graph.llm_model}
         />
         <div className="flex flex-1 overflow-hidden">

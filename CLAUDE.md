@@ -15,7 +15,7 @@ A node-based reasoning canvas where hypotheses, assumptions, and conclusions are
 - **State:** Zustand
 - **Database:** Supabase (PostgreSQL + RLS + JSONB)
 - **Auth:** Clerk
-- **AI:** Anthropic Claude API (`@anthropic-ai/sdk`)
+- **AI:** User-configured Anthropic, OpenAI, and Gemini provider keys
 - **Auto Layout:** ELKjs
 - **Rich Text:** Tiptap
 - **Drag & Drop:** @dnd-kit

@@ -4,7 +4,18 @@ import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
-import { ANTHROPIC_MODEL_IDS, DEFAULT_ANTHROPIC_MODEL_ID } from '@/lib/ai/models';
+import {
+  AI_MODEL_IDS,
+  DEFAULT_AI_MODEL_ID,
+  DEFAULT_AI_PROVIDER_ID,
+  getProviderForModel,
+} from '@/lib/ai/models';
+import {
+  getActiveAiProviderCredential,
+  getAiProviderCredentialsSetupError,
+  getProviderSetupPrompt,
+  hasAiProviderCredentialEncryption,
+} from '@/lib/ai/credentials';
 import type { Graph } from '@/types/graph';
 import type { ThesisNode } from '@/types/node';
 import type { ThesisEdge } from '@/types/edge';
@@ -18,7 +29,7 @@ const updateGraphSchema = z.object({
   graphId: z.string().uuid(),
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional(),
-  llmModel: z.enum(ANTHROPIC_MODEL_IDS).optional(),
+  llmModel: z.enum(AI_MODEL_IDS).optional(),
 });
 
 const deleteGraphSchema = z.object({
@@ -53,7 +64,8 @@ export async function createGraph(
       user_id: userId,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
-      llm_model: DEFAULT_ANTHROPIC_MODEL_ID,
+      llm_provider: DEFAULT_AI_PROVIDER_ID,
+      llm_model: DEFAULT_AI_MODEL_ID,
     })
     .select()
     .single();
@@ -99,7 +111,24 @@ export async function updateGraph(
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
-  if (parsed.data.llmModel !== undefined) updates.llm_model = parsed.data.llmModel;
+  if (parsed.data.llmModel !== undefined) {
+    const providerId = getProviderForModel(parsed.data.llmModel);
+    if (!hasAiProviderCredentialEncryption()) {
+      return { data: null, error: 'Stored provider keys are not configured for this deployment.' };
+    }
+
+    try {
+      const credential = await getActiveAiProviderCredential(supabase, { userId, providerId });
+      if (!credential) {
+        return { data: null, error: getProviderSetupPrompt(providerId) };
+      }
+    } catch (err) {
+      return { data: null, error: getAiProviderCredentialsSetupError(err) };
+    }
+
+    updates.llm_provider = providerId;
+    updates.llm_model = parsed.data.llmModel;
+  }
 
   const { data, error } = await supabase
     .from('graphs')

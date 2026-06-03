@@ -8,11 +8,11 @@ real values belong in Doppler.
 
 Create a Doppler project named `breakdown-sh` and use the default root configs:
 
-| App environment | Doppler config | Consumer |
-| --- | --- | --- |
-| Local development | `dev` | `pnpm dev:secrets` via the Doppler CLI |
-| Staging | `stg` | Vercel Preview environment sync |
-| Production | `prd` | Vercel Production environment sync |
+| App environment   | Doppler config | Consumer                               |
+| ----------------- | -------------- | -------------------------------------- |
+| Local development | `dev`          | `pnpm dev:secrets` via the Doppler CLI |
+| Staging           | `stg`          | Vercel Preview environment sync        |
+| Production        | `prd`          | Vercel Production environment sync     |
 
 Doppler creates `dev`, `stg`, and `prd` by default for new projects. Use branch
 configs only for short-lived overrides; promote stable changes back to the root
@@ -22,14 +22,14 @@ config.
 
 Every config must define these variables:
 
-| Group | Variables |
-| --- | --- |
-| Clerk | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL` |
-| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| Google Drive | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY`, `NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY`, `NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID` |
+| Group                          | Variables                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Clerk                          | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     |
+| Supabase                       | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`                                      |
+| Stored integration credentials | `INTEGRATION_TOKEN_ENCRYPTION_KEY`                                                                                            |
+| Google Drive                   | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY`, `NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID` |
 
-`GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY` must decode to 32 bytes. Generate a value
+`INTEGRATION_TOKEN_ENCRYPTION_KEY` must decode to 32 bytes. Generate a value
 with:
 
 ```sh
@@ -40,6 +40,9 @@ openssl rand -base64 32
 in Doppler so each environment has one source of truth. Next.js inlines these
 values at build time, so staging and production must receive them before
 `next build` runs.
+
+AI provider API keys are user-managed in Settings and stored encrypted in
+Supabase. Do not add shared provider API keys to Doppler or Vercel.
 
 ## Local Development
 
@@ -76,9 +79,9 @@ doppler run -- pnpm secrets:check
 Connect Doppler to Vercel with one sync per environment:
 
 | Vercel environment | Doppler config |
-| --- | --- |
-| Preview | `stg` |
-| Production | `prd` |
+| ------------------ | -------------- |
+| Preview            | `stg`          |
+| Production         | `prd`          |
 
 Use Vercel's Sensitive environment variable type for synced values. After each
 sync is configured, Doppler should be the place where values are added, edited,

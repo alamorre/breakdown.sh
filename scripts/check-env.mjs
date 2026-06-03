@@ -12,18 +12,17 @@ const requiredGroups = [
   },
   {
     name: 'Supabase',
-    keys: ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'],
-  },
-  {
-    name: 'Anthropic',
-    keys: ['ANTHROPIC_API_KEY'],
+    keys: [
+      'NEXT_PUBLIC_SUPABASE_URL',
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ],
   },
   {
     name: 'Google Drive integration',
     keys: [
       'GOOGLE_DRIVE_CLIENT_ID',
       'GOOGLE_DRIVE_CLIENT_SECRET',
-      'GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY',
       'NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY',
       'NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID',
     ],
@@ -37,13 +36,27 @@ const missingGroups = requiredGroups
   }))
   .filter((group) => group.keys.length > 0);
 
-const encryptionKey = process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY;
-const hasInvalidGoogleDriveEncryptionKey =
+if (
+  !process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY &&
+  !process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY
+) {
+  missingGroups.push({
+    name: 'Stored integration credentials',
+    keys: ['INTEGRATION_TOKEN_ENCRYPTION_KEY'],
+  });
+}
+
+const encryptionKey =
+  process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY ?? process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY;
+const encryptionKeyName = process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY
+  ? 'INTEGRATION_TOKEN_ENCRYPTION_KEY'
+  : 'GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY';
+const hasInvalidEncryptionKey =
   typeof encryptionKey === 'string' &&
   encryptionKey.length > 0 &&
   Buffer.from(encryptionKey, 'base64').length !== 32;
 
-if (missingGroups.length > 0 || hasInvalidGoogleDriveEncryptionKey) {
+if (missingGroups.length > 0 || hasInvalidEncryptionKey) {
   console.error('Environment validation failed.');
 
   for (const group of missingGroups) {
@@ -53,9 +66,9 @@ if (missingGroups.length > 0 || hasInvalidGoogleDriveEncryptionKey) {
     }
   }
 
-  if (hasInvalidGoogleDriveEncryptionKey) {
-    console.error('\nGoogle Drive integration:');
-    console.error('  - GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY must decode to 32 bytes');
+  if (hasInvalidEncryptionKey) {
+    console.error('\nStored integration credentials:');
+    console.error(`  - ${encryptionKeyName} must decode to 32 bytes`);
   }
 
   console.error('\nLoad secrets with Doppler, for example: pnpm dev:secrets');
