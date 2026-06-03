@@ -8,38 +8,38 @@ import {
   type EdgeChange,
 } from '@xyflow/react';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode, RunStatus } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode, RunStatus } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 import { batchUpdateNodePositions } from '@/actions/graph-actions';
 
 export interface CanvasNode extends Node {
   data: {
-    thesisNode: ThesisNode;
+    breakdownNode: BreakdownNode;
   };
 }
 
 export interface CanvasEdge extends Edge {
   data: {
-    thesisEdge: ThesisEdge;
+    breakdownEdge: BreakdownEdge;
   };
 }
 
-function toCanvasNode(node: ThesisNode): CanvasNode {
+function toCanvasNode(node: BreakdownNode): CanvasNode {
   return {
     id: node.id,
-    type: 'thesis',
+    type: 'breakdown',
     position: { x: node.position_x, y: node.position_y },
-    data: { thesisNode: node },
+    data: { breakdownNode: node },
   };
 }
 
-function toCanvasEdge(edge: ThesisEdge): CanvasEdge {
+function toCanvasEdge(edge: BreakdownEdge): CanvasEdge {
   return {
     id: edge.id,
     source: edge.source_node_id,
     target: edge.target_node_id,
-    type: 'thesis',
-    data: { thesisEdge: edge },
+    type: 'breakdown',
+    data: { breakdownEdge: edge },
   };
 }
 
@@ -53,12 +53,12 @@ interface GraphStoreState {
 }
 
 interface GraphStoreActions {
-  hydrate: (graph: Graph, nodes: ThesisNode[], edges: ThesisEdge[]) => void;
+  hydrate: (graph: Graph, nodes: BreakdownNode[], edges: BreakdownEdge[]) => void;
   onNodesChange: (changes: NodeChange<CanvasNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<CanvasEdge>[]) => void;
-  addNode: (node: ThesisNode) => void;
+  addNode: (node: BreakdownNode) => void;
   updateGraphData: (updates: Partial<Graph>) => void;
-  updateNodeData: (nodeId: string, updates: Partial<ThesisNode>) => void;
+  updateNodeData: (nodeId: string, updates: Partial<BreakdownNode>) => void;
   setNodeRunState: (
     nodeId: string,
     state: {
@@ -70,8 +70,8 @@ interface GraphStoreActions {
     },
   ) => void;
   removeNode: (nodeId: string) => void;
-  addEdge: (edge: ThesisEdge) => void;
-  updateEdgeData: (edgeId: string, updates: Partial<ThesisEdge>) => void;
+  addEdge: (edge: BreakdownEdge) => void;
+  updateEdgeData: (edgeId: string, updates: Partial<BreakdownEdge>) => void;
   removeEdge: (edgeId: string) => void;
   selectNode: (nodeId: string | null) => void;
   selectEdge: (edgeId: string | null) => void;
@@ -139,7 +139,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
           ? {
               ...n,
               data: {
-                thesisNode: { ...n.data.thesisNode, ...updates },
+                breakdownNode: { ...n.data.breakdownNode, ...updates },
               },
             }
           : n,
@@ -154,14 +154,14 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
           ? {
               ...n,
               data: {
-                thesisNode: {
-                  ...n.data.thesisNode,
+                breakdownNode: {
+                  ...n.data.breakdownNode,
                   run_status: runState.run_status,
                   ...(runState.output !== undefined && { output: runState.output }),
                   ...(runState.run_error !== undefined && { run_error: runState.run_error }),
                   ...(runState.last_run_at !== undefined && { last_run_at: runState.last_run_at }),
                   ...(runState.metadata && {
-                    metadata: { ...n.data.thesisNode.metadata, ...runState.metadata },
+                    metadata: { ...n.data.breakdownNode.metadata, ...runState.metadata },
                   }),
                 },
               },
@@ -176,8 +176,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       nodes: state.nodes.filter((n) => n.id !== nodeId),
       edges: state.edges.filter(
         (e) =>
-          e.data.thesisEdge.source_node_id !== nodeId &&
-          e.data.thesisEdge.target_node_id !== nodeId,
+          e.data.breakdownEdge.source_node_id !== nodeId &&
+          e.data.breakdownEdge.target_node_id !== nodeId,
       ),
       selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
     }));
@@ -196,7 +196,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
           ? {
               ...e,
               data: {
-                thesisEdge: { ...e.data.thesisEdge, ...updates },
+                breakdownEdge: { ...e.data.breakdownEdge, ...updates },
               },
             }
           : e,

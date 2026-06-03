@@ -3,8 +3,8 @@
 import { ReactFlowProvider } from '@xyflow/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 import { GraphCanvas } from '@/components/canvas/GraphCanvas';
 import { GraphTopBar } from '@/components/canvas/GraphTopBar';
 import { NodeSidebar } from '@/components/canvas/NodeSidebar';
@@ -12,8 +12,8 @@ import { NodeDetailPanel } from '@/components/canvas/NodeDetailPanel';
 
 interface GraphEditorProps {
   graph: Graph;
-  initialNodes: ThesisNode[];
-  initialEdges: ThesisEdge[];
+  initialNodes: BreakdownNode[];
+  initialEdges: BreakdownEdge[];
 }
 
 export function GraphEditor({ graph, initialNodes, initialEdges }: GraphEditorProps) {

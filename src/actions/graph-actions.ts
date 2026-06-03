@@ -17,8 +17,8 @@ import {
   hasAiProviderCredentialEncryption,
 } from '@/lib/ai/credentials';
 import type { Graph } from '@/types/graph';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 
 const createGraphSchema = z.object({
   name: z.string().min(1).max(200),
@@ -172,7 +172,7 @@ export async function deleteGraph(
 }
 
 export async function getGraph(input: z.infer<typeof getGraphSchema>): Promise<{
-  data: { graph: Graph; nodes: ThesisNode[]; edges: ThesisEdge[] } | null;
+  data: { graph: Graph; nodes: BreakdownNode[]; edges: BreakdownEdge[] } | null;
   error: string | null;
 }> {
   const userId = await getUserId();
@@ -209,8 +209,8 @@ export async function getGraph(input: z.infer<typeof getGraphSchema>): Promise<{
   return {
     data: {
       graph: graph as Graph,
-      nodes: (nodesResult.data ?? []) as ThesisNode[],
-      edges: (edgesResult.data ?? []) as ThesisEdge[],
+      nodes: (nodesResult.data ?? []) as BreakdownNode[],
+      edges: (edgesResult.data ?? []) as BreakdownEdge[],
     },
     error: null,
   };

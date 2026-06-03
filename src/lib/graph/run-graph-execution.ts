@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { runNode } from '@/actions/node-actions';
 import { resolveAiModelSelection } from '@/lib/ai/models';
-import type { RunStatus, ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { RunStatus, BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 import type {
   RunGraphNodeResult,
   RunGraphResponse,
@@ -54,12 +54,12 @@ function formatSkippedError(result: { upstreamNodeIds: string[] }, nodeNames: Ma
   return `Skipped because upstream did not complete: ${upstreamNames.join(', ')}`;
 }
 
-function getNodeSummary(node: ThesisNode) {
+function getNodeSummary(node: BreakdownNode) {
   return (node.metadata as { summary?: string } | null)?.summary;
 }
 
 function toStatusNode(
-  node: ThesisNode,
+  node: BreakdownNode,
   overrides: Partial<Omit<RunGraphStatusNode, 'nodeId' | 'name'>> = {},
 ): RunGraphStatusNode {
   return {
@@ -137,7 +137,7 @@ async function setFailedSkippedOrCancelledNodeStatus(
 
 async function markNodesQueued(
   supabase: ReturnType<typeof createServerClient>,
-  nodes: ThesisNode[],
+  nodes: BreakdownNode[],
 ) {
   if (nodes.length === 0) {
     return;
@@ -187,7 +187,7 @@ export async function getGraphRunStatus(graphId: string): Promise<RunGraphStatus
 
     return {
       data: {
-        nodes: ((nodes ?? []) as ThesisNode[]).map((node) => toStatusNode(node)),
+        nodes: ((nodes ?? []) as BreakdownNode[]).map((node) => toStatusNode(node)),
       },
       error: null,
     };
@@ -238,8 +238,8 @@ export async function runGraphWithScheduler(input: {
       return { data: null, error: edgesResult.error.message };
     }
 
-    const nodes = (nodesResult.data ?? []) as ThesisNode[];
-    const edges = (edgesResult.data ?? []) as ThesisEdge[];
+    const nodes = (nodesResult.data ?? []) as BreakdownNode[];
+    const edges = (edgesResult.data ?? []) as BreakdownEdge[];
     const nodeNames = new Map(nodes.map((node) => [node.id, node.name]));
     const runEdges = edges.map((edge) => ({
       source: edge.source_node_id,
@@ -270,7 +270,7 @@ export async function runGraphWithScheduler(input: {
     });
 
     const summary = await runDependencyAwareBatches<
-      ThesisNode,
+      BreakdownNode,
       { output: string; summary?: string; lastRunAt: string }
     >({
       nodes,

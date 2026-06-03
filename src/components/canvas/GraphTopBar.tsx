@@ -84,7 +84,7 @@ function buildInitialProgressItems(
 
   return nodes.map((node) => ({
     nodeId: node.id,
-    name: node.data.thesisNode.name,
+    name: node.data.breakdownNode.name,
     runStatus: runningIds.has(node.id) ? 'running' : 'queued',
     error: runningIds.has(node.id)
       ? null
@@ -113,7 +113,7 @@ function buildResultProgressItems(
   results: RunGraphNodeResult[],
   orderedNodes: CanvasNode[],
 ): RunProgressItem[] {
-  const nodeNames = new Map(orderedNodes.map((node) => [node.id, node.data.thesisNode.name]));
+  const nodeNames = new Map(orderedNodes.map((node) => [node.id, node.data.breakdownNode.name]));
 
   return sortRunProgressItems(
     results.map((result) => ({
@@ -285,8 +285,8 @@ export function GraphTopBar({
     const currentNodes = useGraphStore.getState().nodes;
     const currentEdges = useGraphStore.getState().edges;
     const runEdges = currentEdges.map((edge) => ({
-      source: edge.data.thesisEdge.source_node_id,
-      target: edge.data.thesisEdge.target_node_id,
+      source: edge.data.breakdownEdge.source_node_id,
+      target: edge.data.breakdownEdge.target_node_id,
     }));
 
     if (currentNodes.length === 0) {
@@ -331,12 +331,12 @@ export function GraphTopBar({
         node.id,
         {
           nodeId: node.id,
-          name: node.data.thesisNode.name,
-          runStatus: node.data.thesisNode.run_status,
-          output: node.data.thesisNode.output,
-          summary: (node.data.thesisNode.metadata as { summary?: string }).summary,
-          lastRunAt: node.data.thesisNode.last_run_at,
-          error: node.data.thesisNode.run_error,
+          name: node.data.breakdownNode.name,
+          runStatus: node.data.breakdownNode.run_status,
+          output: node.data.breakdownNode.output,
+          summary: (node.data.breakdownNode.metadata as { summary?: string }).summary,
+          lastRunAt: node.data.breakdownNode.last_run_at,
+          error: node.data.breakdownNode.run_error,
         },
       ]),
     );

@@ -15,7 +15,7 @@ import { createNode } from '@/actions/node-actions';
 import { SOURCE_NODE_TYPES, DATA_SOURCE_DEFAULT_NAMES } from '@/types/data-source';
 import { useGoogleDrivePicker } from '@/components/integrations/google-drive/GoogleDrivePicker';
 import type { PickedGoogleDriveFile } from '@/lib/integrations/google-drive/source';
-import type { ThesisNode } from '@/types/node';
+import type { BreakdownNode } from '@/types/node';
 
 const NODE_OPTIONS = [
   { label: 'AI Node', icon: Brain, nodeType: 'default', defaultName: 'New Node' },
@@ -73,7 +73,7 @@ export function NodeSidebar() {
         }),
       });
       const result = (await response.json().catch(() => null)) as {
-        data?: ThesisNode[];
+        data?: BreakdownNode[];
         error?: string;
       } | null;
 

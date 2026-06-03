@@ -18,8 +18,8 @@ import { fetchGoogleSheet } from '@/lib/fetch/fetch-google-sheet';
 import { fetchGoogleDriveSource } from '@/lib/integrations/google-drive/export';
 import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
 import { isGoogleDriveSourceConfig } from '@/types/data-source';
-import type { ThesisNode } from '@/types/node';
-import type { ThesisEdge } from '@/types/edge';
+import type { BreakdownNode } from '@/types/node';
+import type { BreakdownEdge } from '@/types/edge';
 
 const createNodeSchema = z.object({
   graphId: z.string().uuid(),
@@ -57,7 +57,7 @@ async function getUserId(): Promise<string> {
 
 async function runDataSourceNode(
   supabase: ReturnType<typeof createServerClient>,
-  node: ThesisNode,
+  node: BreakdownNode,
   userId: string,
 ): Promise<{
   data: { output: string; lastRunAt: string; metadata?: Record<string, unknown> } | null;
@@ -195,7 +195,7 @@ async function runDataSourceNode(
 
 export async function createNode(
   input: z.infer<typeof createNodeSchema>,
-): Promise<{ data: ThesisNode | null; error: string | null }> {
+): Promise<{ data: BreakdownNode | null; error: string | null }> {
   await getUserId();
   const parsed = createNodeSchema.safeParse(input);
   if (!parsed.success) {
@@ -221,12 +221,12 @@ export async function createNode(
     return { data: null, error: error.message };
   }
 
-  return { data: data as ThesisNode, error: null };
+  return { data: data as BreakdownNode, error: null };
 }
 
 export async function updateNode(
   input: z.infer<typeof updateNodeSchema>,
-): Promise<{ data: ThesisNode | null; error: string | null }> {
+): Promise<{ data: BreakdownNode | null; error: string | null }> {
   await getUserId();
   const parsed = updateNodeSchema.safeParse(input);
   if (!parsed.success) {
@@ -253,7 +253,7 @@ export async function updateNode(
     return { data: null, error: error.message };
   }
 
-  return { data: data as ThesisNode, error: null };
+  return { data: data as BreakdownNode, error: null };
 }
 
 export async function deleteNode(
@@ -302,7 +302,7 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
     return { data: null, error: nodeError?.message ?? 'Node not found' };
   }
 
-  const typedNode = node as ThesisNode;
+  const typedNode = node as BreakdownNode;
 
   // Branch: data source nodes fetch external content instead of calling Claude
   if (isDataSourceNode(typedNode.node_type)) {
@@ -322,7 +322,7 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
     return { data: null, error: edgesError.message };
   }
 
-  const typedEdges = (inboundEdges ?? []) as ThesisEdge[];
+  const typedEdges = (inboundEdges ?? []) as BreakdownEdge[];
   const upstreamInputs: UpstreamInput[] = [];
 
   if (typedEdges.length > 0) {
@@ -336,8 +336,8 @@ export async function runNode(input: z.infer<typeof runNodeSchema>): Promise<{
       return { data: null, error: sourceError.message };
     }
 
-    const sourceMap = new Map<string, ThesisNode>();
-    for (const sn of (sourceNodes ?? []) as ThesisNode[]) {
+    const sourceMap = new Map<string, BreakdownNode>();
+    for (const sn of (sourceNodes ?? []) as BreakdownNode[]) {
       sourceMap.set(sn.id, sn);
     }
 

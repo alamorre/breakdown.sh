@@ -1,5 +1,5 @@
 import { getDataSourceType } from '@/types/data-source';
-import type { ThesisNode } from '@/types/node';
+import type { BreakdownNode } from '@/types/node';
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -7,7 +7,7 @@ const DAY_MS = 24 * HOUR_MS;
 
 export const SOURCE_STALE_AFTER_MS = DAY_MS;
 
-type SourceFreshnessNode = Pick<ThesisNode, 'node_type' | 'last_run_at'>;
+type SourceFreshnessNode = Pick<BreakdownNode, 'node_type' | 'last_run_at'>;
 
 export function isRefreshableSourceNode(nodeType: string): boolean {
   const sourceType = getDataSourceType(nodeType);

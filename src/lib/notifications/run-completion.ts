@@ -62,7 +62,7 @@ async function showBrowserNotification(body: string, url?: string) {
 
   const notification = new notificationApi(RUN_COMPLETION_TITLE, {
     body,
-    tag: 'thesis-run-completion',
+    tag: 'breakdown-run-completion',
   });
 
   notification.onclick = () => {

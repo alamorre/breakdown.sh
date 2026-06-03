@@ -1,4 +1,4 @@
-import type { ThesisNode } from '@/types/node';
+import type { BreakdownNode } from '@/types/node';
 import { sortTopologically, type DirectedEdge, type DirectedNode } from './topological-sort';
 
 export const RUN_ALL_MAX_CONCURRENCY = 3;
@@ -47,7 +47,7 @@ export class RunAllCycleError extends Error {
   }
 }
 
-export function isParallelRunEligibleNode(node: Pick<ThesisNode, 'node_type'>): boolean {
+export function isParallelRunEligibleNode(node: Pick<BreakdownNode, 'node_type'>): boolean {
   return typeof node.node_type === 'string';
 }
 
