@@ -197,9 +197,9 @@ export function AiProviderSettings() {
           return (
             <div
               key={provider.id}
-              className="grid gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[9rem_1fr]"
+              className="grid gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[9rem_minmax(0,1fr)] md:items-start"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-col md:items-start md:gap-1">
                 <span className="font-medium">{provider.label}</span>
                 {loading ? (
                   <Badge variant="secondary">Checking</Badge>
@@ -213,7 +213,7 @@ export function AiProviderSettings() {
                 )}
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 {credential && (
                   <div className="text-sm text-muted-foreground">
                     Key {credential.apiKeyHint}
@@ -227,7 +227,7 @@ export function AiProviderSettings() {
                   ref={(node) => {
                     formRefs.current[provider.id] = node;
                   }}
-                  className="flex flex-col gap-2 sm:flex-row"
+                  className="flex min-w-0 flex-col gap-2 sm:flex-row"
                   onSubmit={(event) => void handleSave(event, provider.id)}
                 >
                   <Input
@@ -236,7 +236,7 @@ export function AiProviderSettings() {
                     autoComplete="off"
                     placeholder={connected ? 'Replace API key' : 'API key'}
                     disabled={!configured || saving || removing}
-                    className="min-w-0"
+                    className="min-w-0 flex-1"
                   />
                   <div className="flex gap-2">
                     <Button
