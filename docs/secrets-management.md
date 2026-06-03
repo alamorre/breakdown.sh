@@ -6,7 +6,7 @@ real values belong in Doppler.
 
 ## Doppler Structure
 
-Create a Doppler project named `thesis` and use the default root configs:
+Create a Doppler project named `breakdown-sh` and use the default root configs:
 
 | App environment | Doppler config | Consumer |
 | --- | --- | --- |
@@ -51,15 +51,15 @@ brew install dopplerhq/cli/doppler
 doppler login
 ```
 
-From the repository root, bind this directory to the `thesis` project and `dev`
-config:
+From the repository root, bind this directory to the `breakdown-sh` project and
+`dev` config:
 
 ```sh
 doppler setup
 ```
 
-The checked-in `doppler.yaml` preselects `project: thesis` and `config: dev`.
-After setup, run the app with:
+The checked-in `doppler.yaml` preselects `project: breakdown-sh` and
+`config: dev`. After setup, run the app with:
 
 ```sh
 pnpm dev:secrets
@@ -101,7 +101,7 @@ environment so the browser bundle is rebuilt with the new value.
 ## Manual Setup Checklist
 
 - [ ] Create or sign in to the Doppler workspace.
-- [ ] Create the `thesis` project.
+- [ ] Create the `breakdown-sh` project.
 - [ ] Import local development values into `dev`.
 - [ ] Import staging values into `stg`.
 - [ ] Import production values into `prd`.
