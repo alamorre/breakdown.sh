@@ -4,13 +4,20 @@ Breakdown can be used as a headless DAG and reasoning workflow layer through RES
 
 ## Local Setup
 
-Create an integration token:
+Create an integration token from the app:
+
+1. Sign in to Breakdown.
+2. Open `/settings`.
+3. Use **MCP Access** to create a token.
+4. Copy the raw `bdk_...` token when it is shown. It is only displayed once.
+
+For local development, the script path is still available when you have Supabase service-role env vars:
 
 ```bash
 pnpm headless:token -- --user-id user_123 --name "Local MCP"
 ```
 
-The script prints the raw token once. Store it as `THESIS_API_TOKEN`.
+Store the raw token as `THESIS_API_TOKEN`.
 
 Start the app:
 

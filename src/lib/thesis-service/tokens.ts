@@ -32,6 +32,8 @@ export interface IntegrationTokenRecord {
   revoked_at: string | null;
 }
 
+export type PublicIntegrationTokenRecord = Omit<IntegrationTokenRecord, 'token_hash'>;
+
 export function hashIntegrationToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
@@ -54,7 +56,12 @@ export async function mintIntegrationToken(
 }> {
   const parsed = createIntegrationTokenSchema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new ThesisServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
 
   const { token, tokenPrefix } = createRawIntegrationToken();
@@ -81,8 +88,25 @@ export async function mintIntegrationToken(
 
   return {
     token,
-    record: data as Omit<IntegrationTokenRecord, 'token_hash'>,
+    record: data as PublicIntegrationTokenRecord,
   };
+}
+
+export async function listIntegrationTokens(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<PublicIntegrationTokenRecord[]> {
+  const { data, error } = await supabase
+    .from('integration_tokens')
+    .select('id,user_id,name,token_prefix,scopes,created_at,last_used_at,revoked_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new ThesisServiceError('database_error', error.message, 400);
+  }
+
+  return (data ?? []) as PublicIntegrationTokenRecord[];
 }
 
 export async function resolveIntegrationToken(
@@ -134,7 +158,12 @@ export async function revokeIntegrationToken(
 ): Promise<void> {
   const parsed = revokeIntegrationTokenSchema.safeParse(input);
   if (!parsed.success) {
-    throw new ThesisServiceError('validation_error', parsed.error.message, 400, parsed.error.flatten());
+    throw new ThesisServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
   }
 
   const { error } = await supabase

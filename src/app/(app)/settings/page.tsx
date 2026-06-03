@@ -1,5 +1,6 @@
 import { AiProviderSettings } from '@/components/integrations/ai-providers/AiProviderSettings';
 import { GoogleDriveSettings } from '@/components/integrations/google-drive/GoogleDriveSettings';
+import { HeadlessTokenSettings } from '@/components/integrations/headless-tokens/HeadlessTokenSettings';
 
 export default function SettingsPage() {
   return (
@@ -11,6 +12,7 @@ export default function SettingsPage() {
 
       <AiProviderSettings />
       <GoogleDriveSettings />
+      <HeadlessTokenSettings />
     </section>
   );
 }
