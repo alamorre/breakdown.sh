@@ -38,16 +38,16 @@ export default function Home() {
               Sign in
             </Link>
             <Link
+              href="/docs"
+              className="inline-flex h-10 items-center justify-center rounded-md border px-4 font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              Docs
+            </Link>
+            <Link
               href="/privacy"
               className="inline-flex h-10 items-center justify-center rounded-md border px-4 font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               Privacy
-            </Link>
-            <Link
-              href="/mcp"
-              className="inline-flex h-10 items-center justify-center rounded-md border px-4 font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              MCP docs
             </Link>
             <Link
               href="/terms-of-service"
