@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+
+import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsBreadcrumb } from '@/components/docs/DocsBreadcrumb';
+import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
   title: 'Deployment And Secrets | breakdown.sh',
@@ -19,25 +22,12 @@ const requiredVariables = [
   ],
 ];
 
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-md border bg-muted/40 p-4 text-sm leading-6">
-      <code>{children}</code>
-    </pre>
-  );
-}
-
 export default function DeploymentDocsPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <article className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
-          <Link
-            href="/docs"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Docs
-          </Link>
+          <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Deployment And Secrets</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
             Use this as the public template for configuring local, staging, and production
@@ -45,7 +35,7 @@ export default function DeploymentDocsPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Secrets Source Of Truth</h2>
           <p>
             Keep <code>.env.local.example</code> as the variable inventory. Real values should live
@@ -57,7 +47,7 @@ export default function DeploymentDocsPage() {
             A straightforward setup is one project with separate <code>dev</code>, <code>stg</code>,
             and <code>prd</code> configs for local development, preview deployments, and production.
           </p>
-        </div>
+        </DocsProse>
 
         <div className="mt-6 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
@@ -80,7 +70,7 @@ export default function DeploymentDocsPage() {
           </table>
         </div>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Integration Token Encryption</h2>
           <p>
             <code>INTEGRATION_TOKEN_ENCRYPTION_KEY</code> must decode to 32 bytes. Generate a value
@@ -110,7 +100,7 @@ pnpm dev:secrets`}</CodeBlock>
             <li>User-managed AI provider API keys belong in app settings, not shared env vars.</li>
             <li>Rotate upstream credentials after replacing them in the secrets manager.</li>
           </ul>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );

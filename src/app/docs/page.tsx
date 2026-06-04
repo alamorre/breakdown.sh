@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsBreadcrumb } from '@/components/docs/DocsBreadcrumb';
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'Docs | breakdown.sh',
   description: 'Public documentation for breakdown.sh setup, integrations, and MCP access.',
@@ -59,12 +62,7 @@ export default function DocsPage() {
     <main className="min-h-screen bg-background text-foreground">
       <article className="mx-auto w-full max-w-4xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
-          <Link
-            href="/"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            breakdown.sh
-          </Link>
+          <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Docs</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
             Public documentation for building, connecting, deploying, and understanding Breakdown.
@@ -86,14 +84,14 @@ export default function DocsPage() {
           ))}
         </section>
 
-        <section className="prose prose-neutral mt-10 max-w-none dark:prose-invert">
+        <DocsProse className="mt-10">
           <h2>Docs Visibility</h2>
           <p>
             New documentation should be public by default when it helps users, contributors,
             integrators, or self-hosters. Keep docs internal only when they include sensitive
             operational details or short-lived implementation notes.
           </p>
-        </section>
+        </DocsProse>
 
         <div className="mt-4 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
