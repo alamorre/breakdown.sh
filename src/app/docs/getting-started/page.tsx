@@ -1,18 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'Getting Started | breakdown.sh',
   description: 'Install dependencies and run breakdown.sh locally.',
 };
-
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-md border bg-muted/40 p-4 text-sm leading-6">
-      <code>{children}</code>
-    </pre>
-  );
-}
 
 export default function GettingStartedPage() {
   return (
@@ -32,7 +27,7 @@ export default function GettingStartedPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Install</h2>
           <p>
             Breakdown uses the pnpm version pinned in <code>package.json</code>. Enable Corepack,
@@ -80,7 +75,7 @@ pnpm build`}</CodeBlock>
             See <Link href="/docs/deployment">Deployment And Secrets</Link> for the fuller
             environment and production setup model.
           </p>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );

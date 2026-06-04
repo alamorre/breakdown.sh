@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'MCP Access | breakdown.sh',
   description: 'How to connect MCP-capable AI clients to breakdown.sh reasoning graphs.',
@@ -36,14 +39,6 @@ const toolGroups = [
   ],
 ];
 
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-md border bg-muted/40 p-4 text-sm leading-6">
-      <code>{children}</code>
-    </pre>
-  );
-}
-
 export default function McpPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -64,7 +59,7 @@ export default function McpPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>What Works Today</h2>
           <p>
             Any client that supports remote MCP over Streamable HTTP and can send a bearer token can
@@ -228,7 +223,7 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
   -H "Accept: application/json, text/event-stream" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`}</CodeBlock>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'Product Model | breakdown.sh',
   description: 'How Breakdown models reasoning graphs, source nodes, and analysis runs.',
@@ -44,7 +46,7 @@ export default function ProductDocsPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Core Idea</h2>
           <p>
             Instead of leaving research scattered across chat threads and documents, Breakdown turns
@@ -58,7 +60,18 @@ export default function ProductDocsPage() {
             graph makes those dependencies visible, lets users refresh source material, and helps
             downstream analysis stay connected to what changed upstream.
           </p>
-        </div>
+
+          <h2>Breadcrumb Trails</h2>
+          <p>
+            Breadcrumb trails show where a user is inside a graph, workflow, run, or selected node.
+            They are navigation and orientation aids; edge types still carry the dependency meaning
+            between nodes.
+          </p>
+          <p>
+            See <Link href="/docs/breadcrumb-trails">Breadcrumb Trails</Link> for trail item
+            mapping, expected behavior, and terminology notes.
+          </p>
+        </DocsProse>
 
         <div className="mt-8 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
@@ -79,13 +92,13 @@ export default function ProductDocsPage() {
           </table>
         </div>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Edge Semantics</h2>
           <p>
             Edges are more than lines on the canvas. Their labels tell the runner how to frame
             upstream outputs when building the prompt context for downstream nodes.
           </p>
-        </div>
+        </DocsProse>
 
         <div className="mt-6 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
@@ -106,7 +119,7 @@ export default function ProductDocsPage() {
           </table>
         </div>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>External Agents</h2>
           <p>
             Breakdown can also act as a headless graph layer. External AI clients can connect over
@@ -116,7 +129,7 @@ export default function ProductDocsPage() {
           <p>
             See <Link href="/mcp">MCP Access</Link> for connection details.
           </p>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );

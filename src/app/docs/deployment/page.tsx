@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'Deployment And Secrets | breakdown.sh',
   description: 'Environment variables and deployment notes for breakdown.sh.',
@@ -18,14 +21,6 @@ const requiredVariables = [
     'GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY, NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID',
   ],
 ];
-
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-md border bg-muted/40 p-4 text-sm leading-6">
-      <code>{children}</code>
-    </pre>
-  );
-}
 
 export default function DeploymentDocsPage() {
   return (
@@ -45,7 +40,7 @@ export default function DeploymentDocsPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Secrets Source Of Truth</h2>
           <p>
             Keep <code>.env.local.example</code> as the variable inventory. Real values should live
@@ -57,7 +52,7 @@ export default function DeploymentDocsPage() {
             A straightforward setup is one project with separate <code>dev</code>, <code>stg</code>,
             and <code>prd</code> configs for local development, preview deployments, and production.
           </p>
-        </div>
+        </DocsProse>
 
         <div className="mt-6 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
@@ -80,7 +75,7 @@ export default function DeploymentDocsPage() {
           </table>
         </div>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Integration Token Encryption</h2>
           <p>
             <code>INTEGRATION_TOKEN_ENCRYPTION_KEY</code> must decode to 32 bytes. Generate a value
@@ -110,7 +105,7 @@ pnpm dev:secrets`}</CodeBlock>
             <li>User-managed AI provider API keys belong in app settings, not shared env vars.</li>
             <li>Rotate upstream credentials after replacing them in the secrets manager.</li>
           </ul>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );

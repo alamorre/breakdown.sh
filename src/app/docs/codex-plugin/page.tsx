@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'Codex Plugin | breakdown.sh',
   description: 'Use the repo-local breakdown.sh Codex plugin with scoped MCP access.',
@@ -20,14 +23,6 @@ const remainingWork = [
   'Submit or distribute through any hosted Codex marketplace, if one is desired.',
 ];
 
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-md border bg-muted/40 p-4 text-sm leading-6">
-      <code>{children}</code>
-    </pre>
-  );
-}
-
 export default function CodexPluginDocsPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -46,14 +41,14 @@ export default function CodexPluginDocsPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>What Exists</h2>
           <p>
             The plugin lives in this repository and is intended for local development, testing, and
             the first public marketplace pass. It is not yet published to a hosted Codex
             marketplace.
           </p>
-        </div>
+        </DocsProse>
 
         <div className="mt-6 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
@@ -76,7 +71,7 @@ export default function CodexPluginDocsPage() {
           </table>
         </div>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Authentication</h2>
           <p>
             Create a token from <Link href="/settings">Settings</Link> under MCP Access, then export
@@ -165,7 +160,7 @@ pnpm --filter @breakdown/mcp build`}</CodeBlock>
             Track the public plugin release in{' '}
             <a href="https://github.com/alamorre/breakdown.sh/issues/74">GitHub issue #74</a>.
           </p>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );

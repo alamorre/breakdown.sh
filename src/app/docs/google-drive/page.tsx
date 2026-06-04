@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsProse } from '@/components/docs/DocsProse';
+
 export const metadata: Metadata = {
   title: 'Google Drive Sources | breakdown.sh',
   description: 'How Breakdown uses selected Google Drive files as graph source material.',
@@ -39,7 +41,7 @@ export default function GoogleDriveDocsPage() {
           </p>
         </header>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>User Flow</h2>
           <ol>
             <li>Open a graph and add a Google Drive source.</li>
@@ -59,7 +61,7 @@ export default function GoogleDriveDocsPage() {
             Refresh tokens are stored server-side and encrypted. The browser receives only the
             access needed to open Google Picker and select files.
           </p>
-        </div>
+        </DocsProse>
 
         <div className="mt-8 overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
@@ -80,7 +82,7 @@ export default function GoogleDriveDocsPage() {
           </table>
         </div>
 
-        <div className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <DocsProse className="mt-8">
           <h2>Deployment Checklist</h2>
           <ul>
             {setupItems.map((item) => (
@@ -96,7 +98,7 @@ export default function GoogleDriveDocsPage() {
             <li>Pick one private Doc, Sheet, and Presentation.</li>
             <li>Refresh each source without making the file public.</li>
           </ol>
-        </div>
+        </DocsProse>
       </article>
     </main>
   );
