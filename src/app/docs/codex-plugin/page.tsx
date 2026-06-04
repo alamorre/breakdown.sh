@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsBreadcrumb } from '@/components/docs/DocsBreadcrumb';
 import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
@@ -28,12 +29,7 @@ export default function CodexPluginDocsPage() {
     <main className="min-h-screen bg-background text-foreground">
       <article className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
-          <Link
-            href="/docs"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Docs
-          </Link>
+          <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Codex Plugin</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
             Breakdown includes a repo-local Codex plugin scaffold that connects Codex to reasoning

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { CodeBlock } from '@/components/docs/CodeBlock';
+import { DocsBreadcrumb } from '@/components/docs/DocsBreadcrumb';
 import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
@@ -44,12 +45,7 @@ export default function McpPage() {
     <main className="min-h-screen bg-background text-foreground">
       <article className="mx-auto w-full max-w-4xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
-          <Link
-            href="/docs"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Docs
-          </Link>
+          <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">
             Connect an AI client with MCP
           </h1>

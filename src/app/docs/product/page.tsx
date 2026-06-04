@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsBreadcrumb } from '@/components/docs/DocsBreadcrumb';
 import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
@@ -33,12 +34,7 @@ export default function ProductDocsPage() {
     <main className="min-h-screen bg-background text-foreground">
       <article className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
-          <Link
-            href="/docs"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Docs
-          </Link>
+          <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Product Model</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
             Breakdown is a node-based reasoning canvas. Users structure source material and analysis
@@ -59,17 +55,6 @@ export default function ProductDocsPage() {
             Many decisions depend on multiple assumptions, evidence streams, and sub-conclusions. A
             graph makes those dependencies visible, lets users refresh source material, and helps
             downstream analysis stay connected to what changed upstream.
-          </p>
-
-          <h2>Breadcrumb Trails</h2>
-          <p>
-            Breadcrumb trails show where a user is inside a graph, workflow, run, or selected node.
-            They are navigation and orientation aids; edge types still carry the dependency meaning
-            between nodes.
-          </p>
-          <p>
-            See <Link href="/docs/breadcrumb-trails">Breadcrumb Trails</Link> for trail item
-            mapping, expected behavior, and terminology notes.
           </p>
         </DocsProse>
 
