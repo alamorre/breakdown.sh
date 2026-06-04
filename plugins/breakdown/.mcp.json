@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "breakdown": {
+      "type": "http",
+      "url": "https://www.breakdown.sh/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${BREAKDOWN_API_TOKEN}"
+      }
+    }
+  }
+}

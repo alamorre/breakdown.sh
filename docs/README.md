@@ -11,6 +11,7 @@ notes, or short-lived implementation plans.
 | --------------------------------------- | ---------------------- | ----------------------- |
 | `README.md`                             | Public                 | `/docs/getting-started` |
 | `docs/headless-agents.md`               | Public                 | `/mcp`                  |
+| `docs/codex-plugin.md`                  | Public                 | `/docs/codex-plugin`    |
 | `docs/google-drive-production-setup.md` | Public after redaction | `/docs/google-drive`    |
 | `docs/secrets-management.md`            | Public after redaction | `/docs/deployment`      |
 | `docs/google-drive-integration.md`      | Public after review    | `/docs/google-drive`    |
