@@ -73,10 +73,11 @@ export default function McpPage() {
             header.
           </p>
           <p>
-            Breakdown does not yet ship a public marketplace listing or OAuth consent flow for
-            hosted connector directories. If a client requires OAuth-only connector registration,
-            this endpoint is the MCP server to register later, but the current public path is
-            bearer-token based.
+            Breakdown now includes a repo-local <Link href="/docs/codex-plugin">Codex plugin</Link>{' '}
+            scaffold for MCP access and project workflows. It does not yet ship a hosted public
+            marketplace listing or OAuth consent flow for connector directories. If a client
+            requires OAuth-only connector registration, this endpoint is the MCP server to register
+            later, but the current public path is bearer-token based.
           </p>
 
           <div className="not-prose mt-6 grid gap-2 rounded-md border p-4">
@@ -127,6 +128,10 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <p>
             Then set <code>BREAKDOWN_API_TOKEN</code> to the token created in Settings before
             starting the client.
+          </p>
+          <p>
+            For the repo-local plugin scaffold, see{' '}
+            <Link href="/docs/codex-plugin">Codex Plugin</Link>.
           </p>
 
           <h2>Use Claude Desktop Locally</h2>

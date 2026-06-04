@@ -18,6 +18,11 @@ const docs = [
     description: 'Connect MCP-capable AI clients to Breakdown with scoped bearer tokens.',
   },
   {
+    href: '/docs/codex-plugin',
+    title: 'Codex Plugin',
+    description: 'Use the repo-local Breakdown plugin for Codex MCP access and project workflows.',
+  },
+  {
     href: '/docs/google-drive',
     title: 'Google Drive Sources',
     description: 'Use selected Docs, Sheets, and Presentations as graph source material.',

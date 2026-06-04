@@ -39,6 +39,15 @@ pnpm dev:secrets
 See [docs/secrets-management.md](docs/secrets-management.md) for the local,
 staging, and production workflow.
 
+## Codex Plugin
+
+This repo includes a local Codex plugin scaffold at `plugins/breakdown`. It
+bundles Breakdown-specific skills and connects to the hosted MCP endpoint with a
+scoped `BREAKDOWN_API_TOKEN`.
+
+See [docs/codex-plugin.md](docs/codex-plugin.md) and the public
+`/docs/codex-plugin` route for setup, status, and remaining marketplace work.
+
 ## Package Security
 
 This project uses pnpm with a seven-day release cooldown. Dependency resolution is configured in `pnpm-workspace.yaml` with `minimumReleaseAge: 10080`, strict fallback behavior, and no bypass for registry metadata that is missing publish times.
