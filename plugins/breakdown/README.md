@@ -23,6 +23,25 @@ https://www.breakdown.sh/api/mcp
 For local development against a running app, use the MCP instructions in `/mcp` or temporarily point
 the server URL at `http://localhost:3000/api/mcp`.
 
+## Install In Codex
+
+From a local checkout:
+
+```bash
+cd /path/to/breakdown.sh
+codex plugin marketplace add "$(pwd)"
+codex plugin add breakdown@breakdown
+```
+
+From Git after the plugin has merged:
+
+```bash
+codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
+codex plugin add breakdown@breakdown
+```
+
+Start a new Codex thread after installing so the plugin skills and MCP tools are loaded.
+
 ## Verification
 
 From the repo root:
