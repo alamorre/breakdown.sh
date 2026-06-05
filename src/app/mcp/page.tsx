@@ -7,14 +7,17 @@ import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
   title: 'MCP Access | breakdown.sh',
-  description: 'How to connect MCP-capable AI clients to breakdown.sh reasoning graphs.',
+  description: 'How to connect MCP-capable AI clients to hosted breakdown.sh reasoning graphs.',
 };
 
 const endpointRows = [
-  ['MCP server URL', '/api/mcp'],
+  ['Discovery metadata', 'GET https://www.breakdown.sh/api'],
+  ['Agent onboarding', 'GET https://www.breakdown.sh/api/integrations/headless-onboarding'],
+  ['Setup sessions', 'POST https://www.breakdown.sh/api/integrations/agent-setup-sessions'],
+  ['MCP server URL', 'https://www.breakdown.sh/api/mcp'],
   ['Transport', 'Streamable HTTP MCP'],
+  ['Headless REST', 'https://www.breakdown.sh/api/headless'],
   ['Authentication', 'Authorization: Bearer bdk_...'],
-  ['Agent setup', '/api/integrations/agent-setup-sessions'],
   ['Token management', '/settings -> MCP Access'],
 ];
 
@@ -51,54 +54,50 @@ export default function McpPage() {
             Connect an AI client with MCP
           </h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
-            Breakdown exposes a Streamable HTTP MCP endpoint so external AI clients can read, edit,
-            and run reasoning graphs with a scoped bearer token.
+            Breakdown exposes a hosted Streamable HTTP MCP endpoint so agents in other projects can
+            read, edit, and run reasoning graphs with scoped bearer tokens.
           </p>
         </header>
 
         <DocsProse className="mt-8">
-          <h2>What Works Today</h2>
+          <h2>Default Hosted Path</h2>
           <p>
-            Any client that supports remote MCP over Streamable HTTP and can send a bearer token can
-            connect to Breakdown. That includes local agent consoles, self-hosted bridges, and
-            ChatGPT-style clients when they provide a custom MCP server URL with an authorization
-            header.
+            Start from your own repo or agent console. Discover Breakdown through public metadata,
+            create a setup session, ask the signed-in human to approve it, exchange the setup secret
+            for a <code>bdk_...</code> token, and connect to the hosted MCP endpoint. Do not clone
+            the Breakdown repo for normal service usage.
           </p>
           <p>
-            Breakdown now includes a repo-local <Link href="/docs/codex-plugin">Codex plugin</Link>{' '}
-            scaffold for MCP access and project workflows. It does not yet ship a hosted public
-            marketplace listing or OAuth consent flow for connector directories. If a client
-            requires OAuth-only connector registration, this endpoint is the MCP server to register
-            later, but the current public path is bearer-token based.
+            Clone or sparse-install this repository only when you are contributing to Breakdown,
+            self-hosting it, or testing the repo-local Codex plugin scaffold.
           </p>
+        </DocsProse>
 
-          <div className="not-prose mt-6 grid gap-2 rounded-md border p-4">
-            {endpointRows.map(([label, value]) => (
-              <div key={label} className="grid gap-1 text-sm sm:grid-cols-[11rem_minmax(0,1fr)]">
-                <div className="font-medium">{label}</div>
-                <div className="break-words font-mono text-muted-foreground">{value}</div>
-              </div>
-            ))}
-          </div>
+        <div className="not-prose mt-6 grid gap-2 rounded-md border p-4">
+          {endpointRows.map(([label, value]) => (
+            <div key={label} className="grid gap-1 text-sm sm:grid-cols-[11rem_minmax(0,1fr)]">
+              <div className="font-medium">{label}</div>
+              <div className="break-words font-mono text-muted-foreground">{value}</div>
+            </div>
+          ))}
+        </div>
 
-          <h2>Connect a Remote MCP Client</h2>
+        <DocsProse className="mt-8">
+          <h2>Remote MCP Quickstart</h2>
           <ol>
             <li>
-              Ask the client or agent to create a setup session at{' '}
-              <code>/api/integrations/agent-setup-sessions</code>.
+              Read <code>GET /api</code> or <code>GET /api/integrations/headless-onboarding</code>{' '}
+              for machine-readable setup metadata.
             </li>
+            <li>Create an agent setup session.</li>
             <li>Open the returned approval URL while signed in to Breakdown.</li>
             <li>Verify the setup code and approve the requested scopes.</li>
             <li>
-              The agent exchanges its setup secret for the scoped <code>bdk_...</code> token.
+              Have the agent exchange the setup secret for the scoped <code>bdk_...</code> token.
             </li>
             <li>
-              In your MCP client, add the server URL for this deployment:
-              <CodeBlock>{`https://www.breakdown.sh/api/mcp`}</CodeBlock>
-            </li>
-            <li>
-              Configure bearer authentication:
-              <CodeBlock>{`Authorization: Bearer bdk_your_token_here`}</CodeBlock>
+              Configure your MCP client with <code>https://www.breakdown.sh/api/mcp</code> and an{' '}
+              <code>Authorization: Bearer bdk_...</code> header.
             </li>
             <li>
               Ask the client to list Breakdown tools or list your graphs. A successful connection
@@ -106,45 +105,54 @@ export default function McpPage() {
               <code>create_external_run</code>.
             </li>
           </ol>
+
+          <h2>Create And Approve A Setup Session</h2>
+          <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \\
+  -H "Content-Type: application/json" \\
+  -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
           <p>
-            If setup sessions are unavailable for a client, sign in and create a token manually from{' '}
-            <Link href="/settings">Settings</Link> under MCP Access.
+            The create response includes an approval URL, setup code, exchange URL, and exchange
+            secret. The user opens the approval URL in a signed-in browser, verifies the code, and
+            approves the requested scopes. The agent then exchanges the approved setup secret:
+          </p>
+          <CodeBlock>{`curl "$EXCHANGE_URL" \\
+  -H "Content-Type: application/json" \\
+  -d "{\\"exchangeSecret\\":\\"$EXCHANGE_SECRET\\"}"`}</CodeBlock>
+          <p>
+            The exchange response includes the raw token once, the MCP URL, the headless REST base
+            URL, and an authorization header value. If setup sessions are unavailable for a client,
+            sign in and create a token manually from <Link href="/settings">Settings</Link> under
+            MCP Access.
           </p>
 
-          <h2>Use Codex or Another Config-Based Client</h2>
+          <h2>Configure A Client</h2>
           <p>
             Clients that read MCP server configuration usually need a URL plus an environment
-            variable containing the token. For example:
+            variable containing the token.
           </p>
           <CodeBlock>{`[mcp_servers.breakdown]
 url = "https://www.breakdown.sh/api/mcp"
 bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <p>
-            Then set <code>BREAKDOWN_API_TOKEN</code> to the token created in Settings before
-            starting the client.
+            Then set <code>BREAKDOWN_API_TOKEN</code> to the approved <code>bdk_...</code> token
+            before starting the client.
           </p>
-          <p>
-            For the repo-local plugin scaffold, see{' '}
-            <Link href="/docs/codex-plugin">Codex Plugin</Link>.
-          </p>
+          <CodeBlock>{`curl https://www.breakdown.sh/api/mcp \\
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`}</CodeBlock>
 
-          <h2>Use Claude Desktop Locally</h2>
+          <h2>REST And Bootstrap Metadata</h2>
           <p>
-            For local desktop clients that prefer stdio MCP, run the bundled MCP package against a
-            local or hosted Breakdown app:
+            MCP clients and agents can also discover integration metadata at <code>/api</code>,{' '}
+            <code>/.well-known/ai-plugin.json</code>, <code>/openapi.json</code>, and{' '}
+            <code>/api/integrations/headless-onboarding</code>. The headless REST API lives under{' '}
+            <code>/api/headless</code> and uses the same bearer tokens and scopes.
           </p>
-          <CodeBlock>{`{
-  "mcpServers": {
-    "breakdown": {
-      "command": "node",
-      "args": ["/absolute/path/to/breakdown.sh/packages/breakdown-mcp/dist/index.js"],
-      "env": {
-        "BREAKDOWN_BASE_URL": "https://www.breakdown.sh",
-        "BREAKDOWN_API_TOKEN": "bdk_your_token_here"
-      }
-    }
-  }
-}`}</CodeBlock>
+          <CodeBlock>{`curl https://www.breakdown.sh/api/headless/graphs \\
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \\
+  -H "Accept: application/json"`}</CodeBlock>
 
           <h2>Scopes</h2>
           <div className="not-prose mt-4 overflow-hidden rounded-md border">
@@ -182,7 +190,7 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
             ))}
           </div>
 
-          <h2>How External Evaluator Runs Work</h2>
+          <h2>External Evaluator Runs</h2>
           <p>
             External-evaluator mode lets the MCP client keep the model work in its own environment
             while Breakdown stores the graph, step state, outputs, citations, and blocked data gaps.
@@ -196,7 +204,7 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
             <li>Finalize the run when steps are submitted or intentionally blocked.</li>
           </ol>
 
-          <h2>Safety Model</h2>
+          <h2>Safety And Current Data</h2>
           <ul>
             <li>Tokens are scoped and can be revoked from Settings.</li>
             <li>Raw tokens are shown once and stored by Breakdown only as hashes.</li>
@@ -206,28 +214,53 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
               patches, or cancelling runs.
             </li>
             <li>
-              Current-data steps should be blocked when the host client lacks the required connector
-              or live data access.
+              Current-data or stock-analysis steps depend on host-agent tools such as web search,
+              financial data, workspace files, or other connectors. If the host lacks the required
+              tool, mark the step blocked instead of fabricating data.
             </li>
           </ul>
 
-          <h2>REST and Bootstrap Metadata</h2>
+          <h2>Troubleshooting</h2>
           <p>
-            MCP clients can also discover integration metadata at{' '}
-            <code>/api/integrations/headless-onboarding</code>. The headless REST API lives under{' '}
-            <code>/api/headless</code> and uses the same bearer tokens and scopes.
+            <code>401 Missing bearer token</code> means the request reached Breakdown without an
+            approved bearer token. Create and approve a setup session, exchange it for a{' '}
+            <code>bdk_...</code> token, and set <code>BREAKDOWN_API_TOKEN</code> before retrying. It
+            does not mean the agent should clone this repository.
           </p>
           <p>
-            Agent-native approval sessions are created at{' '}
-            <code>/api/integrations/agent-setup-sessions</code>. The create response includes an
-            approval URL, setup code, exchange URL, and exchange secret. The exchange response
-            includes the raw token once.
+            <code>403 Missing required scope</code> means the token is valid but lacks the scope
+            needed for that tool or route. Create a new token with the minimum additional scope
+            needed.
           </p>
-          <CodeBlock>{`curl https://www.breakdown.sh/api/mcp \\
-  -H "Authorization: Bearer bdk_your_token_here" \\
-  -H "Accept: application/json, text/event-stream" \\
-  -H "Content-Type: application/json" \\
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`}</CodeBlock>
+
+          <h2>Advanced Local Or Self-Hosted Use</h2>
+          <p>
+            Use local endpoints only when you are developing Breakdown, testing a self-hosted
+            deployment, or validating the repo-local plugin scaffold.
+          </p>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "http://localhost:3000/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            For local desktop clients that require stdio MCP, build and run the bundled MCP package
+            from a Breakdown checkout:
+          </p>
+          <CodeBlock>{`{
+  "mcpServers": {
+    "breakdown": {
+      "command": "node",
+      "args": ["/absolute/path/to/breakdown.sh/packages/breakdown-mcp/dist/index.js"],
+      "env": {
+        "BREAKDOWN_BASE_URL": "https://www.breakdown.sh",
+        "BREAKDOWN_API_TOKEN": "bdk_your_token_here"
+      }
+    }
+  }
+}`}</CodeBlock>
+          <p>
+            For Codex plugin-specific setup, see <Link href="/docs/codex-plugin">Codex Plugin</Link>
+            .
+          </p>
         </DocsProse>
       </article>
     </main>

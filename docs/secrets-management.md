@@ -1,8 +1,14 @@
 # Secrets Management
 
-This project uses Doppler as the source of truth for environment variables and
-secrets. Keep `.env.local.example` in the repo as the variable inventory only;
-real values belong in Doppler.
+This operator document is for people self-hosting Breakdown, running the hosted app, or
+contributing to the repo. It is not required for ordinary hosted MCP/API integration from another
+project.
+
+Hosted service users and off-repo coding agents should connect through setup sessions,
+`https://www.breakdown.sh/api/mcp`, and scoped `bdk_...` bearer tokens instead.
+
+This project uses Doppler as the source of truth for environment variables and secrets. Keep
+`.env.local.example` in the repo as the variable inventory only; real values belong in Doppler.
 
 ## Doppler Structure
 

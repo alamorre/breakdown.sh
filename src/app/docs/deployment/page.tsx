@@ -5,8 +5,8 @@ import { DocsBreadcrumb } from '@/components/docs/DocsBreadcrumb';
 import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
-  title: 'Deployment And Secrets | breakdown.sh',
-  description: 'Environment variables and deployment notes for breakdown.sh.',
+  title: 'Operator Deployment | breakdown.sh',
+  description: 'Self-hosting and operator environment notes for breakdown.sh.',
 };
 
 const requiredVariables = [
@@ -28,14 +28,22 @@ export default function DeploymentDocsPage() {
       <article className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
           <DocsBreadcrumb />
-          <h1 className="mt-4 text-3xl font-semibold tracking-normal">Deployment And Secrets</h1>
+          <h1 className="mt-4 text-3xl font-semibold tracking-normal">Operator Deployment</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-            Use this as the public template for configuring local, staging, and production
-            environments without exposing real secret values.
+            Use this when you are self-hosting Breakdown, operating a deployment, or contributing to
+            the app. These secrets are not required to connect an external agent to hosted
+            Breakdown.
           </p>
         </header>
 
         <DocsProse className="mt-8">
+          <h2>Who Needs This</h2>
+          <p>
+            Hosted service users and off-repo coding agents should use{' '}
+            <code>https://www.breakdown.sh/api/mcp</code>, setup sessions, and scoped bearer tokens.
+            This page is for operators who manage the Breakdown app infrastructure.
+          </p>
+
           <h2>Secrets Source Of Truth</h2>
           <p>
             Keep <code>.env.local.example</code> as the variable inventory. Real values should live
