@@ -91,6 +91,25 @@ environment variable UI unless you are recovering from an incident.
 After changing any `NEXT_PUBLIC_*` value, redeploy the affected Vercel
 environment so the browser bundle is rebuilt with the new value.
 
+## GitHub Actions Supabase Migrations
+
+Repo admins can manually run the `Supabase Migrations` workflow from GitHub
+Actions when local Supabase CLI access is unavailable. The workflow is
+`workflow_dispatch` only, defaults to `dry_run: true`, and applies migrations
+only when `dry_run` is explicitly set to `false`.
+
+Configure these GitHub repository secrets before running it:
+
+| Secret                  | Purpose                                            |
+| ----------------------- | -------------------------------------------------- |
+| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token for CLI management. |
+| `SUPABASE_DB_PASSWORD`  | Remote Postgres password used by `supabase link`.  |
+| `SUPABASE_PROJECT_REF`  | Deterministic target project reference for CI.     |
+
+Use the default dry run first and review the migration output. Set
+`include_all: true` only when intentionally passing `--include-all` to
+`supabase db push`.
+
 ## Updating Or Rotating A Secret
 
 1. Update the value in the relevant Doppler config.
