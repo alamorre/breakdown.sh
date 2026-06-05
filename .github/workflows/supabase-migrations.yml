@@ -13,9 +13,28 @@ on:
         required: true
         type: boolean
         default: false
+      github_environment:
+        description: GitHub Environment that grants Doppler access and approval gates.
+        required: true
+        type: environment
+      doppler_project:
+        description: Doppler project to fetch migration secrets from.
+        required: true
+        type: string
+        default: breakdown-sh
+      doppler_config:
+        description: Doppler config to fetch migration secrets from.
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+          - stg
+          - prd
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: supabase-migrations
@@ -25,26 +44,18 @@ jobs:
   migrate:
     name: Supabase DB Push
     runs-on: ubuntu-latest
+    environment: ${{ inputs.github_environment }}
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      DOPPLER_SERVICE_IDENTITY_ID: ${{ vars.DOPPLER_SERVICE_IDENTITY_ID }}
     steps:
-      - name: Require Supabase secrets
+      - name: Require Doppler identity
         run: |
           set -euo pipefail
 
-          missing=0
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::$name repository secret is required."
-              missing=1
-            else
-              echo "::add-mask::${!name}"
-            fi
-          done
-
-          exit "$missing"
+          if [ -z "${DOPPLER_SERVICE_IDENTITY_ID:-}" ]; then
+            echo "::error::DOPPLER_SERVICE_IDENTITY_ID repository variable is required."
+            exit 1
+          fi
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +64,29 @@ jobs:
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Fetch migration secrets from Doppler
+        uses: dopplerhq/secrets-fetch-action@v2.0.0
+        with:
+          auth-method: oidc
+          doppler-identity-id: ${{ vars.DOPPLER_SERVICE_IDENTITY_ID }}
+          doppler-project: ${{ inputs.doppler_project }}
+          doppler-config: ${{ inputs.doppler_config }}
+          inject-env-vars: true
+
+      - name: Require Supabase migration secrets
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required in Doppler config '${{ inputs.doppler_config }}'."
+              missing=1
+            fi
+          done
+
+          exit "$missing"
 
       - name: Link Supabase project
         run: |
