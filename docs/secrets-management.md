@@ -26,6 +26,7 @@ Every config must define these variables:
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | Clerk                          | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     |
 | Supabase                       | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`                                      |
+| Supabase migrations            | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`                                                       |
 | Stored integration credentials | `INTEGRATION_TOKEN_ENCRYPTION_KEY`                                                                                            |
 | Google Drive                   | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY`, `NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID` |
 
@@ -98,13 +99,31 @@ Actions when local Supabase CLI access is unavailable. The workflow is
 `workflow_dispatch` only, defaults to `dry_run: true`, and applies migrations
 only when `dry_run` is explicitly set to `false`.
 
-Configure these GitHub repository secrets before running it:
+The workflow fetches Supabase migration credentials from Doppler at runtime.
+Choose the GitHub Environment and Doppler config in the workflow inputs. Use
+matching names such as `development` + `dev`, `staging` + `stg`, and
+`production` + `prd`.
 
-| Secret                  | Purpose                                            |
+Each Doppler config that should support migrations must define:
+
+| Doppler secret          | Purpose                                            |
 | ----------------------- | -------------------------------------------------- |
 | `SUPABASE_ACCESS_TOKEN` | Supabase personal access token for CLI management. |
 | `SUPABASE_DB_PASSWORD`  | Remote Postgres password used by `supabase link`.  |
 | `SUPABASE_PROJECT_REF`  | Deterministic target project reference for CI.     |
+
+Each GitHub Environment that can run migrations needs one non-secret variable:
+
+| Environment variable          | Purpose                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `DOPPLER_SERVICE_IDENTITY_ID` | Doppler service account identity id authorized for GitHub Actions OIDC. |
+
+Configure a Doppler service account identity for this repository and allow the
+workflow to fetch the target Doppler project/config through GitHub OIDC. The
+workflow grants `id-token: write` for this exchange, then uses Doppler's
+official secrets fetch action to inject the migration secrets into the job.
+Add required reviewers to the `production` GitHub Environment before using it
+for non-dry-run migrations.
 
 Use the default dry run first and review the migration output. Set
 `include_all: true` only when intentionally passing `--include-all` to
