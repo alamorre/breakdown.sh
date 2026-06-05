@@ -70,11 +70,19 @@ export default function CodexPluginDocsPage() {
         <DocsProse className="mt-8">
           <h2>Authentication</h2>
           <p>
-            Create a token from <Link href="/settings">Settings</Link> under MCP Access, then export
-            it before starting Codex. Tokens use the <code>bdk_...</code> prefix, are shown once,
-            and can be scoped to the graph and run permissions the plugin needs.
+            Codex can create an agent setup session, ask the signed-in user to approve it in
+            Breakdown, then exchange the setup secret for a scoped <code>bdk_...</code> token. The
+            user does not need to copy the raw token.
           </p>
-          <CodeBlock>{`export BREAKDOWN_API_TOKEN=bdk_...`}</CodeBlock>
+          <CodeBlock>{`curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
+  -H "Content-Type: application/json" \
+  -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
+          <p>
+            Open the returned approval URL, verify the setup code, then exchange the returned setup
+            secret at the returned exchange URL. Use the exchange response token as{' '}
+            <code>BREAKDOWN_API_TOKEN</code> before starting Codex. Manual token creation from{' '}
+            <Link href="/settings">Settings</Link> under MCP Access remains available as a fallback.
+          </p>
 
           <h2>Install From A Local Checkout</h2>
           <p>Use this path when the Breakdown repo is already on the same machine as Codex.</p>
@@ -110,10 +118,10 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
 
           <h2>Connect Codex</h2>
           <ol>
-            <li>Sign in to Breakdown and create an MCP Access token.</li>
+            <li>Start an agent setup session with Breakdown.</li>
+            <li>Open the approval URL while signed in and approve the matching setup code.</li>
             <li>
-              Choose the narrowest scopes the agent needs, such as <code>graphs:read</code> for
-              read-only use or graph and run scopes for editing and execution.
+              Exchange the setup secret for a scoped <code>bdk_...</code> token.
             </li>
             <li>
               Export the token as <code>BREAKDOWN_API_TOKEN</code> before starting Codex.

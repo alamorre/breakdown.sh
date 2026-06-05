@@ -11,7 +11,19 @@ Breakdown now includes a repo-local Codex plugin scaffold at `plugins/breakdown`
 
 ## Authentication
 
-The plugin expects a Breakdown integration token in the `BREAKDOWN_API_TOKEN` environment variable. Users create tokens from Settings under MCP Access. Tokens use the `bdk_...` prefix, are shown once, and can be scoped to the minimum graph and run permissions needed by the client.
+The plugin expects a Breakdown integration token in the `BREAKDOWN_API_TOKEN` environment variable. Tokens use the `bdk_...` prefix, are shown once, and can be scoped to the minimum graph and run permissions needed by the client.
+
+For agent-native setup, Codex can create an approval session, ask the signed-in user to approve it in Breakdown, then exchange the setup secret for the scoped token without the user copying the raw token:
+
+```bash
+curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
+  -H "Content-Type: application/json" \
+  -d '{"clientName":"Codex","providerName":"OpenAI"}'
+```
+
+Open the returned `approveUrl`, verify the `userCode`, then exchange with the returned `exchangeSecret` at the returned `exchangeUrl`. Use the response `token` as `BREAKDOWN_API_TOKEN` for Codex MCP startup or for `pnpm headless:verify`.
+
+Manual token creation from Settings under MCP Access remains available as a fallback.
 
 ## Install From A Local Checkout
 
@@ -38,18 +50,19 @@ The sparse paths fetch the marketplace manifest and the plugin source directory.
 
 ## Connect Codex To Breakdown
 
-1. Sign in to Breakdown.
-2. Open Settings and create an MCP Access token.
-3. Choose the narrowest scopes the agent needs, such as `graphs:read` for read-only use or graph and run scopes for editing and execution.
-4. Copy the raw `bdk_...` token when it is shown.
-5. Export the token before starting Codex:
+1. Start an agent setup session with `POST /api/integrations/agent-setup-sessions`.
+2. Open the returned approval URL while signed in to Breakdown and approve the matching setup code.
+3. Exchange the setup secret for the scoped `bdk_...` token.
+4. Export the token before starting Codex:
 
    ```bash
    export BREAKDOWN_API_TOKEN=bdk_...
    ```
 
-6. Start a new Codex thread so the plugin skills and MCP server are loaded.
-7. Ask Codex to list Breakdown graphs, read a graph, or turn a goal into a Breakdown DAG.
+5. Start a new Codex thread so the plugin skills and MCP server are loaded.
+6. Ask Codex to list Breakdown graphs, read a graph, or turn a goal into a Breakdown DAG.
+
+If setup sessions are unavailable in a deployment, create the token manually in Settings under MCP Access and use the same export step.
 
 ## MCP Without The Plugin
 

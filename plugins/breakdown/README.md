@@ -8,11 +8,22 @@ This repo-local Codex plugin connects Codex to breakdown.sh reasoning graphs thr
 
 ## Environment
 
-Create a scoped token in Breakdown settings and expose it before starting Codex:
+Create an agent setup session and ask the signed-in user to approve the returned URL:
+
+```bash
+curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
+  -H "Content-Type: application/json" \
+  -d '{"clientName":"Codex","providerName":"OpenAI"}'
+```
+
+After approval, exchange the returned setup secret at the returned exchange URL. Use the exchange
+response token before starting Codex:
 
 ```bash
 export BREAKDOWN_API_TOKEN=bdk_...
 ```
+
+Manual token creation in Breakdown settings under MCP Access is still supported as a fallback.
 
 The default MCP server URL is:
 

@@ -29,6 +29,46 @@ When using the local scripts, the dev server should be reachable at `BREAKDOWN_B
 
 Headless REST and MCP calls use opaque bearer tokens with the `bdk_...` prefix. Raw tokens are shown once. Breakdown stores only a token hash plus metadata.
 
+### Agent-Native Setup
+
+A coding agent can request a scoped setup session without the user copying a token. The user signs in to Breakdown, approves the session in the browser, and the agent exchanges its setup secret for a one-time `bdk_...` token response.
+
+Create a setup session:
+
+```bash
+curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
+  -H "Content-Type: application/json" \
+  -d '{"clientName":"Codex","providerName":"OpenAI"}'
+```
+
+The response includes:
+
+- `approveUrl`: open this in the signed-in browser.
+- `userCode`: compare this with the code shown in the approval page.
+- `exchangeSecret`: keep this in the agent session only.
+- `exchangeUrl`: call this after approval.
+
+Exchange the approved session:
+
+```bash
+curl "$EXCHANGE_URL" \
+  -H "Content-Type: application/json" \
+  -d "{\"exchangeSecret\":\"$EXCHANGE_SECRET\"}"
+```
+
+The exchange response includes the raw `token`, `sessionContext.authorizationHeader`, the MCP URL, and the headless REST base URL. Use that token as `BREAKDOWN_API_TOKEN` for `pnpm headless:verify` or for the MCP client process. The user can revoke the resulting token from Settings under MCP Access.
+
+Discovery metadata is available at:
+
+```text
+GET /api/integrations/headless-onboarding
+GET /api/integrations/agent-setup-sessions
+```
+
+The older session-authenticated bootstrap endpoint remains available for bridges that already have the signed-in browser session cookie.
+
+### Manual Token Creation
+
 Create a token in the app:
 
 1. Sign in to Breakdown.

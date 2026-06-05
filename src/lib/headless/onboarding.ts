@@ -37,6 +37,7 @@ export function getExternalConsoleOnboardingMetadata(origin: string) {
     version: 'headless-onboarding.v1',
     capabilities: [
       'session_bootstrap',
+      'agent_setup_approval_session',
       'mcp_streamable_http',
       'rest_headless_api',
       'graph_import',
@@ -48,17 +49,20 @@ export function getExternalConsoleOnboardingMetadata(origin: string) {
       signInUrl: `${origin}/sign-in`,
       signUpUrl: `${origin}/sign-up`,
       bootstrapUrl: `${origin}/api/integrations/headless-onboarding`,
+      agentSetupSessionsUrl: `${origin}/api/integrations/agent-setup-sessions`,
       mcpUrl: `${origin}/api/mcp`,
       headlessApiBaseUrl: `${origin}/api/headless`,
     },
     auth: {
       bootstrap: 'clerk-session',
+      agentSetup: 'approval-session',
       mcp: 'bearer-token',
       defaultScopes: EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES,
       allowedBootstrapScopes: EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES,
     },
     firstRun: {
       supportedWorkflowModes: ['none', 'importGraph', 'importGraphAndCreateExternalRun'],
+      setupSessionResultShape: ['approveUrl', 'userCode', 'exchangeSecret', 'exchangeUrl'],
       resultShape: ['token', 'sessionContext', 'workflow.graphId', 'workflow.externalRun.runId'],
     },
   };
