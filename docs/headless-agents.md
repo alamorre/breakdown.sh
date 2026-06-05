@@ -1,29 +1,57 @@
 # Headless Agents
 
-Breakdown can be used as a headless DAG and reasoning workflow layer through REST routes, a local stdio MCP server, and a Streamable HTTP MCP endpoint. The local path is intentionally first-class: a developer can run the app, mint a scoped token, verify REST and MCP contracts, and exercise external-evaluator runs without adding hosted/vendor dependencies.
+Breakdown can be used as a hosted DAG and reasoning workflow layer through public discovery
+metadata, setup-session approval, headless REST routes, and a Streamable HTTP MCP endpoint. The
+default path is for a coding agent running in any project to connect to hosted Breakdown without
+cloning this repository.
 
-## Local Setup
+Clone or sparse-install `alamorre/breakdown.sh` only when you are contributing to Breakdown,
+self-hosting it, or testing the repo-local plugin scaffold.
 
-Prerequisites:
+## Hosted Agent Quickstart
 
-- Node and pnpm from `package.json`.
-- The app environment needed for local Supabase access.
-- A signed-in Breakdown user id, such as `user_...`, for CLI token creation.
+1. Start in your own repo, terminal, or agent console.
+2. Discover integration metadata:
 
-Install and start the app:
+   ```text
+   GET https://www.breakdown.sh/api
+   GET https://www.breakdown.sh/api/integrations/headless-onboarding
+   ```
 
-```bash
-pnpm install
-pnpm dev
+3. Create an agent setup session:
+
+   ```bash
+   curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
+     -H "Content-Type: application/json" \
+     -d '{"clientName":"Codex","providerName":"OpenAI"}'
+   ```
+
+4. Ask the signed-in human to open the returned approval URL and verify the setup code.
+5. Exchange the approved setup secret for a scoped `bdk_...` token.
+6. Connect MCP at `https://www.breakdown.sh/api/mcp` or REST under
+   `https://www.breakdown.sh/api/headless`.
+7. Persist graphs, reasoning steps, citations, blocked data gaps, and external-run state in
+   Breakdown.
+
+`401 Missing bearer token` means the request reached Breakdown without an approved token. Create and
+approve a setup session or set `BREAKDOWN_API_TOKEN`; it does not mean the agent should clone the
+repo.
+
+MCP client configuration:
+
+```toml
+[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
 ```
 
-Set the local base URL used by scripts and the MCP package:
+Headless REST check:
 
 ```bash
-export BREAKDOWN_BASE_URL=http://localhost:3000
+curl https://www.breakdown.sh/api/headless/graphs \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
+  -H "Accept: application/json"
 ```
-
-When using the local scripts, the dev server should be reachable at `BREAKDOWN_BASE_URL`. The scripts do not provision hosted services and do not call any vendor market-data provider.
 
 ## Tokens
 
@@ -36,7 +64,7 @@ A coding agent can request a scoped setup session without the user copying a tok
 Create a setup session:
 
 ```bash
-curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
+curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
   -H "Content-Type: application/json" \
   -d '{"clientName":"Codex","providerName":"OpenAI"}'
 ```
@@ -56,11 +84,15 @@ curl "$EXCHANGE_URL" \
   -d "{\"exchangeSecret\":\"$EXCHANGE_SECRET\"}"
 ```
 
-The exchange response includes the raw `token`, `sessionContext.authorizationHeader`, the MCP URL, and the headless REST base URL. Use that token as `BREAKDOWN_API_TOKEN` for `pnpm headless:verify` or for the MCP client process. The user can revoke the resulting token from Settings under MCP Access.
+The exchange response includes the raw `token`, `sessionContext.authorizationHeader`, the MCP URL,
+and the headless REST base URL. Use that token as `BREAKDOWN_API_TOKEN` for the MCP client process.
+Local verification scripts can use the same variable when you are contributing to Breakdown. The
+user can revoke the resulting token from Settings under MCP Access.
 
 Discovery metadata is available at:
 
 ```text
+GET /api
 GET /api/integrations/headless-onboarding
 GET /api/integrations/agent-setup-sessions
 ```
@@ -117,10 +149,37 @@ Revocation:
 Quick auth check:
 
 ```bash
-curl "$BREAKDOWN_BASE_URL/api/headless/graphs" \
+curl https://www.breakdown.sh/api/headless/graphs \
   -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Accept: application/json"
 ```
+
+## Local Development And Self-Hosting
+
+Use this path when you are running your own Breakdown app, contributing to the project, or testing
+repo-local integrations. It is not required for hosted Breakdown usage.
+
+Prerequisites:
+
+- Node and pnpm from `package.json`.
+- The app environment needed for local Supabase access.
+- A signed-in Breakdown user id, such as `user_...`, for CLI token creation.
+
+Install and start the app:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Set the local base URL used by scripts and the MCP package:
+
+```bash
+export BREAKDOWN_BASE_URL=http://localhost:3000
+```
+
+When using the local scripts, the dev server should be reachable at `BREAKDOWN_BASE_URL`. The
+scripts do not provision hosted services and do not call any vendor market-data provider.
 
 ## Claude Desktop MCP
 
@@ -159,10 +218,10 @@ GET /api/mcp
 DELETE /api/mcp
 ```
 
-Local example:
+Hosted example:
 
 ```bash
-curl "$BREAKDOWN_BASE_URL/api/mcp" \
+curl https://www.breakdown.sh/api/mcp \
   -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
   -H "Accept: application/json, text/event-stream" \
   -H "Content-Type: application/json" \
@@ -177,13 +236,14 @@ curl "$BREAKDOWN_BASE_URL/api/mcp" \
 Hosted or desktop agent consoles can discover onboarding metadata:
 
 ```text
-GET https://your-breakdown-host/api/integrations/headless-onboarding
+GET https://www.breakdown.sh/api/integrations/headless-onboarding
 ```
 
-After the user signs in to Breakdown in a browser session, a console or bridge can bootstrap a one-time bearer token:
+Prefer setup sessions for new agents. Bridges that already have the signed-in browser session cookie
+can still bootstrap a one-time bearer token:
 
 ```text
-POST https://your-breakdown-host/api/integrations/headless-onboarding
+POST https://www.breakdown.sh/api/integrations/headless-onboarding
 ```
 
 Minimal body:

@@ -1,6 +1,21 @@
 # Breakdown Codex Plugin
 
-This repo-local Codex plugin connects Codex to breakdown.sh reasoning graphs through:
+This repo-local Codex plugin is for contributors and packaging tests. It is not required for normal
+Breakdown service usage.
+
+For agents running in another project, use direct hosted MCP/API instead:
+
+```toml
+[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+```
+
+Create and approve a setup session, exchange it for a scoped `bdk_...` token, and set
+`BREAKDOWN_API_TOKEN` before starting Codex. See the public `/mcp` page or
+`docs/getting-started.md` for the default hosted flow.
+
+## What This Plugin Contains
 
 - `plugins/breakdown/.mcp.json`, which points at the hosted Streamable HTTP MCP endpoint.
 - `plugins/breakdown/skills/`, which bundles Breakdown-specific development workflows.
@@ -11,7 +26,7 @@ This repo-local Codex plugin connects Codex to breakdown.sh reasoning graphs thr
 Create an agent setup session and ask the signed-in user to approve the returned URL:
 
 ```bash
-curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
+curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
   -H "Content-Type: application/json" \
   -d '{"clientName":"Codex","providerName":"OpenAI"}'
 ```
@@ -25,16 +40,9 @@ export BREAKDOWN_API_TOKEN=bdk_...
 
 Manual token creation in Breakdown settings under MCP Access is still supported as a fallback.
 
-The default MCP server URL is:
+## Install In Codex For Plugin Testing
 
-```text
-https://www.breakdown.sh/api/mcp
-```
-
-For local development against a running app, use the MCP instructions in `/mcp` or temporarily point
-the server URL at `http://localhost:3000/api/mcp`.
-
-## Install In Codex
+Use these commands only when testing this repo-local plugin scaffold.
 
 From a local checkout:
 

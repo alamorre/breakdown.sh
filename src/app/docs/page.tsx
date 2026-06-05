@@ -6,24 +6,25 @@ import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
   title: 'Docs | breakdown.sh',
-  description: 'Public documentation for breakdown.sh setup, integrations, and MCP access.',
+  description: 'Public documentation for hosted Breakdown integrations, MCP access, and operators.',
 };
 
 const docs = [
   {
     href: '/docs/getting-started',
     title: 'Getting Started',
-    description: 'Install dependencies, run Breakdown locally, and understand the dev workflow.',
+    description: 'Connect an off-repo coding agent to hosted Breakdown with MCP or headless REST.',
   },
   {
     href: '/mcp',
     title: 'MCP Access',
-    description: 'Connect MCP-capable AI clients to Breakdown with scoped bearer tokens.',
+    description: 'Configure remote Streamable HTTP MCP, scopes, setup sessions, and REST metadata.',
   },
   {
     href: '/docs/codex-plugin',
     title: 'Codex Plugin',
-    description: 'Use the repo-local Breakdown plugin for Codex MCP access and project workflows.',
+    description:
+      'Compare direct hosted MCP, the future public plugin path, and local plugin testing.',
   },
   {
     href: '/docs/google-drive',
@@ -31,25 +32,31 @@ const docs = [
     description: 'Use selected Docs, Sheets, and Presentations as graph source material.',
   },
   {
-    href: '/docs/deployment',
-    title: 'Deployment And Secrets',
-    description: 'Set up environment variables, Doppler, Vercel sync, and production checks.',
-  },
-  {
     href: '/docs/product',
     title: 'Product Model',
     description: 'Learn how Breakdown structures reasoning as a directed analysis graph.',
+  },
+  {
+    href: '/docs/local-development',
+    title: 'Local Development',
+    description: 'Contributor setup for running, testing, and changing the Breakdown app locally.',
+  },
+  {
+    href: '/docs/deployment',
+    title: 'Operator Deployment',
+    description:
+      'Self-hosting and operator notes for env vars, Doppler, Vercel, and production checks.',
   },
 ];
 
 const visibilityRows = [
   [
     'Public',
-    'User setup, MCP access, Google Drive usage, deployment templates, and product model.',
+    'Hosted service usage, MCP access, Google Drive usage, integration setup, and product model.',
   ],
   [
-    'Public after review',
-    'Operational runbooks that need hostnames, credentials, or stale notes generalized.',
+    'Contributor or operator',
+    'Local development, self-hosting, deployment templates, and repo-local plugin testing.',
   ],
   [
     'Internal',
@@ -65,9 +72,9 @@ export default function DocsPage() {
           <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Docs</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
-            Public documentation for building, connecting, deploying, and understanding Breakdown.
-            These pages collect the useful docs from the private repo into routes that signed-out
-            visitors can read.
+            Public documentation for connecting agents to hosted Breakdown, using integrations, and
+            understanding the product model. Local development and deployment pages are for
+            contributors, self-hosters, and operators, not the default path for external agents.
           </p>
         </header>
 
@@ -88,7 +95,8 @@ export default function DocsPage() {
           <h2>Docs Visibility</h2>
           <p>
             New documentation should be public by default when it helps users, contributors,
-            integrators, or self-hosters. Keep docs internal only when they include sensitive
+            integrators, or self-hosters. Public integration docs should lead with hosted MCP and
+            REST usage from any project. Keep docs internal only when they include sensitive
             operational details or short-lived implementation notes.
           </p>
         </DocsProse>

@@ -7,8 +7,26 @@ import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
   title: 'Codex Plugin | breakdown.sh',
-  description: 'Use the repo-local breakdown.sh Codex plugin with scoped MCP access.',
+  description: 'Hosted MCP, future plugin, and repo-local Codex plugin setup for breakdown.sh.',
 };
+
+const integrationPaths = [
+  [
+    'Default',
+    'Direct hosted MCP/API',
+    'Use setup sessions and https://www.breakdown.sh/api/mcp from any project. No Breakdown checkout is needed.',
+  ],
+  [
+    'Optional',
+    'Public Codex plugin',
+    'Use the hosted plugin path after marketplace packaging ships. Track that work in issue #74.',
+  ],
+  [
+    'Contributor only',
+    'Repo-local plugin scaffold',
+    'Use local checkout or sparse Git install only when developing Breakdown or testing plugin packaging.',
+  ],
+];
 
 const pluginFiles = [
   ['Plugin manifest', 'plugins/breakdown/.codex-plugin/plugin.json'],
@@ -32,17 +50,98 @@ export default function CodexPluginDocsPage() {
           <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Codex Plugin</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-            Breakdown includes a repo-local Codex plugin scaffold that connects Codex to reasoning
-            graphs through scoped MCP access and bundles project-specific development workflows.
+            Codex can use Breakdown directly through hosted MCP today. The repo-local plugin
+            scaffold is for contributors and packaging tests, not the default path for agents
+            running in another project.
           </p>
         </header>
 
         <DocsProse className="mt-8">
-          <h2>What Exists</h2>
+          <h2>Choose The Right Path</h2>
           <p>
-            The plugin lives in this repository and is intended for local development, testing, and
-            the first public marketplace pass. It is not yet published to a hosted Codex
-            marketplace.
+            If your goal is to use Breakdown from Codex or another coding agent, start with direct
+            hosted MCP/API. Do not clone or sparse-install the Breakdown repo unless you are working
+            on Breakdown itself, self-hosting it, or validating plugin packaging.
+          </p>
+        </DocsProse>
+
+        <div className="mt-6 overflow-hidden rounded-md border">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="border-b px-4 py-3 font-medium">Path</th>
+                <th className="border-b px-4 py-3 font-medium">Use</th>
+                <th className="border-b px-4 py-3 font-medium">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {integrationPaths.map(([label, name, description]) => (
+                <tr key={label} className="border-b last:border-b-0">
+                  <td className="whitespace-nowrap px-4 py-3 font-medium">{label}</td>
+                  <td className="px-4 py-3">{name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <DocsProse className="mt-8">
+          <h2>Default: Connect Directly To Hosted MCP</h2>
+          <ol>
+            <li>
+              Create an agent setup session at{' '}
+              <code>https://www.breakdown.sh/api/integrations/agent-setup-sessions</code>.
+            </li>
+            <li>Open the returned approval URL while signed in to Breakdown.</li>
+            <li>Verify the setup code and approve the requested scopes.</li>
+            <li>
+              Exchange the setup secret for a scoped <code>bdk_...</code> token.
+            </li>
+            <li>
+              Configure Codex or another MCP-capable client with{' '}
+              <code>https://www.breakdown.sh/api/mcp</code>.
+            </li>
+          </ol>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            Set <code>BREAKDOWN_API_TOKEN</code> to the approved token before starting the client.
+            For the full setup-session flow, see <Link href="/mcp">MCP Access</Link>.
+          </p>
+
+          <h2>Authentication</h2>
+          <p>
+            Codex can create an agent setup session, ask the signed-in user to approve it in
+            Breakdown, then exchange the setup secret for a scoped <code>bdk_...</code> token. The
+            user does not need to copy the raw token.
+          </p>
+          <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \\
+  -H "Content-Type: application/json" \\
+  -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
+          <p>
+            Open the returned approval URL, verify the setup code, then exchange the returned setup
+            secret at the returned exchange URL. Manual token creation from{' '}
+            <Link href="/settings">Settings</Link> under MCP Access remains available as a fallback.
+          </p>
+
+          <h2>Optional: Public Codex Plugin</h2>
+          <p>
+            The public plugin path is not yet shipped. Once it is published, it should wrap the same
+            hosted MCP endpoint and setup-session flow so agents can connect without cloning this
+            repository.
+          </p>
+          <p>
+            Track the public plugin release in{' '}
+            <a href="https://github.com/alamorre/breakdown.sh/issues/74">GitHub issue #74</a>.
+          </p>
+
+          <h2>Contributor Only: Repo-Local Plugin</h2>
+          <p>
+            The scaffold in this repository is useful for local development, testing, and the first
+            marketplace packaging pass. These files are not required for normal Breakdown service
+            usage.
           </p>
         </DocsProse>
 
@@ -68,78 +167,33 @@ export default function CodexPluginDocsPage() {
         </div>
 
         <DocsProse className="mt-8">
-          <h2>Authentication</h2>
-          <p>
-            Codex can create an agent setup session, ask the signed-in user to approve it in
-            Breakdown, then exchange the setup secret for a scoped <code>bdk_...</code> token. The
-            user does not need to copy the raw token.
-          </p>
-          <CodeBlock>{`curl "$BREAKDOWN_BASE_URL/api/integrations/agent-setup-sessions" \
-  -H "Content-Type: application/json" \
-  -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
-          <p>
-            Open the returned approval URL, verify the setup code, then exchange the returned setup
-            secret at the returned exchange URL. Use the exchange response token as{' '}
-            <code>BREAKDOWN_API_TOKEN</code> before starting Codex. Manual token creation from{' '}
-            <Link href="/settings">Settings</Link> under MCP Access remains available as a fallback.
-          </p>
-
           <h2>Install From A Local Checkout</h2>
-          <p>Use this path when the Breakdown repo is already on the same machine as Codex.</p>
+          <p>
+            Use this only when the Breakdown repo is already on the same machine because you are
+            changing or testing Breakdown.
+          </p>
           <CodeBlock>{`cd /path/to/breakdown.sh
 codex plugin marketplace add "$(pwd)"
 codex plugin add breakdown@breakdown`}</CodeBlock>
-          <p>
-            The marketplace command points Codex at this repository. The plugin install command
-            installs the <code>breakdown</code> plugin from the <code>breakdown</code> marketplace
-            declared in <code>.agents/plugins/marketplace.json</code>.
-          </p>
 
-          <h2>Install From Git</h2>
+          <h2>Install From Git For Plugin Testing</h2>
           <p>
-            After the plugin has merged to <code>main</code>, a Codex user can install the
-            marketplace directly from Git without cloning the full repo first.
+            Sparse Git install fetches only the marketplace manifest and plugin source directory. It
+            is for plugin packaging tests, not the default hosted integration path.
           </p>
           <CodeBlock>{`codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
 codex plugin add breakdown@breakdown`}</CodeBlock>
-          <p>
-            The sparse paths fetch the marketplace manifest and plugin source directory. Use a
-            branch or tag instead of <code>main</code> while testing unreleased changes.
-          </p>
-
-          <h2>MCP Endpoint</h2>
-          <p>The repo-local plugin defaults to the hosted Streamable HTTP MCP endpoint.</p>
-          <CodeBlock>{`https://www.breakdown.sh/api/mcp`}</CodeBlock>
-          <p>
-            Coding agents that support MCP but do not use Codex plugins can connect directly to the
-            same endpoint. Use the MCP configuration examples on <Link href="/mcp">MCP Access</Link>{' '}
-            with the same <code>BREAKDOWN_API_TOKEN</code> value.
-          </p>
-
-          <h2>Connect Codex</h2>
-          <ol>
-            <li>Start an agent setup session with Breakdown.</li>
-            <li>Open the approval URL while signed in and approve the matching setup code.</li>
-            <li>
-              Exchange the setup secret for a scoped <code>bdk_...</code> token.
-            </li>
-            <li>
-              Export the token as <code>BREAKDOWN_API_TOKEN</code> before starting Codex.
-            </li>
-            <li>Install the plugin from the local checkout or Git marketplace.</li>
-            <li>Start a new Codex thread so the plugin skills and MCP server are loaded.</li>
-            <li>Ask Codex to list Breakdown graphs or turn a goal into a Breakdown DAG.</li>
-          </ol>
 
           <h2>Local App Development</h2>
-          <p>For local app development, run the app and use a local token.</p>
+          <p>
+            For local app development, run the app and point the client at the local MCP endpoint.
+          </p>
           <CodeBlock>{`pnpm dev
 export BREAKDOWN_API_TOKEN=bdk_...`}</CodeBlock>
           <p>
-            Then point the agent at <code>http://localhost:3000/api/mcp</code>. For a one-off Codex
-            session, use the direct MCP configuration from <Link href="/mcp">MCP Access</Link>; for
-            plugin testing, make an uncommitted local edit to{' '}
-            <code>plugins/breakdown/.mcp.json</code> and switch the URL back before committing.
+            Then use <code>http://localhost:3000/api/mcp</code>. For plugin testing, make an
+            uncommitted local edit to <code>plugins/breakdown/.mcp.json</code> and switch the URL
+            back before committing.
           </p>
 
           <h2>Verify</h2>
@@ -154,16 +208,20 @@ export BREAKDOWN_API_TOKEN=bdk_...`}</CodeBlock>
           <CodeBlock>{`pnpm headless:verify
 pnpm --filter @breakdown/mcp build`}</CodeBlock>
 
+          <h2>Troubleshooting</h2>
+          <p>
+            <code>401 Missing bearer token</code> means the client reached Breakdown without an
+            approved token. Create and approve a setup session or set{' '}
+            <code>BREAKDOWN_API_TOKEN</code>; do not clone the repository just to inspect plugin
+            files.
+          </p>
+
           <h2>Remaining Product Work</h2>
           <ul>
             {remainingWork.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
-          <p>
-            Track the public plugin release in{' '}
-            <a href="https://github.com/alamorre/breakdown.sh/issues/74">GitHub issue #74</a>.
-          </p>
         </DocsProse>
       </article>
     </main>
