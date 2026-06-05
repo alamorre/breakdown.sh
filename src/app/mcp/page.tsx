@@ -14,6 +14,7 @@ const endpointRows = [
   ['MCP server URL', '/api/mcp'],
   ['Transport', 'Streamable HTTP MCP'],
   ['Authentication', 'Authorization: Bearer bdk_...'],
+  ['Agent setup', '/api/integrations/agent-setup-sessions'],
   ['Token management', '/settings -> MCP Access'],
 ];
 
@@ -83,15 +84,13 @@ export default function McpPage() {
           <h2>Connect a Remote MCP Client</h2>
           <ol>
             <li>
-              Sign in to Breakdown and open <Link href="/settings">Settings</Link>.
+              Ask the client or agent to create a setup session at{' '}
+              <code>/api/integrations/agent-setup-sessions</code>.
             </li>
+            <li>Open the returned approval URL while signed in to Breakdown.</li>
+            <li>Verify the setup code and approve the requested scopes.</li>
             <li>
-              In <strong>MCP Access</strong>, create a token. Choose the narrowest scopes that match
-              what the client should do.
-            </li>
-            <li>
-              Copy the token immediately. Breakdown only shows the raw <code>bdk_...</code> value
-              once.
+              The agent exchanges its setup secret for the scoped <code>bdk_...</code> token.
             </li>
             <li>
               In your MCP client, add the server URL for this deployment:
@@ -107,6 +106,10 @@ export default function McpPage() {
               <code>create_external_run</code>.
             </li>
           </ol>
+          <p>
+            If setup sessions are unavailable for a client, sign in and create a token manually from{' '}
+            <Link href="/settings">Settings</Link> under MCP Access.
+          </p>
 
           <h2>Use Codex or Another Config-Based Client</h2>
           <p>
@@ -213,6 +216,12 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
             MCP clients can also discover integration metadata at{' '}
             <code>/api/integrations/headless-onboarding</code>. The headless REST API lives under{' '}
             <code>/api/headless</code> and uses the same bearer tokens and scopes.
+          </p>
+          <p>
+            Agent-native approval sessions are created at{' '}
+            <code>/api/integrations/agent-setup-sessions</code>. The create response includes an
+            approval URL, setup code, exchange URL, and exchange secret. The exchange response
+            includes the raw token once.
           </p>
           <CodeBlock>{`curl https://www.breakdown.sh/api/mcp \\
   -H "Authorization: Bearer bdk_your_token_here" \\
