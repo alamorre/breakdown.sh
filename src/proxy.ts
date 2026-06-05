@@ -3,8 +3,12 @@ import { NextResponse } from 'next/server';
 
 const isPublicRoute = createRouteMatcher([
   '/',
+  '/.well-known/ai-plugin.json',
+  '/.well-known/openapi.json',
+  '/api',
   '/docs(.*)',
   '/mcp',
+  '/openapi.json',
   '/privacy',
   '/terms-of-service',
   '/sign-in(.*)',
