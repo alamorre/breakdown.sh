@@ -31,7 +31,7 @@ When adding or changing docs, classify them as one of:
 - `internal`: should stay private because it is sensitive, stale, or only useful
   as implementation scratch space.
 
-Public integration docs should make hosted MCP/API the default path for off-repo
-agents. Local development, self-hosting, deployment, and repo-local plugin docs
-should be labeled so agents do not infer they need to clone this repository for
-ordinary Breakdown service usage.
+Public integration docs should make hosted MCP/API and the public Codex plugin
+the default paths for off-repo agents. Local development, self-hosting,
+deployment, and plugin packaging-test docs should be labeled so agents do not
+infer they need to clone this repository for ordinary Breakdown service usage.

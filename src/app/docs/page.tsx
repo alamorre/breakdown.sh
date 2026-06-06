@@ -24,7 +24,7 @@ const docs = [
     href: '/docs/codex-plugin',
     title: 'Codex Plugin',
     description:
-      'Compare direct hosted MCP, the future public plugin path, and local plugin testing.',
+      'Install the public Codex plugin, set up scoped tokens, and choose local overrides.',
   },
   {
     href: '/docs/google-drive',
@@ -56,7 +56,7 @@ const visibilityRows = [
   ],
   [
     'Contributor or operator',
-    'Local development, self-hosting, deployment templates, and repo-local plugin testing.',
+    'Local development, self-hosting, deployment templates, and plugin packaging tests.',
   ],
   [
     'Internal',

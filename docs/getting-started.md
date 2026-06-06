@@ -5,8 +5,8 @@ default integration path is public discovery metadata, setup-session approval, a
 token, and hosted MCP or headless REST. Do not clone `alamorre/breakdown.sh` for normal service
 usage.
 
-Clone this repository only when you are contributing to Breakdown, self-hosting it, or testing the
-repo-local plugin scaffold.
+Clone this repository only when you are contributing to Breakdown, self-hosting it, or testing
+Codex plugin packaging.
 
 ## Public Integration Surfaces
 
