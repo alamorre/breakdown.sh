@@ -176,7 +176,16 @@ export function getHeadlessApiDiscovery(origin: string) {
         path: '/api/headless/external-runs/{runId}/next-step',
         auth: 'bearer',
         scopes: ['runs:external_execute'],
-        description: 'Fetch the next ready external evaluator step.',
+        description:
+          'Claim and return the next runnable external evaluator work packet, including prompt, upstream outputs, freshness warnings, and submit/block routes.',
+      },
+      {
+        method: 'GET',
+        path: '/api/headless/external-runs/{runId}/steps/{stepId}/context',
+        auth: 'bearer',
+        scopes: ['runs:external_execute'],
+        description:
+          'Refresh or debug the executable work packet for a known external evaluator step. The next-step route already includes this packet by default.',
       },
       {
         method: 'POST',
@@ -184,6 +193,20 @@ export function getHeadlessApiDiscovery(origin: string) {
         auth: 'bearer',
         scopes: ['runs:write_results'],
         description: 'Submit a completed external evaluator step result.',
+      },
+      {
+        method: 'POST',
+        path: '/api/headless/external-runs/{runId}/steps/{stepId}/block',
+        auth: 'bearer',
+        scopes: ['runs:write_results'],
+        description: 'Mark a step blocked by a data gap or other external condition.',
+      },
+      {
+        method: 'POST',
+        path: '/api/headless/external-runs/{runId}/finalize',
+        auth: 'bearer',
+        scopes: ['runs:external_execute'],
+        description: 'Finalize an external run after all steps are complete or blocked.',
       },
       {
         method: 'POST',
@@ -245,7 +268,15 @@ export function getHeadlessRunsDiscovery(origin: string) {
         method: 'GET',
         path: '/api/headless/external-runs/{runId}/next-step',
         scopes: ['runs:external_execute'],
-        description: 'Fetch the next ready step.',
+        description:
+          'Claim and return the next runnable work packet, including prompt, upstream outputs, freshness warnings, and submit/block routes.',
+      },
+      {
+        method: 'GET',
+        path: '/api/headless/external-runs/{runId}/steps/{stepId}/context',
+        scopes: ['runs:external_execute'],
+        description:
+          'Refresh or debug the executable work packet for a known step. Clients can usually use next-step directly.',
       },
       {
         method: 'POST',
@@ -387,6 +418,129 @@ export function getOpenApiDocument(origin: string) {
             },
           },
           required: ['data', 'error'],
+        },
+        ExternalStepWorkPacket: {
+          type: 'object',
+          description:
+            'Executable external-evaluator step packet returned by next-step and step context routes.',
+          properties: {
+            stepId: { type: 'string', format: 'uuid' },
+            nodeId: { type: 'string', format: 'uuid' },
+            status: {
+              type: 'string',
+              enum: ['ready', 'in_progress', 'submitted', 'blocked'],
+              description:
+                'Current step status. Calling next-step claims a ready step and returns in_progress.',
+            },
+            contextVersion: {
+              type: 'string',
+              description: 'Submit this exact value with result or block requests.',
+            },
+            node: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                name: { type: 'string' },
+                nodeType: { type: 'string' },
+                prompt: { type: 'string' },
+                priorOutput: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                metadata: { type: 'object', additionalProperties: true },
+                runStatus: { type: 'string' },
+                lastRunAt: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+              },
+              required: [
+                'id',
+                'name',
+                'nodeType',
+                'prompt',
+                'priorOutput',
+                'metadata',
+                'runStatus',
+                'lastRunAt',
+              ],
+            },
+            upstream: {
+              type: 'object',
+              additionalProperties: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    edgeId: { type: 'string', format: 'uuid' },
+                    sourceNodeId: { type: 'string', format: 'uuid' },
+                    sourceNodeName: { type: 'string' },
+                    output: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                    runStatus: { type: 'string' },
+                    lastRunAt: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                    stale: { type: 'boolean' },
+                    freshnessWarning: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                    condition: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                    transform: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  },
+                },
+              },
+            },
+            sourceFreshnessWarnings: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  nodeId: { type: 'string', format: 'uuid' },
+                  name: { type: 'string' },
+                  warning: { type: 'string' },
+                },
+                required: ['nodeId', 'name', 'warning'],
+              },
+            },
+            expectedOutput: {},
+            acceptanceCriteria: {},
+            hostToolInstructions: { type: 'string' },
+            submission: {
+              type: 'object',
+              properties: {
+                submitRoute: { type: 'string' },
+                blockRoute: { type: 'string' },
+                requiredContextVersion: { type: 'string' },
+              },
+              required: ['submitRoute', 'blockRoute', 'requiredContextVersion'],
+            },
+          },
+          required: [
+            'stepId',
+            'nodeId',
+            'status',
+            'contextVersion',
+            'node',
+            'upstream',
+            'sourceFreshnessWarnings',
+            'expectedOutput',
+            'acceptanceCriteria',
+            'hostToolInstructions',
+            'submission',
+          ],
+        },
+        NextExternalStepData: {
+          type: 'object',
+          properties: {
+            runId: { type: 'string', format: 'uuid' },
+            status: { type: 'string', enum: ['active', 'completed', 'blocked', 'cancelled'] },
+            step: {
+              oneOf: [{ $ref: '#/components/schemas/ExternalStepWorkPacket' }, { type: 'null' }],
+            },
+          },
+          required: ['runId', 'status', 'step'],
+        },
+        ExternalStepContextData: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                runId: { type: 'string', format: 'uuid' },
+              },
+              required: ['runId'],
+            },
+            { $ref: '#/components/schemas/ExternalStepWorkPacket' },
+          ],
         },
       },
     },
@@ -590,6 +744,175 @@ export function getOpenApiDocument(origin: string) {
           ],
           responses: {
             '200': { description: 'Deletion confirmation in headless envelope.' },
+          },
+        },
+      },
+      '/api/headless/graphs/{graphId}/external-runs': {
+        post: {
+          tags: ['Headless API'],
+          summary: 'Create an external evaluator run',
+          security: [{ bearerToken: [] }],
+          parameters: [
+            {
+              name: 'graphId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': { description: 'External run and manifest in headless envelope.' },
+            '401': { description: 'Bearer token required.' },
+          },
+        },
+      },
+      '/api/headless/external-runs/{runId}/next-step': {
+        get: {
+          tags: ['Headless API'],
+          summary: 'Claim next external work packet',
+          description:
+            'Returns the next runnable external-evaluator step packet by default. The packet includes node prompt, upstream outputs grouped by edge type, freshness warnings, expected output, acceptance criteria, host-tool instructions, and submit/block routes.',
+          security: [{ bearerToken: [] }],
+          parameters: [
+            {
+              name: 'runId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Next external step work packet in headless envelope.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      data: { $ref: '#/components/schemas/NextExternalStepData' },
+                      error: { type: 'null' },
+                    },
+                    required: ['data', 'error'],
+                  },
+                },
+              },
+            },
+            '401': { description: 'Bearer token required.' },
+          },
+        },
+      },
+      '/api/headless/external-runs/{runId}/steps/{stepId}/context': {
+        get: {
+          tags: ['Headless API'],
+          summary: 'Refresh external step context',
+          description:
+            'Fetches the executable work packet for a known step. Use this for retry, refresh, or debug flows; next-step already returns the same packet for the selected step.',
+          security: [{ bearerToken: [] }],
+          parameters: [
+            {
+              name: 'runId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+            {
+              name: 'stepId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'External step work packet in headless envelope.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      data: { $ref: '#/components/schemas/ExternalStepContextData' },
+                      error: { type: 'null' },
+                    },
+                    required: ['data', 'error'],
+                  },
+                },
+              },
+            },
+            '401': { description: 'Bearer token required.' },
+            '409': { description: 'Step is not ready because dependencies are incomplete.' },
+          },
+        },
+      },
+      '/api/headless/external-runs/{runId}/steps/{stepId}/result': {
+        post: {
+          tags: ['Headless API'],
+          summary: 'Submit external step result',
+          description:
+            'Submit output using the contextVersion returned by next-step or step context.',
+          security: [{ bearerToken: [] }],
+          parameters: [
+            {
+              name: 'runId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+            {
+              name: 'stepId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': { description: 'Submitted step result in headless envelope.' },
+            '409': { description: 'Step state or contextVersion is stale.' },
+          },
+        },
+      },
+      '/api/headless/external-runs/{runId}/steps/{stepId}/block': {
+        post: {
+          tags: ['Headless API'],
+          summary: 'Mark external step blocked',
+          description:
+            'Mark a step blocked using the contextVersion returned by next-step or step context.',
+          security: [{ bearerToken: [] }],
+          parameters: [
+            {
+              name: 'runId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+            {
+              name: 'stepId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': { description: 'Blocked step status in headless envelope.' },
+            '409': { description: 'Step state or contextVersion is stale.' },
+          },
+        },
+      },
+      '/api/headless/external-runs/{runId}/finalize': {
+        post: {
+          tags: ['Headless API'],
+          summary: 'Finalize external run',
+          security: [{ bearerToken: [] }],
+          parameters: [
+            {
+              name: 'runId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': { description: 'Final external run status and metrics in headless envelope.' },
+            '409': { description: 'Run still has incomplete steps.' },
           },
         },
       },

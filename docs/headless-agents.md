@@ -6,7 +6,7 @@ default path is for a coding agent running in any project to connect to hosted B
 cloning this repository.
 
 Clone or sparse-install `alamorre/breakdown.sh` only when you are contributing to Breakdown,
-self-hosting it, or testing the repo-local plugin scaffold.
+self-hosting it, or testing Codex plugin packaging.
 
 ## Hosted Agent Quickstart
 

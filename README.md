@@ -4,8 +4,8 @@ Breakdown is a hosted/headless reasoning workflow service for coding agents. Age
 project can connect to hosted Breakdown through public discovery metadata, setup sessions, remote
 MCP, and headless REST. You do not need to clone this repository for normal service usage.
 
-Use this repository when you are contributing to Breakdown, self-hosting it, or testing the
-repo-local plugin scaffold.
+Use this repository when you are contributing to Breakdown, self-hosting it, or testing Codex plugin
+packaging.
 
 ## Use Hosted Breakdown From Any Project
 
@@ -27,7 +27,7 @@ See the public docs:
 
 - `/docs/getting-started`: hosted integration quickstart
 - `/mcp`: MCP, REST, setup sessions, scopes, and troubleshooting
-- `/docs/codex-plugin`: direct hosted MCP first, plugin paths second
+- `/docs/codex-plugin`: public Codex plugin install, token setup, and local override guidance
 
 ## Local Development
 
@@ -60,8 +60,15 @@ See [docs/local-development.md](docs/local-development.md) and
 
 ## Codex Plugin
 
-Codex and other MCP-capable agents can connect directly to the hosted MCP endpoint without a plugin
-or repository checkout:
+Codex can install the public Breakdown plugin from this repository's Git marketplace:
+
+```bash
+codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
+codex plugin add breakdown@breakdown
+```
+
+Codex and other MCP-capable agents can also connect directly to the hosted MCP endpoint without a
+plugin or repository checkout:
 
 ```toml
 [mcp_servers.breakdown]
@@ -69,8 +76,9 @@ url = "https://www.breakdown.sh/api/mcp"
 bearer_token_env_var = "BREAKDOWN_API_TOKEN"
 ```
 
-This repo also includes a local Codex plugin scaffold at `plugins/breakdown`. Use it for
-contributor testing and packaging work only. See [docs/codex-plugin.md](docs/codex-plugin.md).
+The plugin package lives at `plugins/breakdown` and reads `BREAKDOWN_API_TOKEN` from the Codex
+process environment. See [docs/codex-plugin.md](docs/codex-plugin.md) for install, first-run token
+setup, validation, and local override guidance.
 
 ## Package Security
 

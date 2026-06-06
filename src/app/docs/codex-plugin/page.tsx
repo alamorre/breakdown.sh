@@ -7,24 +7,25 @@ import { DocsProse } from '@/components/docs/DocsProse';
 
 export const metadata: Metadata = {
   title: 'Codex Plugin | breakdown.sh',
-  description: 'Hosted MCP, future plugin, and repo-local Codex plugin setup for breakdown.sh.',
+  description:
+    'Install the Breakdown Codex plugin and connect it to hosted MCP with scoped tokens.',
 };
 
 const integrationPaths = [
   [
-    'Default',
-    'Direct hosted MCP/API',
-    'Use setup sessions and https://www.breakdown.sh/api/mcp from any project. No Breakdown checkout is needed.',
-  ],
-  [
-    'Optional',
     'Public Codex plugin',
-    'Use the hosted plugin path after marketplace packaging ships. Track that work in issue #74.',
+    'Git marketplace plugin',
+    'Use from Codex when you want packaged skills, assets, prompts, MCP tools, and graph resources.',
   ],
   [
-    'Contributor only',
-    'Repo-local plugin scaffold',
-    'Use local checkout or sparse Git install only when developing Breakdown or testing plugin packaging.',
+    'Direct hosted MCP/API',
+    'Manual MCP or REST config',
+    'Use from any MCP-capable client, automation, or coding agent that does not need the Codex plugin.',
+  ],
+  [
+    'Local/self-hosted',
+    'Local MCP endpoint override',
+    'Use only when contributing to Breakdown, testing a local app, or running a self-hosted deployment.',
   ],
 ];
 
@@ -32,36 +33,65 @@ const pluginFiles = [
   ['Plugin manifest', 'plugins/breakdown/.codex-plugin/plugin.json'],
   ['MCP config', 'plugins/breakdown/.mcp.json'],
   ['Bundled skills', 'plugins/breakdown/skills/'],
+  ['Release assets', 'plugins/breakdown/assets/'],
   ['Marketplace entry', '.agents/plugins/marketplace.json'],
 ];
 
-const remainingWork = [
-  'Finalize marketplace naming, icon, screenshots, and release metadata.',
-  'Verify remote MCP behavior in a fresh Codex profile.',
-  'Decide whether hosted OAuth connector registration should replace bearer-token setup later.',
-  'Submit or distribute through any hosted Codex marketplace, if one is desired.',
+const scopeRows = [
+  ['Read graphs', 'graphs:read'],
+  ['Author and patch graphs', 'graphs:read, graphs:write'],
+  ['Internal runs', 'graphs:read, runs:execute, plus runs:cancel only when needed'],
+  ['External evaluator runs', 'graphs:read, runs:external_execute, runs:write_results'],
+  [
+    'Full graph operations',
+    'graphs:read, graphs:write, runs:execute, runs:external_execute, runs:write_results',
+  ],
+];
+
+const toolGroups = [
+  ['Graph CRUD', 'list_graphs, get_graph, create_graph, update_graph, delete_graph'],
+  [
+    'Nodes and edges',
+    'create_node, update_node, delete_node, connect_nodes, update_edge, delete_edge',
+  ],
+  ['Workflow shape', 'export_graph, import_graph, get_workflow_manifest, apply_graph_patch'],
+  ['Internal runs', 'run_node, run_graph, get_run_status, cancel_run'],
+  [
+    'External runs',
+    'create_external_run, get_next_step, get_step_context, submit_step_result, mark_step_blocked, finalize_external_run, summarize_run_delta',
+  ],
+];
+
+const resourceRows = [
+  ['Graph list', 'breakdown://graphs'],
+  ['Graph detail', 'breakdown://graphs/{graphId}'],
+  ['Workflow manifest', 'breakdown://graphs/{graphId}/manifest'],
+  ['Graph node', 'breakdown://graphs/{graphId}/nodes/{nodeId}'],
+  ['Latest run status', 'breakdown://graphs/{graphId}/runs/latest'],
+  ['External run', 'breakdown://external-runs/{runId}'],
+  ['External step', 'breakdown://external-runs/{runId}/steps/{stepId}'],
 ];
 
 export default function CodexPluginDocsPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <article className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
+      <article className="mx-auto w-full max-w-4xl px-6 py-12 sm:py-16">
         <header className="border-b pb-8">
           <DocsBreadcrumb />
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Codex Plugin</h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-            Codex can use Breakdown directly through hosted MCP today. The repo-local plugin
-            scaffold is for contributors and packaging tests, not the default path for agents
-            running in another project.
+          <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
+            Install the Breakdown Codex plugin to connect Codex to hosted reasoning graphs through
+            scoped Streamable HTTP MCP. The first public release uses{' '}
+            <code>BREAKDOWN_API_TOKEN</code> bearer tokens; hosted OAuth connector registration can
+            be added later if marketplace distribution requires it.
           </p>
         </header>
 
         <DocsProse className="mt-8">
           <h2>Choose The Right Path</h2>
           <p>
-            If your goal is to use Breakdown from Codex or another coding agent, start with direct
-            hosted MCP/API. Do not clone or sparse-install the Breakdown repo unless you are working
-            on Breakdown itself, self-hosting it, or validating plugin packaging.
+            Do not clone the Breakdown repo just to use hosted Breakdown. Install the plugin from
+            Git, or point your MCP client directly at the hosted endpoint.
           </p>
         </DocsProse>
 
@@ -77,7 +107,7 @@ export default function CodexPluginDocsPage() {
             <tbody>
               {integrationPaths.map(([label, name, description]) => (
                 <tr key={label} className="border-b last:border-b-0">
-                  <td className="whitespace-nowrap px-4 py-3 font-medium">{label}</td>
+                  <td className="px-4 py-3 font-medium">{label}</td>
                   <td className="px-4 py-3">{name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{description}</td>
                 </tr>
@@ -87,43 +117,94 @@ export default function CodexPluginDocsPage() {
         </div>
 
         <DocsProse className="mt-8">
-          <h2>Default: Connect Directly To Hosted MCP</h2>
+          <h2>Install The Public Plugin</h2>
+          <p>
+            Install the repo marketplace and plugin from Git. The sparse flags fetch only the
+            marketplace manifest and plugin package.
+          </p>
+          <CodeBlock>{`codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
+codex plugin add breakdown@breakdown`}</CodeBlock>
+          <p>
+            For a tagged release, replace <code>--ref main</code> with the release tag. Start a new
+            Codex thread after installing or updating so the plugin skills, prompts, assets, and MCP
+            server config are loaded.
+          </p>
+
+          <h2>Package Contents</h2>
+        </DocsProse>
+
+        <div className="mt-6 overflow-hidden rounded-md border">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="border-b px-4 py-3 font-medium">Part</th>
+                <th className="border-b px-4 py-3 font-medium">Path</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pluginFiles.map(([label, path]) => (
+                <tr key={label} className="border-b last:border-b-0">
+                  <td className="px-4 py-3 font-medium">{label}</td>
+                  <td className="break-all px-4 py-3 font-mono text-xs text-muted-foreground">
+                    {path}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <DocsProse className="mt-8">
+          <h2>First-Run Authentication</h2>
           <ol>
             <li>
               Create an agent setup session at{' '}
               <code>https://www.breakdown.sh/api/integrations/agent-setup-sessions</code>.
             </li>
             <li>Open the returned approval URL while signed in to Breakdown.</li>
-            <li>Verify the setup code and approve the requested scopes.</li>
+            <li>Verify the setup code and approve only the scopes needed for the session.</li>
             <li>
               Exchange the setup secret for a scoped <code>bdk_...</code> token.
             </li>
             <li>
-              Configure Codex or another MCP-capable client with{' '}
-              <code>https://www.breakdown.sh/api/mcp</code>.
+              Set <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
             </li>
           </ol>
-          <CodeBlock>{`[mcp_servers.breakdown]
-url = "https://www.breakdown.sh/api/mcp"
-bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
-          <p>
-            Set <code>BREAKDOWN_API_TOKEN</code> to the approved token before starting the client.
-            For the full setup-session flow, see <Link href="/mcp">MCP Access</Link>.
-          </p>
-
-          <h2>Authentication</h2>
-          <p>
-            Codex can create an agent setup session, ask the signed-in user to approve it in
-            Breakdown, then exchange the setup secret for a scoped <code>bdk_...</code> token. The
-            user does not need to copy the raw token.
-          </p>
           <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \\
   -H "Content-Type: application/json" \\
   -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
           <p>
-            Open the returned approval URL, verify the setup code, then exchange the returned setup
-            secret at the returned exchange URL. Manual token creation from{' '}
-            <Link href="/settings">Settings</Link> under MCP Access remains available as a fallback.
+            Manual token creation from <Link href="/settings">Settings</Link> under MCP Access is
+            available as a fallback. Raw tokens are shown once; store them outside the repository
+            and never commit them.
+          </p>
+        </DocsProse>
+
+        <div className="mt-6 overflow-hidden rounded-md border">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="border-b px-4 py-3 font-medium">Workflow</th>
+                <th className="border-b px-4 py-3 font-medium">Minimum scopes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scopeRows.map(([workflow, scopes]) => (
+                <tr key={workflow} className="border-b last:border-b-0">
+                  <td className="px-4 py-3 font-medium">{workflow}</td>
+                  <td className="break-words px-4 py-3 font-mono text-xs text-muted-foreground">
+                    {scopes}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <DocsProse className="mt-8">
+          <p>
+            Revoke plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or
+            unknown tokens fail closed with <code>401</code>.
           </p>
 
           <h2>Release-Test Authentication</h2>
@@ -140,22 +221,29 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
             from a phone.
           </p>
 
-          <h2>Optional: Public Codex Plugin</h2>
+          <h2>MCP Surface</h2>
           <p>
-            The public plugin path is not yet shipped. Once it is published, it should wrap the same
-            hosted MCP endpoint and setup-session flow so agents can connect without cloning this
-            repository.
+            The plugin exposes hosted MCP tools for graph editing, workflow execution, and external
+            evaluator runs where Codex performs each step and writes results back.
           </p>
-          <p>
-            Track the public plugin release in{' '}
-            <a href="https://github.com/alamorre/breakdown.sh/issues/74">GitHub issue #74</a>.
-          </p>
+        </DocsProse>
 
-          <h2>Contributor Only: Repo-Local Plugin</h2>
+        <div className="mt-6 grid gap-3">
+          {toolGroups.map(([label, tools]) => (
+            <div key={label} className="rounded-md border p-4">
+              <h3 className="text-sm font-medium">{label}</h3>
+              <p className="mt-2 break-words font-mono text-xs leading-5 text-muted-foreground">
+                {tools}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <DocsProse className="mt-8">
+          <h2>Resources</h2>
           <p>
-            The scaffold in this repository is useful for local development, testing, and the first
-            marketplace packaging pass. These files are not required for normal Breakdown service
-            usage.
+            Codex can also read graph resources for graph lists, graph detail, manifests, nodes, run
+            status, external runs, and external step context.
           </p>
         </DocsProse>
 
@@ -163,16 +251,16 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="border-b px-4 py-3 font-medium">Part</th>
-                <th className="border-b px-4 py-3 font-medium">Path</th>
+                <th className="border-b px-4 py-3 font-medium">Resource</th>
+                <th className="border-b px-4 py-3 font-medium">URI</th>
               </tr>
             </thead>
             <tbody>
-              {pluginFiles.map(([label, path]) => (
+              {resourceRows.map(([label, uri]) => (
                 <tr key={label} className="border-b last:border-b-0">
-                  <td className="whitespace-nowrap px-4 py-3 font-medium">{label}</td>
+                  <td className="px-4 py-3 font-medium">{label}</td>
                   <td className="break-all px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {path}
+                    {uri}
                   </td>
                 </tr>
               ))}
@@ -181,61 +269,64 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
         </div>
 
         <DocsProse className="mt-8">
-          <h2>Install From A Local Checkout</h2>
+          <h2>Safety</h2>
           <p>
-            Use this only when the Breakdown repo is already on the same machine because you are
-            changing or testing Breakdown.
-          </p>
-          <CodeBlock>{`cd /path/to/breakdown.sh
-codex plugin marketplace add "$(pwd)"
-codex plugin add breakdown@breakdown`}</CodeBlock>
-
-          <h2>Install From Git For Plugin Testing</h2>
-          <p>
-            Sparse Git install fetches only the marketplace manifest and plugin source directory. It
-            is for plugin packaging tests, not the default hosted integration path.
-          </p>
-          <CodeBlock>{`codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
-codex plugin add breakdown@breakdown`}</CodeBlock>
-
-          <h2>Local App Development</h2>
-          <p>
-            For local app development, run the app and point the client at the local MCP endpoint.
-          </p>
-          <CodeBlock>{`pnpm dev
-export BREAKDOWN_API_TOKEN=bdk_...`}</CodeBlock>
-          <p>
-            Then use <code>http://localhost:3000/api/mcp</code>. For plugin testing, make an
-            uncommitted local edit to <code>plugins/breakdown/.mcp.json</code> and switch the URL
-            back before committing.
+            Destructive tools advertise destructive annotations and confirmation metadata. Clients
+            should still ask before deleting graphs, deleting nodes or edges, replacing imports,
+            applying destructive patches, or cancelling active runs. Use{' '}
+            <code>apply_graph_patch</code> with <code>dryRun=true</code> before applying graph
+            mutations.
           </p>
 
           <h2>Verify</h2>
-          <ol>
-            <li>Ask Codex to list available Breakdown tools or list graphs.</li>
-            <li>
-              Confirm tools such as <code>list_graphs</code>, <code>get_graph</code>,{' '}
-              <code>create_external_run</code>, and <code>submit_step_result</code> are available.
-            </li>
-            <li>Use a low-risk read-only graph action before granting write or run scopes.</li>
-          </ol>
-          <CodeBlock>{`pnpm headless:verify
-pnpm --filter @breakdown/mcp build`}</CodeBlock>
+          <p>
+            After installation, start a fresh Codex thread and ask it to list Breakdown graphs. That
+            exercises the Git marketplace package, env-var token injection, hosted MCP connection,{' '}
+            <code>tools/list</code>, and a read-only graph path.
+          </p>
+          <CodeBlock>{`python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/breakdown
+pnpm exec vitest run src/lib/mcp/codex-plugin-release.test.ts src/app/api/mcp/route.test.ts
+pnpm lint
+pnpm typecheck`}</CodeBlock>
+
+          <h2>Direct Hosted MCP</h2>
+          <p>Use this path when a client does not need the packaged Codex plugin.</p>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            For the full setup-session flow, see <Link href="/mcp">MCP Access</Link>.
+          </p>
+
+          <h2>Local Or Self-Hosted Override</h2>
+          <p>
+            The committed plugin config always points at the hosted MCP endpoint. For local
+            development, do not edit and commit <code>plugins/breakdown/.mcp.json</code>.
+          </p>
+          <p>Prefer direct MCP config while developing the app:</p>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "http://localhost:3000/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            For plugin packaging tests, create a throwaway copy of <code>plugins/breakdown</code>.
+            Change that copy&apos;s <code>.mcp.json</code> to localhost, and install the throwaway
+            marketplace entry.
+          </p>
 
           <h2>Troubleshooting</h2>
           <p>
             <code>401 Missing bearer token</code> means the client reached Breakdown without an
             approved token. Create and approve a setup session or set{' '}
-            <code>BREAKDOWN_API_TOKEN</code>; do not clone the repository just to inspect plugin
-            files.
+            <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
           </p>
-
-          <h2>Remaining Product Work</h2>
-          <ul>
-            {remainingWork.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          <p>
+            <code>403 Missing required scope</code> means the token is valid but too narrow for the
+            requested tool. Create a new token with the minimum additional scope needed.
+          </p>
+          <p>
+            If Codex cannot see the plugin after install or update, start a new thread so Codex
+            reloads plugin skills and MCP server definitions.
+          </p>
         </DocsProse>
       </article>
     </main>

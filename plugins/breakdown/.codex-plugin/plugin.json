@@ -1,30 +1,44 @@
 {
   "name": "breakdown",
-  "version": "0.1.0",
-  "description": "Use breakdown.sh reasoning graphs, headless runs, and project workflows from Codex.",
+  "version": "1.0.0",
+  "description": "Connect Codex to hosted breakdown.sh reasoning graphs, scoped MCP tools, and external-evaluator runs.",
   "author": {
     "name": "breakdown.sh",
     "url": "https://www.breakdown.sh"
   },
   "homepage": "https://www.breakdown.sh/docs/codex-plugin",
   "repository": "https://github.com/alamorre/breakdown.sh",
-  "keywords": ["breakdown", "reasoning-graphs", "mcp", "headless-agents", "codex"],
+  "keywords": [
+    "breakdown",
+    "reasoning-graphs",
+    "mcp",
+    "headless-agents",
+    "external-evaluator",
+    "codex"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Breakdown",
     "shortDescription": "Build and run breakdown.sh reasoning graphs from Codex.",
-    "longDescription": "Breakdown connects Codex to breakdown.sh reasoning graphs through scoped MCP access, external-evaluator runs, and repo-specific development workflows.",
+    "longDescription": "Breakdown connects Codex to hosted reasoning graphs through scoped Streamable HTTP MCP access, graph resources, patch previews, internal runs, and external-evaluator workflows where Codex performs each step and writes results back.",
     "developerName": "breakdown.sh",
     "category": "Productivity",
-    "capabilities": ["MCP", "Workflow", "Write"],
+    "capabilities": ["MCP", "Resources", "Workflow", "Write"],
     "websiteURL": "https://www.breakdown.sh",
     "privacyPolicyURL": "https://www.breakdown.sh/privacy",
     "termsOfServiceURL": "https://www.breakdown.sh/terms-of-service",
     "brandColor": "#111827",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": [
+      "./assets/screenshot-setup.png",
+      "./assets/screenshot-tools.png",
+      "./assets/screenshot-external-run.png"
+    ],
     "defaultPrompt": [
       "List my Breakdown graphs.",
-      "Turn this goal into a Breakdown DAG.",
-      "Run this graph through external evaluator mode."
+      "Help me set up Breakdown MCP access.",
+      "Run a Breakdown graph externally."
     ]
   },
   "mcpServers": "./.mcp.json"

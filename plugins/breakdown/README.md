@@ -1,27 +1,22 @@
 # Breakdown Codex Plugin
 
-This repo-local Codex plugin is for contributors and packaging tests. It is not required for normal
-Breakdown service usage.
+This is the public Codex plugin package for Breakdown. It connects Codex to hosted Breakdown
+reasoning graphs through Streamable HTTP MCP at `https://www.breakdown.sh/api/mcp`.
 
-For agents running in another project, use direct hosted MCP/API instead:
+The plugin ships with marketplace metadata, icon/logo/screenshot assets, bundled Breakdown skills,
+and an MCP config that reads `BREAKDOWN_API_TOKEN` from the Codex process environment.
 
-```toml
-[mcp_servers.breakdown]
-url = "https://www.breakdown.sh/api/mcp"
-bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+## Install From Git
+
+```bash
+codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
+codex plugin add breakdown@breakdown
 ```
 
-Create and approve a setup session, exchange it for a scoped `bdk_...` token, and set
-`BREAKDOWN_API_TOKEN` before starting Codex. See the public `/mcp` page or
-`docs/getting-started.md` for the default hosted flow.
+For a release tag, replace `--ref main` with that tag. Start a new Codex thread after installing or
+updating the plugin.
 
-## What This Plugin Contains
-
-- `plugins/breakdown/.mcp.json`, which points at the hosted Streamable HTTP MCP endpoint.
-- `plugins/breakdown/skills/`, which bundles Breakdown-specific development workflows.
-- `.agents/plugins/marketplace.json`, which makes the plugin discoverable from this checkout.
-
-## Environment
+## First-Run Token Setup
 
 Create an agent setup session and ask the signed-in user to approve the returned URL:
 
@@ -31,35 +26,44 @@ curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
   -d '{"clientName":"Codex","providerName":"OpenAI"}'
 ```
 
-After approval, exchange the returned setup secret at the returned exchange URL. Use the exchange
+After approval, exchange the returned setup secret at the returned exchange URL. Set the exchange
 response token before starting Codex:
 
 ```bash
 export BREAKDOWN_API_TOKEN=bdk_...
 ```
 
-Manual token creation in Breakdown settings under MCP Access is still supported as a fallback.
+Manual token creation in Breakdown settings under MCP Access is supported as a fallback. Store raw
+tokens outside the repository, grant only the scopes needed for the session, and revoke plugin
+tokens from Settings under MCP Access when they are no longer needed.
 
-## Install In Codex For Plugin Testing
+## MCP Surface
 
-Use these commands only when testing this repo-local plugin scaffold.
+Expected hosted MCP capabilities include:
 
-From a local checkout:
+- graph CRUD, import/export, workflow manifests, and patch previews
+- internal graph and node runs
+- external-evaluator runs where Codex fetches step context, performs work, and submits results
+- graph resources for graph lists, graph detail, manifests, nodes, run status, and external runs
 
-```bash
-cd /path/to/breakdown.sh
-codex plugin marketplace add "$(pwd)"
-codex plugin add breakdown@breakdown
+Destructive tools carry destructive annotations and confirmation metadata. Clients should still ask
+before deleting, replacing imports, applying destructive patches, or cancelling runs.
+
+## Local Development Override
+
+The committed `.mcp.json` intentionally points at the hosted endpoint. Do not commit a localhost URL
+to this package.
+
+When developing Breakdown locally, prefer a direct MCP config outside the plugin:
+
+```toml
+[mcp_servers.breakdown]
+url = "http://localhost:3000/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
 ```
 
-From Git after the plugin has merged:
-
-```bash
-codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
-codex plugin add breakdown@breakdown
-```
-
-Start a new Codex thread after installing so the plugin skills and MCP tools are loaded.
+For plugin packaging tests against a local app, copy this plugin directory to a throwaway location
+outside the repo and edit the copy's `.mcp.json`.
 
 ## Verification
 
@@ -67,6 +71,6 @@ From the repo root:
 
 ```bash
 python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/breakdown
+pnpm exec vitest run src/lib/mcp/codex-plugin-release.test.ts src/app/api/mcp/route.test.ts
 pnpm --filter @breakdown/mcp build
-pnpm headless:verify
 ```

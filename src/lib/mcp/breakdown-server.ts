@@ -484,10 +484,11 @@ export function createBreakdownMcpServer(actor: BreakdownActor) {
   server.registerTool(
     'get_next_step',
     {
-      title: 'Get Next External Step',
-      description: 'Get the next ready external-evaluator step for a run.',
+      title: 'Claim Next External Step',
+      description:
+        'Claim and return the next runnable external-evaluator work packet for a run, including prompt, upstream outputs, freshness warnings, and submit/block routes.',
       inputSchema: runInput,
-      annotations: readOnlyAnnotations,
+      annotations: writeAnnotations,
       _meta: { 'breakdown/requiredScope': 'runs:external_execute' },
     },
     async ({ runId }) => textResult(await getNextExternalStepForActor(actor, runId)),
@@ -498,12 +499,12 @@ export function createBreakdownMcpServer(actor: BreakdownActor) {
     {
       title: 'Get External Step Context',
       description:
-        'Fetch prompt, upstream outputs, freshness warnings, and submission instructions for a step.',
+        'Refresh or debug the executable work packet for a known step. get_next_step already returns this packet for the selected step.',
       inputSchema: {
         ...runInput,
         stepId: uuid,
       },
-      annotations: readOnlyAnnotations,
+      annotations: writeAnnotations,
       _meta: { 'breakdown/requiredScope': 'runs:external_execute' },
     },
     async ({ runId, stepId }) =>
@@ -717,7 +718,7 @@ export function createBreakdownMcpServer(actor: BreakdownActor) {
     },
     ({ graphId }) =>
       promptText(
-        `Use Breakdown graph ${graphId} in external-evaluator mode. Create an external run, get each ready step, fetch context, perform the work in this console using available tools/connectors, submit outputs with citations, and finalize the run.`,
+        `Use Breakdown graph ${graphId} in external-evaluator mode. Create an external run, claim each step with get_next_step, perform the work from the returned packet using available tools/connectors, submit outputs with citations, and finalize the run.`,
       ),
   );
 

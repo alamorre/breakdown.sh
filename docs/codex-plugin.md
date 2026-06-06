@@ -1,41 +1,56 @@
 # Codex Plugin
 
-Codex can use Breakdown directly through hosted MCP today. The repo-local plugin scaffold is for
-contributors and packaging tests, not the default path for agents running in another project.
+The Breakdown Codex plugin is the polished public package for connecting Codex to hosted
+Breakdown reasoning graphs. It wraps the same Streamable HTTP MCP endpoint used by direct
+clients: `https://www.breakdown.sh/api/mcp`.
+
+The first public release intentionally uses scoped `BREAKDOWN_API_TOKEN` bearer tokens. Hosted
+OAuth connector registration can be added later if Codex marketplace distribution requires it, but
+tokens keep the Git marketplace, local checkout, and self-hosted paths consistent today.
 
 ## Choose The Right Path
 
-| Path             | Use                   | When                                                                                            |
-| ---------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
-| Default          | Direct hosted MCP/API | Use setup sessions and `https://www.breakdown.sh/api/mcp` from any project. No checkout needed. |
-| Optional         | Public Codex plugin   | Use the hosted plugin path after marketplace packaging ships. Track that work in issue #74.     |
-| Contributor only | Repo-local plugin     | Use local checkout or sparse Git install only when developing Breakdown or testing packaging.   |
+| Path                  | Use                         | When                                                                                               |
+| --------------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| Public Codex plugin   | Git marketplace plugin      | Use from Codex when you want the packaged skills, assets, prompts, MCP tools, and graph resources. |
+| Direct hosted MCP/API | Manual MCP or REST config   | Use from any MCP-capable client, automation, or coding agent that does not need the Codex plugin.  |
+| Local/self-hosted     | Local MCP endpoint override | Use only when contributing to Breakdown, testing a local app, or running a self-hosted deployment. |
 
-Do not clone or sparse-install the Breakdown repo unless you are working on Breakdown itself,
-self-hosting it, or validating plugin packaging.
+Do not clone the Breakdown repo just to use hosted Breakdown. Install the plugin from Git, or point
+your MCP client directly at the hosted endpoint.
 
-## Default: Connect Directly To Hosted MCP
+## Install The Public Plugin
+
+Install the repo marketplace and plugin from Git. The sparse flags fetch only the marketplace
+manifest and plugin package.
+
+```bash
+codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
+codex plugin add breakdown@breakdown
+```
+
+For a tagged release, replace `--ref main` with the release tag. Start a new Codex thread after
+installing or updating so the plugin skills, prompts, assets, and MCP server config are loaded.
+
+The plugin package includes:
+
+- `plugins/breakdown/.codex-plugin/plugin.json` for marketplace metadata, icon, logo, screenshots,
+  starter prompts, and bundled capability declarations.
+- `plugins/breakdown/.mcp.json` for hosted Streamable HTTP MCP with
+  `Authorization: Bearer ${BREAKDOWN_API_TOKEN}`.
+- `plugins/breakdown/skills/` for Breakdown development and graph evaluation workflows.
+- `.agents/plugins/marketplace.json` for the Git marketplace entry.
+
+## First-Run Authentication
+
+Create a scoped token before starting the Codex process that will load the plugin.
 
 1. Create an agent setup session at
    `https://www.breakdown.sh/api/integrations/agent-setup-sessions`.
 2. Open the returned approval URL while signed in to Breakdown.
-3. Verify the setup code and approve the requested scopes.
+3. Verify the setup code and approve only the scopes needed for the plugin session.
 4. Exchange the setup secret for a scoped `bdk_...` token.
-5. Configure Codex or another MCP-capable client with `https://www.breakdown.sh/api/mcp`.
-
-```toml
-[mcp_servers.breakdown]
-url = "https://www.breakdown.sh/api/mcp"
-bearer_token_env_var = "BREAKDOWN_API_TOKEN"
-```
-
-Set `BREAKDOWN_API_TOKEN` to the approved token before starting the client. For the full
-setup-session flow, see the public `/mcp` page.
-
-## Authentication
-
-Codex can create an agent setup session, ask the signed-in user to approve it in Breakdown, then
-exchange the setup secret for a scoped `bdk_...` token. The user does not need to copy the raw token.
+5. Set `BREAKDOWN_API_TOKEN` in the shell, launcher, or environment manager that starts Codex.
 
 ```bash
 curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
@@ -43,9 +58,21 @@ curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
   -d '{"clientName":"Codex","providerName":"OpenAI"}'
 ```
 
-Open the returned approval URL, verify the setup code, then exchange the returned setup secret at
-the returned exchange URL. Manual token creation from Settings under MCP Access remains available as
-a fallback.
+Manual token creation from Settings under MCP Access remains available as a fallback. Raw tokens are
+shown once; store them outside the repository and never commit them.
+
+Recommended scopes:
+
+| Workflow                | Minimum scopes                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| Read graphs             | `graphs:read`                                                                                |
+| Author and patch graphs | `graphs:read`, `graphs:write`                                                                |
+| Internal Breakdown runs | `graphs:read`, `runs:execute`, plus `runs:cancel` only when cancellation is needed           |
+| External evaluator runs | `graphs:read`, `runs:external_execute`, `runs:write_results`                                 |
+| Full graph operations   | `graphs:read`, `graphs:write`, `runs:execute`, `runs:external_execute`, `runs:write_results` |
+
+Revoke plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or unknown tokens
+fail closed with `401`.
 
 ## Release-Test Authentication
 
@@ -58,81 +85,97 @@ The release-test preset uses `graphs:read`, `graphs:write`, `runs:external_execu
 `runs:write_results`. Settings identifies the token purpose, shows last-used metadata, and supports
 rotation or revocation from a phone-friendly screen.
 
-## Optional: Public Codex Plugin
+## MCP Surface
 
-The public plugin path is not yet shipped. Once it is published, it should wrap the same hosted MCP
-endpoint and setup-session flow so agents can connect without cloning this repository.
+The plugin exposes hosted MCP tools for:
 
-Track that work in [GitHub issue #74](https://github.com/alamorre/breakdown.sh/issues/74).
+- graph CRUD: `list_graphs`, `get_graph`, `create_graph`, `update_graph`, `delete_graph`
+- node and edge editing: `create_node`, `update_node`, `delete_node`, `connect_nodes`,
+  `update_edge`, `delete_edge`
+- workflow import/export and patch previews: `export_graph`, `import_graph`,
+  `get_workflow_manifest`, `apply_graph_patch`
+- internal runs: `run_node`, `run_graph`, `get_run_status`, `cancel_run`
+- external evaluator runs: `create_external_run`, `get_next_step`, `get_step_context`,
+  `submit_step_result`, `mark_step_blocked`, `finalize_external_run`, `summarize_run_delta`
 
-## Contributor Only: Repo-Local Plugin
+It also exposes graph resources such as `breakdown://graphs`,
+`breakdown://graphs/{graphId}`, workflow manifests, graph nodes, latest run status, external runs,
+and external step context.
 
-The scaffold in this repository is useful for local development, testing, and the first marketplace
-packaging pass. These files are not required for normal Breakdown service usage:
+Destructive tools advertise destructive annotations and confirmation metadata. Clients should
+still ask before deleting graphs, deleting nodes or edges, replacing imports, applying destructive
+patches, or cancelling active runs. Use `apply_graph_patch` with `dryRun=true` before applying
+graph mutations.
 
-- `plugins/breakdown/.codex-plugin/plugin.json` declares the plugin metadata.
-- `plugins/breakdown/.mcp.json` connects to the hosted Streamable HTTP MCP endpoint.
-- `plugins/breakdown/skills/` bundles Breakdown-specific workflows.
-- `.agents/plugins/marketplace.json` exposes the `breakdown` marketplace entry.
+## Verify The Plugin
 
-### Install From A Local Checkout
+After installation, start a fresh Codex thread and ask it to list Breakdown graphs. That exercises
+the Git marketplace package, env-var token injection, hosted MCP connection, `tools/list`, and a
+read-only graph path.
 
-Use this only when the Breakdown repo is already on the same machine because you are changing or
-testing Breakdown.
-
-```bash
-cd /path/to/breakdown.sh
-codex plugin marketplace add "$(pwd)"
-codex plugin add breakdown@breakdown
-```
-
-### Install From Git For Plugin Testing
-
-Sparse Git install fetches only the marketplace manifest and plugin source directory. It is for
-plugin packaging tests, not the default hosted integration path.
+From a repo checkout, run:
 
 ```bash
-codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
-codex plugin add breakdown@breakdown
+python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/breakdown
+pnpm exec vitest run src/lib/mcp/codex-plugin-release.test.ts src/app/api/mcp/route.test.ts
+pnpm lint
+pnpm typecheck
 ```
 
-### Local App Development
+`src/app/api/mcp/route.test.ts` covers token failure behavior, Streamable HTTP initialization,
+tool schemas, safety annotations, scope failures, and graph listing with a bearer-token actor.
+`src/lib/mcp/codex-plugin-release.test.ts` keeps the marketplace entry, manifest assets, hosted
+MCP config, public-install docs, and local override guidance aligned.
 
-For local app development, run the app and point the client at the local MCP endpoint.
+## Direct Hosted MCP
+
+Use this path when a client does not need the packaged Codex plugin:
+
+```toml
+[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+```
+
+Set `BREAKDOWN_API_TOKEN` to the approved token before starting the client. For the full
+setup-session flow, see the public `/mcp` page.
+
+## Local Or Self-Hosted Override
+
+The committed plugin config always points at the hosted MCP endpoint. For local development, do not
+edit and commit `plugins/breakdown/.mcp.json`.
+
+Use one of these override paths instead:
+
+- Prefer direct MCP config while developing the app:
+
+  ```toml
+  [mcp_servers.breakdown]
+  url = "http://localhost:3000/api/mcp"
+  bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+  ```
+
+- For plugin packaging tests, copy `plugins/breakdown` to a throwaway directory outside the repo,
+  change that copy's `.mcp.json` to `http://localhost:3000/api/mcp`, and install the throwaway
+  marketplace entry.
+
+Run the app before using the local endpoint:
 
 ```bash
 pnpm dev
 export BREAKDOWN_API_TOKEN=bdk_...
 ```
 
-Then use `http://localhost:3000/api/mcp`. For plugin testing, make an uncommitted local edit to
-`plugins/breakdown/.mcp.json` and switch the URL back before committing.
-
-## Verify The Connection
-
-After installing the plugin and starting a fresh thread, ask Codex to list available Breakdown tools
-or list graphs. The MCP tool list should include tools such as `list_graphs`, `get_graph`,
-`create_external_run`, and `submit_step_result`.
-
-For command-line verification from the repo:
-
-```bash
-pnpm headless:verify
-pnpm --filter @breakdown/mcp build
-```
-
 ## Troubleshooting
 
 `401 Missing bearer token` means the client reached Breakdown without an approved token. Create and
-approve a setup session or set `BREAKDOWN_API_TOKEN`; do not clone the repository just to inspect
-plugin files.
+approve a setup session or set `BREAKDOWN_API_TOKEN` in the environment that starts Codex.
 
-## Remaining Product Work
+`403 Missing required scope` means the token is valid but too narrow for the requested tool. Create
+a new token with the minimum additional scope needed.
 
-The scaffold is useful for local and repo-based development, but a polished public plugin still
-needs:
+If Codex still cannot see the plugin after install or update, start a new thread so Codex reloads
+plugin skills and MCP server definitions.
 
-- final marketplace naming, icon, screenshots, and release metadata
-- verification of remote MCP behavior in a fresh Codex profile
-- a decision on whether hosted OAuth connector registration should replace bearer-token setup later
-- submission or distribution through any hosted Codex marketplace, if one is desired
+If local development calls unexpectedly hit production, check for a committed `.mcp.json` edit and
+switch to the direct local MCP config above.

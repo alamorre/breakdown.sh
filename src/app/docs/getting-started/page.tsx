@@ -41,7 +41,7 @@ export default function GettingStartedPage() {
           </p>
           <p>
             Clone this repository only when you are contributing to Breakdown, self-hosting it, or
-            testing the repo-local plugin scaffold.
+            testing Codex plugin packaging.
           </p>
         </DocsProse>
 
