@@ -23,7 +23,12 @@ describe('/openapi.json', () => {
       scheme: 'bearer',
       bearerFormat: 'bdk',
     });
+    expect(body.components.schemas.ExternalStepWorkPacket.properties).toHaveProperty('node');
+    expect(body.components.schemas.ExternalStepWorkPacket.properties).toHaveProperty('upstream');
+    expect(body.components.schemas.ExternalStepWorkPacket.properties).toHaveProperty('submission');
     expect(body.paths['/api/headless/graphs'].get.security).toEqual([{ bearerToken: [] }]);
+    expect(body.paths['/api/headless/external-runs/{runId}/next-step']).toBeDefined();
+    expect(body.paths['/api/headless/external-runs/{runId}/steps/{stepId}/context']).toBeDefined();
     expect(body.paths['/api/integrations/agent-setup-sessions/{sessionId}/exchange']).toBeDefined();
   });
 });

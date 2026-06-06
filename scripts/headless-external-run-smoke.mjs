@@ -125,46 +125,36 @@ async function main() {
   if (!step) {
     throw new Error('Expected a ready external step.');
   }
-
-  const context = await request(
-    'GET',
-    `/api/headless/external-runs/${firstRun.externalRun.runId}/steps/${step.stepId}/context`,
-  );
+  if (!step.node?.prompt || !step.submission?.submitRoute || !step.submission?.blockRoute) {
+    throw new Error('Expected next-step to return an executable work packet.');
+  }
 
   let stepResult;
   if (mode === 'block') {
-    stepResult = await request(
-      'POST',
-      `/api/headless/external-runs/${firstRun.externalRun.runId}/steps/${step.stepId}/block`,
-      {
-        contextVersion: context.contextVersion,
-        reason:
-          'Smoke test intentionally blocked the current-data step to verify data-gap persistence.',
-        requiredData: ['current evidence from host-console tools'],
-        clientName: 'headless smoke',
-        providerName: 'local script',
-      },
-    );
+    stepResult = await request('POST', step.submission.blockRoute, {
+      contextVersion: step.contextVersion,
+      reason:
+        'Smoke test intentionally blocked the current-data step to verify data-gap persistence.',
+      requiredData: ['current evidence from host-console tools'],
+      clientName: 'headless smoke',
+      providerName: 'local script',
+    });
   } else {
-    stepResult = await request(
-      'POST',
-      `/api/headless/external-runs/${firstRun.externalRun.runId}/steps/${step.stepId}/result`,
-      {
-        contextVersion: context.contextVersion,
-        output:
-          'Smoke fixture output: host-console current-data tools are assumed available for this test run.',
-        structuredSummary: { summary: 'Submitted smoke fixture output.' },
-        citations: [
-          {
-            source: 'local fixture',
-            note: 'No external facts used by this smoke test.',
-            accessedAt: new Date().toISOString(),
-          },
-        ],
-        clientName: 'headless smoke',
-        providerName: 'local script',
-      },
-    );
+    stepResult = await request('POST', step.submission.submitRoute, {
+      contextVersion: step.contextVersion,
+      output:
+        'Smoke fixture output: host-console current-data tools are assumed available for this test run.',
+      structuredSummary: { summary: 'Submitted smoke fixture output.' },
+      citations: [
+        {
+          source: 'local fixture',
+          note: 'No external facts used by this smoke test.',
+          accessedAt: new Date().toISOString(),
+        },
+      ],
+      clientName: 'headless smoke',
+      providerName: 'local script',
+    });
   }
 
   const finalized = await request(

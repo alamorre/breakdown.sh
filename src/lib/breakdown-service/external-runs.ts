@@ -66,6 +66,37 @@ interface ExternalRunStepRecord {
   updated_at: string;
 }
 
+interface ExternalStepWorkPacket {
+  stepId: string;
+  nodeId: string;
+  status: ExternalRunStepStatus;
+  contextVersion: string;
+  node: {
+    id: string;
+    name: string;
+    nodeType: string;
+    prompt: string;
+    priorOutput: string | null;
+    metadata: Record<string, unknown>;
+    runStatus: BreakdownNode['run_status'];
+    lastRunAt: string | null;
+  };
+  upstream: Record<string, Array<Record<string, unknown>>>;
+  sourceFreshnessWarnings: Array<{
+    nodeId: string;
+    name: string;
+    warning: string;
+  }>;
+  expectedOutput: unknown;
+  acceptanceCriteria: unknown;
+  hostToolInstructions: string;
+  submission: {
+    submitRoute: string;
+    blockRoute: string;
+    requiredContextVersion: string;
+  };
+}
+
 function serviceClient() {
   return createServerClient();
 }
@@ -214,6 +245,110 @@ async function advanceReadySteps(run: ExternalRunRecord) {
   }
 }
 
+async function buildExternalStepWorkPacket(input: {
+  actor: BreakdownActor;
+  run: ExternalRunRecord;
+  step: ExternalRunStepRecord;
+  markInProgress?: boolean;
+}): Promise<ExternalStepWorkPacket> {
+  const { actor, run, step, markInProgress = true } = input;
+  if (!['ready', 'in_progress', 'submitted', 'blocked'].includes(step.status)) {
+    throw new BreakdownServiceError(
+      'external_run_state',
+      'Step is not ready yet because upstream dependencies are incomplete',
+      409,
+    );
+  }
+
+  const graph = await getGraphForActor(
+    { userId: actor.userId, source: actor.source, scopes: ['graphs:read'] },
+    run.graph_id,
+  );
+  const node = graph.nodes.find((candidate) => candidate.id === step.node_id);
+  if (!node) {
+    throw new BreakdownServiceError('not_found', 'Step node not found', 404);
+  }
+
+  const inboundEdges = graph.edges.filter((edge) => edge.target_node_id === node.id);
+  const sourceNodes = inboundEdges
+    .map((edge) => graph.nodes.find((candidate) => candidate.id === edge.source_node_id))
+    .filter((candidate): candidate is BreakdownNode => Boolean(candidate));
+  const sourceById = new Map(sourceNodes.map((sourceNode) => [sourceNode.id, sourceNode]));
+  const upstreamByEdgeType: Record<string, Array<Record<string, unknown>>> = {};
+
+  for (const edge of inboundEdges) {
+    const sourceNode = sourceById.get(edge.source_node_id);
+    const group = upstreamByEdgeType[edge.edge_type] ?? [];
+    group.push({
+      edgeId: edge.id,
+      sourceNodeId: edge.source_node_id,
+      sourceNodeName: sourceNode?.name ?? 'Unknown node',
+      output: sourceNode?.output ?? null,
+      runStatus: sourceNode?.run_status ?? 'unknown',
+      lastRunAt: sourceNode?.last_run_at ?? null,
+      stale: sourceNode ? isStaleSourceNode(sourceNode) : false,
+      freshnessWarning:
+        sourceNode && isStaleSourceNode(sourceNode)
+          ? `${sourceNode.name} is ${formatSourceAge(sourceNode.last_run_at)}. Refresh or cite current data before relying on it.`
+          : null,
+      condition: edge.condition,
+      transform: edge.transform,
+    });
+    upstreamByEdgeType[edge.edge_type] = group;
+  }
+
+  let claimedStatus = step.status;
+  if (markInProgress && step.status === 'ready') {
+    const supabase = serviceClient();
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('external_run_steps')
+      .update({ status: 'in_progress', started_at: now, updated_at: now })
+      .eq('id', step.id);
+    if (error) {
+      throw new BreakdownServiceError('database_error', error.message, 400);
+    }
+    claimedStatus = 'in_progress';
+  }
+
+  return {
+    stepId: step.id,
+    nodeId: step.node_id,
+    status: claimedStatus,
+    contextVersion: step.context_version,
+    node: {
+      id: node.id,
+      name: node.name,
+      nodeType: node.node_type,
+      prompt: node.prompt,
+      priorOutput: node.output,
+      metadata: node.metadata,
+      runStatus: node.run_status,
+      lastRunAt: node.last_run_at,
+    },
+    upstream: upstreamByEdgeType,
+    sourceFreshnessWarnings: sourceNodes
+      .filter((sourceNode) => isStaleSourceNode(sourceNode))
+      .map((sourceNode) => ({
+        nodeId: sourceNode.id,
+        name: sourceNode.name,
+        warning: `${sourceNode.name} is ${formatSourceAge(sourceNode.last_run_at)}.`,
+      })),
+    expectedOutput:
+      (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown })
+        .expectedOutput ?? null,
+    acceptanceCriteria:
+      (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown })
+        .acceptanceCriteria ?? null,
+    hostToolInstructions: hostToolInstructionsForNode(node),
+    submission: {
+      submitRoute: `/api/headless/external-runs/${run.id}/steps/${step.id}/result`,
+      blockRoute: `/api/headless/external-runs/${run.id}/steps/${step.id}/block`,
+      requiredContextVersion: step.context_version,
+    },
+  };
+}
+
 export async function createExternalRunForActor(
   actor: BreakdownActor,
   graphId: string,
@@ -322,17 +457,11 @@ export async function getNextExternalStepForActor(actor: BreakdownActor, runId: 
   await advanceReadySteps(run);
   const steps = await getRunSteps(run.id);
   const step = steps.find((candidate) => candidate.status === 'ready');
+  const workPacket = step ? await buildExternalStepWorkPacket({ actor, run, step }) : null;
   return {
     runId: run.id,
     status: run.status,
-    step: step
-      ? {
-          stepId: step.id,
-          nodeId: step.node_id,
-          status: step.status,
-          contextVersion: step.context_version,
-        }
-      : null,
+    step: workPacket,
   };
 }
 
@@ -360,92 +489,11 @@ export async function getExternalStepContextForActor(
     );
   }
   const step = stepData as ExternalRunStepRecord;
-  if (!['ready', 'in_progress', 'submitted', 'blocked'].includes(step.status)) {
-    throw new BreakdownServiceError(
-      'external_run_state',
-      'Step is not ready yet because upstream dependencies are incomplete',
-      409,
-    );
-  }
-
-  const graph = await getGraphForActor(
-    { userId: actor.userId, source: actor.source, scopes: ['graphs:read'] },
-    run.graph_id,
-  );
-  const node = graph.nodes.find((candidate) => candidate.id === step.node_id);
-  if (!node) {
-    throw new BreakdownServiceError('not_found', 'Step node not found', 404);
-  }
-
-  const inboundEdges = graph.edges.filter((edge) => edge.target_node_id === node.id);
-  const sourceNodes = inboundEdges
-    .map((edge) => graph.nodes.find((candidate) => candidate.id === edge.source_node_id))
-    .filter((candidate): candidate is BreakdownNode => Boolean(candidate));
-  const sourceById = new Map(sourceNodes.map((sourceNode) => [sourceNode.id, sourceNode]));
-  const upstreamByEdgeType: Record<string, Array<Record<string, unknown>>> = {};
-
-  for (const edge of inboundEdges) {
-    const sourceNode = sourceById.get(edge.source_node_id);
-    const group = upstreamByEdgeType[edge.edge_type] ?? [];
-    group.push({
-      edgeId: edge.id,
-      sourceNodeId: edge.source_node_id,
-      sourceNodeName: sourceNode?.name ?? 'Unknown node',
-      output: sourceNode?.output ?? null,
-      runStatus: sourceNode?.run_status ?? 'unknown',
-      lastRunAt: sourceNode?.last_run_at ?? null,
-      stale: sourceNode ? isStaleSourceNode(sourceNode) : false,
-      freshnessWarning:
-        sourceNode && isStaleSourceNode(sourceNode)
-          ? `${sourceNode.name} is ${formatSourceAge(sourceNode.last_run_at)}. Refresh or cite current data before relying on it.`
-          : null,
-      condition: edge.condition,
-      transform: edge.transform,
-    });
-    upstreamByEdgeType[edge.edge_type] = group;
-  }
-
-  if (step.status === 'ready') {
-    await supabase
-      .from('external_run_steps')
-      .update({ status: 'in_progress', started_at: new Date().toISOString() })
-      .eq('id', step.id);
-  }
+  const workPacket = await buildExternalStepWorkPacket({ actor, run, step });
 
   return {
     runId: run.id,
-    stepId: step.id,
-    contextVersion: step.context_version,
-    node: {
-      id: node.id,
-      name: node.name,
-      nodeType: node.node_type,
-      prompt: node.prompt,
-      priorOutput: node.output,
-      metadata: node.metadata,
-      runStatus: node.run_status,
-      lastRunAt: node.last_run_at,
-    },
-    upstream: upstreamByEdgeType,
-    sourceFreshnessWarnings: sourceNodes
-      .filter((sourceNode) => isStaleSourceNode(sourceNode))
-      .map((sourceNode) => ({
-        nodeId: sourceNode.id,
-        name: sourceNode.name,
-        warning: `${sourceNode.name} is ${formatSourceAge(sourceNode.last_run_at)}.`,
-      })),
-    expectedOutput:
-      (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown })
-        .expectedOutput ?? null,
-    acceptanceCriteria:
-      (node.metadata as { expectedOutput?: unknown; acceptanceCriteria?: unknown })
-        .acceptanceCriteria ?? null,
-    hostToolInstructions: hostToolInstructionsForNode(node),
-    submission: {
-      submitRoute: `/api/headless/external-runs/${run.id}/steps/${step.id}/result`,
-      blockRoute: `/api/headless/external-runs/${run.id}/steps/${step.id}/block`,
-      requiredContextVersion: step.context_version,
-    },
+    ...workPacket,
   };
 }
 
