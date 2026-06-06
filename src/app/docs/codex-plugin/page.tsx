@@ -207,6 +207,20 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
             unknown tokens fail closed with <code>401</code>.
           </p>
 
+          <h2>Release-Test Authentication</h2>
+          <p>
+            Plugin release smoke tests should not depend on one-time approval URLs. Create or rotate
+            a Release Testing token from <Link href="/settings">Settings</Link> under MCP Access,
+            then store the copied value as <code>BREAKDOWN_RELEASE_TEST_TOKEN</code> in GitHub
+            Actions or the agent runtime secret store.
+          </p>
+          <p>
+            The release-test token is scoped to <code>graphs:read</code>, <code>graphs:write</code>,{' '}
+            <code>runs:external_execute</code>, and <code>runs:write_results</code>. Settings shows
+            its purpose, scopes, last-used time, and revoked state so it can be audited or rotated
+            from a phone.
+          </p>
+
           <h2>MCP Surface</h2>
           <p>
             The plugin exposes hosted MCP tools for graph editing, workflow execution, and external

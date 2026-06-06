@@ -9,15 +9,29 @@ type SupabaseClient = ReturnType<typeof createServerClient>;
 
 const TOKEN_PREFIX = 'bdk';
 const TOKEN_SECRET_BYTES = 32;
+const PUBLIC_TOKEN_SELECT =
+  'id,user_id,name,token_prefix,scopes,purpose,created_by_user_id,created_at,last_used_at,revoked_at,expires_at';
+
+export const INTEGRATION_TOKEN_PURPOSES = ['mcp_client', 'release_test'] as const;
+export type IntegrationTokenPurpose = (typeof INTEGRATION_TOKEN_PURPOSES)[number];
+
+const DEFAULT_TOKEN_PURPOSE: IntegrationTokenPurpose = 'mcp_client';
 
 export const createIntegrationTokenSchema = z.object({
   userId: z.string().min(1),
   name: z.string().min(1).max(100),
   scopes: z.array(z.enum(BREAKDOWN_SCOPES)).min(1).default(ALL_BREAKDOWN_SCOPES),
+  purpose: z.enum(INTEGRATION_TOKEN_PURPOSES).default(DEFAULT_TOKEN_PURPOSE),
+  createdByUserId: z.string().min(1).optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 
 export const revokeIntegrationTokenSchema = z.object({
   tokenId: z.string().uuid(),
+});
+
+export const revokeIntegrationTokensByPurposeSchema = z.object({
+  purpose: z.enum(INTEGRATION_TOKEN_PURPOSES),
 });
 
 export interface IntegrationTokenRecord {
@@ -27,9 +41,12 @@ export interface IntegrationTokenRecord {
   token_hash: string;
   token_prefix: string;
   scopes: BreakdownScope[];
+  purpose: IntegrationTokenPurpose;
+  created_by_user_id: string;
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
+  expires_at: string | null;
 }
 
 export type PublicIntegrationTokenRecord = Omit<IntegrationTokenRecord, 'token_hash'>;
@@ -74,8 +91,11 @@ export async function mintIntegrationToken(
       token_hash: tokenHash,
       token_prefix: tokenPrefix,
       scopes: parsed.data.scopes,
+      purpose: parsed.data.purpose,
+      created_by_user_id: parsed.data.createdByUserId ?? parsed.data.userId,
+      expires_at: parsed.data.expiresAt ?? null,
     })
-    .select('id,user_id,name,token_prefix,scopes,created_at,last_used_at,revoked_at')
+    .select(PUBLIC_TOKEN_SELECT)
     .single();
 
   if (error || !data) {
@@ -98,7 +118,7 @@ export async function listIntegrationTokens(
 ): Promise<PublicIntegrationTokenRecord[]> {
   const { data, error } = await supabase
     .from('integration_tokens')
-    .select('id,user_id,name,token_prefix,scopes,created_at,last_used_at,revoked_at')
+    .select(PUBLIC_TOKEN_SELECT)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -120,7 +140,7 @@ export async function resolveIntegrationToken(
   const tokenHash = hashIntegrationToken(token);
   const { data, error } = await supabase
     .from('integration_tokens')
-    .select('id,user_id,name,scopes,revoked_at')
+    .select('id,user_id,name,scopes,revoked_at,expires_at')
     .eq('token_hash', tokenHash)
     .single();
 
@@ -130,10 +150,13 @@ export async function resolveIntegrationToken(
 
   const record = data as Pick<
     IntegrationTokenRecord,
-    'id' | 'user_id' | 'name' | 'scopes' | 'revoked_at'
+    'id' | 'user_id' | 'name' | 'scopes' | 'revoked_at' | 'expires_at'
   >;
   if (record.revoked_at) {
     throw new BreakdownServiceError('unauthorized', 'Integration token has been revoked', 401);
+  }
+  if (record.expires_at && new Date(record.expires_at).getTime() <= Date.now()) {
+    throw new BreakdownServiceError('unauthorized', 'Integration token has expired', 401);
   }
 
   await supabase
@@ -171,6 +194,33 @@ export async function revokeIntegrationToken(
     .update({ revoked_at: new Date().toISOString() })
     .eq('id', parsed.data.tokenId)
     .eq('user_id', actor.userId)
+    .is('revoked_at', null);
+
+  if (error) {
+    throw new BreakdownServiceError('database_error', error.message, 400);
+  }
+}
+
+export async function revokeActiveIntegrationTokensByPurpose(
+  supabase: SupabaseClient,
+  actor: { userId: string },
+  input: z.input<typeof revokeIntegrationTokensByPurposeSchema>,
+): Promise<void> {
+  const parsed = revokeIntegrationTokensByPurposeSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
+  }
+
+  const { error } = await supabase
+    .from('integration_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('user_id', actor.userId)
+    .eq('purpose', parsed.data.purpose)
     .is('revoked_at', null);
 
   if (error) {

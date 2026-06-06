@@ -143,6 +143,21 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`}</CodeBlock>
 
+          <h2>Release-Test Token</h2>
+          <p>
+            Pre-merge plugin smoke tests should use a durable release-test token instead of a
+            one-time setup session. In <Link href="/settings">Settings</Link> under MCP Access, use
+            Release Testing to create or rotate a token with <code>graphs:read</code>,{' '}
+            <code>graphs:write</code>, <code>runs:external_execute</code>, and{' '}
+            <code>runs:write_results</code>.
+          </p>
+          <p>
+            Copy the raw token once and store it as <code>BREAKDOWN_RELEASE_TEST_TOKEN</code> in
+            GitHub Actions or the agent runtime secret store. Release-test tokens identify their
+            purpose in Settings, show last-used metadata, and can be rotated or revoked without
+            accepting another approval URL.
+          </p>
+
           <h2>REST And Bootstrap Metadata</h2>
           <p>
             MCP clients and agents can also discover integration metadata at <code>/api</code>,{' '}

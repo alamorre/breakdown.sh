@@ -31,9 +31,12 @@ function serializeToken(record: PublicIntegrationTokenRecord) {
     name: record.name,
     tokenPrefix: record.token_prefix,
     scopes: record.scopes,
+    purpose: record.purpose,
+    createdByUserId: record.created_by_user_id,
     createdAt: record.created_at,
     lastUsedAt: record.last_used_at,
     revokedAt: record.revoked_at,
+    expiresAt: record.expires_at,
   };
 }
 

@@ -1,22 +1,38 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, KeyRound, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Copy,
+  KeyRound,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ALL_BREAKDOWN_SCOPES, type BreakdownScope } from '@/lib/breakdown-service/scopes';
+import {
+  ALL_BREAKDOWN_SCOPES,
+  RELEASE_TEST_SCOPES,
+  type BreakdownScope,
+} from '@/lib/breakdown-service/scopes';
+import type { IntegrationTokenPurpose } from '@/lib/breakdown-service/tokens';
 
 type HeadlessToken = {
   id: string;
   name: string;
   tokenPrefix: string;
   scopes: BreakdownScope[];
+  purpose: IntegrationTokenPurpose;
+  createdByUserId: string;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  expiresAt: string | null;
 };
 
 type HeadlessTokensResponse = {
@@ -39,6 +55,11 @@ const SCOPE_LABELS: Record<BreakdownScope, string> = {
   'runs:external_execute': 'External runs',
   'runs:write_results': 'Write results',
   'runs:cancel': 'Cancel runs',
+};
+
+const PURPOSE_LABELS: Record<IntegrationTokenPurpose, string> = {
+  mcp_client: 'MCP client',
+  release_test: 'Release test',
 };
 
 async function readTokens(): Promise<HeadlessTokensResponse> {
@@ -64,6 +85,16 @@ function formatScopes(scopes: BreakdownScope[]) {
   return scopes.map((scope) => SCOPE_LABELS[scope]).join(', ');
 }
 
+function markActivePurposeRevoked(
+  tokens: HeadlessToken[],
+  purpose: IntegrationTokenPurpose,
+  revokedAt: string,
+) {
+  return tokens.map((token) =>
+    token.purpose === purpose && !token.revokedAt ? { ...token, revokedAt } : token,
+  );
+}
+
 export function HeadlessTokenSettings() {
   const [configured, setConfigured] = useState(true);
   const [availableScopes, setAvailableScopes] = useState<BreakdownScope[]>(ALL_BREAKDOWN_SCOPES);
@@ -73,9 +104,14 @@ export function HeadlessTokenSettings() {
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [rotatingReleaseTest, setRotatingReleaseTest] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const activeTokens = useMemo(() => tokens.filter((token) => !token.revokedAt), [tokens]);
+  const activeReleaseTestToken = useMemo(
+    () => activeTokens.find((token) => token.purpose === 'release_test') ?? null,
+    [activeTokens],
+  );
 
   const refreshTokens = useCallback(async () => {
     setLoading(true);
@@ -106,6 +142,29 @@ export function HeadlessTokenSettings() {
     );
   };
 
+  const createToken = async (input: {
+    tokenName: string;
+    scopes: BreakdownScope[];
+    purpose: IntegrationTokenPurpose;
+  }) => {
+    const response = await fetch('/api/integrations/headless-tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: input.tokenName,
+        scopes: input.scopes,
+        purpose: input.purpose,
+      }),
+    });
+    const result = (await response.json().catch(() => null)) as CreatedTokenResponse | null;
+
+    if (!response.ok || !result) {
+      throw new Error(result?.error ?? 'Failed to create MCP access token');
+    }
+
+    return result;
+  };
+
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
@@ -123,16 +182,11 @@ export function HeadlessTokenSettings() {
     setCreating(true);
     setCreatedToken(null);
     try {
-      const response = await fetch('/api/integrations/headless-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, scopes: selectedScopes }),
+      const result = await createToken({
+        tokenName: trimmedName,
+        scopes: selectedScopes,
+        purpose: 'mcp_client',
       });
-      const result = (await response.json().catch(() => null)) as CreatedTokenResponse | null;
-
-      if (!response.ok || !result) {
-        throw new Error(result?.error ?? 'Failed to create MCP access token');
-      }
 
       setCreatedToken(result.token);
       setTokens((current) => [result.record, ...current]);
@@ -142,6 +196,32 @@ export function HeadlessTokenSettings() {
       toast.error(err instanceof Error ? err.message : 'Failed to create MCP access token');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleRotateReleaseTest = async () => {
+    setRotatingReleaseTest(true);
+    setCreatedToken(null);
+    try {
+      const result = await createToken({
+        tokenName: 'Release test token',
+        scopes: RELEASE_TEST_SCOPES,
+        purpose: 'release_test',
+      });
+      const revokedAt = new Date().toISOString();
+
+      setCreatedToken(result.token);
+      setTokens((current) => [
+        result.record,
+        ...markActivePurposeRevoked(current, 'release_test', revokedAt),
+      ]);
+      toast.success(
+        activeReleaseTestToken ? 'Release-test token rotated' : 'Release-test token created',
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to rotate release-test token');
+    } finally {
+      setRotatingReleaseTest(false);
     }
   };
 
@@ -238,6 +318,62 @@ export function HeadlessTokenSettings() {
         </div>
       )}
 
+      <div className="mt-5 rounded-md border bg-muted/20 p-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <ShieldCheck className="size-4" />
+              <h3 className="text-sm font-medium">Release Testing</h3>
+              <Badge variant={activeReleaseTestToken ? 'default' : 'secondary'}>
+                {activeReleaseTestToken ? 'Ready' : 'No token'}
+              </Badge>
+            </div>
+            <div className="mt-2 grid gap-1 text-sm text-muted-foreground">
+              <div>{formatScopes(RELEASE_TEST_SCOPES)}</div>
+              <div>
+                Store the copied value as{' '}
+                <code className="font-mono text-xs">BREAKDOWN_RELEASE_TEST_TOKEN</code>.
+              </div>
+              {activeReleaseTestToken && (
+                <div>Last used {formatDate(activeReleaseTestToken.lastUsedAt)}</div>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!configured || rotatingReleaseTest}
+              onClick={() => void handleRotateReleaseTest()}
+            >
+              {rotatingReleaseTest ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              {activeReleaseTestToken ? 'Rotate' : 'Create'}
+            </Button>
+            {activeReleaseTestToken && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={revokingId === activeReleaseTestToken.id}
+                onClick={() => void handleRevoke(activeReleaseTestToken.id)}
+              >
+                {revokingId === activeReleaseTestToken.id ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="size-3.5" />
+                )}
+                Revoke
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <form className="mt-5 grid gap-4" onSubmit={(event) => void handleCreate(event)}>
         <div className="grid gap-2">
           <Label htmlFor="headless-token-name">Token name</Label>
@@ -301,6 +437,7 @@ export function HeadlessTokenSettings() {
                 <div className="min-w-0">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className="font-medium">{token.name}</span>
+                    <Badge variant="outline">{PURPOSE_LABELS[token.purpose]}</Badge>
                     <Badge variant={revoked ? 'secondary' : 'default'}>
                       {revoked ? 'Revoked' : 'Active'}
                     </Badge>
@@ -312,6 +449,7 @@ export function HeadlessTokenSettings() {
                     <div>{formatScopes(token.scopes)}</div>
                     <div>Created {formatDate(token.createdAt)}</div>
                     <div>Last used {formatDate(token.lastUsedAt)}</div>
+                    {token.expiresAt && <div>Expires {formatDate(token.expiresAt)}</div>}
                   </div>
                 </div>
 

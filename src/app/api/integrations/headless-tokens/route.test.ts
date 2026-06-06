@@ -6,12 +6,14 @@ const {
   mockCreateServerClient,
   mockListIntegrationTokens,
   mockMintIntegrationToken,
+  mockRevokeActiveIntegrationTokensByPurpose,
   mockRevokeIntegrationToken,
 } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockCreateServerClient: vi.fn(),
   mockListIntegrationTokens: vi.fn(),
   mockMintIntegrationToken: vi.fn(),
+  mockRevokeActiveIntegrationTokensByPurpose: vi.fn(),
   mockRevokeIntegrationToken: vi.fn(),
 }));
 
@@ -29,6 +31,7 @@ vi.mock('@/lib/breakdown-service/tokens', async (importOriginal) => {
     ...original,
     listIntegrationTokens: mockListIntegrationTokens,
     mintIntegrationToken: mockMintIntegrationToken,
+    revokeActiveIntegrationTokensByPurpose: mockRevokeActiveIntegrationTokensByPurpose,
     revokeIntegrationToken: mockRevokeIntegrationToken,
   };
 });
@@ -43,9 +46,12 @@ const safeRecord = {
   name: 'Preview MCP',
   token_prefix: 'bdk_preview',
   scopes: ['graphs:read', 'graphs:write'] as BreakdownScope[],
+  purpose: 'mcp_client',
+  created_by_user_id: 'user_123',
   created_at: '2026-06-03T00:00:00Z',
   last_used_at: null,
   revoked_at: null,
+  expires_at: null,
 };
 
 function jsonRequest(body: unknown) {
@@ -76,6 +82,7 @@ describe('/api/integrations/headless-tokens', () => {
       token: 'bdk_preview_secret',
       record: safeRecord,
     });
+    mockRevokeActiveIntegrationTokensByPurpose.mockResolvedValue(undefined);
     mockRevokeIntegrationToken.mockResolvedValue(undefined);
   });
 
@@ -100,9 +107,12 @@ describe('/api/integrations/headless-tokens', () => {
         name: 'Preview MCP',
         tokenPrefix: 'bdk_preview',
         scopes: ['graphs:read', 'graphs:write'],
+        purpose: 'mcp_client',
+        createdByUserId: 'user_123',
         createdAt: '2026-06-03T00:00:00Z',
         lastUsedAt: null,
         revokedAt: null,
+        expiresAt: null,
       },
     ]);
     expect(JSON.stringify(body)).not.toContain('token_hash');
@@ -117,10 +127,37 @@ describe('/api/integrations/headless-tokens', () => {
       userId: 'user_123',
       name: 'Preview MCP',
       scopes: ['graphs:read'],
+      purpose: 'mcp_client',
+      createdByUserId: 'user_123',
+      expiresAt: undefined,
     });
     expect(body.token).toBe('bdk_preview_secret');
     expect(body.record.tokenPrefix).toBe('bdk_preview');
     expect(body.record).not.toHaveProperty('token_hash');
+  });
+
+  it('rotates active release-test tokens before minting a fresh scoped token', async () => {
+    const response = await POST(
+      jsonRequest({
+        name: 'Release test token',
+        purpose: 'release_test',
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockRevokeActiveIntegrationTokensByPurpose).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: 'user_123' },
+      { purpose: 'release_test' },
+    );
+    expect(mockMintIntegrationToken).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_123',
+      name: 'Release test token',
+      scopes: ['graphs:read', 'graphs:write', 'runs:external_execute', 'runs:write_results'],
+      purpose: 'release_test',
+      createdByUserId: 'user_123',
+      expiresAt: undefined,
+    });
   });
 
   it('rejects invalid token creation requests', async () => {

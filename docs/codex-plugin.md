@@ -74,6 +74,17 @@ Recommended scopes:
 Revoke plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or unknown tokens
 fail closed with `401`.
 
+## Release-Test Authentication
+
+Plugin release smoke tests should use a durable release-test token instead of one-time approval
+URLs. Create or rotate the token from `/settings` under **MCP Access** -> **Release Testing**, then
+store the copied raw value as `BREAKDOWN_RELEASE_TEST_TOKEN` in GitHub Actions or the agent runtime
+secret store.
+
+The release-test preset uses `graphs:read`, `graphs:write`, `runs:external_execute`, and
+`runs:write_results`. Settings identifies the token purpose, shows last-used metadata, and supports
+rotation or revocation from a phone-friendly screen.
+
 ## MCP Surface
 
 The plugin exposes hosted MCP tools for:
