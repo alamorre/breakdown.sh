@@ -32,6 +32,10 @@ describe('/api/headless discovery', () => {
     expect(body.data.endpoints).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ method: 'GET', path: '/api/headless/graphs' }),
+        expect.objectContaining({
+          method: 'GET',
+          path: '/api/headless/external-runs/{runId}/steps/{stepId}/context',
+        }),
         expect.objectContaining({ method: 'POST', path: '/api/headless/workflows/import-and-run' }),
       ]),
     );

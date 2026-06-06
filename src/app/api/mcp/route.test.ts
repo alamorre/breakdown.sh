@@ -235,6 +235,8 @@ describe('/api/mcp Streamable HTTP route', () => {
     expect(byName.get('list_graphs')?.annotations?.readOnlyHint).toBe(true);
     expect(byName.get('delete_graph')?.annotations?.destructiveHint).toBe(true);
     expect(byName.get('apply_graph_patch')?.annotations?.destructiveHint).toBe(true);
+    expect(byName.get('get_next_step')?.annotations?.readOnlyHint).toBe(false);
+    expect(byName.get('get_step_context')?.annotations?.readOnlyHint).toBe(false);
     expect(byName.get('run_graph')?.annotations?.openWorldHint).toBe(true);
 
     expect(byName.get('apply_graph_patch')?._meta?.['breakdown/requiredScope']).toBe(

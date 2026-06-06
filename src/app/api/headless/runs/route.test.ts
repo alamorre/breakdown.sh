@@ -24,6 +24,9 @@ describe('/api/headless/runs discovery', () => {
       expect.arrayContaining([
         expect.objectContaining({ path: '/api/headless/graphs/{graphId}/run' }),
         expect.objectContaining({ path: '/api/headless/external-runs/{runId}/next-step' }),
+        expect.objectContaining({
+          path: '/api/headless/external-runs/{runId}/steps/{stepId}/context',
+        }),
       ]),
     );
   });

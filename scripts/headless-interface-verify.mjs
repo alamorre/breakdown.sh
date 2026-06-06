@@ -139,6 +139,11 @@ async function verifyMcpToolSchemaWiring() {
     applyPatch.annotations?.destructiveHint === true,
     'apply_graph_patch should advertise destructiveHint for client confirmations',
   );
+  const nextStep = requireTool(tools, 'get_next_step');
+  assert(
+    nextStep.annotations?.readOnlyHint === false,
+    'get_next_step should not advertise readOnlyHint because it claims ready steps',
+  );
 
   const submitStep = requireTool(tools, 'submit_step_result');
   const submitProperties = submitStep.inputSchema.properties ?? {};
@@ -283,49 +288,41 @@ async function main() {
       `/api/headless/external-runs/${runId}/next-step`,
     );
     assert(firstStep.step?.stepId, 'Expected a first ready external step');
-    const firstContext = await headlessRequest(
-      'GET',
-      `/api/headless/external-runs/${runId}/steps/${firstStep.step.stepId}/context`,
+    assert(
+      firstStep.step.node?.prompt && firstStep.step.submission?.submitRoute,
+      'next-step should return an executable first-step packet',
     );
-    await headlessRequest(
-      'POST',
-      `/api/headless/external-runs/${runId}/steps/${firstStep.step.stepId}/result`,
-      {
-        contextVersion: firstContext.contextVersion,
-        output: 'Verification fixture evidence. No live external facts were used.',
-        structuredSummary: { summary: 'Submitted fixture evidence.' },
-        citations: [
-          {
-            source: 'local verification fixture',
-            accessedAt: new Date().toISOString(),
-            note: 'This verifies persistence, not factual retrieval.',
-          },
-        ],
-        clientName: 'headless-interface-verify',
-        providerName: 'local script',
-      },
-    );
+    await headlessRequest('POST', firstStep.step.submission.submitRoute, {
+      contextVersion: firstStep.step.contextVersion,
+      output: 'Verification fixture evidence. No live external facts were used.',
+      structuredSummary: { summary: 'Submitted fixture evidence.' },
+      citations: [
+        {
+          source: 'local verification fixture',
+          accessedAt: new Date().toISOString(),
+          note: 'This verifies persistence, not factual retrieval.',
+        },
+      ],
+      clientName: 'headless-interface-verify',
+      providerName: 'local script',
+    });
 
     const secondStep = await headlessRequest(
       'GET',
       `/api/headless/external-runs/${runId}/next-step`,
     );
     assert(secondStep.step?.stepId, 'Expected a second ready external step after submission');
-    const secondContext = await headlessRequest(
-      'GET',
-      `/api/headless/external-runs/${runId}/steps/${secondStep.step.stepId}/context`,
+    assert(
+      secondStep.step.node?.prompt && secondStep.step.submission?.blockRoute,
+      'next-step should return an executable second-step packet',
     );
-    await headlessRequest(
-      'POST',
-      `/api/headless/external-runs/${runId}/steps/${secondStep.step.stepId}/block`,
-      {
-        contextVersion: secondContext.contextVersion,
-        reason: 'Verification intentionally blocks the second step to exercise data-gap handling.',
-        requiredData: ['host-console qualitative review'],
-        clientName: 'headless-interface-verify',
-        providerName: 'local script',
-      },
-    );
+    await headlessRequest('POST', secondStep.step.submission.blockRoute, {
+      contextVersion: secondStep.step.contextVersion,
+      reason: 'Verification intentionally blocks the second step to exercise data-gap handling.',
+      requiredData: ['host-console qualitative review'],
+      clientName: 'headless-interface-verify',
+      providerName: 'local script',
+    });
 
     const finalized = await headlessRequest(
       'POST',

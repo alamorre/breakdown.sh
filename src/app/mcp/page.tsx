@@ -198,7 +198,9 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <ol>
             <li>Create or import a graph.</li>
             <li>Create an external run for that graph.</li>
-            <li>Fetch the next ready step and its context.</li>
+            <li>
+              Claim the next runnable work packet with <code>get_next_step</code>.
+            </li>
             <li>Use the available host-client tools to do the work.</li>
             <li>Submit the result with citations, or mark the step blocked.</li>
             <li>Finalize the run when steps are submitted or intentionally blocked.</li>
