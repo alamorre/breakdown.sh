@@ -69,7 +69,7 @@ export default function McpPage() {
           </p>
           <p>
             Clone or sparse-install this repository only when you are contributing to Breakdown,
-            self-hosting it, or testing the repo-local Codex plugin scaffold.
+            self-hosting it, or testing Codex plugin packaging.
           </p>
         </DocsProse>
 
@@ -236,7 +236,7 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <h2>Advanced Local Or Self-Hosted Use</h2>
           <p>
             Use local endpoints only when you are developing Breakdown, testing a self-hosted
-            deployment, or validating the repo-local plugin scaffold.
+            deployment, or validating Codex plugin packaging.
           </p>
           <CodeBlock>{`[mcp_servers.breakdown]
 url = "http://localhost:3000/api/mcp"

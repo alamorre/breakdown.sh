@@ -73,6 +73,23 @@ const requiredHeadlessTools = [
   'summarize_run_delta',
 ];
 
+const requiredResourceTemplates = [
+  'graph',
+  'graph_manifest',
+  'graph_node',
+  'graph_run_status',
+  'external_run',
+  'external_run_step',
+];
+
+const requiredPrompts = [
+  'decompose_reasoning_chain',
+  'follow_breakdown_graph',
+  'extend_graph_from_research',
+  'refresh_sources_and_propagate',
+  'summarize_graph_delta',
+];
+
 interface McpToolListEntry {
   name: string;
   inputSchema?: {
@@ -232,6 +249,44 @@ describe('/api/mcp Streamable HTTP route', () => {
     expect(submitProperties).toHaveProperty('stepId');
     expect(submitProperties).toHaveProperty('contextVersion');
     expect(submitProperties).toHaveProperty('output');
+  });
+
+  it('advertises graph resources, resource templates, and workflow prompts', async () => {
+    const resources = await postRpc({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'resources/list',
+      params: {},
+    });
+    const resourceTemplates = await postRpc({
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'resources/templates/list',
+      params: {},
+    });
+    const prompts = await postRpc({
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'prompts/list',
+      params: {},
+    });
+
+    expect(resources.response.status).toBe(200);
+    expect(
+      resources.body.result.resources.map((resource: { name: string }) => resource.name),
+    ).toEqual(expect.arrayContaining(['graphs']));
+
+    expect(resourceTemplates.response.status).toBe(200);
+    expect(
+      resourceTemplates.body.result.resourceTemplates.map(
+        (resourceTemplate: { name: string }) => resourceTemplate.name,
+      ),
+    ).toEqual(expect.arrayContaining(requiredResourceTemplates));
+
+    expect(prompts.response.status).toBe(200);
+    expect(prompts.body.result.prompts.map((prompt: { name: string }) => prompt.name)).toEqual(
+      expect.arrayContaining(requiredPrompts),
+    );
   });
 
   it('calls a read-only tool with bearer-token actor context', async () => {
