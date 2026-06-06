@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 
 import { randomUUID } from 'node:crypto';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -18,22 +17,96 @@ interface HeadlessEnvelope<T = unknown> {
 }
 
 const BASE_URL = process.env.BREAKDOWN_BASE_URL ?? 'http://localhost:3000';
-const API_TOKEN = process.env.BREAKDOWN_API_TOKEN;
+const TOKEN_ENV_VAR = 'BREAKDOWN_API_TOKEN';
+const DIAGNOSTIC_TOOL = 'diagnose_breakdown_setup';
+const EXTERNAL_EVALUATOR_TOOLS = [
+  'create_external_run',
+  'get_next_step',
+  'get_step_context',
+  'submit_step_result',
+  'mark_step_blocked',
+  'finalize_external_run',
+  'summarize_run_delta',
+];
+const EXTERNAL_EVALUATOR_SCOPES = ['graphs:read', 'runs:external_execute', 'runs:write_results'];
 
-if (!API_TOKEN) {
-  console.error('BREAKDOWN_API_TOKEN is required to start the Breakdown MCP server.');
-  process.exit(1);
+function readApiToken() {
+  return process.env[TOKEN_ENV_VAR]?.trim();
 }
 
 function endpoint(path: string) {
   return new URL(path, BASE_URL).toString();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function missingTokenDiagnostics() {
+  return {
+    version: 'codex-setup-diagnostics.v1',
+    ok: false,
+    state: 'missing_token',
+    summary: `${TOKEN_ENV_VAR} is not available to the Breakdown MCP process.`,
+    toolSurface: {
+      diagnosticTool: DIAGNOSTIC_TOOL,
+      externalEvaluatorTools: EXTERNAL_EVALUATOR_TOOLS,
+      externalEvaluatorToolsAvailable: false,
+      reason: 'Protected Breakdown tools require a bearer token before they can call the API.',
+    },
+    scopes: {
+      requiredForExternalEvaluator: EXTERNAL_EVALUATOR_SCOPES,
+      granted: [],
+      missing: EXTERNAL_EVALUATOR_SCOPES,
+    },
+    setup: {
+      agentSetupSessionsUrl: endpoint('/api/integrations/agent-setup-sessions'),
+      diagnosticsUrl: endpoint('/api/integrations/codex/diagnostics'),
+      mcpUrl: endpoint('/api/mcp'),
+      advancedFallback: `Set ${TOKEN_ENV_VAR} in the environment that starts Codex.`,
+    },
+  };
+}
+
+async function readCodexDiagnostics() {
+  const apiToken = readApiToken();
+  if (!apiToken) {
+    return missingTokenDiagnostics();
+  }
+
+  const response = await fetch(endpoint('/api/integrations/codex/diagnostics'), {
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      Accept: 'application/json',
+    },
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    return {
+      version: 'codex-setup-diagnostics.v1',
+      ok: false,
+      state: 'auth_error',
+      summary: `Breakdown diagnostics request failed with HTTP ${response.status}.`,
+      response: body,
+    };
+  }
+
+  return isRecord(body) && 'data' in body ? body.data : body;
+}
+
 async function headlessRequest<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
+  const apiToken = readApiToken();
+  if (!apiToken) {
+    throw new Error(
+      `${TOKEN_ENV_VAR} is not available. Call ${DIAGNOSTIC_TOOL} for setup diagnostics.`,
+    );
+  }
+
   const response = await fetch(endpoint(path), {
     method,
     headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
+      Authorization: `Bearer ${apiToken}`,
       Accept: 'application/json',
       ...(body === undefined
         ? {}
@@ -100,6 +173,17 @@ const server = new McpServer({
   name: 'breakdown-mcp',
   version: '0.1.0',
 });
+
+server.registerTool(
+  DIAGNOSTIC_TOOL,
+  {
+    title: 'Diagnose Breakdown Setup',
+    description:
+      'Check whether Breakdown MCP is loaded, authenticated, scoped for external-evaluator mode, and ready for Codex use.',
+    inputSchema: {},
+  },
+  async () => textResult(await readCodexDiagnostics()),
+);
 
 server.registerTool(
   'list_graphs',

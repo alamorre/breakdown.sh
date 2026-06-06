@@ -14,6 +14,7 @@ const endpointRows = [
   ['Discovery metadata', 'GET https://www.breakdown.sh/api'],
   ['Agent onboarding', 'GET https://www.breakdown.sh/api/integrations/headless-onboarding'],
   ['Setup sessions', 'POST https://www.breakdown.sh/api/integrations/agent-setup-sessions'],
+  ['Codex diagnostics', 'GET https://www.breakdown.sh/api/integrations/codex/diagnostics'],
   ['MCP server URL', 'https://www.breakdown.sh/api/mcp'],
   ['Transport', 'Streamable HTTP MCP'],
   ['Headless REST', 'https://www.breakdown.sh/api/headless'],
@@ -31,6 +32,7 @@ const scopes = [
 ];
 
 const toolGroups = [
+  ['Setup', 'diagnose_breakdown_setup'],
   ['Graphs', 'list_graphs, get_graph, create_graph, update_graph, delete_graph'],
   [
     'Nodes and edges',
@@ -94,6 +96,11 @@ export default function McpPage() {
             <li>Verify the setup code and approve the requested scopes.</li>
             <li>
               Have the agent exchange the setup secret for the scoped <code>bdk_...</code> token.
+            </li>
+            <li>
+              Run <code>diagnose_breakdown_setup</code> or{' '}
+              <code>GET /api/integrations/codex/diagnostics</code> to verify token, scopes, and
+              external-evaluator tool readiness.
             </li>
             <li>
               Configure your MCP client with <code>https://www.breakdown.sh/api/mcp</code> and an{' '}
@@ -239,10 +246,15 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
 
           <h2>Troubleshooting</h2>
           <p>
+            Run <code>diagnose_breakdown_setup</code> from MCP or call{' '}
+            <code>GET /api/integrations/codex/diagnostics</code> for a machine-readable setup state.
+            Missing, invalid, revoked, expired, and under-scoped tokens are reported separately.
+          </p>
+          <p>
             <code>401 Missing bearer token</code> means the request reached Breakdown without an
             approved bearer token. Create and approve a setup session, exchange it for a{' '}
-            <code>bdk_...</code> token, and set <code>BREAKDOWN_API_TOKEN</code> before retrying. It
-            does not mean the agent should clone this repository.
+            <code>bdk_...</code> token, and persist it before retrying. It does not mean the agent
+            should clone this repository.
           </p>
           <p>
             <code>403 Missing required scope</code> means the token is valid but lacks the scope

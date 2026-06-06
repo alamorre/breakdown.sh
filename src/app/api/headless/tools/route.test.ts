@@ -24,9 +24,13 @@ describe('/api/headless/tools discovery', () => {
       mcp: {
         url: 'https://breakdown.example/api/mcp',
         transport: 'streamable-http',
+        diagnosticTool: 'diagnose_breakdown_setup',
         listTools: {
           body: { method: 'tools/list' },
         },
+      },
+      onboarding: {
+        codexDiagnosticsUrl: 'https://breakdown.example/api/integrations/codex/diagnostics',
       },
     });
   });

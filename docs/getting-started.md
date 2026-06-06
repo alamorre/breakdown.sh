@@ -15,6 +15,7 @@ Codex plugin packaging.
 | Discovery metadata | `GET https://www.breakdown.sh/api`                                    |
 | Agent onboarding   | `GET https://www.breakdown.sh/api/integrations/headless-onboarding`   |
 | Setup sessions     | `POST https://www.breakdown.sh/api/integrations/agent-setup-sessions` |
+| Codex diagnostics  | `GET https://www.breakdown.sh/api/integrations/codex/diagnostics`     |
 | Remote MCP         | `https://www.breakdown.sh/api/mcp`                                    |
 | Headless REST      | `https://www.breakdown.sh/api/headless`                               |
 
@@ -26,9 +27,12 @@ Codex plugin packaging.
 3. Create an agent setup session.
 4. Ask the signed-in human to open the approval URL and verify the setup code.
 5. Exchange the approved setup secret for a scoped `bdk_...` token.
-6. Connect MCP at `https://www.breakdown.sh/api/mcp` or use REST under
+6. Persist the token in the host client or user-level launcher secret store that starts the agent.
+7. Run `diagnose_breakdown_setup` or `GET /api/integrations/codex/diagnostics` to confirm the token,
+   scopes, and external-evaluator tool surface.
+8. Connect MCP at `https://www.breakdown.sh/api/mcp` or use REST under
    `https://www.breakdown.sh/api/headless`.
-7. Persist graphs, reasoning steps, citations, blocked data gaps, and external-run state in
+9. Persist graphs, reasoning steps, citations, blocked data gaps, and external-run state in
    Breakdown.
 
 Create a setup session:
@@ -50,7 +54,8 @@ curl "$EXCHANGE_URL" \
   -d "{\"exchangeSecret\":\"$EXCHANGE_SECRET\"}"
 ```
 
-Use the response token as `BREAKDOWN_API_TOKEN`.
+Use the response token in the host client or user-level launcher secret store. `BREAKDOWN_API_TOKEN`
+is an advanced fallback for clients that cannot persist plugin auth yet.
 
 ## MCP Client Configuration
 
@@ -76,9 +81,14 @@ mark the step blocked instead of fabricating an answer.
 
 ## Troubleshooting
 
+Run `diagnose_breakdown_setup` from MCP or call
+`GET https://www.breakdown.sh/api/integrations/codex/diagnostics` for a machine-readable setup
+state. `missing_token`, `invalid_token`, `revoked_token`, `expired_token`, and `missing_scope` are
+reported separately.
+
 `401 Missing bearer token` means the request reached Breakdown but did not include an approved
-token. Create and approve a setup session, exchange it for a `bdk_...` token, and set
-`BREAKDOWN_API_TOKEN` before retrying. It does not mean the agent should clone this repository.
+token. Create and approve a setup session, exchange it for a `bdk_...` token, and persist it before
+retrying. It does not mean the agent should clone this repository.
 
 For contributor setup, see [Local Development](local-development.md). For full MCP details, see the
 public `/mcp` page.

@@ -56,7 +56,11 @@ describe('/api/integrations/agent-setup-sessions', () => {
     expect(body.endpoints.agentSetupSessionsUrl).toBe(
       'https://breakdown.example/api/integrations/agent-setup-sessions',
     );
+    expect(body.endpoints.codexDiagnosticsUrl).toBe(
+      'https://breakdown.example/api/integrations/codex/diagnostics',
+    );
     expect(body.auth.agentSetup).toBe('approval-session');
+    expect(body.auth.codexDiagnostics).toBe('optional-bearer-token');
   });
 
   it('creates a pending agent setup session without requiring a Clerk cookie', async () => {

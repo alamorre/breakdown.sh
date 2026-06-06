@@ -4,7 +4,7 @@ This is the public Codex plugin package for Breakdown. It connects Codex to host
 reasoning graphs through Streamable HTTP MCP at `https://www.breakdown.sh/api/mcp`.
 
 The plugin ships with marketplace metadata, icon/logo/screenshot assets, bundled Breakdown skills,
-and an MCP config that reads `BREAKDOWN_API_TOKEN` from the Codex process environment.
+a setup diagnostic tool, and a hosted MCP config for Breakdown.
 
 ## Install From Git
 
@@ -16,9 +16,12 @@ codex plugin add breakdown@breakdown
 For a release tag, replace `--ref main` with that tag. Start a new Codex thread after installing or
 updating the plugin.
 
-## First-Run Token Setup
+## One-Time Setup
 
-Create an agent setup session and ask the signed-in user to approve the returned URL:
+Create an agent setup session and ask the signed-in user to approve the returned URL. Store the
+exchanged token in the user-level Codex plugin authentication store or launcher secret store that
+starts Codex Desktop. Do not store tokens in repo-local `.codex/config.toml`, committed files, or
+chat.
 
 ```bash
 curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
@@ -26,15 +29,20 @@ curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
   -d '{"clientName":"Codex","providerName":"OpenAI"}'
 ```
 
-After approval, exchange the returned setup secret at the returned exchange URL. Set the exchange
-response token before starting Codex:
+After approval, exchange the returned setup secret at the returned exchange URL. Then start a new
+Codex thread and run:
 
 ```bash
-export BREAKDOWN_API_TOKEN=bdk_...
+diagnose_breakdown_setup
 ```
 
-Manual token creation in Breakdown settings under MCP Access is supported as a fallback. Store raw
-tokens outside the repository, grant only the scopes needed for the session, and revoke plugin
+The diagnostic response should report `state: "ready"` and confirm external-evaluator tools such
+as `get_next_step`, `submit_step_result`, and `mark_step_blocked`. If your client cannot persist
+plugin auth yet, `BREAKDOWN_API_TOKEN` remains an advanced fallback; set it in the environment that
+starts Codex, not in the repository.
+
+Manual token creation in Breakdown settings under MCP Access is also supported as a fallback. Store
+raw tokens outside the repository, grant only the scopes needed for the session, and revoke plugin
 tokens from Settings under MCP Access when they are no longer needed.
 
 ## MCP Surface
@@ -45,6 +53,7 @@ Expected hosted MCP capabilities include:
 - internal graph and node runs
 - external-evaluator runs where Codex fetches step context, performs work, and submits results
 - graph resources for graph lists, graph detail, manifests, nodes, run status, and external runs
+- `diagnose_breakdown_setup` for token, scope, and external-evaluator readiness checks
 
 Destructive tools carry destructive annotations and confirmation metadata. Clients should still ask
 before deleting, replacing imports, applying destructive patches, or cancelling runs.
@@ -74,3 +83,7 @@ python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugin
 pnpm exec vitest run src/lib/mcp/codex-plugin-release.test.ts src/app/api/mcp/route.test.ts
 pnpm --filter @breakdown/mcp build
 ```
+
+From Codex, run `diagnose_breakdown_setup`. If that tool is missing, the plugin or MCP server is not
+loaded in the current Codex session. If it reports `missing_token`, `invalid_token`,
+`revoked_token`, `expired_token`, or `missing_scope`, follow the response's `setup.nextSteps`.

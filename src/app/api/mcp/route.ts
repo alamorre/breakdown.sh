@@ -1,10 +1,17 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { createBreakdownMcpServer } from '@/lib/mcp/breakdown-server';
+import {
+  createBreakdownMcpServer,
+  createBreakdownSetupMcpServer,
+} from '@/lib/mcp/breakdown-server';
 import { resolveHeadlessActor } from '@/lib/breakdown-service/actor';
 import type { BreakdownActor } from '@/lib/breakdown-service/actor';
 import { getErrorResponse } from '@/lib/breakdown-service/errors';
 import { checkHeadlessRateLimit } from '@/lib/breakdown-service/safety';
+import {
+  CODEX_DIAGNOSTIC_TOOL,
+  createCodexAuthFailureDiagnostics,
+} from '@/lib/headless/codex-diagnostics';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,6 +34,48 @@ function withCors(response: Response) {
     statusText: response.statusText,
     headers,
   });
+}
+
+function originFor(request: Request) {
+  return new URL(request.url).origin;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSetupDiagnosticMessage(message: unknown) {
+  if (!isRecord(message)) {
+    return false;
+  }
+
+  const method = message.method;
+  if (
+    method === 'initialize' ||
+    method === 'tools/list' ||
+    method === 'notifications/initialized'
+  ) {
+    return true;
+  }
+
+  if (method !== 'tools/call' || !isRecord(message.params)) {
+    return false;
+  }
+
+  return message.params.name === CODEX_DIAGNOSTIC_TOOL;
+}
+
+async function shouldUseSetupDiagnosticServer(request: Request) {
+  if (request.method !== 'POST') {
+    return false;
+  }
+
+  const body = await request
+    .clone()
+    .json()
+    .catch(() => null);
+  const messages = Array.isArray(body) ? body : [body];
+  return messages.length > 0 && messages.every(isSetupDiagnosticMessage);
 }
 
 function mcpErrorResponse(
@@ -73,12 +122,28 @@ async function resolveMcpActor(request: Request) {
   return actor;
 }
 
+async function handleSetupDiagnosticRequest(request: Request, diagnostics: unknown) {
+  const server = createBreakdownSetupMcpServer(diagnostics);
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+
+  await server.connect(transport);
+  return withCors(await transport.handleRequest(request));
+}
+
 async function handleMcpRequest(request: Request) {
+  const origin = originFor(request);
   let actor: BreakdownActor;
   try {
     actor = await resolveMcpActor(request);
   } catch (err) {
     const error = getErrorResponse(err);
+    if (await shouldUseSetupDiagnosticServer(request)) {
+      return handleSetupDiagnosticRequest(request, createCodexAuthFailureDiagnostics(err, origin));
+    }
+
     return mcpErrorResponse(error.status, error.status === 401 ? -32001 : -32000, error.message, {
       details: error.details,
       headers:
@@ -92,7 +157,7 @@ async function handleMcpRequest(request: Request) {
   }
 
   try {
-    const server = createBreakdownMcpServer(actor);
+    const server = createBreakdownMcpServer(actor, { origin });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
