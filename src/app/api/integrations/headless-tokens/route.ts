@@ -2,18 +2,26 @@ import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import {
+  INTEGRATION_TOKEN_PURPOSES,
   listIntegrationTokens,
   mintIntegrationToken,
+  revokeActiveIntegrationTokensByPurpose,
   type PublicIntegrationTokenRecord,
 } from '@/lib/breakdown-service/tokens';
-import { ALL_BREAKDOWN_SCOPES, BREAKDOWN_SCOPES } from '@/lib/breakdown-service/scopes';
+import {
+  ALL_BREAKDOWN_SCOPES,
+  BREAKDOWN_SCOPES,
+  RELEASE_TEST_SCOPES,
+} from '@/lib/breakdown-service/scopes';
 import { BreakdownServiceError } from '@/lib/breakdown-service/errors';
 
 export const dynamic = 'force-dynamic';
 
 const createTokenBodySchema = z.object({
   name: z.string().trim().min(1).max(100),
-  scopes: z.array(z.enum(BREAKDOWN_SCOPES)).min(1).default(ALL_BREAKDOWN_SCOPES),
+  scopes: z.array(z.enum(BREAKDOWN_SCOPES)).min(1).optional(),
+  purpose: z.enum(INTEGRATION_TOKEN_PURPOSES).default('mcp_client'),
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 
 function isTokenStorageConfigured() {
@@ -26,9 +34,12 @@ function serializeToken(record: PublicIntegrationTokenRecord) {
     name: record.name,
     tokenPrefix: record.token_prefix,
     scopes: record.scopes,
+    purpose: record.purpose,
+    createdByUserId: record.created_by_user_id,
     createdAt: record.created_at,
     lastUsedAt: record.last_used_at,
     revokedAt: record.revoked_at,
+    expiresAt: record.expires_at,
   };
 }
 
@@ -95,10 +106,25 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServerClient();
+    const scopes =
+      body.data.scopes ??
+      (body.data.purpose === 'release_test' ? RELEASE_TEST_SCOPES : ALL_BREAKDOWN_SCOPES);
+
+    if (body.data.purpose === 'release_test') {
+      await revokeActiveIntegrationTokensByPurpose(
+        supabase,
+        { userId },
+        { purpose: body.data.purpose },
+      );
+    }
+
     const { token, record } = await mintIntegrationToken(supabase, {
       userId,
       name: body.data.name,
-      scopes: body.data.scopes,
+      scopes,
+      purpose: body.data.purpose,
+      createdByUserId: userId,
+      expiresAt: body.data.expiresAt,
     });
 
     return Response.json(

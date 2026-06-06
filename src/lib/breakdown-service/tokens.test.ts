@@ -5,6 +5,7 @@ import {
   listIntegrationTokens,
   mintIntegrationToken,
   resolveIntegrationToken,
+  revokeActiveIntegrationTokensByPurpose,
   revokeIntegrationToken,
 } from './tokens';
 import { BreakdownServiceError } from './errors';
@@ -65,9 +66,12 @@ describe('integration token helpers', () => {
         name: 'Preview MCP',
         token_prefix: 'bdk_prefix',
         scopes: ['graphs:read'],
+        purpose: 'mcp_client',
+        created_by_user_id: 'user_123',
         created_at: '2026-06-03T00:00:00Z',
         last_used_at: null,
         revoked_at: null,
+        expires_at: null,
       },
       error: null,
     });
@@ -87,6 +91,42 @@ describe('integration token helpers', () => {
         token_hash: hashIntegrationToken(result.token),
         token_prefix: expect.stringMatching(/^bdk_/),
         scopes: ['graphs:read'],
+        purpose: 'mcp_client',
+        created_by_user_id: 'user_123',
+        expires_at: null,
+      }),
+    );
+  });
+
+  it('mints a release-test token with purpose metadata', async () => {
+    mockSingle.mockResolvedValue({
+      data: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        user_id: 'user_123',
+        name: 'Release test token',
+        token_prefix: 'bdk_prefix',
+        scopes: ['graphs:read', 'graphs:write'],
+        purpose: 'release_test',
+        created_by_user_id: 'user_123',
+        created_at: '2026-06-03T00:00:00Z',
+        last_used_at: null,
+        revoked_at: null,
+        expires_at: null,
+      },
+      error: null,
+    });
+
+    await mintIntegrationToken(createMockSupabase() as never, {
+      userId: 'user_123',
+      name: 'Release test token',
+      scopes: ['graphs:read', 'graphs:write'],
+      purpose: 'release_test',
+    });
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purpose: 'release_test',
+        created_by_user_id: 'user_123',
       }),
     );
   });
@@ -100,9 +140,12 @@ describe('integration token helpers', () => {
           name: 'Local MCP',
           token_prefix: 'bdk_visible',
           scopes: ['graphs:read'],
+          purpose: 'mcp_client',
+          created_by_user_id: 'user_123',
           created_at: '2026-06-03T00:00:00Z',
           last_used_at: null,
           revoked_at: null,
+          expires_at: null,
         },
       ],
       error: null,
@@ -125,6 +168,7 @@ describe('integration token helpers', () => {
         name: 'Local MCP',
         scopes: ['graphs:read', 'runs:external_execute'],
         revoked_at: null,
+        expires_at: null,
       },
       error: null,
     });
@@ -147,6 +191,7 @@ describe('integration token helpers', () => {
         name: 'Local MCP',
         scopes: ['graphs:read'],
         revoked_at: '2026-06-03T00:00:00Z',
+        expires_at: null,
       },
       error: null,
     });
@@ -154,6 +199,24 @@ describe('integration token helpers', () => {
     await expect(
       resolveIntegrationToken(createMockSupabase() as never, 'bdk_test_secret'),
     ).rejects.toThrow(BreakdownServiceError);
+  });
+
+  it('rejects expired tokens', async () => {
+    mockSingle.mockResolvedValue({
+      data: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        user_id: 'user_123',
+        name: 'Local MCP',
+        scopes: ['graphs:read'],
+        revoked_at: null,
+        expires_at: '2020-01-01T00:00:00Z',
+      },
+      error: null,
+    });
+
+    await expect(
+      resolveIntegrationToken(createMockSupabase() as never, 'bdk_test_secret'),
+    ).rejects.toThrow('Integration token has expired');
   });
 
   it('rejects invalid token prefixes before hitting storage', async () => {
@@ -173,6 +236,19 @@ describe('integration token helpers', () => {
     expect(mockUpdate).toHaveBeenCalledWith({ revoked_at: expect.any(String) });
     expect(mockEq).toHaveBeenCalledWith('id', '550e8400-e29b-41d4-a716-446655440000');
     expect(mockEq).toHaveBeenCalledWith('user_id', 'user_123');
+    expect(mockIs).toHaveBeenCalledWith('revoked_at', null);
+  });
+
+  it('revokes active tokens by purpose for rotation', async () => {
+    await revokeActiveIntegrationTokensByPurpose(
+      createMockSupabase() as never,
+      { userId: 'user_123' },
+      { purpose: 'release_test' },
+    );
+
+    expect(mockUpdate).toHaveBeenCalledWith({ revoked_at: expect.any(String) });
+    expect(mockEq).toHaveBeenCalledWith('user_id', 'user_123');
+    expect(mockEq).toHaveBeenCalledWith('purpose', 'release_test');
     expect(mockIs).toHaveBeenCalledWith('revoked_at', null);
   });
 });

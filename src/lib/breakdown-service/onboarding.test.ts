@@ -35,9 +35,12 @@ const safeRecord = {
   name: 'Codex external console',
   token_prefix: 'bdk_bootstrap',
   scopes: ['graphs:read', 'graphs:write', 'runs:external_execute', 'runs:write_results'],
+  purpose: 'mcp_client',
+  created_by_user_id: 'user_123',
   created_at: '2026-06-03T00:00:00Z',
   last_used_at: null,
   revoked_at: null,
+  expires_at: null,
 };
 
 const importGraph = {

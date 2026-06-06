@@ -129,6 +129,22 @@ Use the token:
 export BREAKDOWN_API_TOKEN=bdk_...
 ```
 
+### Release-Test Token
+
+Pre-merge plugin smoke tests should use a durable token instead of a one-time setup approval URL.
+In the app, open `/settings` and use **MCP Access** -> **Release Testing** to create or rotate a
+release-test token. The preset scopes are:
+
+- `graphs:read`
+- `graphs:write`
+- `runs:external_execute`
+- `runs:write_results`
+
+Copy the raw token once and store it as `BREAKDOWN_RELEASE_TEST_TOKEN` in GitHub Actions or the
+agent runtime secret store. The token list identifies release-test tokens by purpose, shows
+last-used metadata, and lets you rotate or revoke the token from the same settings screen. Raw
+tokens are never shown again after creation.
+
 Scopes:
 
 | Scope                   | Allows                                                                     |
