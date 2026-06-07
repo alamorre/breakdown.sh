@@ -121,6 +121,10 @@ describe('Breakdown Codex plugin release package', () => {
     expect(combined).toContain('codex plugin marketplace add alamorre/breakdown.sh');
     expect(combined).toContain('codex plugin add breakdown@breakdown');
     expect(combined).toContain('BREAKDOWN_API_TOKEN');
+    expect(combined).toContain('~/.codex/config.toml');
+    expect(combined).toContain('~/Library/LaunchAgents/sh.breakdown.codex-env.plist');
+    expect(combined).toContain('~/.config/environment.d/breakdown-codex.conf');
+    expect(combined).toContain('HKEY_CURRENT_USER\\Environment');
     expect(combined).toContain('OAuth connector registration can be added later');
     expect(combined).toContain('Revoke plugin tokens from Settings under MCP Access');
     expect(combined).toContain('do not edit and commit');

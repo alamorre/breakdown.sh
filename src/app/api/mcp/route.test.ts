@@ -44,6 +44,7 @@ const graphRows = [
 ];
 
 const requiredHeadlessTools = [
+  'diagnose_breakdown_setup',
   'list_graphs',
   'get_graph',
   'create_graph',
@@ -163,7 +164,51 @@ describe('/api/mcp Streamable HTTP route', () => {
     expect(response.headers.get('access-control-allow-headers')).toContain('Authorization');
   });
 
-  it('fails closed when bearer authentication is missing or invalid', async () => {
+  it('exposes only setup diagnostics when bearer authentication is missing', async () => {
+    mockResolveHeadlessActor.mockRejectedValue(
+      new BreakdownServiceError('unauthorized', 'Missing bearer token', 401),
+    );
+
+    const toolsResponse = await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      }),
+    );
+    const toolsBody = await toolsResponse.json();
+
+    expect(toolsResponse.status).toBe(200);
+    expect(toolsBody.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'diagnose_breakdown_setup',
+    ]);
+
+    const diagnosticsResponse = await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'diagnose_breakdown_setup', arguments: {} },
+        }),
+      }),
+    );
+    const diagnosticsBody = await diagnosticsResponse.json();
+    const diagnostics = JSON.parse(diagnosticsBody.result.content[0].text);
+
+    expect(diagnostics.state).toBe('missing_token');
+    expect(diagnostics.toolSurface.externalEvaluatorToolsAvailable).toBe(false);
+  });
+
+  it('fails closed when unauthenticated clients call protected tools', async () => {
     mockResolveHeadlessActor.mockRejectedValue(
       new BreakdownServiceError('unauthorized', 'Missing bearer token', 401),
     );
@@ -175,7 +220,12 @@ describe('/api/mcp Streamable HTTP route', () => {
           Accept: 'application/json, text/event-stream',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'list_graphs', arguments: {} },
+        }),
       }),
     );
     const body = await response.json();

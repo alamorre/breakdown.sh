@@ -55,6 +55,7 @@ export function getApiIndexDiscovery(origin: string) {
       docsUrl: absoluteUrl(origin, '/docs/codex-plugin'),
       onboardingUrl: onboarding.endpoints.bootstrapUrl,
       agentSetupSessionsUrl: onboarding.endpoints.agentSetupSessionsUrl,
+      codexDiagnosticsUrl: onboarding.endpoints.codexDiagnosticsUrl,
       headlessApiBaseUrl: onboarding.endpoints.headlessApiBaseUrl,
       mcpUrl: onboarding.endpoints.mcpUrl,
     },
@@ -69,6 +70,7 @@ export function getApiIndexDiscovery(origin: string) {
       'POST /api/integrations/agent-setup-sessions to create an approval session',
       'Ask the signed-in human to open approveUrl and confirm userCode',
       'POST /api/integrations/agent-setup-sessions/{sessionId}/exchange with exchangeSecret',
+      'GET /api/integrations/codex/diagnostics to check token and external-evaluator readiness',
       'Use the returned bdk token with /api/mcp or /api/headless',
     ],
   };
@@ -91,6 +93,7 @@ export function getHeadlessApiDiscovery(origin: string) {
     onboarding: {
       metadataUrl: onboarding.endpoints.bootstrapUrl,
       setupSessionsUrl: onboarding.endpoints.agentSetupSessionsUrl,
+      codexDiagnosticsUrl: onboarding.endpoints.codexDiagnosticsUrl,
       defaultScopes: EXTERNAL_CONSOLE_BOOTSTRAP_SCOPES,
     },
     humanApproval: humanApprovalBoundary(origin),
@@ -308,17 +311,19 @@ export function getHeadlessToolsDiscovery(origin: string) {
     version: 'headless-tools.v1',
     collectionEndpoint: false,
     message:
-      'Tool discovery is exposed through the MCP Streamable HTTP endpoint. Use JSON-RPC tools/list after initializing a bearer-authenticated MCP session.',
+      'Tool discovery is exposed through the MCP Streamable HTTP endpoint. Use JSON-RPC tools/list after initializing a bearer-authenticated MCP session. If auth is missing, tools/list exposes only diagnose_breakdown_setup.',
     authentication: bearerAuth(),
     onboarding: {
       metadataUrl: onboarding.endpoints.bootstrapUrl,
       setupSessionsUrl: onboarding.endpoints.agentSetupSessionsUrl,
+      codexDiagnosticsUrl: onboarding.endpoints.codexDiagnosticsUrl,
     },
     humanApproval: humanApprovalBoundary(origin),
     mcp: {
       url: onboarding.endpoints.mcpUrl,
       transport: 'streamable-http',
       auth: 'Authorization: Bearer <bdk_token>',
+      diagnosticTool: 'diagnose_breakdown_setup',
       initialize: {
         method: 'POST',
         body: {
@@ -651,6 +656,17 @@ export function getOpenApiDocument(origin: string) {
           responses: {
             '200': { description: 'Bearer token and session context.' },
             '409': { description: 'Setup session is not approved yet.' },
+          },
+        },
+      },
+      '/api/integrations/codex/diagnostics': {
+        get: {
+          tags: ['Onboarding'],
+          summary: 'Check Codex setup and external-evaluator readiness',
+          description:
+            'Returns a machine-readable diagnostic response. Without a bearer token it reports missing_token; with a token it checks validity, revocation/expiry, and external-evaluator scopes.',
+          responses: {
+            '200': { description: 'Codex setup diagnostic result.' },
           },
         },
       },

@@ -23,6 +23,7 @@ describe('/api discovery', () => {
       openApiUrl: 'https://breakdown.example/openapi.json',
       onboardingUrl: 'https://breakdown.example/api/integrations/headless-onboarding',
       agentSetupSessionsUrl: 'https://breakdown.example/api/integrations/agent-setup-sessions',
+      codexDiagnosticsUrl: 'https://breakdown.example/api/integrations/codex/diagnostics',
       headlessApiBaseUrl: 'https://breakdown.example/api/headless',
       mcpUrl: 'https://breakdown.example/api/mcp',
     });
@@ -32,6 +33,9 @@ describe('/api discovery', () => {
     });
     expect(body.nextSteps).toContain(
       'POST /api/integrations/agent-setup-sessions to create an approval session',
+    );
+    expect(body.nextSteps).toContain(
+      'GET /api/integrations/codex/diagnostics to check token and external-evaluator readiness',
     );
   });
 });

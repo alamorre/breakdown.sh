@@ -46,6 +46,16 @@ import {
   importAndRunExternalWorkflowSchema,
   importGraphAndCreateExternalRunForActor,
 } from '@/lib/breakdown-service/workflow-runs';
+import {
+  CODEX_DIAGNOSTIC_TOOL,
+  createCodexReadyDiagnostics,
+} from '@/lib/headless/codex-diagnostics';
+
+interface BreakdownMcpServerOptions {
+  origin?: string;
+}
+
+const DEFAULT_PUBLIC_ORIGIN = 'https://www.breakdown.sh';
 
 function textResult(data: unknown = { ok: true }) {
   return {
@@ -132,11 +142,42 @@ const runAnnotations = {
   openWorldHint: true,
 };
 
-export function createBreakdownMcpServer(actor: BreakdownActor) {
+function registerDiagnosticTool(server: McpServer, diagnostics: unknown) {
+  server.registerTool(
+    CODEX_DIAGNOSTIC_TOOL,
+    {
+      title: 'Diagnose Breakdown Setup',
+      description:
+        'Check whether Breakdown MCP is loaded, authenticated, scoped for external-evaluator mode, and ready for Codex use.',
+      inputSchema: {},
+      annotations: readOnlyAnnotations,
+      _meta: { 'breakdown/setupDiagnostic': true },
+    },
+    async () => textResult(diagnostics),
+  );
+}
+
+export function createBreakdownSetupMcpServer(diagnostics: unknown) {
+  const server = new McpServer({
+    name: 'breakdown-setup-mcp',
+    version: '0.1.0',
+  });
+
+  registerDiagnosticTool(server, diagnostics);
+  return server;
+}
+
+export function createBreakdownMcpServer(
+  actor: BreakdownActor,
+  options: BreakdownMcpServerOptions = {},
+) {
+  const origin = options.origin ?? DEFAULT_PUBLIC_ORIGIN;
   const server = new McpServer({
     name: 'breakdown-remote-mcp',
     version: '0.1.0',
   });
+
+  registerDiagnosticTool(server, createCodexReadyDiagnostics(actor, origin));
 
   server.registerTool(
     'list_graphs',

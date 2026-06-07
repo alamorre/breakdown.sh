@@ -14,6 +14,7 @@ const setupRows = [
   ['Discovery metadata', 'GET https://www.breakdown.sh/api'],
   ['Agent onboarding', 'GET https://www.breakdown.sh/api/integrations/headless-onboarding'],
   ['Setup sessions', 'POST https://www.breakdown.sh/api/integrations/agent-setup-sessions'],
+  ['Codex diagnostics', 'GET https://www.breakdown.sh/api/integrations/codex/diagnostics'],
   ['Remote MCP', 'https://www.breakdown.sh/api/mcp'],
   ['Headless REST', 'https://www.breakdown.sh/api/headless'],
 ];
@@ -80,6 +81,15 @@ export default function GettingStartedPage() {
               After approval, exchange the setup secret for the scoped <code>bdk_...</code> token.
             </li>
             <li>
+              Persist the token in the host client or user-level launcher secret store that starts
+              the agent.
+            </li>
+            <li>
+              Run <code>diagnose_breakdown_setup</code> or{' '}
+              <code>GET /api/integrations/codex/diagnostics</code> to confirm token, scopes, and
+              external-evaluator tool readiness.
+            </li>
+            <li>
               Connect MCP at <code>https://www.breakdown.sh/api/mcp</code> or use REST under{' '}
               <code>https://www.breakdown.sh/api/headless</code>.
             </li>
@@ -106,8 +116,19 @@ export default function GettingStartedPage() {
   -H "Content-Type: application/json" \\
   -d "{\\"exchangeSecret\\":\\"$EXCHANGE_SECRET\\"}"`}</CodeBlock>
           <p>
-            The exchange response returns the raw token once. Store it in the host agent or client
-            configuration as <code>BREAKDOWN_API_TOKEN</code>.
+            The exchange response returns the raw token once. Store it in the host client or
+            user-level launcher secret store. <code>BREAKDOWN_API_TOKEN</code> is an advanced
+            fallback for clients that cannot persist plugin auth yet.
+          </p>
+          <p>
+            For Codex Desktop fallback setup, put the MCP server reference in{' '}
+            <code>~/.codex/config.toml</code> on macOS/Linux or{' '}
+            <code>%USERPROFILE%\.codex\config.toml</code> on Windows, and store the raw token in the
+            OS user environment. On macOS, use{' '}
+            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>. On Linux, use{' '}
+            <code>~/.config/environment.d/breakdown-codex.conf</code>. On Windows, use{' '}
+            <code>HKEY_CURRENT_USER\Environment</code> with value name{' '}
+            <code>BREAKDOWN_API_TOKEN</code>.
           </p>
 
           <h2>Connect MCP</h2>
@@ -132,10 +153,15 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
 
           <h2>Troubleshooting</h2>
           <p>
+            Run <code>diagnose_breakdown_setup</code> from MCP or call{' '}
+            <code>GET /api/integrations/codex/diagnostics</code> for a machine-readable setup state.
+            Missing, invalid, revoked, expired, and under-scoped tokens are reported separately.
+          </p>
+          <p>
             <code>401 Missing bearer token</code> means the request reached Breakdown but did not
             include an approved token. Create and approve a setup session, exchange it for a{' '}
-            <code>bdk_...</code> token, and set <code>BREAKDOWN_API_TOKEN</code> before retrying. It
-            does not mean the agent should clone this repository.
+            <code>bdk_...</code> token, and persist it before retrying. It does not mean the agent
+            should clone this repository.
           </p>
           <p>
             For MCP details, scopes, tool names, and REST metadata, see{' '}

@@ -8,7 +8,7 @@ import { DocsProse } from '@/components/docs/DocsProse';
 export const metadata: Metadata = {
   title: 'Codex Plugin | breakdown.sh',
   description:
-    'Install the Breakdown Codex plugin and connect it to hosted MCP with scoped tokens.',
+    'Install the Breakdown Codex plugin, approve persistent setup, and verify hosted MCP access.',
 };
 
 const integrationPaths = [
@@ -49,6 +49,7 @@ const scopeRows = [
 ];
 
 const toolGroups = [
+  ['Setup', 'diagnose_breakdown_setup'],
   ['Graph CRUD', 'list_graphs, get_graph, create_graph, update_graph, delete_graph'],
   [
     'Nodes and edges',
@@ -81,9 +82,10 @@ export default function CodexPluginDocsPage() {
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Codex Plugin</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
             Install the Breakdown Codex plugin to connect Codex to hosted reasoning graphs through
-            scoped Streamable HTTP MCP. The first public release uses{' '}
-            <code>BREAKDOWN_API_TOKEN</code> bearer tokens; hosted OAuth connector registration can
-            be added later if marketplace distribution requires it.
+            human-approved setup sessions and scoped Streamable HTTP MCP. Hosted OAuth connector
+            registration can be added later if marketplace distribution requires it; setup sessions
+            keep Git marketplace, local checkout, Codex Desktop, and self-hosted paths consistent
+            today.
           </p>
         </header>
 
@@ -155,8 +157,16 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
         </div>
 
         <DocsProse className="mt-8">
-          <h2>First-Run Authentication</h2>
+          <h2>One-Time Persistent Setup</h2>
+          <p>
+            Use the approval-session path as the default. It avoids raw-token copy/paste in chat and
+            gives Codex a setup URL, user code, exchange URL, and setup secret. Persist the
+            exchanged token in the user-level Codex plugin authentication store or launcher secret
+            store that starts Codex Desktop. Do not store tokens in repo-local{' '}
+            <code>.codex/config.toml</code>, committed files, issue comments, or chat.
+          </p>
           <ol>
+            <li>Install the plugin from Git and start a new Codex thread.</li>
             <li>
               Create an agent setup session at{' '}
               <code>https://www.breakdown.sh/api/integrations/agent-setup-sessions</code>.
@@ -167,7 +177,12 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
               Exchange the setup secret for a scoped <code>bdk_...</code> token.
             </li>
             <li>
-              Set <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
+              Persist the token in the user-level Codex or launcher secret store that starts Codex
+              Desktop.
+            </li>
+            <li>
+              Run <code>diagnose_breakdown_setup</code> and confirm{' '}
+              <code>state: &quot;ready&quot;</code>.
             </li>
           </ol>
           <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \\
@@ -175,9 +190,62 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
   -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
           <p>
             Manual token creation from <Link href="/settings">Settings</Link> under MCP Access is
-            available as a fallback. Raw tokens are shown once; store them outside the repository
-            and never commit them.
+            available as an advanced fallback. Raw tokens are shown once; store them outside the
+            repository and never commit them. If a client cannot persist plugin auth yet, set{' '}
+            <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
           </p>
+
+          <h3>Advanced Fallback: OS-Level Token Storage</h3>
+          <p>
+            Use these locations only when Codex cannot persist plugin authentication itself. Keep
+            the Codex MCP server config in the user-level Codex config file and keep the raw token
+            in the OS user environment.
+          </p>
+          <p>
+            Codex config file paths: <code>~/.codex/config.toml</code> on macOS and Linux, or{' '}
+            <code>%USERPROFILE%\.codex\config.toml</code> on Windows. The config should reference
+            the environment variable, not the raw token.
+          </p>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            On macOS, persist the token for GUI-launched Codex Desktop with this LaunchAgent file:{' '}
+            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>.
+          </p>
+          <CodeBlock>{`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>sh.breakdown.codex-env</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/launchctl</string>
+    <string>setenv</string>
+    <string>BREAKDOWN_API_TOKEN</string>
+    <string>bdk_your_token_here</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>`}</CodeBlock>
+          <CodeBlock>{`launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist`}</CodeBlock>
+          <p>
+            On Linux desktops that use the systemd user environment, persist the token with{' '}
+            <code>~/.config/environment.d/breakdown-codex.conf</code>, then log out and back in
+            before launching Codex. For terminal-launched Codex CLI sessions, exporting{' '}
+            <code>BREAKDOWN_API_TOKEN</code> in that shell also works for that process tree.
+          </p>
+          <CodeBlock>{`BREAKDOWN_API_TOKEN=bdk_your_token_here`}</CodeBlock>
+          <p>
+            On Windows, there is no plaintext file path for the user environment. The persistent
+            location is <code>HKEY_CURRENT_USER\Environment</code>, value name{' '}
+            <code>BREAKDOWN_API_TOKEN</code>. Set it from PowerShell, then quit and reopen Codex
+            Desktop. If Codex still cannot see it, sign out and back in.
+          </p>
+          <CodeBlock>{`[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')`}</CodeBlock>
         </DocsProse>
 
         <div className="mt-6 overflow-hidden rounded-md border">
@@ -204,7 +272,29 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
         <DocsProse className="mt-8">
           <p>
             Revoke plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or
-            unknown tokens fail closed with <code>401</code>.
+            unknown tokens are reported separately by <code>diagnose_breakdown_setup</code> and{' '}
+            <code>GET /api/integrations/codex/diagnostics</code>.
+          </p>
+
+          <h2>Connection Check</h2>
+          <p>
+            Ask Codex to run <code>diagnose_breakdown_setup</code> after plugin setup. A ready
+            response confirms the MCP server is loaded, the token is valid, the external-evaluator
+            tools are present, and the token has the scopes needed for <code>get_next_step</code>,{' '}
+            <code>submit_step_result</code>, and <code>mark_step_blocked</code>.
+          </p>
+          <p>
+            If <code>diagnose_breakdown_setup</code> is missing from the tool list, the plugin or
+            MCP server is not loaded in the current Codex session. Start a new Codex thread after
+            install or update and check that the Breakdown plugin is enabled.
+          </p>
+          <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/codex/diagnostics \
+  -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \
+  -H "Accept: application/json"`}</CodeBlock>
+          <p>
+            Without a bearer token, the diagnostics endpoint returns{' '}
+            <code>{'state: "missing_token"'}</code>
+            so agents do not have to guess from a generic MCP failure.
           </p>
 
           <h2>Release-Test Authentication</h2>
@@ -280,9 +370,10 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
 
           <h2>Verify</h2>
           <p>
-            After installation, start a fresh Codex thread and ask it to list Breakdown graphs. That
-            exercises the Git marketplace package, env-var token injection, hosted MCP connection,{' '}
-            <code>tools/list</code>, and a read-only graph path.
+            After installation, start a fresh Codex thread and ask it to run{' '}
+            <code>diagnose_breakdown_setup</code>, then list Breakdown graphs. That exercises the
+            Git marketplace package, persistent token availability, hosted MCP connection,{' '}
+            <code>tools/list</code>, external-evaluator tool discovery, and a read-only graph path.
           </p>
           <CodeBlock>{`python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/breakdown
 pnpm exec vitest run src/lib/mcp/codex-plugin-release.test.ts src/app/api/mcp/route.test.ts
@@ -315,13 +406,25 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
 
           <h2>Troubleshooting</h2>
           <p>
-            <code>401 Missing bearer token</code> means the client reached Breakdown without an
-            approved token. Create and approve a setup session or set{' '}
-            <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
+            <code>diagnose_breakdown_setup</code> is missing means the plugin or MCP server is not
+            installed, enabled, or loaded in this Codex session. Install or enable the plugin and
+            start a new Codex thread.
+          </p>
+          <p>
+            <code>{'state: "missing_token"'}</code> means the client reached Breakdown without an
+            approved token. Create and approve a setup session, then persist the exchanged token in
+            the user-level Codex or launcher secret store. Use <code>BREAKDOWN_API_TOKEN</code> only
+            as an advanced fallback for clients without persistent plugin auth.
+          </p>
+          <p>
+            <code>{'state: "invalid_token"'}</code>, <code>{'state: "revoked_token"'}</code>, or{' '}
+            <code>{'state: "expired_token"'}</code> means the token is present but cannot be used.
+            Rotate or recreate the token from Settings under MCP Access.
           </p>
           <p>
             <code>403 Missing required scope</code> means the token is valid but too narrow for the
-            requested tool. Create a new token with the minimum additional scope needed.
+            requested tool. Create a new token with the minimum additional scope needed.{' '}
+            <code>{'state: "missing_scope"'}</code> lists the exact missing scopes.
           </p>
           <p>
             If Codex cannot see the plugin after install or update, start a new thread so Codex
