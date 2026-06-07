@@ -47,6 +47,8 @@ Advanced fallback locations:
   `%USERPROFILE%\.codex\config.toml` on Windows, with `bearer_token_env_var = "BREAKDOWN_API_TOKEN"`.
 - macOS GUI-launched Codex Desktop token file:
   `~/Library/LaunchAgents/sh.breakdown.codex-env.plist`.
+- Linux systemd user environment token file: `~/.config/environment.d/breakdown-codex.conf`, with
+  `BREAKDOWN_API_TOKEN=bdk_your_token_here`. Log out and back in before launching Codex.
 - Windows user environment token location: `HKEY_CURRENT_USER\Environment`, value name
   `BREAKDOWN_API_TOKEN`. Set it with PowerShell:
   `[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')`.

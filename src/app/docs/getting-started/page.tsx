@@ -125,7 +125,8 @@ export default function GettingStartedPage() {
             <code>~/.codex/config.toml</code> on macOS/Linux or{' '}
             <code>%USERPROFILE%\.codex\config.toml</code> on Windows, and store the raw token in the
             OS user environment. On macOS, use{' '}
-            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>. On Windows, use{' '}
+            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>. On Linux, use{' '}
+            <code>~/.config/environment.d/breakdown-codex.conf</code>. On Windows, use{' '}
             <code>HKEY_CURRENT_USER\Environment</code> with value name{' '}
             <code>BREAKDOWN_API_TOKEN</code>.
           </p>

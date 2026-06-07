@@ -233,6 +233,13 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <CodeBlock>{`launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist 2>/dev/null || true
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist`}</CodeBlock>
           <p>
+            On Linux desktops that use the systemd user environment, persist the token with{' '}
+            <code>~/.config/environment.d/breakdown-codex.conf</code>, then log out and back in
+            before launching Codex. For terminal-launched Codex CLI sessions, exporting{' '}
+            <code>BREAKDOWN_API_TOKEN</code> in that shell also works for that process tree.
+          </p>
+          <CodeBlock>{`BREAKDOWN_API_TOKEN=bdk_your_token_here`}</CodeBlock>
+          <p>
             On Windows, there is no plaintext file path for the user environment. The persistent
             location is <code>HKEY_CURRENT_USER\Environment</code>, value name{' '}
             <code>BREAKDOWN_API_TOKEN</code>. Set it from PowerShell, then quit and reopen Codex

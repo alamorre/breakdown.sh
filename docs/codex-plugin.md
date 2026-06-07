@@ -75,10 +75,11 @@ server config in the user-level Codex config file and keep the raw token in the 
 
 Codex config file paths:
 
-| OS            | Path                               |
-| ------------- | ---------------------------------- |
-| macOS / Linux | `~/.codex/config.toml`             |
-| Windows       | `%USERPROFILE%\.codex\config.toml` |
+| OS      | Path                               |
+| ------- | ---------------------------------- |
+| macOS   | `~/.codex/config.toml`             |
+| Linux   | `~/.codex/config.toml`             |
+| Windows | `%USERPROFILE%\.codex\config.toml` |
 
 The Codex config should reference the environment variable, not the raw token:
 
@@ -118,6 +119,18 @@ Load or reload it, then quit and reopen Codex Desktop:
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist 2>/dev/null || true
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist
 ```
+
+On Linux desktops that use the systemd user environment, persist the token with this file:
+
+`~/.config/environment.d/breakdown-codex.conf`
+
+```ini
+BREAKDOWN_API_TOKEN=bdk_your_token_here
+```
+
+Then log out and back in before launching Codex so the desktop session inherits the updated user
+environment. For terminal-launched Codex CLI sessions, exporting `BREAKDOWN_API_TOKEN` in that shell
+also works for that process tree.
 
 On Windows, there is no plaintext file path for the user environment. The persistent location is the
 current user's environment registry key:
