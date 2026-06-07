@@ -30,6 +30,8 @@ export const revokeIntegrationTokenSchema = z.object({
   tokenId: z.string().uuid(),
 });
 
+export const deleteIntegrationTokenSchema = revokeIntegrationTokenSchema;
+
 export const revokeIntegrationTokensByPurposeSchema = z.object({
   purpose: z.enum(INTEGRATION_TOKEN_PURPOSES),
 });
@@ -198,6 +200,54 @@ export async function revokeIntegrationToken(
 
   if (error) {
     throw new BreakdownServiceError('database_error', error.message, 400);
+  }
+}
+
+export async function deleteRevokedIntegrationToken(
+  supabase: SupabaseClient,
+  actor: { userId: string },
+  input: z.input<typeof deleteIntegrationTokenSchema>,
+): Promise<void> {
+  const parsed = deleteIntegrationTokenSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
+  }
+
+  const { data, error } = await supabase
+    .from('integration_tokens')
+    .select('id,revoked_at')
+    .eq('id', parsed.data.tokenId)
+    .eq('user_id', actor.userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new BreakdownServiceError('database_error', error.message, 400);
+  }
+  if (!data) {
+    throw new BreakdownServiceError('not_found', 'Integration token not found', 404);
+  }
+  if (!(data as Pick<IntegrationTokenRecord, 'revoked_at'>).revoked_at) {
+    throw new BreakdownServiceError(
+      'conflict',
+      'Revoke the integration token before permanently deleting it',
+      409,
+    );
+  }
+
+  const { error: deleteError } = await supabase
+    .from('integration_tokens')
+    .delete()
+    .eq('id', parsed.data.tokenId)
+    .eq('user_id', actor.userId)
+    .not('revoked_at', 'is', null);
+
+  if (deleteError) {
+    throw new BreakdownServiceError('database_error', deleteError.message, 400);
   }
 }
 

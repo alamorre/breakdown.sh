@@ -1,9 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BreakdownServiceError } from '@/lib/breakdown-service/errors';
 import type { BreakdownScope } from '@/lib/breakdown-service/scopes';
 
 const {
   mockAuth,
   mockCreateServerClient,
+  mockDeleteRevokedIntegrationToken,
   mockListIntegrationTokens,
   mockMintIntegrationToken,
   mockRevokeActiveIntegrationTokensByPurpose,
@@ -11,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockCreateServerClient: vi.fn(),
+  mockDeleteRevokedIntegrationToken: vi.fn(),
   mockListIntegrationTokens: vi.fn(),
   mockMintIntegrationToken: vi.fn(),
   mockRevokeActiveIntegrationTokensByPurpose: vi.fn(),
@@ -29,6 +32,7 @@ vi.mock('@/lib/breakdown-service/tokens', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/breakdown-service/tokens')>();
   return {
     ...original,
+    deleteRevokedIntegrationToken: mockDeleteRevokedIntegrationToken,
     listIntegrationTokens: mockListIntegrationTokens,
     mintIntegrationToken: mockMintIntegrationToken,
     revokeActiveIntegrationTokensByPurpose: mockRevokeActiveIntegrationTokensByPurpose,
@@ -39,6 +43,7 @@ vi.mock('@/lib/breakdown-service/tokens', async (importOriginal) => {
 let GET: typeof import('./route').GET;
 let POST: typeof import('./route').POST;
 let DELETE: typeof import('./[tokenId]/route').DELETE;
+let HARD_DELETE: typeof import('./[tokenId]/hard-delete/route').DELETE;
 
 const safeRecord = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -66,9 +71,11 @@ describe('/api/integrations/headless-tokens', () => {
   beforeAll(async () => {
     const route = await import('./route');
     const revokeRoute = await import('./[tokenId]/route');
+    const hardDeleteRoute = await import('./[tokenId]/hard-delete/route');
     GET = route.GET;
     POST = route.POST;
     DELETE = revokeRoute.DELETE;
+    HARD_DELETE = hardDeleteRoute.DELETE;
   });
 
   beforeEach(() => {
@@ -78,6 +85,7 @@ describe('/api/integrations/headless-tokens', () => {
     mockAuth.mockResolvedValue({ userId: 'user_123' });
     mockCreateServerClient.mockReturnValue({ from: vi.fn() });
     mockListIntegrationTokens.mockResolvedValue([safeRecord]);
+    mockDeleteRevokedIntegrationToken.mockResolvedValue(undefined);
     mockMintIntegrationToken.mockResolvedValue({
       token: 'bdk_preview_secret',
       record: safeRecord,
@@ -194,5 +202,50 @@ describe('/api/integrations/headless-tokens', () => {
       { userId: 'user_123' },
       { tokenId: safeRecord.id },
     );
+  });
+
+  it('permanently deletes a revoked token for the signed-in user', async () => {
+    const response = await HARD_DELETE(new Request('http://localhost'), {
+      params: Promise.resolve({ tokenId: safeRecord.id }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(mockDeleteRevokedIntegrationToken).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: 'user_123' },
+      { tokenId: safeRecord.id },
+    );
+  });
+
+  it('requires a Clerk session before permanent deletion', async () => {
+    mockAuth.mockResolvedValue({ userId: null });
+
+    const response = await HARD_DELETE(new Request('http://localhost'), {
+      params: Promise.resolve({ tokenId: safeRecord.id }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Unauthorized' });
+    expect(mockDeleteRevokedIntegrationToken).not.toHaveBeenCalled();
+  });
+
+  it('returns a conflict when permanent deletion is requested for an active token', async () => {
+    mockDeleteRevokedIntegrationToken.mockRejectedValue(
+      new BreakdownServiceError(
+        'conflict',
+        'Revoke the integration token before permanently deleting it',
+        409,
+      ),
+    );
+
+    const response = await HARD_DELETE(new Request('http://localhost'), {
+      params: Promise.resolve({ tokenId: safeRecord.id }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'Revoke the integration token before permanently deleting it',
+    });
   });
 });

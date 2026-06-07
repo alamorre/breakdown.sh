@@ -13,6 +13,14 @@ import {
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -106,6 +114,8 @@ export function HeadlessTokenSettings() {
   const [creating, setCreating] = useState(false);
   const [rotatingReleaseTest, setRotatingReleaseTest] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmToken, setDeleteConfirmToken] = useState<HeadlessToken | null>(null);
 
   const activeTokens = useMemo(() => tokens.filter((token) => !token.revokedAt), [tokens]);
   const activeReleaseTestToken = useMemo(
@@ -257,6 +267,32 @@ export function HeadlessTokenSettings() {
       toast.error(err instanceof Error ? err.message : 'Failed to revoke MCP access token');
     } finally {
       setRevokingId(null);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!deleteConfirmToken) return;
+
+    const tokenId = deleteConfirmToken.id;
+    setDeletingId(tokenId);
+    try {
+      const response = await fetch(`/api/integrations/headless-tokens/${tokenId}/hard-delete`, {
+        method: 'DELETE',
+      });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(result?.error ?? 'Failed to permanently delete MCP access token');
+      }
+
+      setTokens((current) => current.filter((token) => token.id !== tokenId));
+      setDeleteConfirmToken(null);
+      toast.success('MCP access token permanently deleted');
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to permanently delete MCP access token',
+      );
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -428,6 +464,7 @@ export function HeadlessTokenSettings() {
           tokens.map((token) => {
             const revoked = Boolean(token.revokedAt);
             const revoking = revokingId === token.id;
+            const deleting = deletingId === token.id;
 
             return (
               <div
@@ -453,7 +490,7 @@ export function HeadlessTokenSettings() {
                   </div>
                 </div>
 
-                {!revoked && (
+                {!revoked ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -468,12 +505,70 @@ export function HeadlessTokenSettings() {
                     )}
                     Revoke
                   </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={deleting}
+                    onClick={() => setDeleteConfirmToken(token)}
+                  >
+                    {deleting ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                    Delete permanently
+                  </Button>
                 )}
               </div>
             );
           })
         )}
       </div>
+
+      <Dialog
+        open={Boolean(deleteConfirmToken)}
+        onOpenChange={(open) => {
+          if (!open && !deletingId) {
+            setDeleteConfirmToken(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete token permanently</DialogTitle>
+            <DialogDescription>
+              This will remove &ldquo;{deleteConfirmToken?.name}&rdquo; (
+              <span className="font-mono">{deleteConfirmToken?.tokenPrefix}...</span>) from token
+              history. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={Boolean(deletingId)}
+              onClick={() => setDeleteConfirmToken(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={Boolean(deletingId)}
+              onClick={() => void handlePermanentDelete()}
+            >
+              {deletingId ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
