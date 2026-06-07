@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createRawIntegrationToken,
+  deleteRevokedIntegrationToken,
   hashIntegrationToken,
   listIntegrationTokens,
   mintIntegrationToken,
@@ -17,21 +18,29 @@ const mockInsert = vi.fn();
 const mockSelect = vi.fn();
 const mockEq = vi.fn();
 const mockUpdate = vi.fn();
+const mockDelete = vi.fn();
+const mockMaybeSingle = vi.fn();
+const mockNot = vi.fn();
 
 function createMockSupabase() {
   const chain = {
     select: mockSelect,
     eq: mockEq,
     single: mockSingle,
+    maybeSingle: mockMaybeSingle,
     order: mockOrder,
     insert: mockInsert,
     update: mockUpdate,
+    delete: mockDelete,
     is: mockIs,
+    not: mockNot,
   };
   mockSelect.mockReturnValue(chain);
   mockEq.mockReturnValue(chain);
   mockInsert.mockReturnValue(chain);
   mockUpdate.mockReturnValue(chain);
+  mockDelete.mockReturnValue(chain);
+  mockNot.mockReturnValue(chain);
   return {
     from: vi.fn(() => chain),
   };
@@ -41,6 +50,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockIs.mockResolvedValue({ error: null });
   mockOrder.mockResolvedValue({ data: [], error: null });
+  mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+  mockNot.mockResolvedValue({ error: null });
 });
 
 describe('integration token helpers', () => {
@@ -250,5 +261,57 @@ describe('integration token helpers', () => {
     expect(mockEq).toHaveBeenCalledWith('user_id', 'user_123');
     expect(mockEq).toHaveBeenCalledWith('purpose', 'release_test');
     expect(mockIs).toHaveBeenCalledWith('revoked_at', null);
+  });
+
+  it('permanently deletes revoked token records for the owning user only', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        revoked_at: '2026-06-03T00:00:00Z',
+      },
+      error: null,
+    });
+
+    await deleteRevokedIntegrationToken(
+      createMockSupabase() as never,
+      { userId: 'user_123' },
+      { tokenId: '550e8400-e29b-41d4-a716-446655440000' },
+    );
+
+    expect(mockSelect).toHaveBeenCalledWith('id,revoked_at');
+    expect(mockDelete).toHaveBeenCalled();
+    expect(mockEq).toHaveBeenCalledWith('id', '550e8400-e29b-41d4-a716-446655440000');
+    expect(mockEq).toHaveBeenCalledWith('user_id', 'user_123');
+    expect(mockNot).toHaveBeenCalledWith('revoked_at', 'is', null);
+  });
+
+  it('refuses to permanently delete active token records', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        revoked_at: null,
+      },
+      error: null,
+    });
+
+    await expect(
+      deleteRevokedIntegrationToken(
+        createMockSupabase() as never,
+        { userId: 'user_123' },
+        { tokenId: '550e8400-e29b-41d4-a716-446655440000' },
+      ),
+    ).rejects.toThrow('Revoke the integration token before permanently deleting it');
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it('reports missing token records before permanent deletion', async () => {
+    await expect(
+      deleteRevokedIntegrationToken(
+        createMockSupabase() as never,
+        { userId: 'user_123' },
+        { tokenId: '550e8400-e29b-41d4-a716-446655440000' },
+      ),
+    ).rejects.toThrow('Integration token not found');
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 });
