@@ -68,6 +68,69 @@ Manual token creation from Settings under MCP Access remains available as an adv
 tokens are shown once; store them outside the repository and never commit them. If a client cannot
 persist plugin auth yet, set `BREAKDOWN_API_TOKEN` in the environment that starts Codex.
 
+### Advanced Fallback: OS-Level Token Storage
+
+Use these locations only when Codex cannot persist plugin authentication itself. Keep the Codex MCP
+server config in the user-level Codex config file and keep the raw token in the OS user environment.
+
+Codex config file paths:
+
+| OS            | Path                               |
+| ------------- | ---------------------------------- |
+| macOS / Linux | `~/.codex/config.toml`             |
+| Windows       | `%USERPROFILE%\.codex\config.toml` |
+
+The Codex config should reference the environment variable, not the raw token:
+
+```toml
+[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+```
+
+On macOS, persist the token for GUI-launched Codex Desktop with this LaunchAgent file:
+
+`~/Library/LaunchAgents/sh.breakdown.codex-env.plist`
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>sh.breakdown.codex-env</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/launchctl</string>
+    <string>setenv</string>
+    <string>BREAKDOWN_API_TOKEN</string>
+    <string>bdk_your_token_here</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
+```
+
+Load or reload it, then quit and reopen Codex Desktop:
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist
+```
+
+On Windows, there is no plaintext file path for the user environment. The persistent location is the
+current user's environment registry key:
+
+`HKEY_CURRENT_USER\Environment`, value name `BREAKDOWN_API_TOKEN`
+
+Set it from PowerShell, then quit and reopen Codex Desktop. If Codex still cannot see it, sign out
+and back in so Explorer and newly launched apps inherit the updated user environment.
+
+```powershell
+[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')
+```
+
 Recommended scopes:
 
 | Workflow                | Minimum scopes                                                                               |

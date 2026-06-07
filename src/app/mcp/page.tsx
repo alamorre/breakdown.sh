@@ -144,6 +144,42 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
             Then set <code>BREAKDOWN_API_TOKEN</code> to the approved <code>bdk_...</code> token
             before starting the client.
           </p>
+          <p>
+            For Codex Desktop fallback setup, the MCP server reference belongs in{' '}
+            <code>~/.codex/config.toml</code> on macOS/Linux or{' '}
+            <code>%USERPROFILE%\.codex\config.toml</code> on Windows. Do not put the raw token in
+            that file; store it in the OS user environment.
+          </p>
+          <p>
+            On macOS, persist the token for GUI-launched Codex Desktop with{' '}
+            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>, then quit and reopen
+            Codex Desktop.
+          </p>
+          <CodeBlock>{`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>sh.breakdown.codex-env</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/launchctl</string>
+    <string>setenv</string>
+    <string>BREAKDOWN_API_TOKEN</string>
+    <string>bdk_your_token_here</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>`}</CodeBlock>
+          <CodeBlock>{`launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist`}</CodeBlock>
+          <p>
+            On Windows, the persistent location is <code>HKEY_CURRENT_USER\Environment</code>, value
+            name <code>BREAKDOWN_API_TOKEN</code>. Set it from PowerShell, then quit and reopen
+            Codex Desktop. If Codex still cannot see it, sign out and back in.
+          </p>
+          <CodeBlock>{`[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')`}</CodeBlock>
           <CodeBlock>{`curl https://www.breakdown.sh/api/mcp \\
   -H "Authorization: Bearer $BREAKDOWN_API_TOKEN" \\
   -H "Accept: application/json, text/event-stream" \\

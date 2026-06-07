@@ -194,6 +194,51 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
             repository and never commit them. If a client cannot persist plugin auth yet, set{' '}
             <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
           </p>
+
+          <h3>Advanced Fallback: OS-Level Token Storage</h3>
+          <p>
+            Use these locations only when Codex cannot persist plugin authentication itself. Keep
+            the Codex MCP server config in the user-level Codex config file and keep the raw token
+            in the OS user environment.
+          </p>
+          <p>
+            Codex config file paths: <code>~/.codex/config.toml</code> on macOS and Linux, or{' '}
+            <code>%USERPROFILE%\.codex\config.toml</code> on Windows. The config should reference
+            the environment variable, not the raw token.
+          </p>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            On macOS, persist the token for GUI-launched Codex Desktop with this LaunchAgent file:{' '}
+            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>.
+          </p>
+          <CodeBlock>{`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>sh.breakdown.codex-env</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/launchctl</string>
+    <string>setenv</string>
+    <string>BREAKDOWN_API_TOKEN</string>
+    <string>bdk_your_token_here</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>`}</CodeBlock>
+          <CodeBlock>{`launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.plist`}</CodeBlock>
+          <p>
+            On Windows, there is no plaintext file path for the user environment. The persistent
+            location is <code>HKEY_CURRENT_USER\Environment</code>, value name{' '}
+            <code>BREAKDOWN_API_TOKEN</code>. Set it from PowerShell, then quit and reopen Codex
+            Desktop. If Codex still cannot see it, sign out and back in.
+          </p>
+          <CodeBlock>{`[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')`}</CodeBlock>
         </DocsProse>
 
         <div className="mt-6 overflow-hidden rounded-md border">

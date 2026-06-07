@@ -120,6 +120,15 @@ export default function GettingStartedPage() {
             user-level launcher secret store. <code>BREAKDOWN_API_TOKEN</code> is an advanced
             fallback for clients that cannot persist plugin auth yet.
           </p>
+          <p>
+            For Codex Desktop fallback setup, put the MCP server reference in{' '}
+            <code>~/.codex/config.toml</code> on macOS/Linux or{' '}
+            <code>%USERPROFILE%\.codex\config.toml</code> on Windows, and store the raw token in the
+            OS user environment. On macOS, use{' '}
+            <code>~/Library/LaunchAgents/sh.breakdown.codex-env.plist</code>. On Windows, use{' '}
+            <code>HKEY_CURRENT_USER\Environment</code> with value name{' '}
+            <code>BREAKDOWN_API_TOKEN</code>.
+          </p>
 
           <h2>Connect MCP</h2>
           <p>Use the hosted Streamable HTTP MCP endpoint with bearer-token authentication.</p>

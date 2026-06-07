@@ -41,6 +41,16 @@ as `get_next_step`, `submit_step_result`, and `mark_step_blocked`. If your clien
 plugin auth yet, `BREAKDOWN_API_TOKEN` remains an advanced fallback; set it in the environment that
 starts Codex, not in the repository.
 
+Advanced fallback locations:
+
+- Codex config reference only, no raw token: `~/.codex/config.toml` on macOS/Linux or
+  `%USERPROFILE%\.codex\config.toml` on Windows, with `bearer_token_env_var = "BREAKDOWN_API_TOKEN"`.
+- macOS GUI-launched Codex Desktop token file:
+  `~/Library/LaunchAgents/sh.breakdown.codex-env.plist`.
+- Windows user environment token location: `HKEY_CURRENT_USER\Environment`, value name
+  `BREAKDOWN_API_TOKEN`. Set it with PowerShell:
+  `[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')`.
+
 Manual token creation in Breakdown settings under MCP Access is also supported as a fallback. Store
 raw tokens outside the repository, grant only the scopes needed for the session, and revoke plugin
 tokens from Settings under MCP Access when they are no longer needed.

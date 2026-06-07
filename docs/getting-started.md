@@ -57,6 +57,11 @@ curl "$EXCHANGE_URL" \
 Use the response token in the host client or user-level launcher secret store. `BREAKDOWN_API_TOKEN`
 is an advanced fallback for clients that cannot persist plugin auth yet.
 
+For Codex Desktop fallback setup, put the MCP server reference in `~/.codex/config.toml` on
+macOS/Linux or `%USERPROFILE%\.codex\config.toml` on Windows, and store the raw token in the OS user
+environment. On macOS, use `~/Library/LaunchAgents/sh.breakdown.codex-env.plist`. On Windows, use
+`HKEY_CURRENT_USER\Environment` with value name `BREAKDOWN_API_TOKEN`.
+
 ## MCP Client Configuration
 
 ```toml
