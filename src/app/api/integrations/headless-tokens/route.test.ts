@@ -8,6 +8,7 @@ const {
   mockDeleteRevokedIntegrationToken,
   mockListIntegrationTokens,
   mockMintIntegrationToken,
+  mockRenameIntegrationToken,
   mockRevokeActiveIntegrationTokensByPurpose,
   mockRevokeIntegrationToken,
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   mockDeleteRevokedIntegrationToken: vi.fn(),
   mockListIntegrationTokens: vi.fn(),
   mockMintIntegrationToken: vi.fn(),
+  mockRenameIntegrationToken: vi.fn(),
   mockRevokeActiveIntegrationTokensByPurpose: vi.fn(),
   mockRevokeIntegrationToken: vi.fn(),
 }));
@@ -35,6 +37,7 @@ vi.mock('@/lib/breakdown-service/tokens', async (importOriginal) => {
     deleteRevokedIntegrationToken: mockDeleteRevokedIntegrationToken,
     listIntegrationTokens: mockListIntegrationTokens,
     mintIntegrationToken: mockMintIntegrationToken,
+    renameIntegrationToken: mockRenameIntegrationToken,
     revokeActiveIntegrationTokensByPurpose: mockRevokeActiveIntegrationTokensByPurpose,
     revokeIntegrationToken: mockRevokeIntegrationToken,
   };
@@ -42,6 +45,7 @@ vi.mock('@/lib/breakdown-service/tokens', async (importOriginal) => {
 
 let GET: typeof import('./route').GET;
 let POST: typeof import('./route').POST;
+let PATCH: typeof import('./[tokenId]/route').PATCH;
 let DELETE: typeof import('./[tokenId]/route').DELETE;
 let HARD_DELETE: typeof import('./[tokenId]/hard-delete/route').DELETE;
 
@@ -74,6 +78,7 @@ describe('/api/integrations/headless-tokens', () => {
     const hardDeleteRoute = await import('./[tokenId]/hard-delete/route');
     GET = route.GET;
     POST = route.POST;
+    PATCH = revokeRoute.PATCH;
     DELETE = revokeRoute.DELETE;
     HARD_DELETE = hardDeleteRoute.DELETE;
   });
@@ -89,6 +94,10 @@ describe('/api/integrations/headless-tokens', () => {
     mockMintIntegrationToken.mockResolvedValue({
       token: 'bdk_preview_secret',
       record: safeRecord,
+    });
+    mockRenameIntegrationToken.mockResolvedValue({
+      ...safeRecord,
+      name: 'Production MCP',
     });
     mockRevokeActiveIntegrationTokensByPurpose.mockResolvedValue(undefined);
     mockRevokeIntegrationToken.mockResolvedValue(undefined);
@@ -202,6 +211,51 @@ describe('/api/integrations/headless-tokens', () => {
       { userId: 'user_123' },
       { tokenId: safeRecord.id },
     );
+  });
+
+  it('renames a token for the signed-in user', async () => {
+    const response = await PATCH(
+      new Request('http://localhost', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '  Production MCP  ' }),
+      }),
+      {
+        params: Promise.resolve({ tokenId: safeRecord.id }),
+      },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockRenameIntegrationToken).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: 'user_123' },
+      { tokenId: safeRecord.id, name: 'Production MCP' },
+    );
+    expect(body.token).toMatchObject({
+      id: safeRecord.id,
+      name: 'Production MCP',
+      tokenPrefix: 'bdk_preview',
+    });
+    expect(body.token).not.toHaveProperty('token_hash');
+  });
+
+  it('rejects invalid token rename requests', async () => {
+    const response = await PATCH(
+      new Request('http://localhost', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '' }),
+      }),
+      {
+        params: Promise.resolve({ tokenId: safeRecord.id }),
+      },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain('Too small');
+    expect(mockRenameIntegrationToken).not.toHaveBeenCalled();
   });
 
   it('permanently deletes a revoked token for the signed-in user', async () => {
