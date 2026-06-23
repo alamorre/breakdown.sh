@@ -5,6 +5,7 @@ import {
   hashIntegrationToken,
   listIntegrationTokens,
   mintIntegrationToken,
+  renameIntegrationToken,
   resolveIntegrationToken,
   revokeActiveIntegrationTokensByPurpose,
   revokeIntegrationToken,
@@ -248,6 +249,40 @@ describe('integration token helpers', () => {
     expect(mockEq).toHaveBeenCalledWith('id', '550e8400-e29b-41d4-a716-446655440000');
     expect(mockEq).toHaveBeenCalledWith('user_id', 'user_123');
     expect(mockIs).toHaveBeenCalledWith('revoked_at', null);
+  });
+
+  it('renames token records for the owning user only', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        user_id: 'user_123',
+        name: 'Production MCP',
+        token_prefix: 'bdk_visible',
+        scopes: ['graphs:read'],
+        purpose: 'mcp_client',
+        created_by_user_id: 'user_123',
+        created_at: '2026-06-03T00:00:00Z',
+        last_used_at: null,
+        revoked_at: null,
+        expires_at: null,
+      },
+      error: null,
+    });
+
+    const record = await renameIntegrationToken(
+      createMockSupabase() as never,
+      { userId: 'user_123' },
+      {
+        tokenId: '550e8400-e29b-41d4-a716-446655440000',
+        name: '  Production MCP  ',
+      },
+    );
+
+    expect(record.name).toBe('Production MCP');
+    expect(mockUpdate).toHaveBeenCalledWith({ name: 'Production MCP' });
+    expect(mockEq).toHaveBeenCalledWith('id', '550e8400-e29b-41d4-a716-446655440000');
+    expect(mockEq).toHaveBeenCalledWith('user_id', 'user_123');
+    expect(record).not.toHaveProperty('token_hash');
   });
 
   it('revokes active tokens by purpose for rotation', async () => {

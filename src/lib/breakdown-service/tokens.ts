@@ -32,6 +32,10 @@ export const revokeIntegrationTokenSchema = z.object({
 
 export const deleteIntegrationTokenSchema = revokeIntegrationTokenSchema;
 
+export const renameIntegrationTokenSchema = revokeIntegrationTokenSchema.extend({
+  name: z.string().trim().min(1).max(100),
+});
+
 export const revokeIntegrationTokensByPurposeSchema = z.object({
   purpose: z.enum(INTEGRATION_TOKEN_PURPOSES),
 });
@@ -201,6 +205,39 @@ export async function revokeIntegrationToken(
   if (error) {
     throw new BreakdownServiceError('database_error', error.message, 400);
   }
+}
+
+export async function renameIntegrationToken(
+  supabase: SupabaseClient,
+  actor: { userId: string },
+  input: z.input<typeof renameIntegrationTokenSchema>,
+): Promise<PublicIntegrationTokenRecord> {
+  const parsed = renameIntegrationTokenSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new BreakdownServiceError(
+      'validation_error',
+      parsed.error.message,
+      400,
+      parsed.error.flatten(),
+    );
+  }
+
+  const { data, error } = await supabase
+    .from('integration_tokens')
+    .update({ name: parsed.data.name })
+    .eq('id', parsed.data.tokenId)
+    .eq('user_id', actor.userId)
+    .select(PUBLIC_TOKEN_SELECT)
+    .maybeSingle();
+
+  if (error) {
+    throw new BreakdownServiceError('database_error', error.message, 400);
+  }
+  if (!data) {
+    throw new BreakdownServiceError('not_found', 'Integration token not found', 404);
+  }
+
+  return data as PublicIntegrationTokenRecord;
 }
 
 export async function deleteRevokedIntegrationToken(

@@ -2,13 +2,16 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Check,
   CheckCircle2,
   Copy,
   KeyRound,
   Loader2,
+  Pencil,
   RefreshCw,
   ShieldCheck,
   Trash2,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +56,11 @@ type HeadlessTokensResponse = {
 type CreatedTokenResponse = {
   token: string;
   record: HeadlessToken;
+  error?: string;
+};
+
+type UpdatedTokenResponse = {
+  token: HeadlessToken;
   error?: string;
 };
 
@@ -114,6 +122,9 @@ export function HeadlessTokenSettings() {
   const [creating, setCreating] = useState(false);
   const [rotatingReleaseTest, setRotatingReleaseTest] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [editingTokenId, setEditingTokenId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteConfirmToken, setDeleteConfirmToken] = useState<HeadlessToken | null>(null);
 
@@ -243,6 +254,53 @@ export function HeadlessTokenSettings() {
       toast.success('Token copied');
     } catch {
       toast.error('Could not copy token');
+    }
+  };
+
+  const handleStartRename = (token: HeadlessToken) => {
+    setEditingTokenId(token.id);
+    setEditingName(token.name);
+  };
+
+  const handleCancelRename = () => {
+    setEditingTokenId(null);
+    setEditingName('');
+  };
+
+  const handleRename = async (event: FormEvent<HTMLFormElement>, tokenId: string) => {
+    event.preventDefault();
+
+    const trimmedName = editingName.trim();
+    if (!trimmedName) {
+      toast.error('Name this token first');
+      return;
+    }
+
+    const currentToken = tokens.find((token) => token.id === tokenId);
+    if (currentToken?.name === trimmedName) {
+      handleCancelRename();
+      return;
+    }
+
+    setRenamingId(tokenId);
+    try {
+      const response = await fetch(`/api/integrations/headless-tokens/${tokenId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+      const result = (await response.json().catch(() => null)) as UpdatedTokenResponse | null;
+      if (!response.ok || !result?.token) {
+        throw new Error(result?.error ?? 'Failed to rename MCP access token');
+      }
+
+      setTokens((current) => current.map((token) => (token.id === tokenId ? result.token : token)));
+      handleCancelRename();
+      toast.success('MCP access token renamed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to rename MCP access token');
+    } finally {
+      setRenamingId(null);
     }
   };
 
@@ -463,6 +521,8 @@ export function HeadlessTokenSettings() {
         ) : (
           tokens.map((token) => {
             const revoked = Boolean(token.revokedAt);
+            const editing = editingTokenId === token.id;
+            const renaming = renamingId === token.id;
             const revoking = revokingId === token.id;
             const deleting = deletingId === token.id;
 
@@ -473,7 +533,65 @@ export function HeadlessTokenSettings() {
               >
                 <div className="min-w-0">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="font-medium">{token.name}</span>
+                    {editing ? (
+                      <form
+                        className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+                        onSubmit={(event) => void handleRename(event, token.id)}
+                      >
+                        <Input
+                          value={editingName}
+                          onChange={(event) => setEditingName(event.target.value)}
+                          className="min-w-40 max-w-xs flex-1"
+                          maxLength={100}
+                          disabled={renaming}
+                          aria-label="Token name"
+                          autoFocus
+                        />
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          size="icon-sm"
+                          disabled={renaming}
+                          title="Save name"
+                          aria-label="Save token name"
+                        >
+                          {renaming ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Check className="size-3.5" />
+                          )}
+                          <span className="sr-only">Save token name</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={renaming}
+                          onClick={handleCancelRename}
+                          title="Cancel rename"
+                          aria-label="Cancel token rename"
+                        >
+                          <X className="size-3.5" />
+                          <span className="sr-only">Cancel token rename</span>
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <span className="min-w-0 break-words font-medium">{token.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={Boolean(renamingId)}
+                          onClick={() => handleStartRename(token)}
+                          title="Rename token"
+                          aria-label={`Rename ${token.name}`}
+                        >
+                          <Pencil className="size-3.5" />
+                          <span className="sr-only">Rename token</span>
+                        </Button>
+                      </>
+                    )}
                     <Badge variant="outline">{PURPOSE_LABELS[token.purpose]}</Badge>
                     <Badge variant={revoked ? 'secondary' : 'default'}>
                       {revoked ? 'Revoked' : 'Active'}
