@@ -190,6 +190,23 @@ The release-test preset uses `graphs:read`, `graphs:write`, `runs:external_execu
 `runs:write_results`. Settings identifies the token purpose, shows last-used metadata, and supports
 rotation or revocation from a phone-friendly screen.
 
+## Candidate Versioning
+
+Plugin changes are candidates while a PR is open. When a PR changes the installable plugin package
+under `plugins/breakdown/` or the marketplace entry at `.agents/plugins/marketplace.json`, bump the
+plugin manifest version on that same branch:
+
+```bash
+pnpm plugin:version -- patch
+pnpm plugin:version -- minor
+pnpm plugin:version -- major
+```
+
+The command updates `plugins/breakdown/.codex-plugin/plugin.json`. PR CI compares the branch to the
+base branch and fails if plugin release files changed without a strictly higher `x.y.z` version. The
+bumped version is only a release candidate until the PR passes release testing and is promoted; this
+step does not create a tag or update the promoted smoke-test baseline.
+
 ## MCP Surface
 
 The plugin exposes hosted MCP tools for:

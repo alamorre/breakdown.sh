@@ -18,6 +18,24 @@ env:
   NEXT_TELEMETRY_DISABLED: 1
 
 jobs:
+  plugin-version-guard:
+    name: Plugin Version Guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check plugin candidate version
+        run: node scripts/plugin-version-guard.mjs --base-ref origin/${{ github.base_ref }}
+
   dependency-audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
