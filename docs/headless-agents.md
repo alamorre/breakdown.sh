@@ -156,6 +156,13 @@ Scopes:
 | `runs:write_results`    | Submit or block external step results.                                     |
 | `runs:cancel`           | Cancel internal graph runs.                                                |
 
+External step packets include `executionPrompt`, `promptContract`, `outputContract`, upstream text
+and `structuredOutput`, and submission requirements. Headless agents should execute
+`executionPrompt`, then submit `output`, `structuredOutput` matching `outputContract.schema`, and
+citations with the exact `contextVersion`. When required current data or sources are unavailable,
+mark the step blocked or include explicit `structuredOutput.dataGaps` rather than relying on stale
+model memory.
+
 Revocation:
 
 - In the app, return to `/settings` and revoke the token from **MCP Access**.

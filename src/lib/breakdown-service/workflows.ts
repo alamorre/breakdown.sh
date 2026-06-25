@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
+import {
+  DEFAULT_AI_PROVIDER_ID,
+  getAiProviderOption,
+  getProviderForModel,
+} from '@/lib/ai/models';
 import { sortTopologically } from '@/lib/graph/topological-sort';
 import { isStaleSourceNode, formatSourceAge } from '@/lib/graph/source-freshness';
 import type { Graph } from '@/types/graph';
@@ -47,6 +52,7 @@ export interface HeadlessGraphExport {
     nodeType: string;
     prompt: string;
     output: string | null;
+    structuredOutput: Record<string, unknown> | null;
     metadata: Record<string, unknown>;
     runStatus: string;
     runError: string | null;
@@ -84,6 +90,7 @@ export interface WorkflowManifest {
     nodeType: string;
     prompt: string;
     output: string | null;
+    structuredOutput: Record<string, unknown> | null;
     metadata: Record<string, unknown>;
     runStatus: string;
     runError: string | null;
@@ -138,6 +145,19 @@ function validateAcyclic(nodes: BreakdownNode[], edges: BreakdownEdge[]) {
   return sortedNodes;
 }
 
+function cleanImportString(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function resolveImportAiSelection(graph: { llmProvider?: string | null; llmModel?: string | null }) {
+  const provider = cleanImportString(graph.llmProvider);
+  const model = cleanImportString(graph.llmModel);
+  const llmModel = model ?? getAiProviderOption(provider).defaultModelId;
+  const llmProvider = provider ?? getProviderForModel(llmModel) ?? DEFAULT_AI_PROVIDER_ID;
+  return { llmProvider, llmModel };
+}
+
 function getReadyNodeIds(nodes: BreakdownNode[], edges: BreakdownEdge[]) {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const inbound = new Map<string, BreakdownEdge[]>();
@@ -181,6 +201,7 @@ export async function exportGraphForActor(
       nodeType: node.node_type,
       prompt: node.prompt,
       output: node.output,
+      structuredOutput: node.structured_output ?? null,
       metadata: node.metadata,
       runStatus: node.run_status,
       runError: node.run_error,
@@ -236,6 +257,7 @@ export async function getWorkflowManifestForActor(
       nodeType: node.node_type,
       prompt: node.prompt,
       output: node.output,
+      structuredOutput: node.structured_output ?? null,
       metadata: node.metadata,
       runStatus: node.run_status,
       runError: node.run_error,
@@ -278,6 +300,7 @@ export async function importGraphForActor(
         name: node.name,
         prompt: node.prompt,
         output: node.output ?? null,
+        structured_output: node.structuredOutput ?? null,
         metadata: node.metadata,
         run_status: node.runStatus,
         run_error: node.runError ?? null,
@@ -319,6 +342,7 @@ export async function importGraphForActor(
 
   const supabase = serviceClient();
   let graphId = parsed.graphId;
+  const aiSelection = resolveImportAiSelection(parsed.graph);
   if (parsed.mode === 'replace') {
     if (!graphId) {
       throw new BreakdownServiceError(
@@ -351,8 +375,8 @@ export async function importGraphForActor(
         user_id: actor.userId,
         name: parsed.graph.name,
         description: parsed.graph.description ?? null,
-        llm_provider: parsed.graph.llmProvider ?? null,
-        llm_model: parsed.graph.llmModel ?? null,
+        llm_provider: aiSelection.llmProvider,
+        llm_model: aiSelection.llmModel,
       })
       .select('id')
       .single();
@@ -376,6 +400,7 @@ export async function importGraphForActor(
         name: node.name,
         prompt: node.prompt,
         output: node.output,
+        structured_output: node.structured_output ?? null,
         metadata: node.metadata,
         run_status: node.run_status,
         run_error: node.run_error,

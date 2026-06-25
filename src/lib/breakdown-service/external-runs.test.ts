@@ -23,6 +23,11 @@ const actor: BreakdownActor = {
   tokenId: '99999999-9999-4999-8999-999999999999',
 };
 
+const submitActor: BreakdownActor = {
+  ...actor,
+  scopes: ['runs:write_results'],
+};
+
 const runId = '11111111-1111-4111-8111-111111111111';
 const graphId = '22222222-2222-4222-8222-222222222222';
 const sourceNodeId = '33333333-3333-4333-8333-333333333333';
@@ -41,6 +46,7 @@ function node(overrides: Partial<BreakdownNode>): BreakdownNode {
     position_y: 0,
     prompt: '',
     output: null,
+    structured_output: null,
     run_status: 'idle',
     run_error: null,
     last_run_at: null,
@@ -163,6 +169,7 @@ describe('external run service', () => {
           status: 'submitted',
           context_version: 'ctx-source',
           output: 'Current evidence from the host console.',
+          structured_output: { summary: 'Current evidence', findings: [], dataGaps: [] },
           structured_summary: null,
           citations: [],
           blocked_reason: null,
@@ -185,6 +192,7 @@ describe('external run service', () => {
           status: 'ready',
           context_version: 'ctx-target',
           output: null,
+          structured_output: null,
           structured_summary: null,
           citations: [],
           blocked_reason: null,
@@ -209,6 +217,7 @@ describe('external run service', () => {
           node_type: 'source-web-url',
           name: 'Current evidence',
           output: 'Current evidence from the host console.',
+          structured_output: { summary: 'Current evidence', findings: [], dataGaps: [] },
           run_status: 'success',
           last_run_at: '2026-01-01T00:00:00.000Z',
         }),
@@ -265,6 +274,7 @@ describe('external run service', () => {
               sourceNodeId,
               sourceNodeName: 'Current evidence',
               output: 'Current evidence from the host console.',
+              structuredOutput: { summary: 'Current evidence', findings: [], dataGaps: [] },
               condition: 'Requires current evidence.',
               transform: 'Summarize before use.',
             },
@@ -278,10 +288,14 @@ describe('external run service', () => {
         ],
         expectedOutput: 'A concise answer.',
         acceptanceCriteria: ['Uses the upstream evidence.'],
+        executionPrompt: expect.stringContaining('## Output Contract'),
+        outputContract: { format: 'markdown+json' },
+        promptContract: { source: 'legacy-metadata' },
         submission: {
           submitRoute: `/api/headless/external-runs/${runId}/steps/${targetStepId}/result`,
           blockRoute: `/api/headless/external-runs/${runId}/steps/${targetStepId}/block`,
           requiredContextVersion: 'ctx-target',
+          requiredFields: ['contextVersion', 'output', 'structuredOutput', 'citations'],
         },
       },
     });
@@ -290,6 +304,72 @@ describe('external run service', () => {
       status: 'in_progress',
       started_at: expect.any(String),
       updated_at: expect.any(String),
+    });
+  });
+
+  it('validates external structured output before marking a step submitted', async () => {
+    tables.nodes = [
+      node({
+        id: targetNodeId,
+        name: 'Score candidate',
+        prompt: 'Return the recommendation score.',
+        metadata: {
+          promptContract: {
+            version: 'node-prompt-contract.v1',
+            objective: 'Return a recommendation score.',
+            outputContract: {
+              format: 'json',
+              schema: {
+                type: 'object',
+                required: ['recommendation', 'score'],
+                additionalProperties: false,
+                properties: {
+                  recommendation: { type: 'string' },
+                  score: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+      }) as unknown as Record<string, unknown>,
+    ];
+    tables.evaluations = [];
+    const { submitExternalStepResultForActor } = await import('./external-runs');
+
+    await expect(
+      submitExternalStepResultForActor(submitActor, runId, targetStepId, {
+        contextVersion: 'ctx-target',
+        output: 'Recommendation: promote',
+        structuredOutput: { recommendation: 'promote' },
+      }),
+    ).rejects.toThrow('structuredOutput does not satisfy the node output contract');
+
+    expect(tables.external_run_steps.find((step) => step.id === targetStepId)).toMatchObject({
+      status: 'ready',
+      output: null,
+      structured_output: null,
+    });
+
+    const result = await submitExternalStepResultForActor(submitActor, runId, targetStepId, {
+      contextVersion: 'ctx-target',
+      output: 'Recommendation: promote',
+      structuredOutput: { recommendation: 'promote', score: 0.8 },
+      citations: [],
+    });
+
+    expect(result).toMatchObject({
+      status: 'submitted',
+      structuredOutput: { recommendation: 'promote', score: 0.8 },
+    });
+    expect(tables.external_run_steps.find((step) => step.id === targetStepId)).toMatchObject({
+      status: 'submitted',
+      output: 'Recommendation: promote',
+      structured_output: { recommendation: 'promote', score: 0.8 },
+    });
+    expect(tables.nodes[0]).toMatchObject({
+      output: 'Recommendation: promote',
+      structured_output: { recommendation: 'promote', score: 0.8 },
+      run_status: 'success',
     });
   });
 });

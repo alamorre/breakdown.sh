@@ -301,6 +301,7 @@ describe('/api/mcp Streamable HTTP route', () => {
     expect(submitProperties).toHaveProperty('stepId');
     expect(submitProperties).toHaveProperty('contextVersion');
     expect(submitProperties).toHaveProperty('output');
+    expect(submitProperties).toHaveProperty('structuredOutput');
   });
 
   it('advertises graph resources, resource templates, and workflow prompts', async () => {

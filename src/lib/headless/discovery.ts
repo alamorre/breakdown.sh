@@ -449,6 +449,9 @@ export function getOpenApiDocument(origin: string) {
                 nodeType: { type: 'string' },
                 prompt: { type: 'string' },
                 priorOutput: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                priorStructuredOutput: {
+                  oneOf: [{ type: 'object', additionalProperties: true }, { type: 'null' }],
+                },
                 metadata: { type: 'object', additionalProperties: true },
                 runStatus: { type: 'string' },
                 lastRunAt: { oneOf: [{ type: 'string' }, { type: 'null' }] },
@@ -459,6 +462,7 @@ export function getOpenApiDocument(origin: string) {
                 'nodeType',
                 'prompt',
                 'priorOutput',
+                'priorStructuredOutput',
                 'metadata',
                 'runStatus',
                 'lastRunAt',
@@ -475,6 +479,9 @@ export function getOpenApiDocument(origin: string) {
                     sourceNodeId: { type: 'string', format: 'uuid' },
                     sourceNodeName: { type: 'string' },
                     output: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                    structuredOutput: {
+                      oneOf: [{ type: 'object', additionalProperties: true }, { type: 'null' }],
+                    },
                     runStatus: { type: 'string' },
                     lastRunAt: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                     stale: { type: 'boolean' },
@@ -485,6 +492,18 @@ export function getOpenApiDocument(origin: string) {
                 },
               },
             },
+            executionPrompt: { type: 'string' },
+            promptContract: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                source: { type: 'string', enum: ['metadata', 'legacy-metadata', 'default'] },
+                contract: { type: 'object', additionalProperties: true },
+              },
+              required: ['source', 'contract'],
+            },
+            outputContract: { type: 'object', additionalProperties: true },
+            structuredOutputRequired: { type: 'boolean' },
             sourceFreshnessWarnings: {
               type: 'array',
               items: {
@@ -506,8 +525,9 @@ export function getOpenApiDocument(origin: string) {
                 submitRoute: { type: 'string' },
                 blockRoute: { type: 'string' },
                 requiredContextVersion: { type: 'string' },
+                requiredFields: { type: 'array', items: { type: 'string' } },
               },
-              required: ['submitRoute', 'blockRoute', 'requiredContextVersion'],
+              required: ['submitRoute', 'blockRoute', 'requiredContextVersion', 'requiredFields'],
             },
           },
           required: [
@@ -517,6 +537,10 @@ export function getOpenApiDocument(origin: string) {
             'contextVersion',
             'node',
             'upstream',
+            'executionPrompt',
+            'promptContract',
+            'outputContract',
+            'structuredOutputRequired',
             'sourceFreshnessWarnings',
             'expectedOutput',
             'acceptanceCriteria',
@@ -787,7 +811,7 @@ export function getOpenApiDocument(origin: string) {
           tags: ['Headless API'],
           summary: 'Claim next external work packet',
           description:
-            'Returns the next runnable external-evaluator step packet by default. The packet includes node prompt, upstream outputs grouped by edge type, freshness warnings, expected output, acceptance criteria, host-tool instructions, and submit/block routes.',
+            'Returns the next runnable external-evaluator step packet by default. The packet includes executionPrompt, outputContract, upstream text and structured outputs grouped by edge type, freshness warnings, expected output, acceptance criteria, host-tool instructions, and submit/block routes.',
           security: [{ bearerToken: [] }],
           parameters: [
             {
@@ -864,7 +888,7 @@ export function getOpenApiDocument(origin: string) {
           tags: ['Headless API'],
           summary: 'Submit external step result',
           description:
-            'Submit output using the contextVersion returned by next-step or step context.',
+            'Submit output, structuredOutput, and citations using the contextVersion returned by next-step or step context. structuredOutput is validated against the step outputContract before submission is accepted.',
           security: [{ bearerToken: [] }],
           parameters: [
             {

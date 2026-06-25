@@ -6,6 +6,7 @@ interface ExportedNode {
   name: string;
   prompt: string;
   output: string | null;
+  structuredOutput: Record<string, unknown> | null;
   position: { x: number; y: number };
 }
 
@@ -33,6 +34,7 @@ export function exportGraph(graph: Graph, nodes: CanvasNode[], edges: CanvasEdge
       name: n.data.breakdownNode.name,
       prompt: n.data.breakdownNode.prompt,
       output: n.data.breakdownNode.output,
+      structuredOutput: n.data.breakdownNode.structured_output ?? null,
       position: { x: n.position.x, y: n.position.y },
     })),
     edges: edges.map((e) => ({

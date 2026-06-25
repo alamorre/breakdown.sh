@@ -69,6 +69,7 @@ function toStatusNode(
     name: node.name,
     runStatus: overrides.runStatus ?? (node.run_status as RunStatus),
     output: overrides.output ?? node.output,
+    structuredOutput: overrides.structuredOutput ?? node.structured_output ?? null,
     summary: overrides.summary ?? getNodeSummary(node),
     lastRunAt: overrides.lastRunAt ?? node.last_run_at,
     error: overrides.error ?? node.run_error,
@@ -79,7 +80,12 @@ function mapSchedulerResultToNodeResult(
   result: {
     nodeId: string;
     status: 'success' | 'failed' | 'skipped' | 'cancelled';
-    result?: { output: string; summary?: string; lastRunAt: string };
+    result?: {
+      output: string;
+      structuredOutput?: Record<string, unknown> | null;
+      summary?: string;
+      lastRunAt: string;
+    };
     error: string | null;
     upstreamNodeIds: string[];
   },
@@ -90,6 +96,7 @@ function mapSchedulerResultToNodeResult(
       nodeId: result.nodeId,
       runStatus: 'success',
       output: result.result?.output,
+      structuredOutput: result.result?.structuredOutput,
       summary: result.result?.summary,
       lastRunAt: result.result?.lastRunAt,
       error: null,
@@ -183,7 +190,7 @@ export async function getGraphRunStatus(
 
     const { data: nodes, error: nodesError } = await supabase
       .from('nodes')
-      .select('id,name,run_status,run_error,last_run_at,output,metadata')
+      .select('id,name,run_status,run_error,last_run_at,output,structured_output,metadata')
       .eq('graph_id', graphId);
 
     if (nodesError) {
@@ -277,7 +284,12 @@ export async function runGraphWithScheduler(input: {
 
     const summary = await runDependencyAwareBatches<
       BreakdownNode,
-      { output: string; summary?: string; lastRunAt: string }
+      {
+        output: string;
+        structuredOutput?: Record<string, unknown> | null;
+        summary?: string;
+        lastRunAt: string;
+      }
     >({
       nodes,
       edges: runEdges,
@@ -314,6 +326,7 @@ export async function runGraphWithScheduler(input: {
             node: toStatusNode(node, {
               runStatus: mappedResult.runStatus,
               output: mappedResult.output,
+              structuredOutput: mappedResult.structuredOutput,
               summary: mappedResult.summary,
               lastRunAt: mappedResult.lastRunAt,
               error: mappedResult.error,

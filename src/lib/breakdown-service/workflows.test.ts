@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BreakdownActor } from './actor';
 import { BreakdownServiceError } from './errors';
 
-const { mockGetGraphForActor } = vi.hoisted(() => ({
+const { mockCreateServerClient, mockGetGraphForActor } = vi.hoisted(() => ({
+  mockCreateServerClient: vi.fn(),
   mockGetGraphForActor: vi.fn(),
+}));
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServerClient: mockCreateServerClient,
 }));
 
 vi.mock('./graphs', async (importOriginal) => {
@@ -19,6 +24,11 @@ const actor: BreakdownActor = {
   source: 'integration-token',
   scopes: ['graphs:read'],
   tokenId: '550e8400-e29b-41d4-a716-446655440000',
+};
+
+const writeActor: BreakdownActor = {
+  ...actor,
+  scopes: ['graphs:write'],
 };
 
 const graph = {
@@ -108,10 +118,54 @@ const graph = {
   ],
 };
 
+function createImportMockSupabase() {
+  const inserted: Record<string, Array<Record<string, unknown>>> = {
+    graphs: [],
+    nodes: [],
+    edges: [],
+    headless_audit_logs: [],
+  };
+  const importedGraphId = '77777777-7777-4777-8777-777777777777';
+  const importedNodeIds = [
+    '88888888-8888-4888-8888-888888888888',
+    '99999999-9999-4999-8999-999999999999',
+  ];
+  let nodeInsertIndex = 0;
+
+  const client = {
+    from: vi.fn((table: string) => {
+      const query = {
+        delete: vi.fn(() => query),
+        eq: vi.fn(() => query),
+        insert: vi.fn((payload: unknown) => {
+          const values = (Array.isArray(payload) ? payload : [payload]) as Array<
+            Record<string, unknown>
+          >;
+          inserted[table] = [...(inserted[table] ?? []), ...values];
+          return query;
+        }),
+        select: vi.fn(() => query),
+        single: vi.fn(async () => {
+          if (table === 'graphs') return { data: { id: importedGraphId }, error: null };
+          if (table === 'nodes') {
+            const id = importedNodeIds[nodeInsertIndex++];
+            return { data: { id }, error: null };
+          }
+          return { data: null, error: null };
+        }),
+      };
+      return query;
+    }),
+  };
+
+  return { client, inserted, importedGraphId };
+}
+
 describe('headless workflow helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetGraphForActor.mockResolvedValue(graph);
+    mockCreateServerClient.mockReturnValue(createImportMockSupabase().client);
   });
 
   it('exports graphs in the stable headless interchange shape', async () => {
@@ -183,5 +237,56 @@ describe('headless workflow helpers', () => {
     await expect(getWorkflowManifestForActor(actor, graph.id)).rejects.toThrow(
       BreakdownServiceError,
     );
+  });
+
+  it('defaults missing import LLM metadata before creating graphs', async () => {
+    const mockSupabase = createImportMockSupabase();
+    mockCreateServerClient.mockReturnValue(mockSupabase.client);
+    const { importGraphForActor } = await import('./workflows');
+
+    const result = await importGraphForActor(writeActor, {
+      mode: 'create',
+      graph: {
+        name: 'Imported smoke graph',
+        description: null,
+        llmProvider: null,
+        llmModel: null,
+      },
+      nodes: [
+        {
+          id: 'source-node',
+          name: 'Source',
+          nodeType: 'default',
+          prompt: 'Gather evidence',
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: 'target-node',
+          name: 'Target',
+          nodeType: 'default',
+          prompt: 'Analyze evidence',
+          position: { x: 200, y: 0 },
+        },
+      ],
+      edges: [
+        {
+          sourceNodeId: 'source-node',
+          targetNodeId: 'target-node',
+          edgeType: 'depends_on',
+        },
+      ],
+    });
+
+    expect(result.graphId).toBe(mockSupabase.importedGraphId);
+    expect(mockSupabase.inserted.graphs[0]).toMatchObject({
+      name: 'Imported smoke graph',
+      llm_provider: 'anthropic',
+      llm_model: 'claude-sonnet-4-6',
+    });
+    expect(mockSupabase.inserted.edges[0]).toMatchObject({
+      graph_id: mockSupabase.importedGraphId,
+      source_node_id: '88888888-8888-4888-8888-888888888888',
+      target_node_id: '99999999-9999-4999-8999-999999999999',
+    });
   });
 });

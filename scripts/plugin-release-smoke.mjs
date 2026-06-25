@@ -5,13 +5,14 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { delimiter, dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const DEFAULT_MARKETPLACE_REPO = 'alamorre/breakdown.sh';
 const DEFAULT_BASE_URL = 'https://www.breakdown.sh';
 const DEFAULT_MARKDOWN_OUTPUT = 'plugin-smoke-test.md';
+const CODEX_CLI_NPM_SPEC = '@openai/codex@0.142.2';
 const TOKEN_ENV_NAME = 'BREAKDOWN_RELEASE_TEST_TOKEN';
 const SECRET_REDACTION = '[REDACTED]';
 const RECOMMENDATIONS = new Set(['promote', 'promote-with-known-issues', 'block']);
@@ -186,6 +187,56 @@ function commandDisplay(command, args) {
   return [command, ...args].join(' ');
 }
 
+function hasCommandOnPath(command, env) {
+  const path = env.PATH ?? '';
+  const executableNames =
+    process.platform === 'win32' ? [command, `${command}.cmd`, `${command}.exe`] : [command];
+
+  return path
+    .split(delimiter)
+    .filter(Boolean)
+    .some((directory) =>
+      executableNames.some((name) => existsSync(resolve(directory, name))),
+    );
+}
+
+function codexCommand(args, env) {
+  if (hasCommandOnPath('codex', env)) {
+    return { command: 'codex', args };
+  }
+
+  return { command: 'npx', args: ['--yes', CODEX_CLI_NPM_SPEC, ...args] };
+}
+
+function hasLocalMarketplace(root) {
+  return (
+    existsSync(resolve(root, '.agents/plugins')) &&
+    existsSync(resolve(root, 'plugins/breakdown/.codex-plugin/plugin.json'))
+  );
+}
+
+function marketplaceAddCommand({ marketplaceRepo, candidateRef, env, localRoot = process.cwd() }) {
+  if (hasLocalMarketplace(localRoot)) {
+    return codexCommand(['plugin', 'marketplace', 'add', localRoot], env);
+  }
+
+  return codexCommand(
+    [
+      'plugin',
+      'marketplace',
+      'add',
+      marketplaceRepo,
+      '--ref',
+      candidateRef,
+      '--sparse',
+      '.agents/plugins',
+      '--sparse',
+      'plugins/breakdown',
+    ],
+    env,
+  );
+}
+
 async function runCommand(command, args, { cwd, env, secrets }) {
   const startedAt = Date.now();
   const display = commandDisplay(command, args);
@@ -246,22 +297,8 @@ async function installCandidate({ marketplaceRepo, candidateRef, token, secrets 
   };
 
   const commands = [
-    {
-      command: 'codex',
-      args: [
-        'plugin',
-        'marketplace',
-        'add',
-        marketplaceRepo,
-        '--ref',
-        candidateRef,
-        '--sparse',
-        '.agents/plugins',
-        '--sparse',
-        'plugins/breakdown',
-      ],
-    },
-    { command: 'codex', args: ['plugin', 'add', 'breakdown@breakdown'] },
+    marketplaceAddCommand({ marketplaceRepo, candidateRef, env }),
+    codexCommand(['plugin', 'add', 'breakdown@breakdown'], env),
   ];
 
   const results = [];
@@ -290,6 +327,8 @@ function tinyReleaseGraph({ candidateVersion, candidateRef }) {
     graph: {
       name: `Plugin release smoke ${candidateVersion}`,
       description: `Release-test graph for Breakdown plugin candidate ${candidateVersion} at ${candidateRef}.`,
+      llmProvider: 'anthropic',
+      llmModel: 'claude-sonnet-4-6',
     },
     nodes: [
       {
@@ -737,9 +776,7 @@ export async function runPluginReleaseSmoke(options) {
       friction: authFriction,
     },
     hosted,
-    newFeedback: hosted.ok
-      ? ['Manual smoke passed; run #108 baseline comparison before promotion.']
-      : ['Manual smoke failed; inspect structured JSON for the failed stage.'],
+    newFeedback: hosted.ok ? [] : ['Manual smoke failed; inspect structured JSON for the failed stage.'],
     regressions: [],
     recommendation,
   };

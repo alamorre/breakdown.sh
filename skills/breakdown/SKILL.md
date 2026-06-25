@@ -16,7 +16,8 @@ Breakdown is the workflow memory and DAG layer. The host agent console does the 
 
 - Node names should be short action phrases, such as `Fetch recent filings`, `Build bull case`, or `Compare valuation scenarios`.
 - Node prompts should say exactly what evidence, format, and caveats are expected.
-- Use node metadata for `acceptanceCriteria`, `expectedOutput`, `requiresCurrentData`, `suggestedHostTools`, and `hostToolInstructions`.
+- Use node metadata for `promptContract`, `acceptanceCriteria`, `expectedOutput`, `requiresCurrentData`, `suggestedHostTools`, and `hostToolInstructions`.
+- Prefer `promptContract.version = "node-prompt-contract.v1"` when a step needs a strict objective, method, citation policy, or structured output schema. Legacy metadata is still translated into a default contract.
 - Prefer edge types:
   - `depends_on` for hard prerequisites.
   - `inputs_to` for data or source material flowing into analysis.
@@ -45,15 +46,15 @@ Use `apply_graph_patch` with `dryRun: true`. Summarize added, updated, rewired, 
 ### follow_breakdown_graph
 
 1. Call `create_external_run`.
-2. Loop: `get_next_step`, then `get_step_context`.
-3. Perform the step in the current console. Use host tools/connectors when the context asks for fresh facts.
-4. Call `submit_step_result` with output, citations, structured summary, and the exact `contextVersion`.
+2. Loop: `get_next_step`, then `get_step_context` when refreshing or debugging the packet.
+3. Execute the returned `executionPrompt`. Use `outputContract` as the required structured-output schema and use host tools/connectors when the prompt asks for fresh facts.
+4. Call `submit_step_result` with `output`, `structuredOutput`, citations, optional structured summary, and the exact `contextVersion`.
 5. If blocked, call `mark_step_blocked` with the missing data/tool.
 6. Finalize with `finalize_external_run`.
 
 ### execute_step_with_host_tools
 
-For current data, use tools available in this console. For stock analysis, prefer current market-data/filing/news tools such as FMP if available. Submit citations/source notes and timestamps. If none are available, do not produce an investment conclusion from stale memory.
+For current data, use tools available in this console. For stock analysis, prefer current market-data/filing/news tools such as FMP if available. Submit citations/source notes and timestamps. If none are available, either mark the step blocked or include explicit `structuredOutput.dataGaps`; do not produce an investment conclusion from stale memory.
 
 ### summarize_graph_delta
 
