@@ -121,17 +121,17 @@ export default function McpPage() {
 
           <h2>Create A Durable Client Connection</h2>
           <p>
-            For persistent clients, create a named token in <Link href="/settings">Settings</Link>{' '}
-            under MCP Access, copy the raw <code>bdk_...</code> credential once, and store it in the
-            client or launcher secret store. The token remains valid until revoked, rotated, or
-            until its optional expiry.
+            For persistent clients, create a named client connection in{' '}
+            <Link href="/settings">Settings</Link>, copy the raw <code>bdk_...</code> credential
+            once, and store it in the client or launcher secret store. The token remains valid until
+            revoked, rotated, or until its optional expiry.
           </p>
           <p>
-            Use <code>https://www.breakdown.sh/api/mcp</code> as the server URL and send the token
-            as <code>Authorization: Bearer bdk_...</code>. Issue{' '}
-            <a href="https://github.com/alamorre/breakdown.sh/issues/116">#116</a> tracks a more
-            Zapier-like Connect page with client-specific snippets, copy-once credentials, and
-            rotation beside setup instructions.
+            The settings flow includes client-specific snippets for Codex, Claude, Cursor, OpenAI
+            API, and generic MCP clients. Prefer <code>Authorization: Bearer bdk_...</code> with
+            <code>https://www.breakdown.sh/api/mcp</code>. A full URL fallback with{' '}
+            <code>?access_token=...</code> is available for clients that cannot set headers, but it
+            is easier to leak through logs and history.
           </p>
 
           <h2>Create And Approve A Setup Session</h2>

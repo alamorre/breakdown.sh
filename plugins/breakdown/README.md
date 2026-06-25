@@ -23,13 +23,13 @@ or launcher secret store that starts Codex. The `bdk_...` token remains valid un
 rotated, or reaches an optional expiry.
 
 1. Sign in to Breakdown.
-2. Open `/settings` and use **MCP Access** to create a token named for the client, such as
-   `Codex Desktop`.
-3. Grant the scopes needed for the workflow.
-4. Copy the raw `bdk_...` token when it is shown. It is displayed once.
-5. Store it outside the repository in the user-level Codex/plugin secret store or launcher secret
+2. Open `/settings` and use **MCP Client Connections** under **MCP Access**.
+3. Choose Codex to load the client-specific snippet and default connection name.
+4. Grant the scopes needed for the workflow.
+5. Copy the raw `bdk_...` token when it is shown. It is displayed once.
+6. Store it outside the repository in the user-level Codex/plugin secret store or launcher secret
    store that starts Codex Desktop.
-6. Start a new Codex thread and run:
+7. Start a new Codex thread and run:
 
 ```bash
 diagnose_breakdown_setup
@@ -38,9 +38,9 @@ diagnose_breakdown_setup
 The diagnostic response should report `state: "ready"` and confirm external-evaluator tools such
 as `get_next_step`, `submit_step_result`, and `mark_step_blocked`.
 
-Issue [#116](https://github.com/alamorre/breakdown.sh/issues/116) tracks a more Zapier-like
-**Connect** page with client-specific snippets, copy-once credentials, last-used status, and
-rotation beside the setup instructions.
+The settings page keeps the setup snippets, last-used status, rotate/revoke actions, and URL
+fallback beside the named connection. Prefer the `Authorization: Bearer ...` header form; use the
+`?access_token=...` URL only for clients that cannot set headers.
 
 ## Agent-Native Setup Session
 
@@ -81,9 +81,9 @@ Advanced fallback locations:
   `BREAKDOWN_API_TOKEN`. Set it with PowerShell:
   `[Environment]::SetEnvironmentVariable('BREAKDOWN_API_TOKEN', 'bdk_your_token_here', 'User')`.
 
-Manual token creation in Breakdown settings under MCP Access is a supported durable setup path.
-Store raw tokens outside the repository, grant only the scopes needed for the session, and revoke or
-rotate plugin tokens from Settings under MCP Access when they are no longer needed.
+Manual connection creation in Breakdown settings under MCP Client Connections is a supported
+durable setup path. Store raw tokens outside the repository, grant only the scopes needed for the
+session, and revoke or rotate plugin tokens from Settings when they are no longer needed.
 
 ## MCP Surface
 

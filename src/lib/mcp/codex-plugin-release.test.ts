@@ -126,9 +126,14 @@ describe('Breakdown Codex plugin release package', () => {
     expect(combined).toContain('~/.config/environment.d/breakdown-codex.conf');
     expect(combined).toContain('HKEY_CURRENT_USER\\Environment');
     expect(combined).toContain('OAuth connector registration can be added later');
-    expect(combined).toContain('Revoke plugin tokens from Settings under MCP Access');
+    expect(combined).toContain(
+      'Revoke plugin connections from Settings under MCP Client Connections',
+    );
+    expect(combined).toContain('MCP Client Connections');
+    expect(combined).toContain('?access_token=...');
     expect(combined).toContain('do not edit and commit');
     expect(combined).toContain('http://localhost:3000/api/mcp');
+    expect(combined).not.toContain('github.com/alamorre/breakdown.sh/issues/116');
     expect(combined).not.toContain('public plugin path is not yet shipped');
     expect(combined).not.toContain('future public plugin path');
   });

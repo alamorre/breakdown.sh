@@ -50,16 +50,16 @@ store it in the client or launcher secret store that starts the MCP process. The
 the common hosted-MCP pattern used by tools such as Zapier: a stable server URL plus a client
 credential, with rotation/revocation handled from the service.
 
-Today, create the connection from Breakdown settings:
+Create the connection from Breakdown settings:
 
 1. Sign in to Breakdown.
-2. Open `/settings` and use **MCP Access** to create a token named for the client, such as
-   `Codex Desktop`.
-3. Grant the minimum scopes needed for the workflow.
-4. Copy the raw `bdk_...` token when it is shown. It is displayed once.
-5. Store it outside the repository in the user-level Codex/plugin secret store or launcher secret
+2. Open `/settings` and use **MCP Client Connections** under **MCP Access**.
+3. Choose Codex, Claude, Cursor, OpenAI API, or Other to load the client-specific snippet.
+4. Grant the minimum scopes needed for the workflow.
+5. Copy the raw `bdk_...` token when it is shown. It is displayed once.
+6. Store it outside the repository in the user-level Codex/plugin secret store or launcher secret
    store that starts Codex Desktop.
-6. Run `diagnose_breakdown_setup` from Codex and confirm `state: "ready"`.
+7. Run `diagnose_breakdown_setup` from Codex and confirm `state: "ready"`.
 
 Use the hosted Streamable HTTP MCP endpoint with bearer authentication:
 
@@ -73,9 +73,9 @@ Set `BREAKDOWN_API_TOKEN` to the copied `bdk_...` token in the environment or se
 the MCP client. Do not store raw tokens in repo-local `.codex/config.toml`, committed files, issue
 comments, or chat. Revoke or rotate client tokens from Settings under **MCP Access**.
 
-Issue [#116](https://github.com/alamorre/breakdown.sh/issues/116) tracks a more Zapier-like
-**Connect** experience with client-specific snippets, copy-once credentials, last-used status, and
-rotation beside the setup instructions.
+Settings also shows last-used status, rotate/revoke actions, and a full URL fallback using
+`?access_token=...` for clients that cannot set headers. Prefer the header form because URLs are
+easier to leak through logs, browser history, and shell history.
 
 ## Agent-Native Setup Session
 
@@ -191,8 +191,8 @@ Recommended scopes:
 | External evaluator runs | `graphs:read`, `runs:external_execute`, `runs:write_results`                                 |
 | Full graph operations   | `graphs:read`, `graphs:write`, `runs:execute`, `runs:external_execute`, `runs:write_results` |
 
-Revoke or rotate plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or
-unknown tokens are reported separately by `diagnose_breakdown_setup` and
+Revoke or rotate plugin connections from Settings under MCP Client Connections. Revoked, missing,
+malformed, or unknown tokens are reported separately by `diagnose_breakdown_setup` and
 `GET https://www.breakdown.sh/api/integrations/codex/diagnostics`.
 
 ## Connection Check

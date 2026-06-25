@@ -33,14 +33,20 @@ export async function resolveClerkActor(
   };
 }
 
-function readBearerToken(request: Request): string {
+export function readBearerToken(request: Request): string {
   const header = request.headers.get('authorization') ?? '';
   const match = header.match(/^Bearer\s+(.+)$/i);
-  if (!match?.[1]) {
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get('access_token') ?? url.searchParams.get('token');
+  if (!queryToken) {
     throw new BreakdownServiceError('unauthorized', 'Missing bearer token', 401);
   }
 
-  return match[1].trim();
+  return queryToken.trim();
 }
 
 export async function resolveHeadlessActor(

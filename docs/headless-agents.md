@@ -69,9 +69,10 @@ OpenAI API, or another MCP-capable client directly.
 
 1. Sign in to Breakdown.
 2. Open `/settings`.
-3. Use **MCP Access** to create a token named for the client.
-4. Copy the raw token when it is shown. It is displayed once.
-5. Configure the MCP client with `https://www.breakdown.sh/api/mcp` and bearer authentication.
+3. Use **MCP Client Connections** under **MCP Access**.
+4. Choose Codex, Claude, Cursor, OpenAI API, or Other to load the client-specific snippet.
+5. Copy the raw token when it is shown. It is displayed once.
+6. Configure the MCP client with `https://www.breakdown.sh/api/mcp` and bearer authentication.
 
 ```toml
 [mcp_servers.breakdown]
@@ -82,9 +83,9 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"
 Raw tokens are never shown again after creation. Rotate or revoke the token from Settings under
 **MCP Access** if it is exposed, lost, no longer needed, or missing required scopes.
 
-Issue [#116](https://github.com/alamorre/breakdown.sh/issues/116) tracks a richer Zapier-style
-Connect flow with client-specific snippets, copy-once credentials, last-used status, and rotation
-beside the setup instructions.
+Settings keeps client-specific snippets, copy-once credentials, last-used status, and rotation
+beside the named connection. It also shows a `?access_token=...` URL fallback for clients that
+cannot set headers; prefer bearer headers because URLs are easier to leak.
 
 ### Agent-Native Setup
 
