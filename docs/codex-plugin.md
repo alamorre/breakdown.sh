@@ -207,6 +207,9 @@ base branch and fails if plugin release files changed without a strictly higher 
 bumped version is only a release candidate until the PR passes release testing and is promoted; this
 step does not create a tag or update the promoted smoke-test baseline.
 
+For the phone-first release workflow, command syntax, promotion gate, baseline update, and
+regression triage, see `docs/plugin-release-loop.md`.
+
 ## MCP Surface
 
 The plugin exposes hosted MCP tools for:
