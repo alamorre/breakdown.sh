@@ -1,0 +1,240 @@
+name: Plugin Release Test
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: plugin-release-test-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  release-test:
+    name: Release Test
+    if: >
+      (github.event_name == 'pull_request_target' && github.event.label.name == 'release-test') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/release-test'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout workflow helpers
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Resolve release-test request
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+
+          actor_permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${GITHUB_ACTOR}/permission" --jq '.permission' 2>/dev/null || echo none)"
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+
+          RELEASE_TEST_ACTOR_PERMISSION="${actor_permission}" \
+          RELEASE_TEST_ALLOWED_REPOSITORY="${GITHUB_REPOSITORY}" \
+          RELEASE_TEST_PULL_REQUEST="${pr_json}" \
+          node scripts/plugin-release-test-request.mjs
+
+      - name: Stop when no release test was requested
+        if: steps.request.outputs.should_run != 'true'
+        run: echo "${{ steps.request.outputs.skip_reason }}"
+
+      - name: Prepare release-test artifacts
+        if: steps.request.outputs.should_run == 'true'
+        env:
+          TESTED_REF: ${{ steps.request.outputs.tested_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-test-artifacts
+          cat > release-test-artifacts/plugin-smoke-test.md <<'REPORT'
+          # Plugin smoke test
+
+          The workflow did not reach the candidate smoke runner.
+          REPORT
+          cat > release-test-artifacts/plugin-smoke-test.json <<REPORT
+          {
+            "testedRef": "${TESTED_REF}",
+            "recommendation": "block",
+            "authFriction": "Not reported",
+            "regressions": [],
+            "nextActions": ["Open the workflow logs, fix the setup failure, then rerun /release-test."]
+          }
+          REPORT
+
+      - name: Checkout candidate ref
+        if: steps.request.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.request.outputs.checkout_repository }}
+          ref: ${{ steps.request.outputs.checkout_ref }}
+          path: candidate
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup pnpm
+        if: steps.request.outputs.should_run == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+          run_install: false
+
+      - name: Restore pnpm cache
+        if: steps.request.outputs.should_run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: candidate/pnpm-lock.yaml
+
+      - name: Read candidate plugin version
+        if: steps.request.outputs.should_run == 'true'
+        id: candidate
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          candidate_version="$(node -e "const fs = require('node:fs'); const manifest = JSON.parse(fs.readFileSync('plugins/breakdown/.codex-plugin/plugin.json', 'utf8')); process.stdout.write(manifest.version);")"
+          echo "candidate_version=${candidate_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install candidate dependencies
+        if: steps.request.outputs.should_run == 'true'
+        id: dependencies
+        continue-on-error: true
+        working-directory: candidate
+        run: pnpm install --frozen-lockfile
+
+      - name: Run candidate smoke test
+        if: steps.request.outputs.should_run == 'true'
+        id: smoke
+        continue-on-error: true
+        working-directory: candidate
+        env:
+          BREAKDOWN_RELEASE_TEST_TOKEN: ${{ secrets.BREAKDOWN_RELEASE_TEST_TOKEN }}
+          BREAKDOWN_API_TOKEN: ${{ secrets.BREAKDOWN_RELEASE_TEST_TOKEN }}
+          PR_NUMBER: ${{ steps.request.outputs.pr_number }}
+          TESTED_REF: ${{ steps.request.outputs.tested_ref }}
+          CANDIDATE_VERSION: ${{ steps.candidate.outputs.candidate_version }}
+          MARKETPLACE_REPO: ${{ github.repository }}
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ../release-test-artifacts
+
+          if [ "${DEPENDENCIES_OUTCOME}" != "success" ]; then
+            cat > ../release-test-artifacts/plugin-smoke-test.md <<'REPORT'
+          # Plugin smoke test
+
+          Candidate dependency installation failed before the smoke runner started.
+          REPORT
+            cat > ../release-test-artifacts/plugin-smoke-test.json <<REPORT
+          {
+            "candidateVersion": "${CANDIDATE_VERSION}",
+            "testedRef": "${TESTED_REF}",
+            "recommendation": "block",
+            "authFriction": "Not reported",
+            "regressions": [],
+            "nextActions": ["Fix candidate dependency installation, then rerun /release-test."]
+          }
+          REPORT
+            exit 1
+          fi
+
+          if [ -n "${BREAKDOWN_RELEASE_TEST_TOKEN:-}" ]; then
+            echo "::add-mask::${BREAKDOWN_RELEASE_TEST_TOKEN}"
+          else
+            cat > ../release-test-artifacts/plugin-smoke-test.md <<'REPORT'
+          # Plugin smoke test
+
+          BREAKDOWN_RELEASE_TEST_TOKEN is not configured for this repository or environment.
+          REPORT
+            cat > ../release-test-artifacts/plugin-smoke-test.json <<'REPORT'
+          {
+            "recommendation": "block",
+            "authFriction": "BREAKDOWN_RELEASE_TEST_TOKEN is not configured.",
+            "regressions": [],
+            "nextActions": ["Add BREAKDOWN_RELEASE_TEST_TOKEN as a repository or environment secret, then rerun /release-test."]
+          }
+          REPORT
+            exit 1
+          fi
+
+          if [ ! -f scripts/plugin-release-smoke.mjs ]; then
+            cat > ../release-test-artifacts/plugin-smoke-test.md <<'REPORT'
+          # Plugin smoke test
+
+          `scripts/plugin-release-smoke.mjs` is not present on the tested candidate ref yet.
+          REPORT
+            cat > ../release-test-artifacts/plugin-smoke-test.json <<REPORT
+          {
+            "candidateVersion": "${CANDIDATE_VERSION}",
+            "testedRef": "${TESTED_REF}",
+            "recommendation": "block",
+            "authFriction": "Release-test token was provided to the workflow.",
+            "regressions": [],
+            "nextActions": ["Add scripts/plugin-release-smoke.mjs, then rerun /release-test."]
+          }
+          REPORT
+            exit 1
+          fi
+
+          node scripts/plugin-release-smoke.mjs \
+            --pr "${PR_NUMBER}" \
+            --ref "${TESTED_REF}" \
+            --candidate-version "${CANDIDATE_VERSION}" \
+            --marketplace-repo "${MARKETPLACE_REPO}" \
+            --output ../release-test-artifacts/plugin-smoke-test.md \
+            --json-output ../release-test-artifacts/plugin-smoke-test.json \
+            --baseline docs/plugin-release-tests/latest.json
+
+      - name: Upload release-test artifacts
+        if: steps.request.outputs.should_run == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-release-test-pr-${{ steps.request.outputs.pr_number }}-${{ github.run_id }}
+          path: release-test-artifacts
+          if-no-files-found: warn
+
+      - name: Build PR comment
+        if: steps.request.outputs.should_run == 'true' && always()
+        id: comment
+        env:
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          node scripts/plugin-release-test-comment.mjs \
+            --json release-test-artifacts/plugin-smoke-test.json \
+            --markdown release-test-artifacts/plugin-smoke-test.md \
+            --output release-test-comment.md \
+            --smoke-status "${{ steps.smoke.outcome }}" \
+            --pr-number "${{ steps.request.outputs.pr_number }}" \
+            --tested-ref "${{ steps.request.outputs.tested_ref }}" \
+            --candidate-version "${{ steps.candidate.outputs.candidate_version }}" \
+            --workflow-url "${WORKFLOW_URL}"
+
+      - name: Post PR comment
+        if: steps.request.outputs.should_run == 'true' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ steps.request.outputs.pr_number }}" --body-file release-test-comment.md
+
+      - name: Fail when smoke test failed
+        if: steps.request.outputs.should_run == 'true' && steps.smoke.outcome != 'success'
+        run: exit 1
