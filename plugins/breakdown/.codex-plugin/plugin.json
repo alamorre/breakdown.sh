@@ -1,6 +1,6 @@
 {
   "name": "breakdown",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Connect Codex to hosted breakdown.sh reasoning graphs, scoped MCP tools, and external-evaluator runs.",
   "author": {
     "name": "breakdown.sh",
@@ -23,7 +23,12 @@
     "longDescription": "Breakdown connects Codex to hosted reasoning graphs through durable scoped Streamable HTTP MCP access, graph resources, patch previews, internal runs, and external-evaluator workflows where Codex performs each step and writes results back.",
     "developerName": "breakdown.sh",
     "category": "Productivity",
-    "capabilities": ["MCP", "Resources", "Workflow", "Write"],
+    "capabilities": [
+      "MCP",
+      "Resources",
+      "Workflow",
+      "Write"
+    ],
     "websiteURL": "https://www.breakdown.sh",
     "privacyPolicyURL": "https://www.breakdown.sh/privacy",
     "termsOfServiceURL": "https://www.breakdown.sh/terms-of-service",
