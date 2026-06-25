@@ -21,6 +21,7 @@
     "secrets:check": "node scripts/check-env.mjs",
     "plugin:version": "node scripts/plugin-version.mjs",
     "plugin:version:check": "node scripts/plugin-version-guard.mjs",
+    "plugin:release:command": "node scripts/plugin-release-command.mjs",
     "headless:token": "node scripts/create-integration-token.mjs",
     "headless:smoke": "node scripts/headless-external-run-smoke.mjs",
     "headless:verify": "node scripts/headless-interface-verify.mjs"
