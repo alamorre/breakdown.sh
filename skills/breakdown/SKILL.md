@@ -45,6 +45,9 @@ Use `apply_graph_patch` with `dryRun: true`. Summarize added, updated, rewired, 
 
 ### follow_breakdown_graph
 
+0. Run `diagnose_breakdown_setup` when available. If it reports `missing_token`, start or explain
+   the durable MCP token/setup-session path and wait for the user-approved credential; do not
+   describe a local analysis as a completed Breakdown run.
 1. Call `create_external_run`.
 2. Loop: `get_next_step`, then `get_step_context` when refreshing or debugging the packet.
 3. Execute the returned `executionPrompt`. Use `outputContract` as the required structured-output schema and use host tools/connectors when the prompt asks for fresh facts.
@@ -55,6 +58,9 @@ Use `apply_graph_patch` with `dryRun: true`. Summarize added, updated, rewired, 
 ### execute_step_with_host_tools
 
 For current data, use tools available in this console. For stock analysis, prefer current market-data/filing/news tools such as FMP if available. Submit citations/source notes and timestamps. If none are available, either mark the step blocked or include explicit `structuredOutput.dataGaps`; do not produce an investment conclusion from stale memory.
+
+Authentication gaps are different from data gaps. If Breakdown is reachable but missing a bearer
+token, set up or request the durable MCP credential first, then retry the graph run.
 
 ### summarize_graph_delta
 

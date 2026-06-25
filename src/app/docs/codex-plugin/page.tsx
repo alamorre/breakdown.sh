@@ -8,7 +8,7 @@ import { DocsProse } from '@/components/docs/DocsProse';
 export const metadata: Metadata = {
   title: 'Codex Plugin | breakdown.sh',
   description:
-    'Install the Breakdown Codex plugin, approve persistent setup, and verify hosted MCP access.',
+    'Install the Breakdown Codex plugin, configure durable MCP access, and verify hosted MCP access.',
 };
 
 const integrationPaths = [
@@ -82,10 +82,10 @@ export default function CodexPluginDocsPage() {
           <h1 className="mt-4 text-3xl font-semibold tracking-normal">Codex Plugin</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
             Install the Breakdown Codex plugin to connect Codex to hosted reasoning graphs through
-            human-approved setup sessions and scoped Streamable HTTP MCP. Hosted OAuth connector
-            registration can be added later if marketplace distribution requires it; setup sessions
-            keep Git marketplace, local checkout, Codex Desktop, and self-hosted paths consistent
-            today.
+            durable scoped Streamable HTTP MCP credentials and human-approved setup sessions. Hosted
+            OAuth connector registration can be added later if marketplace distribution requires it;
+            durable <code>bdk_...</code> tokens keep Git marketplace, local checkout, Codex Desktop,
+            and self-hosted paths consistent today.
           </p>
         </header>
 
@@ -157,13 +157,48 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
         </div>
 
         <DocsProse className="mt-8">
-          <h2>One-Time Persistent Setup</h2>
+          <h2>Recommended Hosted MCP Connection</h2>
           <p>
-            Use the approval-session path as the default. It avoids raw-token copy/paste in chat and
-            gives Codex a setup URL, user code, exchange URL, and setup secret. Persist the
-            exchanged token in the user-level Codex plugin authentication store or launcher secret
-            store that starts Codex Desktop. Do not store tokens in repo-local{' '}
-            <code>.codex/config.toml</code>, committed files, issue comments, or chat.
+            Create a named Breakdown MCP connection once, copy the credential once, and store it in
+            the client or launcher secret store that starts Codex. The resulting{' '}
+            <code>bdk_...</code> token is durable until revoked, rotated, or until an optional
+            expiry.
+          </p>
+          <ol>
+            <li>Sign in to Breakdown.</li>
+            <li>
+              Open <Link href="/settings">Settings</Link> and use MCP Access to create a token named
+              for the client.
+            </li>
+            <li>Grant the minimum scopes needed for the workflow.</li>
+            <li>Copy the raw token when it is shown. It is displayed once.</li>
+            <li>
+              Store it outside the repository in the user-level Codex/plugin secret store or
+              launcher secret store that starts Codex Desktop.
+            </li>
+            <li>
+              Run <code>diagnose_breakdown_setup</code> and confirm{' '}
+              <code>state: &quot;ready&quot;</code>.
+            </li>
+          </ol>
+          <CodeBlock>{`[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
+          <p>
+            Set <code>BREAKDOWN_API_TOKEN</code> to the copied <code>bdk_...</code> token in the
+            environment or secret store used by the MCP client. Do not store raw tokens in
+            repo-local <code>.codex/config.toml</code>, committed files, issue comments, or chat.
+            Revoke or rotate client tokens from Settings under MCP Access. Issue{' '}
+            <a href="https://github.com/alamorre/breakdown.sh/issues/116">#116</a> tracks a more
+            Zapier-like Connect experience with client-specific snippets and copy-once credentials.
+          </p>
+
+          <h2>Agent-Native Setup Session</h2>
+          <p>
+            Use the approval-session path when an agent can start setup from inside the MCP client
+            and the user can approve in the browser. The setup session is short-lived, but the
+            exchanged <code>bdk_...</code> token is a normal integration token: it remains valid
+            until revoked, rotated, or until its optional expiry.
           </p>
           <ol>
             <li>Install the plugin from Git and start a new Codex thread.</li>
@@ -189,10 +224,10 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
   -H "Content-Type: application/json" \\
   -d '{"clientName":"Codex","providerName":"OpenAI"}'`}</CodeBlock>
           <p>
-            Manual token creation from <Link href="/settings">Settings</Link> under MCP Access is
-            available as an advanced fallback. Raw tokens are shown once; store them outside the
-            repository and never commit them. If a client cannot persist plugin auth yet, set{' '}
-            <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
+            If <code>diagnose_breakdown_setup</code> reports <code>missing_token</code>, create a
+            durable MCP connection from Settings or create and approve an agent setup session. Do
+            not treat <code>missing_token</code> as permission to simulate a Breakdown run outside
+            Breakdown unless the user explicitly asks for that fallback.
           </p>
 
           <h3>Advanced Fallback: OS-Level Token Storage</h3>
@@ -412,9 +447,10 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           </p>
           <p>
             <code>{'state: "missing_token"'}</code> means the client reached Breakdown without an
-            approved token. Create and approve a setup session, then persist the exchanged token in
-            the user-level Codex or launcher secret store. Use <code>BREAKDOWN_API_TOKEN</code> only
-            as an advanced fallback for clients without persistent plugin auth.
+            bearer token. Create a durable MCP connection token from Settings under MCP Access, or
+            create and approve an agent setup session, then persist the resulting token in the
+            user-level Codex or launcher secret store. If the client cannot persist plugin auth yet,
+            set <code>BREAKDOWN_API_TOKEN</code> in the environment that starts Codex.
           </p>
           <p>
             <code>{'state: "invalid_token"'}</code>, <code>{'state: "revoked_token"'}</code>, or{' '}
