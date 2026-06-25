@@ -140,6 +140,24 @@ function readFlexibleArray(report, paths) {
   return [];
 }
 
+function promotedMetricValues(report) {
+  if (Array.isArray(report?.metrics)) {
+    const metrics = {};
+    for (const metric of report.metrics) {
+      if (!metric || typeof metric !== 'object' || typeof metric.key !== 'string') continue;
+      if (!Object.hasOwn(metric, 'candidate')) continue;
+      metrics[metric.key] = metric.candidate;
+    }
+    return Object.keys(metrics).length > 0 ? metrics : null;
+  }
+
+  if (report?.metrics && typeof report.metrics === 'object') {
+    return report.metrics;
+  }
+
+  return null;
+}
+
 export function normalizeReleaseReport(report) {
   const recommendation = readFlexibleString(report, [
     ['recommendation'],
@@ -251,8 +269,9 @@ export function buildPromotedBaseline({
     throw new Error(promotion.message);
   }
 
-  return {
+  const baseline = {
     schemaVersion: 1,
+    generatedAt: promotedAt,
     promotedAt,
     promotedBy: actor,
     pullRequest: pr,
@@ -261,7 +280,7 @@ export function buildPromotedBaseline({
     candidate: {
       version: promotion.normalized.candidateVersion,
       ref: promotion.normalized.testedRef,
-      sha: promotion.normalized.testedSha,
+      sha: promotion.normalized.testedSha ?? sha,
     },
     previousBaseline: {
       version: promotion.normalized.baselineVersion,
@@ -272,6 +291,10 @@ export function buildPromotedBaseline({
     regressions: promotion.normalized.regressions,
     newFeedback: promotion.normalized.newFeedback,
   };
+  const metrics = promotedMetricValues(report);
+  if (metrics) baseline.metrics = metrics;
+
+  return baseline;
 }
 
 function regressionTitle(regression, index) {

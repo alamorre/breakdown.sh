@@ -112,6 +112,7 @@ describe('plugin release phone command helper', () => {
       }),
     ).toMatchObject({
       schemaVersion: 1,
+      generatedAt: '2026-06-25T00:00:00.000Z',
       promotedBy: 'maintainer',
       pullRequest: '123',
       candidate: {
@@ -120,6 +121,34 @@ describe('plugin release phone command helper', () => {
         sha: 'abc123',
       },
       recommendation: 'promote',
+    });
+  });
+
+  it('preserves promoted comparison metrics for the next baseline', () => {
+    const baseline = releaseCommand.buildPromotedBaseline({
+      report: {
+        recommendation: 'promote',
+        candidate: { version: '1.1.0', ref: 'abc123' },
+        metrics: [
+          { key: 'install_success', candidate: true },
+          { key: 'elapsed_ms', candidate: 12000 },
+          {
+            key: 'mcp_surface',
+            candidate: { success: true, tools: ['list_graphs'], missingTools: [] },
+          },
+        ],
+      },
+      sha: 'abc123',
+      promotedAt: '2026-06-25T00:00:00.000Z',
+    });
+
+    expect(baseline).toMatchObject({
+      candidate: { version: '1.1.0', ref: 'abc123', sha: 'abc123' },
+      metrics: {
+        install_success: true,
+        elapsed_ms: 12000,
+        mcp_surface: { success: true, tools: ['list_graphs'], missingTools: [] },
+      },
     });
   });
 
