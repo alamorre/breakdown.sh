@@ -1,11 +1,24 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-23T00:00:00.000Z",
+  "generatedAt": "2026-06-25T19:22:46.543Z",
+  "promotedAt": "2026-06-25T19:22:46.543Z",
+  "promotedBy": null,
+  "pullRequest": "115",
+  "sourceSha": "d862f3bfc1c73084273e1210813a5ec56187a0de",
+  "reportPath": "docs/plugin-release-tests/latest-candidate.json",
   "candidate": {
-    "version": "1.0.0",
-    "ref": "main",
-    "pr": ""
+    "version": "1.1.0",
+    "ref": "d862f3bfc1c73084273e1210813a5ec56187a0de",
+    "sha": "d862f3bfc1c73084273e1210813a5ec56187a0de"
   },
+  "previousBaseline": {
+    "version": "1.0.0",
+    "ref": "main"
+  },
+  "recommendation": "promote",
+  "acceptedKnownIssues": false,
+  "regressions": [],
+  "newFeedback": [],
   "metrics": {
     "install_success": true,
     "auth_friction": "low",
@@ -13,22 +26,30 @@
       "success": true,
       "tools": [
         "apply_graph_patch",
+        "cancel_run",
+        "connect_nodes",
         "create_external_run",
         "create_graph",
         "create_node",
         "delete_edge",
         "delete_graph",
         "delete_node",
+        "diagnose_breakdown_setup",
+        "export_graph",
+        "finalize_external_run",
         "get_graph",
         "get_next_step",
         "get_run_status",
         "get_step_context",
         "get_workflow_manifest",
         "import_graph",
+        "import_graph_and_create_external_run",
         "list_graphs",
+        "mark_step_blocked",
         "run_graph",
         "run_node",
         "submit_step_result",
+        "summarize_run_delta",
         "update_edge",
         "update_graph",
         "update_node"
@@ -41,15 +62,11 @@
       "readSuccess": true
     },
     "external_run_success": true,
-    "setup_steps": 7,
-    "elapsed_ms": 120000,
+    "setup_steps": 2,
+    "elapsed_ms": 10797,
     "docs_ambiguity": {
       "count": 0,
       "items": []
     }
-  },
-  "newFeedback": [],
-  "notes": [
-    "Seeded baseline for release-test comparison. Replace with the latest promoted smoke summary after the first promoted candidate."
-  ]
+  }
 }

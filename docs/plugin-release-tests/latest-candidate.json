@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-25T19:22:46.337Z",
+  "candidate": {
+    "version": "1.1.0",
+    "ref": "d862f3bfc1c73084273e1210813a5ec56187a0de",
+    "pr": "115"
+  },
+  "baseline": {
+    "version": "1.0.0",
+    "ref": "main",
+    "generatedAt": "2026-06-23T00:00:00.000Z"
+  },
+  "recommendation": "promote",
+  "metrics": [
+    {
+      "key": "install_success",
+      "label": "Install success",
+      "baseline": true,
+      "candidate": true,
+      "status": "same",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    },
+    {
+      "key": "auth_friction",
+      "label": "Auth friction",
+      "baseline": "low",
+      "candidate": "low",
+      "status": "same",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    },
+    {
+      "key": "mcp_surface",
+      "label": "MCP surface",
+      "baseline": {
+        "success": true,
+        "tools": [
+          "apply_graph_patch",
+          "create_external_run",
+          "create_graph",
+          "create_node",
+          "delete_edge",
+          "delete_graph",
+          "delete_node",
+          "get_graph",
+          "get_next_step",
+          "get_run_status",
+          "get_step_context",
+          "get_workflow_manifest",
+          "import_graph",
+          "list_graphs",
+          "run_graph",
+          "run_node",
+          "submit_step_result",
+          "update_edge",
+          "update_graph",
+          "update_node"
+        ],
+        "resources": [],
+        "missingTools": []
+      },
+      "candidate": {
+        "success": true,
+        "tools": [
+          "apply_graph_patch",
+          "cancel_run",
+          "connect_nodes",
+          "create_external_run",
+          "create_graph",
+          "create_node",
+          "delete_edge",
+          "delete_graph",
+          "delete_node",
+          "diagnose_breakdown_setup",
+          "export_graph",
+          "finalize_external_run",
+          "get_graph",
+          "get_next_step",
+          "get_run_status",
+          "get_step_context",
+          "get_workflow_manifest",
+          "import_graph",
+          "import_graph_and_create_external_run",
+          "list_graphs",
+          "mark_step_blocked",
+          "run_graph",
+          "run_node",
+          "submit_step_result",
+          "summarize_run_delta",
+          "update_edge",
+          "update_graph",
+          "update_node"
+        ],
+        "resources": [],
+        "missingTools": []
+      },
+      "status": "improved",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": "Candidate adds: cancel_run, connect_nodes, diagnose_breakdown_setup, export_graph, finalize_external_run, import_graph_and_create_external_run, mark_step_blocked, summarize_run_delta."
+    },
+    {
+      "key": "graph_access",
+      "label": "Graph access",
+      "baseline": {
+        "listSuccess": true,
+        "readSuccess": true
+      },
+      "candidate": {
+        "listSuccess": true,
+        "readSuccess": true
+      },
+      "status": "same",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    },
+    {
+      "key": "external_run_success",
+      "label": "External run success",
+      "baseline": true,
+      "candidate": true,
+      "status": "same",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    },
+    {
+      "key": "setup_steps",
+      "label": "Setup steps",
+      "baseline": 7,
+      "candidate": 2,
+      "status": "improved",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    },
+    {
+      "key": "elapsed_ms",
+      "label": "Elapsed time",
+      "baseline": 120000,
+      "candidate": 10797,
+      "status": "improved",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    },
+    {
+      "key": "docs_ambiguity",
+      "label": "Docs ambiguity",
+      "baseline": {
+        "count": 0,
+        "items": []
+      },
+      "candidate": {
+        "count": 0,
+        "items": []
+      },
+      "status": "same",
+      "severity": "info",
+      "acceptedKnownIssue": null,
+      "details": ""
+    }
+  ],
+  "regressions": [],
+  "newFeedback": [],
+  "acceptedKnownIssues": [],
+  "comparedKeys": [
+    "install_success",
+    "auth_friction",
+    "mcp_surface",
+    "graph_access",
+    "external_run_success",
+    "setup_steps",
+    "elapsed_ms",
+    "docs_ambiguity"
+  ]
+}
