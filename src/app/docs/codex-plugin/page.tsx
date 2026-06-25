@@ -167,8 +167,12 @@ codex plugin add breakdown@breakdown`}</CodeBlock>
           <ol>
             <li>Sign in to Breakdown.</li>
             <li>
-              Open <Link href="/settings">Settings</Link> and use MCP Access to create a token named
-              for the client.
+              Open <Link href="/settings">Settings</Link> and use MCP Client Connections under MCP
+              Access.
+            </li>
+            <li>
+              Choose Codex, Claude, Cursor, OpenAI API, or Other to load the client-specific
+              snippet.
             </li>
             <li>Grant the minimum scopes needed for the workflow.</li>
             <li>Copy the raw token when it is shown. It is displayed once.</li>
@@ -188,9 +192,9 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
             Set <code>BREAKDOWN_API_TOKEN</code> to the copied <code>bdk_...</code> token in the
             environment or secret store used by the MCP client. Do not store raw tokens in
             repo-local <code>.codex/config.toml</code>, committed files, issue comments, or chat.
-            Revoke or rotate client tokens from Settings under MCP Access. Issue{' '}
-            <a href="https://github.com/alamorre/breakdown.sh/issues/116">#116</a> tracks a more
-            Zapier-like Connect experience with client-specific snippets and copy-once credentials.
+            Revoke or rotate client tokens from Settings under MCP Access. Settings also shows
+            last-used status and a full URL fallback with <code>?access_token=...</code> for clients
+            that cannot set headers; prefer bearer headers because URLs are easier to leak.
           </p>
 
           <h2>Agent-Native Setup Session</h2>
@@ -306,8 +310,9 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.p
 
         <DocsProse className="mt-8">
           <p>
-            Revoke plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or
-            unknown tokens are reported separately by <code>diagnose_breakdown_setup</code> and{' '}
+            Revoke plugin connections from Settings under MCP Client Connections. Revoked, missing,
+            malformed, or unknown tokens are reported separately by{' '}
+            <code>diagnose_breakdown_setup</code> and{' '}
             <code>GET /api/integrations/codex/diagnostics</code>.
           </p>
 

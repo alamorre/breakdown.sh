@@ -48,6 +48,7 @@ let POST: typeof import('./route').POST;
 let PATCH: typeof import('./[tokenId]/route').PATCH;
 let DELETE: typeof import('./[tokenId]/route').DELETE;
 let HARD_DELETE: typeof import('./[tokenId]/hard-delete/route').DELETE;
+let ROTATE: typeof import('./[tokenId]/rotate/route').POST;
 
 const safeRecord = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -76,11 +77,13 @@ describe('/api/integrations/headless-tokens', () => {
     const route = await import('./route');
     const revokeRoute = await import('./[tokenId]/route');
     const hardDeleteRoute = await import('./[tokenId]/hard-delete/route');
+    const rotateRoute = await import('./[tokenId]/rotate/route');
     GET = route.GET;
     POST = route.POST;
     PATCH = revokeRoute.PATCH;
     DELETE = revokeRoute.DELETE;
     HARD_DELETE = hardDeleteRoute.DELETE;
+    ROTATE = rotateRoute.POST;
   });
 
   beforeEach(() => {
@@ -211,6 +214,49 @@ describe('/api/integrations/headless-tokens', () => {
       { userId: 'user_123' },
       { tokenId: safeRecord.id },
     );
+  });
+
+  it('rotates a named client connection and returns the replacement raw token once', async () => {
+    const rotatedRecord = {
+      ...safeRecord,
+      id: '550e8400-e29b-41d4-a716-446655440111',
+      token_prefix: 'bdk_rotated',
+      created_at: '2026-06-04T00:00:00Z',
+    };
+    mockMintIntegrationToken.mockResolvedValueOnce({
+      token: 'bdk_rotated_secret',
+      record: rotatedRecord,
+    });
+
+    const response = await ROTATE(new Request('http://localhost'), {
+      params: Promise.resolve({ tokenId: safeRecord.id }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockListIntegrationTokens).toHaveBeenCalledWith(expect.anything(), 'user_123');
+    expect(mockMintIntegrationToken).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_123',
+      name: 'Preview MCP',
+      scopes: ['graphs:read', 'graphs:write'],
+      purpose: 'mcp_client',
+      createdByUserId: 'user_123',
+      expiresAt: null,
+    });
+    expect(mockRevokeIntegrationToken).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: 'user_123' },
+      { tokenId: safeRecord.id },
+    );
+    expect(body).toMatchObject({
+      token: 'bdk_rotated_secret',
+      rotatedTokenId: safeRecord.id,
+      record: {
+        id: rotatedRecord.id,
+        tokenPrefix: 'bdk_rotated',
+      },
+    });
+    expect(body.record).not.toHaveProperty('token_hash');
   });
 
   it('renames a token for the signed-in user', async () => {

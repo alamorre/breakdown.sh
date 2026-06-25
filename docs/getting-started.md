@@ -25,7 +25,7 @@ Codex plugin packaging.
 1. Start in your own repo, terminal, or agent console.
 2. Read public discovery metadata from `GET /api` or
    `GET /api/integrations/headless-onboarding`.
-3. Use a durable token from `/settings` -> **MCP Access**, or create an agent setup session.
+3. Use a durable connection from `/settings` -> **MCP Access** -> **MCP Client Connections**, or create an agent setup session.
 4. For setup sessions, ask the signed-in human to open the approval URL and verify the setup code.
 5. Exchange the approved setup secret for a scoped `bdk_...` token.
 6. Persist the token in the host client or user-level launcher secret store that starts the agent.
@@ -56,7 +56,7 @@ curl "$EXCHANGE_URL" \
 ```
 
 Use the response token in the host client or user-level launcher secret store. For direct client
-setup, create the token in `/settings` -> **MCP Access** and copy it once. `BREAKDOWN_API_TOKEN` is
+setup, create the connection in `/settings` -> **MCP Access** -> **MCP Client Connections** and copy it once. `BREAKDOWN_API_TOKEN` is
 the supported environment variable for clients that cannot persist plugin auth directly.
 
 For Codex Desktop fallback setup, put the MCP server reference in `~/.codex/config.toml` on
@@ -95,7 +95,7 @@ state. `missing_token`, `invalid_token`, `revoked_token`, `expired_token`, and `
 reported separately.
 
 `401 Missing bearer token` means the request reached Breakdown but did not include a token. Create a
-durable token from `/settings` -> **MCP Access**, or create and approve a setup session, exchange it
+durable connection from `/settings` -> **MCP Access** -> **MCP Client Connections**, or create and approve a setup session, exchange it
 for a `bdk_...` token, and persist it before retrying. It does not mean the agent should clone this
 repository.
 

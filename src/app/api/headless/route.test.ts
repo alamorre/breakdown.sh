@@ -23,6 +23,7 @@ describe('/api/headless discovery', () => {
       authentication: {
         type: 'bearer',
         header: 'Authorization: Bearer <bdk_token>',
+        queryParameter: 'access_token',
       },
       onboarding: {
         metadataUrl: 'https://breakdown.example/api/integrations/headless-onboarding',

@@ -76,8 +76,8 @@ export default function GettingStartedPage() {
               <code>GET /api/integrations/headless-onboarding</code>.
             </li>
             <li>
-              Use a durable token from MCP Access in <code>/settings</code>, or create an agent
-              setup session.
+              Use a durable connection from MCP Client Connections in <code>/settings</code>, or
+              create an agent setup session.
             </li>
             <li>
               For setup sessions, ask the signed-in human to open the approval URL and verify the
@@ -105,12 +105,13 @@ export default function GettingStartedPage() {
             </li>
           </ol>
 
-          <h2>Create A Durable Client Token</h2>
+          <h2>Create A Durable Client Connection</h2>
           <p>
             For persistent clients, sign in to Breakdown, open{' '}
-            <Link href="/settings">Settings</Link>, and use MCP Access to create a token named for
-            the client. Copy the raw <code>bdk_...</code> token when it is shown; it is displayed
-            once. The token remains valid until revoked, rotated, or until its optional expiry.
+            <Link href="/settings">Settings</Link>, and use MCP Client Connections under MCP Access
+            to create a named connection for the client. Copy the raw <code>bdk_...</code> token
+            when it is shown; it is displayed once. The token remains valid until revoked, rotated,
+            or until its optional expiry.
           </p>
 
           <h2>Create A Setup Session</h2>
@@ -174,9 +175,10 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           </p>
           <p>
             <code>401 Missing bearer token</code> means the request reached Breakdown but did not
-            include a token. Create a durable token from MCP Access in <code>/settings</code>, or
-            create and approve a setup session, exchange it for a <code>bdk_...</code> token, and
-            persist it before retrying. It does not mean the agent should clone this repository.
+            include a token. Create a durable connection from MCP Client Connections in{' '}
+            <code>/settings</code>, or create and approve a setup session, exchange it for a{' '}
+            <code>bdk_...</code> token, and persist it before retrying. It does not mean the agent
+            should clone this repository.
           </p>
           <p>
             For MCP details, scopes, tool names, and REST metadata, see{' '}
