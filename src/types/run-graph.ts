@@ -4,6 +4,7 @@ export interface RunGraphNodeResult {
   nodeId: string;
   runStatus: RunStatus;
   output?: string | null;
+  structuredOutput?: Record<string, unknown> | null;
   summary?: string;
   lastRunAt?: string | null;
   error: string | null;
@@ -36,6 +37,7 @@ export interface RunGraphStatusNode {
   name: string;
   runStatus: RunStatus;
   output?: string | null;
+  structuredOutput?: Record<string, unknown> | null;
   summary?: string;
   lastRunAt?: string | null;
   error: string | null;

@@ -34,6 +34,7 @@ export const updateNodeSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   prompt: z.string().max(50000).optional(),
   output: z.string().max(250000).nullable().optional(),
+  structuredOutput: jsonRecordSchema.nullable().optional(),
   nodeType: z.string().min(1).max(80).optional(),
   metadata: jsonRecordSchema.optional(),
   positionX: z.number().optional(),
@@ -150,6 +151,7 @@ export const importGraphSchema = z.object({
       nodeType: z.string().min(1).max(80).default('default'),
       prompt: z.string().max(50000).default(''),
       output: z.string().max(250000).nullable().optional(),
+      structuredOutput: jsonRecordSchema.nullable().optional(),
       metadata: jsonRecordSchema.default({}),
       runStatus: z
         .enum(['idle', 'queued', 'running', 'success', 'error', 'skipped', 'cancelled'])
@@ -181,6 +183,7 @@ export const createExternalRunSchema = z.object({
 export const submitExternalStepResultSchema = z.object({
   contextVersion: z.string().min(1).max(128),
   output: z.string().min(1).max(250000),
+  structuredOutput: jsonRecordSchema.optional(),
   structuredSummary: jsonRecordSchema.optional(),
   citations: z
     .array(

@@ -19,13 +19,13 @@ Evaluate a selected Breakdown node or graph by using the existing graph runner, 
 
 2. **Gather upstream context**
    - Read the graph with its nodes and edges.
-   - For each inbound edge, collect the source node name, output, edge type, and freshness state.
-   - Use `src/lib/ai/build-prompt.ts` for prompt composition when adding app-side runner behavior.
+   - For each inbound edge, collect the source node name, output, structured output, edge type, and freshness state.
+   - Use `src/lib/ai/prompt-contract.ts` for prompt-contract composition when adding app-side runner behavior.
 
 3. **Choose the execution path**
    - UI/internal execution: call `runNode` or `runGraph` through server actions or `src/lib/breakdown-service`.
    - MCP execution: use `run_node`, `run_graph`, `create_external_run`, `get_next_step`, `get_step_context`, and `submit_step_result`.
-   - External-evaluator execution: perform the step in Codex with available tools, then write the result and citations back to Breakdown.
+   - External-evaluator execution: execute the returned `executionPrompt` in Codex with available tools, then write `output`, `structuredOutput`, and citations back to Breakdown.
 
 4. **Show proposed changes**
    - Summarize previous output, new output, citations, blocked data gaps, and downstream impact.
@@ -33,9 +33,10 @@ Evaluate a selected Breakdown node or graph by using the existing graph runner, 
    - Ask before destructive actions such as delete, replace import, destructive patch apply, or run cancellation.
 
 5. **Persist through supported APIs**
-   - Use `submit_step_result` for external-run outputs.
-   - Use `mark_step_blocked` when required current data or host tools are unavailable.
-   - Avoid manual Supabase edits unless the task is explicitly a migration or repair.
+
+- Use `submit_step_result` for external-run outputs. Include `structuredOutput` matching the packet's `outputContract`.
+  - Use `mark_step_blocked` when required current data or host tools are unavailable.
+  - Avoid manual Supabase edits unless the task is explicitly a migration or repair.
 
 ## Rules
 

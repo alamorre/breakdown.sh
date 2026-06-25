@@ -232,6 +232,25 @@ still ask before deleting graphs, deleting nodes or edges, replacing imports, ap
 patches, or cancelling active runs. Use `apply_graph_patch` with `dryRun=true` before applying
 graph mutations.
 
+## Prompt Contracts
+
+External-evaluator packets from `get_next_step` and `get_step_context` include an
+`executionPrompt`, `promptContract`, `outputContract`, and submission requirements. Agents should
+execute `executionPrompt` rather than the raw node prompt, then submit both the display `output`
+and a machine-readable `structuredOutput` that matches `outputContract.schema`.
+
+Nodes may define a strict `metadata.promptContract` with `version:
+"node-prompt-contract.v1"`, `objective`, optional `role`, `method`, `toolPolicy`,
+`acceptanceCriteria`, `citationRequirements`, and an `outputContract` JSON schema. Legacy metadata
+fields such as `expectedOutput`, `acceptanceCriteria`, `requiresCurrentData`,
+`suggestedHostTools`, and `hostToolInstructions` are translated into a domain-neutral default
+contract for older graphs.
+
+When current data or external sources are required, agents must provide citations with source
+metadata or include explicit `structuredOutput.dataGaps`. The server validates explicit contract
+payloads before marking a step submitted and stores validated structured payloads separately from
+the human-readable node output for downstream prompts.
+
 ## Verify The Plugin
 
 After installation, start a fresh Codex thread and ask it to run `diagnose_breakdown_setup`, then

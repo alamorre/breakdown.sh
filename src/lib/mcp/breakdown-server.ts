@@ -286,6 +286,7 @@ export function createBreakdownMcpServer(
         name: z.string().min(1).max(200).optional(),
         prompt: z.string().max(50000).optional(),
         output: z.string().max(250000).nullable().optional(),
+        structuredOutput: jsonRecord.nullable().optional(),
         nodeType: z.string().max(80).optional(),
         metadata: jsonRecord.optional(),
         positionX: z.number().optional(),
@@ -557,12 +558,13 @@ export function createBreakdownMcpServer(
     {
       title: 'Submit External Step Result',
       description:
-        'Submit externally-produced output and citations for a step. This writes to Breakdown history.',
+        'Submit externally-produced output, structuredOutput, and citations for a step. This writes to Breakdown history after contract validation.',
       inputSchema: {
         ...runInput,
         stepId: uuid,
         contextVersion: z.string().min(1),
         output: z.string().min(1).max(250000),
+        structuredOutput: jsonRecord.optional(),
         structuredSummary: jsonRecord.optional(),
         citations: z.array(jsonRecord).default([]),
         clientName: z.string().max(100).optional(),
@@ -759,7 +761,7 @@ export function createBreakdownMcpServer(
     },
     ({ graphId }) =>
       promptText(
-        `Use Breakdown graph ${graphId} in external-evaluator mode. Create an external run, claim each step with get_next_step, perform the work from the returned packet using available tools/connectors, submit outputs with citations, and finalize the run.`,
+        `Use Breakdown graph ${graphId} in external-evaluator mode. Create an external run, claim each step with get_next_step, execute the returned executionPrompt using available tools/connectors, then submit output, structuredOutput matching outputContract, and citations with the exact contextVersion. If required inputs or current data are unavailable, mark the step blocked or submit explicit data gaps instead of fabricating facts. Finalize the run when no runnable steps remain.`,
       ),
   );
 

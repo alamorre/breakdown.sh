@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { formatSourceAge, isStaleSourceNode } from '@/lib/graph/source-freshness';
+import {
+  buildNodeExecutionPrompt,
+  fallbackStructuredOutput,
+  validateNodeStructuredOutput,
+  type NodeExecutionUpstreamInput,
+  type NodePromptContract,
+  type PromptContractSource,
+} from '@/lib/ai/prompt-contract';
 import type { BreakdownNode } from '@/types/node';
 import type { BreakdownEdge } from '@/types/edge';
 import type { BreakdownActor } from './actor';
@@ -52,6 +60,7 @@ interface ExternalRunStepRecord {
   status: ExternalRunStepStatus;
   context_version: string;
   output: string | null;
+  structured_output: Record<string, unknown> | null;
   structured_summary: Record<string, unknown> | null;
   citations: unknown[];
   blocked_reason: string | null;
@@ -77,11 +86,19 @@ interface ExternalStepWorkPacket {
     nodeType: string;
     prompt: string;
     priorOutput: string | null;
+    priorStructuredOutput: Record<string, unknown> | null;
     metadata: Record<string, unknown>;
     runStatus: BreakdownNode['run_status'];
     lastRunAt: string | null;
   };
   upstream: Record<string, Array<Record<string, unknown>>>;
+  executionPrompt: string;
+  promptContract: {
+    source: PromptContractSource;
+    contract: NodePromptContract;
+  };
+  outputContract: NodePromptContract['outputContract'];
+  structuredOutputRequired: boolean;
   sourceFreshnessWarnings: Array<{
     nodeId: string;
     name: string;
@@ -94,6 +111,7 @@ interface ExternalStepWorkPacket {
     submitRoute: string;
     blockRoute: string;
     requiredContextVersion: string;
+    requiredFields: string[];
   };
 }
 
@@ -135,6 +153,7 @@ function contextVersionForNode(input: {
     upstreamNodes: input.upstreamNodes.map((node) => ({
       id: node.id,
       output: node.output,
+      structuredOutput: node.structured_output ?? null,
       runStatus: node.run_status,
       lastRunAt: node.last_run_at,
       updatedAt: node.updated_at,
@@ -275,15 +294,17 @@ async function buildExternalStepWorkPacket(input: {
     .filter((candidate): candidate is BreakdownNode => Boolean(candidate));
   const sourceById = new Map(sourceNodes.map((sourceNode) => [sourceNode.id, sourceNode]));
   const upstreamByEdgeType: Record<string, Array<Record<string, unknown>>> = {};
+  const upstreamInputs: NodeExecutionUpstreamInput[] = [];
 
   for (const edge of inboundEdges) {
     const sourceNode = sourceById.get(edge.source_node_id);
     const group = upstreamByEdgeType[edge.edge_type] ?? [];
-    group.push({
+    const upstreamEntry = {
       edgeId: edge.id,
       sourceNodeId: edge.source_node_id,
       sourceNodeName: sourceNode?.name ?? 'Unknown node',
       output: sourceNode?.output ?? null,
+      structuredOutput: sourceNode?.structured_output ?? null,
       runStatus: sourceNode?.run_status ?? 'unknown',
       lastRunAt: sourceNode?.last_run_at ?? null,
       stale: sourceNode ? isStaleSourceNode(sourceNode) : false,
@@ -293,9 +314,34 @@ async function buildExternalStepWorkPacket(input: {
           : null,
       condition: edge.condition,
       transform: edge.transform,
-    });
+    };
+    group.push(upstreamEntry);
     upstreamByEdgeType[edge.edge_type] = group;
+    upstreamInputs.push({
+      edgeId: edge.id,
+      sourceNodeId: edge.source_node_id,
+      nodeName: sourceNode?.name ?? 'Unknown node',
+      nodeOutput: sourceNode?.output ?? null,
+      structuredOutput: sourceNode?.structured_output ?? null,
+      edgeType: edge.edge_type,
+      condition: edge.condition,
+      transform: edge.transform,
+      runStatus: sourceNode?.run_status ?? 'unknown',
+      lastRunAt: sourceNode?.last_run_at ?? null,
+      stale: sourceNode ? isStaleSourceNode(sourceNode) : false,
+      freshnessWarning:
+        sourceNode && isStaleSourceNode(sourceNode)
+          ? `${sourceNode.name} is ${formatSourceAge(sourceNode.last_run_at)}. Refresh or cite current data before relying on it.`
+          : null,
+    });
   }
+
+  const promptContext = buildNodeExecutionPrompt({
+    node,
+    inboundEdges,
+    upstreamInputs,
+    mode: 'external',
+  });
 
   let claimedStatus = step.status;
   if (markInProgress && step.status === 'ready') {
@@ -322,11 +368,19 @@ async function buildExternalStepWorkPacket(input: {
       nodeType: node.node_type,
       prompt: node.prompt,
       priorOutput: node.output,
+      priorStructuredOutput: node.structured_output ?? null,
       metadata: node.metadata,
       runStatus: node.run_status,
       lastRunAt: node.last_run_at,
     },
     upstream: upstreamByEdgeType,
+    executionPrompt: promptContext.executionPrompt,
+    promptContract: {
+      source: promptContext.contractSource,
+      contract: promptContext.contract,
+    },
+    outputContract: promptContext.outputContract,
+    structuredOutputRequired: promptContext.structuredOutputRequired,
     sourceFreshnessWarnings: sourceNodes
       .filter((sourceNode) => isStaleSourceNode(sourceNode))
       .map((sourceNode) => ({
@@ -345,6 +399,7 @@ async function buildExternalStepWorkPacket(input: {
       submitRoute: `/api/headless/external-runs/${run.id}/steps/${step.id}/result`,
       blockRoute: `/api/headless/external-runs/${run.id}/steps/${step.id}/block`,
       requiredContextVersion: step.context_version,
+      requiredFields: ['contextVersion', 'output', 'structuredOutput', 'citations'],
     },
   };
 }
@@ -557,6 +612,28 @@ export async function submitExternalStepResultForActor(
   const node = nodeData as BreakdownNode;
   const previousOutput = node.output;
   const lastRunAt = new Date().toISOString();
+  const promptContext = buildNodeExecutionPrompt({ node, mode: 'external' });
+  const structuredOutput =
+    parsed.structuredOutput ??
+    (promptContext.structuredOutputRequired
+      ? null
+      : fallbackStructuredOutput(
+          parsed.output,
+          parsed.citations as Array<Record<string, unknown>>,
+        ));
+  const validation = validateNodeStructuredOutput({
+    contract: promptContext.contract,
+    structuredOutput,
+    citations: parsed.citations as Array<Record<string, unknown>>,
+  });
+  if (!validation.ok) {
+    throw new BreakdownServiceError(
+      'validation_error',
+      `structuredOutput does not satisfy the node output contract: ${validation.errors.join('; ')}`,
+      400,
+      { errors: validation.errors, outputContract: promptContext.outputContract },
+    );
+  }
 
   const metadata = {
     ...node.metadata,
@@ -567,6 +644,7 @@ export async function submitExternalStepResultForActor(
       providerName: parsed.providerName ?? run.provider_name,
       submittedAt: lastRunAt,
       citations: parsed.citations,
+      structuredOutput,
       structuredSummary: parsed.structuredSummary ?? null,
     },
   };
@@ -576,6 +654,7 @@ export async function submitExternalStepResultForActor(
     .update({
       status: 'submitted',
       output: parsed.output,
+      structured_output: structuredOutput,
       structured_summary: parsed.structuredSummary ?? null,
       citations: parsed.citations,
       submitted_by_source: actor.source,
@@ -594,6 +673,7 @@ export async function submitExternalStepResultForActor(
     .from('nodes')
     .update({
       output: parsed.output,
+      structured_output: structuredOutput,
       metadata,
       run_status: 'success',
       run_error: null,
@@ -640,6 +720,7 @@ export async function submitExternalStepResultForActor(
     stepId: step.id,
     nodeId: node.id,
     status: 'submitted',
+    structuredOutput,
     lastRunAt,
   };
 }

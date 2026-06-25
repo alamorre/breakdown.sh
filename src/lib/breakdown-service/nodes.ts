@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { buildRunPrompt, buildSummaryPrompt, type UpstreamInput } from '@/lib/ai/build-prompt';
+import { buildSummaryPrompt } from '@/lib/ai/build-prompt';
+import {
+  buildNodeExecutionPrompt,
+  fallbackStructuredOutput,
+  parseStructuredOutputFromText,
+  validateNodeStructuredOutput,
+  type NodeExecutionUpstreamInput,
+} from '@/lib/ai/prompt-contract';
 import { getSummaryModelId, resolveAiModelSelection } from '@/lib/ai/models';
 import {
   getAiProviderCredentialsSetupError,
@@ -124,6 +131,7 @@ export async function updateNodeForActor(
   if (parsed.name !== undefined) updates.name = parsed.name;
   if (parsed.prompt !== undefined) updates.prompt = parsed.prompt;
   if (parsed.output !== undefined) updates.output = parsed.output;
+  if (parsed.structuredOutput !== undefined) updates.structured_output = parsed.structuredOutput;
   if (parsed.nodeType !== undefined) updates.node_type = parsed.nodeType;
   if (parsed.metadata !== undefined) updates.metadata = parsed.metadata;
   if (parsed.positionX !== undefined) updates.position_x = parsed.positionX;
@@ -324,6 +332,7 @@ export async function runNodeForActor(
   input: z.input<typeof runNodeSchema>,
 ): Promise<{
   output: string;
+  structuredOutput?: Record<string, unknown> | null;
   summary?: string;
   lastRunAt: string;
   metadata?: Record<string, unknown>;
@@ -363,7 +372,7 @@ export async function runNodeForActor(
   }
 
   const typedEdges = (inboundEdges ?? []) as BreakdownEdge[];
-  const upstreamInputs: UpstreamInput[] = [];
+  const upstreamInputs: NodeExecutionUpstreamInput[] = [];
 
   if (typedEdges.length > 0) {
     const sourceIds = typedEdges.map((edge) => edge.source_node_id);
@@ -402,9 +411,16 @@ export async function runNodeForActor(
       }
 
       upstreamInputs.push({
+        edgeId: edge.id,
+        sourceNodeId: sourceNode.id,
         nodeName: sourceNode.name,
         nodeOutput: sourceNode.output,
+        structuredOutput: sourceNode.structured_output ?? null,
         edgeType: edge.edge_type,
+        condition: edge.condition,
+        transform: edge.transform,
+        runStatus: sourceNode.run_status,
+        lastRunAt: sourceNode.last_run_at,
       });
     }
 
@@ -451,7 +467,13 @@ export async function runNodeForActor(
     .eq('id', parsed.nodeId);
 
   const previousOutput = typedNode.output;
-  const prompt = buildRunPrompt(typedNode.prompt, upstreamInputs);
+  const promptContext = buildNodeExecutionPrompt({
+    node: typedNode,
+    inboundEdges: typedEdges,
+    upstreamInputs,
+    mode: 'internal',
+  });
+  const prompt = promptContext.executionPrompt;
 
   try {
     const response = await createAiCompletion({
@@ -465,6 +487,26 @@ export async function runNodeForActor(
     });
 
     const output = response.output;
+    const parsedStructuredOutput =
+      parseStructuredOutputFromText(output) ??
+      (promptContext.structuredOutputRequired ? null : fallbackStructuredOutput(output));
+    const structuredCitations = Array.isArray(parsedStructuredOutput?.citations)
+      ? parsedStructuredOutput.citations.filter(
+          (citation): citation is Record<string, unknown> =>
+            typeof citation === 'object' && citation !== null && !Array.isArray(citation),
+        )
+      : [];
+    const validation = validateNodeStructuredOutput({
+      contract: promptContext.contract,
+      structuredOutput: parsedStructuredOutput,
+      citations: structuredCitations,
+    });
+    if (!validation.ok) {
+      throw new Error(
+        `Node output did not satisfy output contract: ${validation.errors.join('; ')}`,
+      );
+    }
+    const structuredOutput = parsedStructuredOutput;
     let summary: string | undefined;
     try {
       const summaryResponse = await createAiCompletion({
@@ -486,6 +528,7 @@ export async function runNodeForActor(
       .from('nodes')
       .update({
         output,
+        structured_output: structuredOutput,
         metadata: updatedMetadata,
         run_status: 'success',
         run_error: null,
@@ -520,7 +563,7 @@ export async function runNodeForActor(
       responseSummary: { modelId: executionModel, providerId },
     });
 
-    return { output, summary, lastRunAt };
+    return { output, structuredOutput, summary, lastRunAt };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error during AI evaluation';
 

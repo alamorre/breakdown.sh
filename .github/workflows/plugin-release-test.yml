@@ -119,6 +119,15 @@ jobs:
         working-directory: candidate
         run: pnpm install --frozen-lockfile
 
+      - name: Install Codex CLI
+        if: steps.request.outputs.should_run == 'true'
+        id: codex_cli
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm install -g @openai/codex@0.142.2
+          codex --version
+
       - name: Run candidate smoke test
         if: steps.request.outputs.should_run == 'true'
         id: smoke
@@ -132,6 +141,7 @@ jobs:
           CANDIDATE_VERSION: ${{ steps.candidate.outputs.candidate_version }}
           MARKETPLACE_REPO: ${{ github.repository }}
           DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+          CODEX_CLI_OUTCOME: ${{ steps.codex_cli.outcome }}
         run: |
           set -euo pipefail
 
@@ -151,6 +161,25 @@ jobs:
             "authFriction": "Not reported",
             "regressions": [],
             "nextActions": ["Fix candidate dependency installation, then rerun /release-test."]
+          }
+          REPORT
+            exit 1
+          fi
+
+          if [ "${CODEX_CLI_OUTCOME}" != "success" ]; then
+            cat > ../release-test-artifacts/plugin-smoke-test.md <<'REPORT'
+          # Plugin smoke test
+
+          Codex CLI installation failed before the smoke runner started.
+          REPORT
+            cat > ../release-test-artifacts/plugin-smoke-test.json <<REPORT
+          {
+            "candidateVersion": "${CANDIDATE_VERSION}",
+            "testedRef": "${TESTED_REF}",
+            "recommendation": "block",
+            "authFriction": "Codex CLI installation failed before candidate install.",
+            "regressions": [],
+            "nextActions": ["Fix Codex CLI installation in the release-test workflow, then rerun /release-test."]
           }
           REPORT
             exit 1

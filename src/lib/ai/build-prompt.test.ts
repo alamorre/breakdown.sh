@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { buildRunPrompt } from '@/lib/ai/build-prompt';
 
 describe('buildRunPrompt', () => {
-  it('should return prompt as-is when no upstream inputs', () => {
+  it('wraps a standalone prompt in the default execution contract', () => {
     const result = buildRunPrompt('Analyze this data', []);
-    expect(result).toBe('Analyze this data');
+    expect(result).toContain('# Breakdown Node Execution Prompt');
+    expect(result).toContain('Analyze this data');
+    expect(result).toContain('## Output Contract');
+    expect(result).toContain('structuredOutput');
   });
 
   it('should include single upstream input with edge type', () => {
@@ -16,9 +19,10 @@ describe('buildRunPrompt', () => {
       },
     ]);
 
-    expect(result).toContain('[SUPPORTS] From "Market Data"');
+    expect(result).toContain('Input 1: Market Data');
+    expect(result).toContain('Edge type: supports');
     expect(result).toContain('Prices are rising 5% YoY');
-    expect(result).toContain('Your task:\nSummarize the findings');
+    expect(result).toContain('Summarize the findings');
   });
 
   it('should include multiple upstream inputs separated by dividers', () => {
@@ -35,12 +39,13 @@ describe('buildRunPrompt', () => {
       },
     ]);
 
-    expect(result).toContain('[SUPPORTS] From "Pro Analysis"');
+    expect(result).toContain('Input 1: Pro Analysis');
     expect(result).toContain('Strong growth potential');
-    expect(result).toContain('[CONTRADICTS] From "Risk Assessment"');
+    expect(result).toContain('Input 2: Risk Assessment');
+    expect(result).toContain('Edge type: contradicts');
     expect(result).toContain('High volatility expected');
     expect(result).toContain('---');
-    expect(result).toContain('Your task:\nMake a decision');
+    expect(result).toContain('Make a decision');
   });
 
   it('should handle depends_on edge type', () => {
@@ -52,7 +57,8 @@ describe('buildRunPrompt', () => {
       },
     ]);
 
-    expect(result).toContain('[DEPENDS_ON] From "Assumption Node"');
+    expect(result).toContain('Input 1: Assumption Node');
+    expect(result).toContain('Edge type: depends_on');
     expect(result).toContain('Interest rates stay low');
   });
 
@@ -65,7 +71,8 @@ describe('buildRunPrompt', () => {
       },
     ]);
 
-    expect(result).toContain('[INPUTS_TO] From "Pending Node"');
+    expect(result).toContain('Input 1: Pending Node');
+    expect(result).toContain('Edge type: inputs_to');
     expect(result).toContain('[not yet run]');
   });
 });
