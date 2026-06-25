@@ -23,6 +23,9 @@ Evaluate a selected Breakdown node or graph by using the existing graph runner, 
    - Use `src/lib/ai/prompt-contract.ts` for prompt-contract composition when adding app-side runner behavior.
 
 3. **Choose the execution path**
+   - First run `diagnose_breakdown_setup` when it is available. If it reports `missing_token`,
+     create or explain the durable MCP connection/setup-session path and wait for approval or a
+     token; do not present a local simulation as a completed Breakdown run.
    - UI/internal execution: call `runNode` or `runGraph` through server actions or `src/lib/breakdown-service`.
    - MCP execution: use `run_node`, `run_graph`, `create_external_run`, `get_next_step`, `get_step_context`, and `submit_step_result`.
    - External-evaluator execution: execute the returned `executionPrompt` in Codex with available tools, then write `output`, `structuredOutput`, and citations back to Breakdown.
@@ -37,6 +40,8 @@ Evaluate a selected Breakdown node or graph by using the existing graph runner, 
 - Use `submit_step_result` for external-run outputs. Include `structuredOutput` matching the packet's `outputContract`.
   - Use `mark_step_blocked` when required current data or host tools are unavailable.
   - Avoid manual Supabase edits unless the task is explicitly a migration or repair.
+  - A missing bearer token is an authentication setup task, not permission to bypass Breakdown. Use
+    the durable MCP token path or agent setup session, then retry the run.
 
 ## Rules
 

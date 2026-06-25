@@ -63,7 +63,15 @@ function missingTokenDiagnostics() {
       agentSetupSessionsUrl: endpoint('/api/integrations/agent-setup-sessions'),
       diagnosticsUrl: endpoint('/api/integrations/codex/diagnostics'),
       mcpUrl: endpoint('/api/mcp'),
-      advancedFallback: `Set ${TOKEN_ENV_VAR} in the environment that starts Codex.`,
+      nextSteps: [
+        'Create a durable MCP connection token from Breakdown Settings under MCP Access, or create and approve an agent setup session.',
+        `Set ${TOKEN_ENV_VAR} in the environment or secret store that starts the MCP client.`,
+        `Run ${DIAGNOSTIC_TOOL} again to verify the token and scopes.`,
+      ],
+      durableConnection:
+        'A bdk token remains valid until revoked, rotated, or until its optional expiry.',
+      agentSetup:
+        'Agent setup sessions are short-lived approval ceremonies that exchange into the same durable bdk token type.',
     },
   };
 }

@@ -18,7 +18,8 @@ self-hosting it, or testing Codex plugin packaging.
    GET https://www.breakdown.sh/api/integrations/headless-onboarding
    ```
 
-3. Create an agent setup session:
+3. Connect with a durable `bdk_...` token from `/settings` -> **MCP Access**, or create an agent
+   setup session when the agent should initiate browser approval:
 
    ```bash
    curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
@@ -27,15 +28,17 @@ self-hosting it, or testing Codex plugin packaging.
    ```
 
 4. Ask the signed-in human to open the returned approval URL and verify the setup code.
-5. Exchange the approved setup secret for a scoped `bdk_...` token.
+5. Exchange the approved setup secret for a scoped `bdk_...` token when using an agent setup
+   session.
 6. Connect MCP at `https://www.breakdown.sh/api/mcp` or REST under
    `https://www.breakdown.sh/api/headless`.
 7. Persist graphs, reasoning steps, citations, blocked data gaps, and external-run state in
    Breakdown.
 
-`401 Missing bearer token` means the request reached Breakdown without an approved token. Create and
-approve a setup session or set `BREAKDOWN_API_TOKEN`; it does not mean the agent should clone the
-repo.
+`401 Missing bearer token` means the request reached Breakdown without a token. Create a durable MCP
+connection token from `/settings` -> **MCP Access**, create and approve a setup session, or set
+`BREAKDOWN_API_TOKEN`; it does not mean the agent should clone the repo or simulate a Breakdown run
+outside Breakdown.
 
 MCP client configuration:
 
@@ -57,9 +60,37 @@ curl https://www.breakdown.sh/api/headless/graphs \
 
 Headless REST and MCP calls use opaque bearer tokens with the `bdk_...` prefix. Raw tokens are shown once. Breakdown stores only a token hash plus metadata.
 
+### Durable Client Connection
+
+For persistent clients, create a named token once, copy the raw credential once, and store it in the
+client or launcher secret store. A `bdk_...` token remains valid until revoked, rotated, or until
+its optional expiry. This is the recommended path when a user is configuring Codex, Claude, Cursor,
+OpenAI API, or another MCP-capable client directly.
+
+1. Sign in to Breakdown.
+2. Open `/settings`.
+3. Use **MCP Access** to create a token named for the client.
+4. Copy the raw token when it is shown. It is displayed once.
+5. Configure the MCP client with `https://www.breakdown.sh/api/mcp` and bearer authentication.
+
+```toml
+[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+```
+
+Raw tokens are never shown again after creation. Rotate or revoke the token from Settings under
+**MCP Access** if it is exposed, lost, no longer needed, or missing required scopes.
+
+Issue [#116](https://github.com/alamorre/breakdown.sh/issues/116) tracks a richer Zapier-style
+Connect flow with client-specific snippets, copy-once credentials, last-used status, and rotation
+beside the setup instructions.
+
 ### Agent-Native Setup
 
-A coding agent can request a scoped setup session without the user copying a token. The user signs in to Breakdown, approves the session in the browser, and the agent exchanges its setup secret for a one-time `bdk_...` token response.
+A coding agent can request a scoped setup session without the user copying a token into chat. The
+user signs in to Breakdown, approves the session in the browser, and the agent exchanges its setup
+secret for a copy-once durable `bdk_...` integration token response.
 
 Create a setup session:
 
@@ -101,7 +132,7 @@ The older session-authenticated bootstrap endpoint remains available for bridges
 
 ### Manual Token Creation
 
-Create a token in the app:
+Create a token in the app when you need a durable client connection:
 
 1. Sign in to Breakdown.
 2. Open `/settings`.

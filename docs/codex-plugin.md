@@ -4,10 +4,10 @@ The Breakdown Codex plugin is the polished public package for connecting Codex t
 Breakdown reasoning graphs. It wraps the same Streamable HTTP MCP endpoint used by direct
 clients: `https://www.breakdown.sh/api/mcp`.
 
-The first public release uses human-approved setup sessions that mint scoped bearer tokens for the
-Codex plugin. Hosted OAuth connector registration can be added later if Codex marketplace
-distribution requires it, but setup sessions keep the Git marketplace, local checkout, Codex
-Desktop, and self-hosted paths consistent today without asking users to paste raw tokens into chat.
+The first public release supports durable MCP connection tokens and human-approved setup sessions
+that mint the same scoped bearer tokens for agents. Hosted OAuth connector registration can be
+added later if Codex marketplace distribution requires it, but durable `bdk_...` integration tokens
+keep the Git marketplace, local checkout, Codex Desktop, and self-hosted paths consistent today.
 
 ## Choose The Right Path
 
@@ -42,12 +42,48 @@ The plugin package includes:
 - `plugins/breakdown/skills/` for Breakdown development and graph evaluation workflows.
 - `.agents/plugins/marketplace.json` for the Git marketplace entry.
 
-## One-Time Persistent Setup
+## Recommended Hosted MCP Connection
 
-Use the approval-session path as the default. It gives agents a browser approval URL and setup code,
-then returns a scoped token after the signed-in user approves. Persist the exchanged token in the
-user-level Codex plugin authentication store or launcher secret store that starts Codex Desktop. Do
-not store tokens in repo-local `.codex/config.toml`, committed files, issue comments, or chat.
+For day-to-day use, create a named Breakdown MCP connection once, copy the credential once, and
+store it in the client or launcher secret store that starts the MCP process. The resulting
+`bdk_...` token is durable until it is revoked, rotated, or reaches an optional expiry. This mirrors
+the common hosted-MCP pattern used by tools such as Zapier: a stable server URL plus a client
+credential, with rotation/revocation handled from the service.
+
+Today, create the connection from Breakdown settings:
+
+1. Sign in to Breakdown.
+2. Open `/settings` and use **MCP Access** to create a token named for the client, such as
+   `Codex Desktop`.
+3. Grant the minimum scopes needed for the workflow.
+4. Copy the raw `bdk_...` token when it is shown. It is displayed once.
+5. Store it outside the repository in the user-level Codex/plugin secret store or launcher secret
+   store that starts Codex Desktop.
+6. Run `diagnose_breakdown_setup` from Codex and confirm `state: "ready"`.
+
+Use the hosted Streamable HTTP MCP endpoint with bearer authentication:
+
+```toml
+[mcp_servers.breakdown]
+url = "https://www.breakdown.sh/api/mcp"
+bearer_token_env_var = "BREAKDOWN_API_TOKEN"
+```
+
+Set `BREAKDOWN_API_TOKEN` to the copied `bdk_...` token in the environment or secret store used by
+the MCP client. Do not store raw tokens in repo-local `.codex/config.toml`, committed files, issue
+comments, or chat. Revoke or rotate client tokens from Settings under **MCP Access**.
+
+Issue [#116](https://github.com/alamorre/breakdown.sh/issues/116) tracks a more Zapier-like
+**Connect** experience with client-specific snippets, copy-once credentials, last-used status, and
+rotation beside the setup instructions.
+
+## Agent-Native Setup Session
+
+Use the approval-session path when an agent can start setup from inside the MCP client and the user
+can approve in the browser. The setup session is short-lived, but the exchanged `bdk_...` token is a
+normal integration token: it remains valid until revoked, rotated, or until its optional expiry.
+Persist the exchanged token in the user-level Codex plugin authentication store or launcher secret
+store that starts Codex Desktop.
 
 1. Install the plugin from Git and start a new Codex thread so Codex loads the plugin package.
 2. Create an agent setup session at
@@ -64,14 +100,15 @@ curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \
   -d '{"clientName":"Codex","providerName":"OpenAI"}'
 ```
 
-Manual token creation from Settings under MCP Access remains available as an advanced fallback. Raw
-tokens are shown once; store them outside the repository and never commit them. If a client cannot
-persist plugin auth yet, set `BREAKDOWN_API_TOKEN` in the environment that starts Codex.
+If `diagnose_breakdown_setup` reports `missing_token`, create a durable MCP connection from Settings
+or create and approve an agent setup session. Do not treat `missing_token` as permission to simulate
+a Breakdown run outside Breakdown unless the user explicitly asks for that fallback.
 
 ### Advanced Fallback: OS-Level Token Storage
 
-Use these locations only when Codex cannot persist plugin authentication itself. Keep the Codex MCP
-server config in the user-level Codex config file and keep the raw token in the OS user environment.
+Use these locations when the MCP client cannot persist plugin authentication itself. Keep the Codex
+MCP server config in the user-level Codex config file and keep the raw token in the OS user
+environment.
 
 Codex config file paths:
 
@@ -154,8 +191,8 @@ Recommended scopes:
 | External evaluator runs | `graphs:read`, `runs:external_execute`, `runs:write_results`                                 |
 | Full graph operations   | `graphs:read`, `graphs:write`, `runs:execute`, `runs:external_execute`, `runs:write_results` |
 
-Revoke plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or unknown tokens
-are reported separately by `diagnose_breakdown_setup` and
+Revoke or rotate plugin tokens from Settings under MCP Access. Revoked, missing, malformed, or
+unknown tokens are reported separately by `diagnose_breakdown_setup` and
 `GET https://www.breakdown.sh/api/integrations/codex/diagnostics`.
 
 ## Connection Check
@@ -281,7 +318,7 @@ url = "https://www.breakdown.sh/api/mcp"
 bearer_token_env_var = "BREAKDOWN_API_TOKEN"
 ```
 
-Set `BREAKDOWN_API_TOKEN` to the approved token before starting the client. For the full
+Set `BREAKDOWN_API_TOKEN` to the durable `bdk_...` token before starting the client. For the full
 setup-session flow, see the public `/mcp` page.
 
 ## Local Or Self-Hosted Override
@@ -315,10 +352,11 @@ export BREAKDOWN_API_TOKEN=bdk_...
 `diagnose_breakdown_setup` is missing means the plugin or MCP server is not installed, enabled, or
 loaded in this Codex session. Install/enable the plugin and start a new Codex thread.
 
-`state: "missing_token"` means the client reached Breakdown without an approved token. Create and
-approve a setup session, then persist the exchanged token in the user-level Codex or launcher secret
-store. Use `BREAKDOWN_API_TOKEN` only as an advanced fallback for clients without persistent plugin
-auth.
+`state: "missing_token"` means the client reached Breakdown without a bearer token. Create a durable
+MCP connection token from Settings under **MCP Access**, or create and approve an agent setup
+session, then persist the resulting token in the user-level Codex or launcher secret store. If the
+client cannot persist plugin auth yet, set `BREAKDOWN_API_TOKEN` in the environment that starts
+Codex.
 
 `state: "invalid_token"`, `state: "revoked_token"`, or `state: "expired_token"` means the token
 is present but cannot be used. Rotate or recreate the token from Settings under MCP Access.

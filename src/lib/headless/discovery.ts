@@ -35,7 +35,7 @@ function bearerAuth() {
     header: 'Authorization: Bearer <bdk_token>',
     tokenPrefix: 'bdk_',
     tokenSource:
-      'Create an agent setup session, wait for signed-in human approval, then exchange the session secret.',
+      'Create a durable token from Breakdown MCP Access settings, or create an agent setup session, wait for signed-in human approval, then exchange the session secret.',
     scopes: BREAKDOWN_SCOPES,
   };
 }
@@ -358,7 +358,7 @@ export function getAiPluginManifest(origin: string) {
     description_for_human:
       'Breakdown exposes graph workflows, headless execution, and MCP tools for approved integrations.',
     description_for_model:
-      'Use the public discovery and onboarding endpoints to create an agent setup session. A signed-in human must approve the setup URL before you can exchange for a bdk bearer token. Use the token with /api/mcp or /api/headless.',
+      'Use a durable bdk bearer token created from Breakdown MCP Access settings, or use the public onboarding endpoints to create an agent setup session. Setup sessions require signed-in human approval before exchange and produce a token for /api/mcp or /api/headless.',
     auth: {
       type: 'service_http',
       authorization_type: 'bearer',

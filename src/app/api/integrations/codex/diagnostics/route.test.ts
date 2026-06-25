@@ -104,7 +104,7 @@ describe('/api/integrations/codex/diagnostics', () => {
     });
     expect(body.data.setup.nextSteps).toEqual(
       expect.arrayContaining([
-        'Create an agent setup session and approve it in the browser while signed in to Breakdown.',
+        'Create a durable MCP connection token from Settings under MCP Access, or create an agent setup session and approve it in the browser while signed in to Breakdown.',
       ]),
     );
   });

@@ -156,7 +156,7 @@ export function createCodexReadyDiagnostics(actor: BreakdownActor, origin: strin
     setup: {
       ...links,
       persistentCodexConfig:
-        'Install the plugin once, approve an agent setup session, and store the resulting token in the user-level Codex or launcher secret store that starts Codex Desktop.',
+        'Create a durable MCP connection token from Settings under MCP Access, or approve an agent setup session, then store the resulting token in the user-level Codex or launcher secret store that starts Codex Desktop.',
       advancedFallback:
         'If a client cannot persist plugin auth yet, set BREAKDOWN_API_TOKEN in the environment that starts Codex.',
     },
@@ -223,12 +223,12 @@ export function createCodexAuthFailureDiagnostics(err: unknown, origin: string) 
       ...links,
       nextSteps: [
         'Install or enable the Breakdown Codex plugin if no Breakdown MCP tools are listed.',
-        'Create an agent setup session and approve it in the browser while signed in to Breakdown.',
-        'Persist the exchanged token in the user-level Codex or launcher secret store that starts Codex Desktop.',
+        'Create a durable MCP connection token from Settings under MCP Access, or create an agent setup session and approve it in the browser while signed in to Breakdown.',
+        'Persist the resulting token in the user-level Codex or launcher secret store that starts Codex Desktop.',
         `Run ${CODEX_DIAGNOSTIC_TOOL} from Codex to verify the MCP tool surface and scopes.`,
       ],
       advancedFallback:
-        'Raw bdk tokens and BREAKDOWN_API_TOKEN are fallback paths for clients without persistent plugin auth.',
+        'BREAKDOWN_API_TOKEN is the supported environment variable for clients without a dedicated plugin secret store.',
     },
   };
 }

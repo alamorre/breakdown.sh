@@ -36,9 +36,9 @@ export default function GettingStartedPage() {
           <h2>Default Path For Coding Agents</h2>
           <p>
             Breakdown is a hosted reasoning workflow service for agents running in other codebases.
-            Agents should discover the public metadata, create an approval session, get a scoped{' '}
-            <code>bdk_...</code> token after human approval, then connect to the hosted MCP or REST
-            APIs.
+            Agents should use a durable scoped <code>bdk_...</code> token from MCP Access, or create
+            a short-lived approval session that exchanges into the same token type, then connect to
+            the hosted MCP or REST APIs.
           </p>
           <p>
             Clone this repository only when you are contributing to Breakdown, self-hosting it, or
@@ -75,8 +75,14 @@ export default function GettingStartedPage() {
               Read public discovery metadata from <code>GET /api</code> or{' '}
               <code>GET /api/integrations/headless-onboarding</code>.
             </li>
-            <li>Create an agent setup session.</li>
-            <li>Ask the signed-in human to open the approval URL and verify the setup code.</li>
+            <li>
+              Use a durable token from MCP Access in <code>/settings</code>, or create an agent
+              setup session.
+            </li>
+            <li>
+              For setup sessions, ask the signed-in human to open the approval URL and verify the
+              setup code.
+            </li>
             <li>
               After approval, exchange the setup secret for the scoped <code>bdk_...</code> token.
             </li>
@@ -99,10 +105,19 @@ export default function GettingStartedPage() {
             </li>
           </ol>
 
+          <h2>Create A Durable Client Token</h2>
+          <p>
+            For persistent clients, sign in to Breakdown, open{' '}
+            <Link href="/settings">Settings</Link>, and use MCP Access to create a token named for
+            the client. Copy the raw <code>bdk_...</code> token when it is shown; it is displayed
+            once. The token remains valid until revoked, rotated, or until its optional expiry.
+          </p>
+
           <h2>Create A Setup Session</h2>
           <p>
             A setup session lets an agent request access without asking the user to paste a raw
-            token into the chat.
+            token into the chat. The setup session expires quickly, but the exchanged token is a
+            durable integration token unless an expiry was configured.
           </p>
           <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \\
   -H "Content-Type: application/json" \\
@@ -117,8 +132,8 @@ export default function GettingStartedPage() {
   -d "{\\"exchangeSecret\\":\\"$EXCHANGE_SECRET\\"}"`}</CodeBlock>
           <p>
             The exchange response returns the raw token once. Store it in the host client or
-            user-level launcher secret store. <code>BREAKDOWN_API_TOKEN</code> is an advanced
-            fallback for clients that cannot persist plugin auth yet.
+            user-level launcher secret store. <code>BREAKDOWN_API_TOKEN</code> is the supported
+            environment variable for clients that cannot persist plugin auth directly.
           </p>
           <p>
             For Codex Desktop fallback setup, put the MCP server reference in{' '}
@@ -159,9 +174,9 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           </p>
           <p>
             <code>401 Missing bearer token</code> means the request reached Breakdown but did not
-            include an approved token. Create and approve a setup session, exchange it for a{' '}
-            <code>bdk_...</code> token, and persist it before retrying. It does not mean the agent
-            should clone this repository.
+            include a token. Create a durable token from MCP Access in <code>/settings</code>, or
+            create and approve a setup session, exchange it for a <code>bdk_...</code> token, and
+            persist it before retrying. It does not mean the agent should clone this repository.
           </p>
           <p>
             For MCP details, scopes, tool names, and REST metadata, see{' '}

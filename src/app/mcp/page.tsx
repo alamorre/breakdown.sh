@@ -65,9 +65,10 @@ export default function McpPage() {
           <h2>Default Hosted Path</h2>
           <p>
             Start from your own repo or agent console. Discover Breakdown through public metadata,
-            create a setup session, ask the signed-in human to approve it, exchange the setup secret
-            for a <code>bdk_...</code> token, and connect to the hosted MCP endpoint. Do not clone
-            the Breakdown repo for normal service usage.
+            create a durable MCP token from Settings under MCP Access, or create a setup session
+            that a signed-in human approves in the browser. Both paths produce a{' '}
+            <code>bdk_...</code> token for the hosted MCP endpoint. Do not clone the Breakdown repo
+            for normal service usage.
           </p>
           <p>
             Clone or sparse-install this repository only when you are contributing to Breakdown,
@@ -91,8 +92,13 @@ export default function McpPage() {
               Read <code>GET /api</code> or <code>GET /api/integrations/headless-onboarding</code>{' '}
               for machine-readable setup metadata.
             </li>
-            <li>Create an agent setup session.</li>
-            <li>Open the returned approval URL while signed in to Breakdown.</li>
+            <li>
+              Create a durable MCP token from <Link href="/settings">Settings</Link> under MCP
+              Access, or create an agent setup session.
+            </li>
+            <li>
+              For setup sessions, open the returned approval URL while signed in to Breakdown.
+            </li>
             <li>Verify the setup code and approve the requested scopes.</li>
             <li>
               Have the agent exchange the setup secret for the scoped <code>bdk_...</code> token.
@@ -113,6 +119,21 @@ export default function McpPage() {
             </li>
           </ol>
 
+          <h2>Create A Durable Client Connection</h2>
+          <p>
+            For persistent clients, create a named token in <Link href="/settings">Settings</Link>{' '}
+            under MCP Access, copy the raw <code>bdk_...</code> credential once, and store it in the
+            client or launcher secret store. The token remains valid until revoked, rotated, or
+            until its optional expiry.
+          </p>
+          <p>
+            Use <code>https://www.breakdown.sh/api/mcp</code> as the server URL and send the token
+            as <code>Authorization: Bearer bdk_...</code>. Issue{' '}
+            <a href="https://github.com/alamorre/breakdown.sh/issues/116">#116</a> tracks a more
+            Zapier-like Connect page with client-specific snippets, copy-once credentials, and
+            rotation beside setup instructions.
+          </p>
+
           <h2>Create And Approve A Setup Session</h2>
           <CodeBlock>{`curl https://www.breakdown.sh/api/integrations/agent-setup-sessions \\
   -H "Content-Type: application/json" \\
@@ -127,9 +148,8 @@ export default function McpPage() {
   -d "{\\"exchangeSecret\\":\\"$EXCHANGE_SECRET\\"}"`}</CodeBlock>
           <p>
             The exchange response includes the raw token once, the MCP URL, the headless REST base
-            URL, and an authorization header value. If setup sessions are unavailable for a client,
-            sign in and create a token manually from <Link href="/settings">Settings</Link> under
-            MCP Access.
+            URL, and an authorization header value. The setup session is short-lived, but the
+            exchanged token is durable until revoked, rotated, or until its optional expiry.
           </p>
 
           <h2>Configure A Client</h2>
@@ -141,7 +161,7 @@ export default function McpPage() {
 url = "https://www.breakdown.sh/api/mcp"
 bearer_token_env_var = "BREAKDOWN_API_TOKEN"`}</CodeBlock>
           <p>
-            Then set <code>BREAKDOWN_API_TOKEN</code> to the approved <code>bdk_...</code> token
+            Then set <code>BREAKDOWN_API_TOKEN</code> to the durable <code>bdk_...</code> token
             before starting the client.
           </p>
           <p>
@@ -295,9 +315,9 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.breakdown.codex-env.p
           </p>
           <p>
             <code>401 Missing bearer token</code> means the request reached Breakdown without an
-            approved bearer token. Create and approve a setup session, exchange it for a{' '}
-            <code>bdk_...</code> token, and persist it before retrying. It does not mean the agent
-            should clone this repository.
+            bearer token. Create a durable token from Settings under MCP Access, or create and
+            approve a setup session, exchange it for a <code>bdk_...</code> token, and persist it
+            before retrying. It does not mean the agent should clone this repository.
           </p>
           <p>
             <code>403 Missing required scope</code> means the token is valid but lacks the scope
