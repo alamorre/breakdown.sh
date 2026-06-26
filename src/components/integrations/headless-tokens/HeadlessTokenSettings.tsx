@@ -6,6 +6,7 @@ import {
   Bot,
   Check,
   CheckCircle2,
+  ChevronDown,
   Code2,
   Copy,
   Info,
@@ -257,41 +258,121 @@ function markActivePurposeRevoked(
   );
 }
 
-function CopyBlock({
+function SetupValueRow({
   title,
   value,
   onCopy,
-  warning,
 }: {
   title: string;
   value: string;
   onCopy: (value: string, label: string) => void;
-  warning?: string;
 }) {
   return (
-    <div className="rounded-md border bg-background">
-      <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+    <div className="grid gap-2 px-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+        <Copy className="size-3.5 text-muted-foreground" />
+        <span>{title}</span>
+      </div>
+      <code className="min-w-0 truncate rounded-md bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
+        {value}
+      </code>
+      <Button type="button" variant="ghost" size="sm" onClick={() => onCopy(value, title)}>
+        <Copy className="size-3.5" />
+        Copy
+      </Button>
+    </div>
+  );
+}
+
+function SetupSnippetPanel({
+  value,
+  onCopy,
+}: {
+  value: string;
+  onCopy: (value: string, label: string) => void;
+}) {
+  return (
+    <div className="border-t px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          {warning ? (
-            <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-300" />
-          ) : (
-            <Copy className="size-3.5 text-muted-foreground" />
-          )}
-          <span className="text-sm font-medium">{title}</span>
+          <Copy className="size-3.5 text-muted-foreground" />
+          <span className="text-sm font-medium">Client snippet</span>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => onCopy(value, title)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onCopy(value, 'Client snippet')}
+        >
           <Copy className="size-3.5" />
           Copy
         </Button>
       </div>
-      <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5 text-muted-foreground">
+      <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5 text-muted-foreground">
         {value}
       </pre>
-      {warning && (
-        <p className="border-t px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-          {warning}
+    </div>
+  );
+}
+
+function FallbackUrlDetails({
+  value,
+  onCopy,
+}: {
+  value: string;
+  onCopy: (value: string, label: string) => void;
+}) {
+  return (
+    <details className="group border-t bg-muted/20">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
+        <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+        <span className="font-medium text-foreground">Full URL fallback</span>
+        <span className="hidden sm:inline">for clients that cannot set headers</span>
+        <ChevronDown className="ml-auto size-3.5 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="grid gap-2 px-3 pb-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background p-3 font-mono text-xs leading-5 text-muted-foreground">
+          {value}
+        </pre>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onCopy(value, 'Full URL fallback')}
+        >
+          <Copy className="size-3.5" />
+          Copy
+        </Button>
+        <p className="text-xs leading-5 text-amber-700 sm:col-span-2 dark:text-amber-300">
+          Use only when a client cannot set headers. URLs are easier to leak through logs, browser
+          history, and shell history.
         </p>
-      )}
+      </div>
+    </details>
+  );
+}
+
+function SetupCopyPanel({
+  credentialToken,
+  connectionSnippet,
+  onCopy,
+}: {
+  credentialToken: string | null;
+  connectionSnippet: string;
+  onCopy: (value: string, label: string) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border bg-background">
+      <div className="divide-y">
+        <SetupValueRow title="Server URL" value={MCP_ENDPOINT} onCopy={onCopy} />
+        <SetupValueRow
+          title="Authorization header"
+          value={tokenAuthHeader(credentialToken)}
+          onCopy={onCopy}
+        />
+      </div>
+      <SetupSnippetPanel value={connectionSnippet} onCopy={onCopy} />
+      <FallbackUrlDetails value={tokenUrl(credentialToken)} onCopy={onCopy} />
     </div>
   );
 }
@@ -642,7 +723,7 @@ export function HeadlessTokenSettings() {
         </p>
       )}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(260px,0.75fr)_minmax(520px,1.25fr)]">
         <form className="grid content-start gap-4" onSubmit={(event) => void handleCreate(event)}>
           <div className="grid gap-2">
             <span className="text-sm font-medium">Client</span>
@@ -656,10 +737,10 @@ export function HeadlessTokenSettings() {
                     key={preset.id}
                     type="button"
                     aria-pressed={selected}
-                    className="flex min-h-16 items-start gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 aria-pressed:border-primary aria-pressed:bg-primary/10"
+                    className="flex min-h-12 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 aria-pressed:border-primary aria-pressed:bg-primary/10"
                     onClick={() => handleSelectClient(preset.id)}
                   >
-                    <Icon className="mt-0.5 size-4 shrink-0" />
+                    <Icon className="size-4 shrink-0" />
                     <span className="min-w-0">
                       <span className="block font-medium">{preset.label}</span>
                       <span className="block text-xs text-muted-foreground">{preset.provider}</span>
@@ -751,90 +832,82 @@ export function HeadlessTokenSettings() {
             </div>
           )}
 
-          <CopyBlock title="Server URL" value={MCP_ENDPOINT} onCopy={handleCopy} />
-          <CopyBlock
-            title="Authorization header"
-            value={tokenAuthHeader(credentialToken)}
+          <SetupCopyPanel
+            credentialToken={credentialToken}
+            connectionSnippet={connectionSnippet}
             onCopy={handleCopy}
-          />
-          <CopyBlock title="Client snippet" value={connectionSnippet} onCopy={handleCopy} />
-          <CopyBlock
-            title="Full URL fallback"
-            value={tokenUrl(credentialToken)}
-            onCopy={handleCopy}
-            warning="Use only when a client cannot set headers. URLs are easier to leak through logs, browser history, and shell history."
           />
 
-          <div className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
-            <div className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0" />
-              <p>
-                Agent setup sessions are short-lived approval steps. After approval, the exchange
-                creates the same durable <code className="font-mono text-xs">bdk_...</code>{' '}
-                credential listed here.
-              </p>
-            </div>
+          <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
+            <p>
+              Agent setup sessions are short-lived approval steps. After approval, the exchange
+              creates the same durable <code className="font-mono text-xs">bdk_...</code> credential
+              listed here.
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 rounded-md border bg-muted/20 p-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <ShieldCheck className="size-4" />
-              <h3 className="text-sm font-medium">Release Testing</h3>
-              <Badge variant={activeReleaseTestToken ? 'default' : 'secondary'}>
-                {activeReleaseTestToken ? 'Ready' : 'No token'}
-              </Badge>
-            </div>
-            <div className="mt-2 grid gap-1 text-sm text-muted-foreground">
-              <div>{formatScopes(RELEASE_TEST_SCOPES)}</div>
-              <div>
-                Store the copied value as{' '}
-                <code className="font-mono text-xs">BREAKDOWN_RELEASE_TEST_TOKEN</code>.
+      <div className="mt-8 border-t pt-6">
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <ShieldCheck className="size-4" />
+                <h3 className="text-sm font-medium">Release Testing</h3>
+                <Badge variant={activeReleaseTestToken ? 'default' : 'secondary'}>
+                  {activeReleaseTestToken ? 'Ready' : 'No token'}
+                </Badge>
               </div>
-              {activeReleaseTestToken && (
-                <div>Last used {formatDate(activeReleaseTestToken.lastUsedAt)}</div>
-              )}
+              <div className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                <div>{formatScopes(RELEASE_TEST_SCOPES)}</div>
+                <div>
+                  Store the copied value as{' '}
+                  <code className="font-mono text-xs">BREAKDOWN_RELEASE_TEST_TOKEN</code>.
+                </div>
+                {activeReleaseTestToken && (
+                  <div>Last used {formatDate(activeReleaseTestToken.lastUsedAt)}</div>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!configured || rotatingReleaseTest}
-              onClick={() => void handleRotateReleaseTest()}
-            >
-              {rotatingReleaseTest ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="size-3.5" />
-              )}
-              {activeReleaseTestToken ? 'Rotate' : 'Create'}
-            </Button>
-            {activeReleaseTestToken && (
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={revokingId === activeReleaseTestToken.id}
-                onClick={() => void handleRevoke(activeReleaseTestToken.id)}
+                disabled={!configured || rotatingReleaseTest}
+                onClick={() => void handleRotateReleaseTest()}
               >
-                {revokingId === activeReleaseTestToken.id ? (
+                {rotatingReleaseTest ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <Trash2 className="size-3.5" />
+                  <RefreshCw className="size-3.5" />
                 )}
-                Revoke
+                {activeReleaseTestToken ? 'Rotate' : 'Create'}
               </Button>
-            )}
+              {activeReleaseTestToken && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={revokingId === activeReleaseTestToken.id}
+                  onClick={() => void handleRevoke(activeReleaseTestToken.id)}
+                >
+                  {revokingId === activeReleaseTestToken.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                  Revoke
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-8 border-t pt-6">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-medium">Saved Client Connections</h3>
           <Badge variant="secondary">{clientConnections.length}</Badge>
