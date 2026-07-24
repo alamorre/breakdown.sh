@@ -1,0 +1,50 @@
+schema_version: breakdown.workflow.v1
+id: invalid-derived-dag
+name: Invalid Derived DAG
+inputs:
+  unused-input: {}
+  used-input: {}
+nodes:
+  - id: self-reference
+    name: Self Reference
+    prompt: This node incorrectly consumes itself.
+    inputs:
+      itself:
+        node: self-reference
+      z-itself:
+        node: self-reference
+      a-used:
+        workflow_input: used-input
+      b-used:
+        workflow_input: used-input
+  - id: cycle-a
+    name: Cycle A
+    prompt: This node participates in a cycle.
+    inputs:
+      from-b:
+        node: cycle-b
+  - id: cycle-b
+    name: Cycle B
+    prompt: This node participates in a cycle.
+    inputs:
+      from-a:
+        node: cycle-a
+  - id: missing-sources
+    name: Missing Sources
+    prompt: These sources do not exist.
+    inputs:
+      missing-node:
+        node: absent-node
+      missing-workflow:
+        workflow_input: absent-input
+  - id: source
+    name: Source
+    prompt: Produce a source Result.
+  - id: duplicate-node-source
+    name: Duplicate Node Source
+    prompt: Consume a Result only once.
+    inputs:
+      a-source:
+        node: source
+      b-source:
+        node: source

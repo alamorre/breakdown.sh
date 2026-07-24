@@ -1,0 +1,17 @@
+schema_version: breakdown.workflow.v1
+id: non-string-identifier-keys
+name: Non-String Identifier Keys
+inputs:
+  true:
+    default: inputs/boolean.md
+  "true":
+    default: inputs/string.md
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Reject identifier key coercion.
+    inputs:
+      false:
+        workflow_input: "true"
+      "false":
+        workflow_input: "true"

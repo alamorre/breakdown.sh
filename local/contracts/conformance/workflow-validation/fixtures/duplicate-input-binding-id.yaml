@@ -1,0 +1,17 @@
+schema_version: breakdown.workflow.v1
+id: duplicate-input-binding-id
+name: Duplicate Input Binding ID
+inputs:
+  first:
+    default: inputs/first.md
+  second:
+    default: inputs/second.md
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume both sources.
+    inputs:
+      source:
+        workflow_input: first
+      source:
+        workflow_input: second

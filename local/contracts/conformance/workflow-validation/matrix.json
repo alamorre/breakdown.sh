@@ -467,6 +467,360 @@
           }
         ]
       }
+    },
+    {
+      "id": "WFV-028",
+      "requirement": "Issue #144: accept derived DAG shapes and preserve authored node order while ordering identifier maps",
+      "fixture": "fixtures/derived-dag-valid.yaml",
+      "oracle": {
+        "ok": true,
+        "value": {
+          "definitionPath": "breakdown.yaml",
+          "workflow": {
+            "schema_version": "breakdown.workflow.v1",
+            "id": "research-workflow",
+            "name": "Research Workflow",
+            "description": "Validate a representative authored workflow.",
+            "inputs": {
+              "constraints": {
+                "default": "inputs/constraints.md"
+              },
+              "question": {
+                "description": "A pathless Workflow Input required when a Run begins."
+              },
+              "source-notes": {
+                "description": "Primary source notes.",
+                "default": "Research/naïve Notes.md"
+              }
+            },
+            "nodes": [
+              {
+                "id": "synthesize",
+                "name": "Synthesize",
+                "prompt": "Combine the independent findings.",
+                "inputs": {
+                  "alpha-findings": {
+                    "node": "compare"
+                  },
+                  "zeta-findings": {
+                    "node": "investigate"
+                  }
+                }
+              },
+              {
+                "id": "investigate",
+                "name": "Investigate",
+                "prompt": "Gather evidence from the source notes.",
+                "inputs": {
+                  "notes": {
+                    "workflow_input": "source-notes"
+                  },
+                  "question": {
+                    "workflow_input": "question"
+                  }
+                }
+              },
+              {
+                "id": "compare",
+                "name": "Compare",
+                "prompt": "Compare the evidence with the constraints.",
+                "inputs": {
+                  "constraints": {
+                    "workflow_input": "constraints"
+                  },
+                  "research": {
+                    "node": "investigate"
+                  }
+                }
+              },
+              {
+                "id": "reuse",
+                "name": "Reuse",
+                "prompt": "Reuse the same evidence in another terminal branch.",
+                "inputs": {
+                  "research": {
+                    "node": "investigate"
+                  }
+                }
+              },
+              {
+                "id": "independent-root",
+                "name": "Independent Root",
+                "prompt": "Produce an outcome in a disconnected component."
+              },
+              {
+                "id": "isolated",
+                "name": "Isolated",
+                "prompt": "Produce an isolated terminal outcome."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "WFV-029",
+      "requirement": "Issue #144: enforce exact identifiers, authored fields, metadata, prompts, and Input Binding source shapes",
+      "fixture": "fixtures/invalid-authored-contracts.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/description"
+          },
+          {
+            "code": "schema",
+            "path": "/id"
+          },
+          {
+            "code": "schema",
+            "path": "/inputs/Bad_Input"
+          },
+          {
+            "code": "schema",
+            "path": "/inputs/Bad_Input/description"
+          },
+          {
+            "code": "schema",
+            "path": "/inputs/Bad_Input/unexpected"
+          },
+          {
+            "code": "schema",
+            "path": "/inputs/numeric-default/default"
+          },
+          {
+            "code": "schema",
+            "path": "/name"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/description"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/Bad_Binding"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/Bad_Binding/workflow_input"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/conflicting-source"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/invalid-source/node"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/missing-source"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/unknown-source"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/unknown-source/literal"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/name"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/prompt"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/id"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/id"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/name"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/prompt"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-030",
+      "requirement": "Issue #144: reject non-portable Workflow Input default paths lexically",
+      "fixture": "fixtures/invalid-default-paths.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "invalid_path",
+            "path": "/inputs/absolute/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/backslash/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/dot/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/drive/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/empty-segment/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/empty/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/environment/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/glob/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/percent/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/shell/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/tilde/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/traversal/default"
+          },
+          {
+            "code": "invalid_path",
+            "path": "/inputs/url/default"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-031",
+      "requirement": "Issue #144: aggregate stable missing-reference, duplicate-source, unused-input, self-reference, and cycle diagnostics",
+      "fixture": "fixtures/invalid-derived-dag.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "unused_input",
+            "path": "/inputs/unused-input"
+          },
+          {
+            "code": "duplicate_source",
+            "path": "/nodes/0/inputs/b-used/workflow_input"
+          },
+          {
+            "code": "cycle",
+            "path": "/nodes/0/inputs/itself/node"
+          },
+          {
+            "code": "cycle",
+            "path": "/nodes/0/inputs/z-itself/node"
+          },
+          {
+            "code": "duplicate_source",
+            "path": "/nodes/0/inputs/z-itself/node"
+          },
+          {
+            "code": "cycle",
+            "path": "/nodes/1/inputs/from-b/node"
+          },
+          {
+            "code": "cycle",
+            "path": "/nodes/2/inputs/from-a/node"
+          },
+          {
+            "code": "missing_reference",
+            "path": "/nodes/3/inputs/missing-node/node"
+          },
+          {
+            "code": "missing_reference",
+            "path": "/nodes/3/inputs/missing-workflow/workflow_input"
+          },
+          {
+            "code": "duplicate_source",
+            "path": "/nodes/5/inputs/b-source/node"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-032",
+      "requirement": "Issue #144: require unique Workflow Input identifiers",
+      "fixture": "fixtures/duplicate-workflow-input-id.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-033",
+      "requirement": "Issue #144: require unique local Input Binding identifiers",
+      "fixture": "fixtures/duplicate-input-binding-id.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-034",
+      "requirement": "Issue #144: reject non-string identifier keys before YAML-to-JavaScript coercion",
+      "fixture": "fixtures/non-string-identifier-keys.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/inputs/true"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/inputs/false"
+          }
+        ]
+      }
     }
   ]
 }

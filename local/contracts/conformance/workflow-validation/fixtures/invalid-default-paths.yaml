@@ -1,0 +1,61 @@
+schema_version: breakdown.workflow.v1
+id: invalid-default-paths
+name: Invalid Default Paths
+inputs:
+  absolute:
+    default: /etc/passwd
+  backslash:
+    default: 'inputs\source.md'
+  dot:
+    default: inputs/./source.md
+  drive:
+    default: C:/source.md
+  empty:
+    default: ''
+  empty-segment:
+    default: inputs//source.md
+  environment:
+    default: $PROJECT_INPUT/source.md
+  glob:
+    default: inputs/*.md
+  percent:
+    default: inputs/%2e%2e/source.md
+  shell:
+    default: $(command)/source.md
+  tilde:
+    default: ~/source.md
+  traversal:
+    default: inputs/../source.md
+  url:
+    default: https://example.com/source.md
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume every declared Workflow Input.
+    inputs:
+      absolute:
+        workflow_input: absolute
+      backslash:
+        workflow_input: backslash
+      dot:
+        workflow_input: dot
+      drive:
+        workflow_input: drive
+      empty:
+        workflow_input: empty
+      empty-segment:
+        workflow_input: empty-segment
+      environment:
+        workflow_input: environment
+      glob:
+        workflow_input: glob
+      percent:
+        workflow_input: percent
+      shell:
+        workflow_input: shell
+      tilde:
+        workflow_input: tilde
+      traversal:
+        workflow_input: traversal
+      url:
+        workflow_input: url

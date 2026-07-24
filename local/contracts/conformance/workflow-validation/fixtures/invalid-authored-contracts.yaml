@@ -1,0 +1,40 @@
+schema_version: breakdown.workflow.v1
+id: Invalid_ID
+name: ' Research Workflow '
+description: 42
+inputs:
+  Bad_Input:
+    description: 42
+    default: sources/notes.md
+    unexpected: true
+  valid-input:
+    default: inputs/constraints.md
+  numeric-default:
+    default: 42
+nodes:
+  - id: duplicate-node
+    name: ' '
+    prompt: ''
+    description: Node descriptions do not exist in v1.
+    inputs:
+      Bad_Binding:
+        workflow_input: Bad_Input
+      conflicting-source:
+        workflow_input: valid-input
+        node: duplicate-node
+      invalid-source:
+        node: 42
+      missing-source: {}
+      unknown-source:
+        literal: content
+  - id: duplicate-node
+    name: Valid Name
+    prompt: A valid prompt.
+    inputs:
+      use-valid:
+        workflow_input: valid-input
+      use-numeric:
+        workflow_input: numeric-default
+  - id: identifier-that-is-far-too-long-because-it-contains-more-than-sixty-four-characters
+    name: 'Trailing Space '
+    prompt: 42

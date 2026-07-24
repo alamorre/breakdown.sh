@@ -1,0 +1,15 @@
+schema_version: breakdown.workflow.v1
+id: duplicate-workflow-input-id
+name: Duplicate Workflow Input ID
+inputs:
+  source:
+    default: inputs/one.md
+  source:
+    default: inputs/two.md
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume the source.
+    inputs:
+      source:
+        workflow_input: source

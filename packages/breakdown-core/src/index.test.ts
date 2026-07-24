@@ -20,6 +20,7 @@ interface ConformanceRow {
   oracle:
     | {
         ok: true;
+        value?: unknown;
         effect?: {
           absent_path: string;
         };
@@ -148,6 +149,53 @@ nodes:
     });
   });
 
+  it('should count name and description limits in Unicode characters', async () => {
+    const workflowName = '😀'.repeat(200);
+    const description = '🧪'.repeat(2_000);
+    const nodeName = '界'.repeat(200);
+    const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: unicode-boundaries
+name: ${workflowName}
+description: ${description}
+nodes:
+  - id: validate
+    name: ${nodeName}
+    prompt: Validate Unicode boundaries.
+`);
+
+    const result = await operate({ operation: 'validate_workflow' }, { projectRoot });
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it('should reject names and descriptions above their Unicode character limits', async () => {
+    const workflowName = '😀'.repeat(201);
+    const description = '🧪'.repeat(2_001);
+    const nodeName = '界'.repeat(201);
+    const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: unicode-overflow
+name: ${workflowName}
+description: ${description}
+nodes:
+  - id: validate
+    name: ${nodeName}
+    prompt: Validate Unicode boundaries.
+`);
+
+    const result = await operate({ operation: 'validate_workflow' }, { projectRoot });
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        diagnostics: [
+          { code: 'schema', path: '/description' },
+          { code: 'schema', path: '/name' },
+          { code: 'schema', path: '/nodes/0/name' },
+        ],
+      },
+    });
+  });
+
   describe.each(conformanceMatrix.rows)('$id', (row) => {
     it(`should satisfy ${row.id}: ${row.requirement}`, async () => {
       const fixture = await readFile(new URL(row.fixture, conformanceRoot));
@@ -171,6 +219,11 @@ nodes:
             code: row.oracle.failure_code,
             diagnostics: row.oracle.diagnostics,
           },
+        });
+      } else if (row.oracle.value !== undefined) {
+        expect(result).toEqual({
+          ok: true,
+          value: row.oracle.value,
         });
       } else if (row.oracle.effect !== undefined) {
         await expect(

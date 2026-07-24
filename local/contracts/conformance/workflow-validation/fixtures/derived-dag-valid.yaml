@@ -1,0 +1,49 @@
+schema_version: breakdown.workflow.v1
+id: research-workflow
+name: Research Workflow
+description: Validate a representative authored workflow.
+inputs:
+  source-notes:
+    description: Primary source notes.
+    default: Research/naïve Notes.md
+  constraints:
+    default: inputs/constraints.md
+  question:
+    description: A pathless Workflow Input required when a Run begins.
+nodes:
+  - id: synthesize
+    name: Synthesize
+    prompt: Combine the independent findings.
+    inputs:
+      zeta-findings:
+        node: investigate
+      alpha-findings:
+        node: compare
+  - id: investigate
+    name: Investigate
+    prompt: Gather evidence from the source notes.
+    inputs:
+      notes:
+        workflow_input: source-notes
+      question:
+        workflow_input: question
+  - id: compare
+    name: Compare
+    prompt: Compare the evidence with the constraints.
+    inputs:
+      research:
+        node: investigate
+      constraints:
+        workflow_input: constraints
+  - id: reuse
+    name: Reuse
+    prompt: Reuse the same evidence in another terminal branch.
+    inputs:
+      research:
+        node: investigate
+  - id: independent-root
+    name: Independent Root
+    prompt: Produce an outcome in a disconnected component.
+  - id: isolated
+    name: Isolated
+    prompt: Produce an isolated terminal outcome.
