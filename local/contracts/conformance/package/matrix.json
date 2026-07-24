@@ -1,0 +1,35 @@
+{
+  "schema_version": "breakdown.conformance-matrix.v1",
+  "defaults": {
+    "prerequisites": "Inspect the clean tarball installation used by the installed CLI tests.",
+    "action": "Read the installed package manifests and runtime dependency graph.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "package",
+      "host": "none",
+      "protocol": "npm"
+    },
+    "gate": "release-blocking",
+    "evidence": "packages/breakdown-cli/src/index.test.ts"
+  },
+  "rows": [
+    {
+      "id": "PKG-001",
+      "requirement": "Issue #143: package the core and CLI separately in lockstep",
+      "oracle": "@breakdown-sh/core and @breakdown-sh/cli both report 1.0.0-beta.1 and the CLI requires that exact core version."
+    },
+    {
+      "id": "PKG-002",
+      "requirement": "Issue #143: support Node ^24.0.0",
+      "oracle": "Both installed package manifests declare engines.node as ^24.0.0."
+    },
+    {
+      "id": "PKG-003",
+      "requirement": "Issue #143: isolate the core from hosted and adapter dependencies",
+      "oracle": "The core has exactly one runtime dependency, yaml 2.9.0; the CLI has exactly one runtime dependency, the exact matching core."
+    }
+  ]
+}

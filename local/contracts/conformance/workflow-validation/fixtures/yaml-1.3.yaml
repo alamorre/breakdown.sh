@@ -1,0 +1,9 @@
+%YAML 1.3
+---
+schema_version: breakdown.workflow.v1
+id: research
+name: Research
+nodes:
+  - id: investigate
+    name: Investigate
+    prompt: Gather the relevant evidence.

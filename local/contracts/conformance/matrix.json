@@ -1,0 +1,17 @@
+{
+  "schema_version": "breakdown.conformance-index.v1",
+  "matrices": [
+    {
+      "group": "WFV",
+      "path": "workflow-validation/matrix.json"
+    },
+    {
+      "group": "CLI",
+      "path": "cli/matrix.json"
+    },
+    {
+      "group": "PKG",
+      "path": "package/matrix.json"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breakdown.sh/contracts/schemas/breakdown.workflow.v1.schema.json",
+  "title": "Breakdown Workflow Definition v1",
+  "description": "The machine shape delivered by the minimal Breakdown Local validation tracer bullet.",
+  "$comment": "YAML 1.2 Core-profile syntax restrictions are normative but cannot be represented by JSON Schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "name", "nodes"],
+  "properties": {
+    "schema_version": {
+      "const": "breakdown.workflow.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "prompt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

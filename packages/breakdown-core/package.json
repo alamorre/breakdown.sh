@@ -1,0 +1,28 @@
+{
+  "name": "@breakdown-sh/core",
+  "version": "1.0.0-beta.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run src/index.test.ts",
+    "test:coverage": "vitest run src/index.test.ts --coverage --coverage.include=src/index.ts --coverage.thresholds.lines=80",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "yaml": "2.9.0"
+  }
+}

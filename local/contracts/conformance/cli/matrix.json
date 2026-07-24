@@ -1,0 +1,45 @@
+{
+  "schema_version": "breakdown.conformance-matrix.v1",
+  "defaults": {
+    "prerequisites": "Build @breakdown-sh/core and @breakdown-sh/cli, pack both, and install their tarballs with the exact YAML dependency in an otherwise empty temporary package.",
+    "action": "Invoke the installed breakdown executable against a real temporary project.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "cli",
+      "host": "none",
+      "protocol": "breakdown.cli-output.v1"
+    },
+    "gate": "release-blocking",
+    "evidence": "packages/breakdown-cli/src/index.test.ts"
+  },
+  "rows": [
+    {
+      "id": "CLI-001",
+      "requirement": "Issue #143: expose breakdown workflow validate --project PATH --json",
+      "oracle": "Exit 0; stdout is one compact breakdown.cli-output.v1 success document plus LF; stderr is empty."
+    },
+    {
+      "id": "CLI-002",
+      "requirement": "Issue #143: expose concise human validation output",
+      "oracle": "Exit 0; stdout identifies breakdown.yaml and the Node Definition count; stderr is empty."
+    },
+    {
+      "id": "CLI-003",
+      "requirement": "Issue #143: preserve structured core validation failures",
+      "oracle": "Exit 3; stdout is one compact failure document with invalid_workflow and ordered diagnostics; stderr is empty."
+    },
+    {
+      "id": "CLI-004",
+      "requirement": "Issue #143: require an explicit non-empty project root",
+      "oracle": "Missing or empty --project exits 2 with usage on stderr and no stdout."
+    },
+    {
+      "id": "CLI-005",
+      "requirement": "Issue #143: expose only the delivered validation command",
+      "oracle": "A command outside workflow validate exits 2 with usage on stderr and no stdout."
+    }
+  ]
+}

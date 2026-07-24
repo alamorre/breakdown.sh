@@ -1,0 +1,16 @@
+---
+schema_version: breakdown.workflow.v1
+id: first
+name: First
+nodes:
+  - id: first-node
+    name: First node
+    prompt: First prompt
+---
+schema_version: breakdown.workflow.v1
+id: second
+name: Second
+nodes:
+  - id: second-node
+    name: Second node
+    prompt: Second prompt

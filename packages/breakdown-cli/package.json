@@ -1,0 +1,27 @@
+{
+  "name": "@breakdown-sh/cli",
+  "version": "1.0.0-beta.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^24.0.0"
+  },
+  "bin": {
+    "breakdown": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "pnpm --filter @breakdown-sh/core build && pnpm run build",
+    "test": "vitest run src/index.test.ts",
+    "pretest:coverage": "pnpm --filter @breakdown-sh/core build && pnpm run build",
+    "test:coverage": "vitest run src/index.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@breakdown-sh/core": "workspace:1.0.0-beta.1"
+  }
+}

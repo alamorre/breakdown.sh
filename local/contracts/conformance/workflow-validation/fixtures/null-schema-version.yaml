@@ -1,0 +1,7 @@
+schema_version: null
+id: research
+name: Research
+nodes:
+  - id: investigate
+    name: Investigate
+    prompt: Gather the relevant evidence.

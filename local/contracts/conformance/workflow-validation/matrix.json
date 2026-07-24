@@ -1,0 +1,472 @@
+{
+  "schema_version": "breakdown.conformance-matrix.v1",
+  "defaults": {
+    "prerequisites": "Place the fixture bytes at <temporary-project>/breakdown.yaml.",
+    "action": "Call validate_workflow through the core dispatcher with the temporary project as the explicit trusted project root.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "evidence": "packages/breakdown-core/src/index.test.ts"
+  },
+  "rows": [
+    {
+      "id": "WFV-001",
+      "requirement": "Issue #143: accept a minimal breakdown.workflow.v1 Workflow Definition",
+      "fixture": "fixtures/minimal-valid.yaml",
+      "oracle": {
+        "ok": true
+      }
+    },
+    {
+      "id": "WFV-002",
+      "requirement": "Issue #143: reject invalid YAML deterministically",
+      "fixture": "fixtures/invalid-syntax.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-003",
+      "requirement": "Issue #143: require exactly one YAML document",
+      "fixture": "fixtures/multiple-documents.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-004",
+      "requirement": "Issue #143: require a mapping-root document",
+      "fixture": "fixtures/sequence-root.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-005",
+      "requirement": "Issue #143: reject YAML version directives other than 1.2",
+      "fixture": "fixtures/yaml-1.1.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "unsupported",
+        "failure_code": "unsupported_version",
+        "diagnostics": [
+          {
+            "code": "unsupported_version",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-006",
+      "requirement": "Issue #143: accept an explicit YAML 1.2 directive",
+      "fixture": "fixtures/yaml-1.2.yaml",
+      "oracle": {
+        "ok": true
+      }
+    },
+    {
+      "id": "WFV-007",
+      "requirement": "Issue #143: require every root field and order diagnostics by path then code",
+      "fixture": "fixtures/missing-root-fields.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/id"
+          },
+          {
+            "code": "schema",
+            "path": "/name"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes"
+          },
+          {
+            "code": "schema",
+            "path": "/schema_version"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-008",
+      "requirement": "Issue #143: reject unsupported Workflow Definition schema identifiers",
+      "fixture": "fixtures/unsupported-schema-version.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "unsupported",
+        "failure_code": "unsupported_version",
+        "diagnostics": [
+          {
+            "code": "unsupported_version",
+            "path": "/schema_version"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-009",
+      "requirement": "Issue #143: reject unknown root fields",
+      "fixture": "fixtures/unknown-root-field.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/unexpected"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-010",
+      "requirement": "Issue #143: require a non-empty nodes array",
+      "fixture": "fixtures/empty-nodes.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/nodes"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-011",
+      "requirement": "Issue #143: reject scalar coercion",
+      "fixture": "fixtures/no-coercion.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-012",
+      "requirement": "Issue #143: reject null used as omission",
+      "fixture": "fixtures/null-required-field.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/name"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-013",
+      "requirement": "Issue #143: enforce basic Node Definition invariants and unknown-field rejection",
+      "fixture": "fixtures/invalid-nodes.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/nodes/0"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/id"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/name"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/prompt"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/unexpected"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/3/id"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/4/name"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/5/prompt"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-014",
+      "requirement": "Issue #143: reject duplicate mapping keys",
+      "fixture": "fixtures/duplicate-keys.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-015",
+      "requirement": "Issue #143: reject YAML anchors",
+      "fixture": "fixtures/anchor.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-016",
+      "requirement": "Issue #143: reject YAML aliases",
+      "fixture": "fixtures/alias.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-017",
+      "requirement": "Issue #143: reject YAML merge keys",
+      "fixture": "fixtures/merge-key.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-018",
+      "requirement": "Issue #143: reject custom YAML tags",
+      "fixture": "fixtures/custom-tag.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-019",
+      "requirement": "Issue #143: reject positive and negative infinity",
+      "fixture": "fixtures/non-finite-infinity.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-020",
+      "requirement": "Issue #143: reject NaN",
+      "fixture": "fixtures/non-finite-nan.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-021",
+      "requirement": "Issue #143: reject invalid YAML directives",
+      "fixture": "fixtures/invalid-yaml-directive.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-022",
+      "requirement": "Issue #143: reject a YAML version directive newer than 1.2",
+      "fixture": "fixtures/yaml-1.3.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "unsupported",
+        "failure_code": "unsupported_version",
+        "diagnostics": [
+          {
+            "code": "unsupported_version",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-023",
+      "requirement": "Issue #143: reject bytes that are not valid UTF-8",
+      "fixture": "fixtures/invalid-utf8.base64",
+      "encoding": "base64",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "parse",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-024",
+      "requirement": "Issue #143: reject custom YAML tag directives even when no tagged value uses them",
+      "fixture": "fixtures/custom-tag-directive.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-025",
+      "requirement": "Issue #143: treat project content as data and never execute it",
+      "fixture": "fixtures/hostile-project-content.yaml",
+      "oracle": {
+        "ok": true,
+        "effect": {
+          "absent_path": "should-not-exist"
+        }
+      }
+    },
+    {
+      "id": "WFV-026",
+      "requirement": "Issue #143: reject a YAML tag directive that overrides the standard tag handle",
+      "fixture": "fixtures/standard-tag-override.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-027",
+      "requirement": "Issue #143: reject null schema_version as a schema error rather than an unsupported family",
+      "fixture": "fixtures/null-schema-version.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/schema_version"
+          }
+        ]
+      }
+    }
+  ]
+}

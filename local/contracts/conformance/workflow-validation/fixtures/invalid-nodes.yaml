@@ -1,0 +1,19 @@
+schema_version: breakdown.workflow.v1
+id: research
+name: Research
+nodes:
+  - not-a-mapping
+  - {}
+  - id: unexpected-field
+    name: Unexpected field
+    prompt: Reject unknown fields.
+    unexpected: rejected
+  - id: 42
+    name: Invalid id
+    prompt: Reject coercion.
+  - id: null-name
+    name: null
+    prompt: Reject null as omission.
+  - id: empty-prompt
+    name: Empty prompt
+    prompt: ""

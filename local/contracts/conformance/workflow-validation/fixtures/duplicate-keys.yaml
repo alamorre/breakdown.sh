@@ -1,0 +1,8 @@
+schema_version: breakdown.workflow.v1
+id: first
+id: second
+name: Duplicate keys
+nodes:
+  - id: investigate
+    name: Investigate
+    prompt: Gather the relevant evidence.
