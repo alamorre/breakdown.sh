@@ -1,0 +1,56 @@
+schema_version: breakdown.workflow.v1
+id: maximal-workflow
+name: Maximal Workflow
+description: Exercises every Workflow Definition field delivered through issue 145.
+inputs:
+  source:
+    description: Source material for the contracted Result.
+    default: inputs/source.md
+extensions:
+  com.example.canvas:
+    collapsed: false
+    serial: 9007199254740993
+    position:
+      x: 10
+      y: 20
+nodes:
+  - id: summarize
+    name: Summarize
+    prompt: Produce Markdown and a portable structured sidecar.
+    inputs:
+      source:
+        workflow_input: source
+    data_contract:
+      type: [object, 'null']
+      enum:
+        - count: 1
+          labels: [ready]
+        - null
+      const:
+        count: 1
+        labels: [ready]
+      title: Summary
+      description: A portable summary Data Contract.
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          maximum: 10
+          exclusiveMinimum: -1
+          exclusiveMaximum: 11
+        labels:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
+          minItems: 1
+          maxItems: 3
+        metadata: true
+      required: [count, labels]
+      additionalProperties: false
+    extensions:
+      org.example.reviewer:
+        labels: [portable, inert]
+        settings:
+          enabled: true

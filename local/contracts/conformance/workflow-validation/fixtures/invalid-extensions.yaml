@@ -1,0 +1,14 @@
+schema_version: breakdown.workflow.v1
+id: invalid-extensions
+name: Invalid Extensions
+extensions:
+  invalid: {}
+  com..example: {}
+  com.example.value: false
+nodes:
+  - id: inspect
+    name: Inspect
+    prompt: Reject invalid extension declarations.
+    extensions:
+      Com.Example.Reviewer: {}
+      org.example.reviewer: []

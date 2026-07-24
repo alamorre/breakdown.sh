@@ -821,6 +821,493 @@
           }
         ]
       }
+    },
+    {
+      "id": "WFV-035",
+      "requirement": "Issue #145: accept and preserve a maximal definition with a portable Data Contract and inert extensions",
+      "fixture": "fixtures/maximal-valid.yaml",
+      "oracle": {
+        "ok": true
+      }
+    },
+    {
+      "id": "WFV-036",
+      "requirement": "Issue #145: accept Data Contracts for every possible JSON instance root type",
+      "fixture": "fixtures/data-contract-roots-valid.yaml",
+      "oracle": {
+        "ok": true
+      }
+    },
+    {
+      "id": "WFV-037",
+      "requirement": "Issue #145: reject unsupported Data Contract features and invalid allowed-keyword shapes",
+      "fixture": "fixtures/invalid-data-contracts.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/nodes/0/data_contract"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/$defs"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/$id"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/$ref"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/$schema"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/$vocabulary"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/__proto__"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/allOf"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/anyOf"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/constructor"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/default"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/definitions"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/else"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/format"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/hasOwnProperty"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/if"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/not"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/oneOf"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/pattern"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/then"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/1/data_contract/toString"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/additionalProperties"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/description"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/enum"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/exclusiveMaximum"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/exclusiveMinimum"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/items"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/maxItems"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/maxLength"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/maximum"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/minItems"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/minLength"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/minimum"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/properties/invalid"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/properties/nested/pattern"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/required"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/title"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/2/data_contract/type"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/3/data_contract"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-038",
+      "requirement": "Issue #145: require reverse-DNS extension namespaces and JSON-object values",
+      "fixture": "fixtures/invalid-extensions.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/extensions/com..example"
+          },
+          {
+            "code": "schema",
+            "path": "/extensions/com.example.value"
+          },
+          {
+            "code": "schema",
+            "path": "/extensions/invalid"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/extensions/Com.Example.Reviewer"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/extensions/org.example.reviewer"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-039",
+      "requirement": "Issue #145: require string keys throughout JSON-compatible Data Contracts and extensions",
+      "fixture": "fixtures/non-string-json-keys.yaml",
+      "oracle": {
+        "ok": false,
+        "failure_kind": "invalid",
+        "failure_code": "invalid_workflow",
+        "diagnostics": [
+          {
+            "code": "schema",
+            "path": "/extensions/com.example.metadata/1"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/data_contract/enum/0/false"
+          },
+          {
+            "code": "schema",
+            "path": "/nodes/0/data_contract/properties/true"
+          }
+        ]
+      }
+    },
+    {
+      "id": "WFV-040",
+      "requirement": "Issue #145: enforce every fixed Workflow Definition limit at limit-minus-one, limit, and limit-plus-one without truncation",
+      "generated_cases": [
+        {
+          "id": "workflow-definition-bytes-minus-one",
+          "generator": "workflow_definition_bytes",
+          "value": 1048575,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "workflow-definition-bytes-limit",
+          "generator": "workflow_definition_bytes",
+          "value": 1048576,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "workflow-definition-bytes-plus-one",
+          "generator": "workflow_definition_bytes",
+          "value": 1048577,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "nodes-minus-one",
+          "generator": "nodes_per_workflow",
+          "value": 255,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "nodes-limit",
+          "generator": "nodes_per_workflow",
+          "value": 256,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "nodes-plus-one",
+          "generator": "nodes_per_workflow",
+          "value": 257,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "workflow-inputs-minus-one",
+          "generator": "workflow_inputs_per_workflow",
+          "value": 127,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "workflow-inputs-limit",
+          "generator": "workflow_inputs_per_workflow",
+          "value": 128,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "workflow-inputs-plus-one",
+          "generator": "workflow_inputs_per_workflow",
+          "value": 129,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "input-bindings-minus-one",
+          "generator": "input_bindings_per_node",
+          "value": 63,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "input-bindings-limit",
+          "generator": "input_bindings_per_node",
+          "value": 64,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "input-bindings-plus-one",
+          "generator": "input_bindings_per_node",
+          "value": 65,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "node-prompt-bytes-minus-one",
+          "generator": "node_prompt_bytes",
+          "value": 102399,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "node-prompt-bytes-limit",
+          "generator": "node_prompt_bytes",
+          "value": 102400,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "node-prompt-bytes-plus-one",
+          "generator": "node_prompt_bytes",
+          "value": 102401,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "nesting-depth-minus-one",
+          "generator": "yaml_json_nesting_depth",
+          "value": 63,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "nesting-depth-limit",
+          "generator": "yaml_json_nesting_depth",
+          "value": 64,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "nesting-depth-plus-one",
+          "generator": "yaml_json_nesting_depth",
+          "value": 65,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "data-contract-schema-nodes-minus-one",
+          "generator": "data_contract_schema_nodes",
+          "value": 4095,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "data-contract-schema-nodes-limit",
+          "generator": "data_contract_schema_nodes",
+          "value": 4096,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "data-contract-schema-nodes-plus-one",
+          "generator": "data_contract_schema_nodes",
+          "value": 4097,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "project-relative-path-bytes-minus-one",
+          "generator": "project_relative_path_bytes",
+          "value": 1023,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "project-relative-path-bytes-limit",
+          "generator": "project_relative_path_bytes",
+          "value": 1024,
+          "oracle": {
+            "ok": true
+          }
+        },
+        {
+          "id": "project-relative-path-bytes-plus-one",
+          "generator": "project_relative_path_bytes",
+          "value": 1025,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded"
+          }
+        },
+        {
+          "id": "diagnostics-minus-one",
+          "generator": "diagnostics_returned",
+          "value": 999,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "invalid",
+            "failure_code": "invalid_workflow",
+            "diagnostic_count": 999
+          }
+        },
+        {
+          "id": "diagnostics-limit",
+          "generator": "diagnostics_returned",
+          "value": 1000,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "invalid",
+            "failure_code": "invalid_workflow",
+            "diagnostic_count": 1000
+          }
+        },
+        {
+          "id": "diagnostics-plus-one",
+          "generator": "diagnostics_returned",
+          "value": 1001,
+          "oracle": {
+            "ok": false,
+            "failure_kind": "resource_limit",
+            "failure_code": "limit_exceeded",
+            "diagnostic_count": 1000
+          }
+        }
+      ]
     }
   ]
 }

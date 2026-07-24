@@ -1,0 +1,40 @@
+schema_version: breakdown.workflow.v1
+id: data-contract-roots
+name: Data Contract Roots
+nodes:
+  - id: object-result
+    name: Object Result
+    prompt: Produce an object sidecar.
+    data_contract:
+      type: object
+  - id: array-result
+    name: Array Result
+    prompt: Produce an array sidecar.
+    data_contract:
+      type: array
+      items: true
+  - id: string-result
+    name: String Result
+    prompt: Produce a string sidecar.
+    data_contract:
+      type: string
+  - id: number-result
+    name: Number Result
+    prompt: Produce a number sidecar.
+    data_contract:
+      type: number
+  - id: integer-result
+    name: Integer Result
+    prompt: Produce an integer sidecar.
+    data_contract:
+      type: integer
+  - id: boolean-result
+    name: Boolean Result
+    prompt: Produce a boolean sidecar.
+    data_contract:
+      type: boolean
+  - id: null-result
+    name: Null Result
+    prompt: Produce a null sidecar.
+    data_contract:
+      type: 'null'

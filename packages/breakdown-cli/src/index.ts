@@ -21,6 +21,15 @@ interface ParsedArguments {
   json: boolean;
 }
 
+function stringifyMachineValue(value: unknown) {
+  const json = JSON as typeof JSON & {
+    rawJSON(text: string): unknown;
+  };
+  return JSON.stringify(value, (_key, item: unknown) =>
+    typeof item === 'bigint' ? json.rawJSON(item.toString()) : item,
+  );
+}
+
 function parseArguments(args: string[]): ParsedArguments | undefined {
   if (args[0] !== 'workflow' || args[1] !== 'validate') {
     return undefined;
@@ -80,7 +89,7 @@ async function main() {
           ok: false,
           error: result.failure,
         };
-    process.stdout.write(`${JSON.stringify(envelope)}\n`);
+    process.stdout.write(`${stringifyMachineValue(envelope)}\n`);
   } else if (result.ok) {
     const nodeCount = result.value.workflow.nodes.length;
     const nodeLabel = nodeCount === 1 ? 'Node Definition' : 'Node Definitions';

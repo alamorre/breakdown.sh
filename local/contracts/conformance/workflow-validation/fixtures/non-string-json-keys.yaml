@@ -1,0 +1,16 @@
+schema_version: breakdown.workflow.v1
+id: non-string-json-keys
+name: Non-string JSON Keys
+extensions:
+  com.example.metadata:
+    1: invalid
+nodes:
+  - id: validate
+    name: Validate
+    prompt: Reject non-string keys throughout JSON-compatible values.
+    data_contract:
+      enum:
+        - false: invalid
+      properties:
+        true:
+          type: string

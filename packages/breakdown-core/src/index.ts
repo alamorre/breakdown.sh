@@ -3,6 +3,14 @@ import { join } from 'node:path';
 
 import { isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
+import { DATA_CONTRACT_KEYWORD_KINDS, DATA_CONTRACT_TYPES } from './data-contract-dialect.js';
+import {
+  isNonNegativeRawJsonInteger,
+  isRawJsonNumber,
+  preserveYamlJsonNumber,
+} from './exact-json-number.js';
+import { FIXED_LIMITS } from './fixed-limits.js';
+
 export interface ValidateWorkflowRequest {
   operation: 'validate_workflow';
 }
@@ -92,6 +100,18 @@ function validationFailure(
   };
 }
 
+function resourceLimitFailure(diagnostics: Diagnostic[] = []): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'resource_limit',
+      code: 'limit_exceeded',
+      message: 'A fixed resource limit was exceeded.',
+      diagnostics,
+    },
+  };
+}
+
 function unsupportedYamlVersionFailure(): OperationFailure {
   return validationFailure(
     [
@@ -108,7 +128,9 @@ function unsupportedYamlVersionFailure(): OperationFailure {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return (
+    typeof value === 'object' && value !== null && !Array.isArray(value) && !isRawJsonNumber(value)
+  );
 }
 
 function schemaDiagnostic(path: string, message: string): Diagnostic {
@@ -141,52 +163,35 @@ function escapePointerSegment(segment: string) {
   return segment.replaceAll('~', '~0').replaceAll('/', '~1');
 }
 
-function valueForStringKey(mapping: unknown, key: string) {
-  if (!isMap(mapping)) return undefined;
-  const pair = mapping.items.find(
-    (item) => isScalar(item.key) && typeof item.key.value === 'string' && item.key.value === key,
-  );
-  return pair?.value;
-}
-
 function nonStringKeyPathSegment(key: unknown) {
   if (isScalar(key)) return escapePointerSegment(String(key.value));
   return '<non-string-key>';
 }
 
-function collectNonStringIdentifierKeyDiagnostics(contents: unknown): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
-  const workflowInputs = valueForStringKey(contents, 'inputs');
-  if (isMap(workflowInputs)) {
-    for (const input of workflowInputs.items) {
-      if (!isScalar(input.key) || typeof input.key.value !== 'string') {
-        diagnostics.push(
-          schemaDiagnostic(
-            `/inputs/${nonStringKeyPathSegment(input.key)}`,
-            'Workflow Input identifiers must be strings.',
-          ),
-        );
-      }
-    }
+function collectNonStringMappingKeyDiagnostics(
+  value: unknown,
+  path = '',
+  diagnostics: Diagnostic[] = [],
+): Diagnostic[] {
+  if (isSeq(value)) {
+    value.items.forEach((item, index) => {
+      collectNonStringMappingKeyDiagnostics(item, `${path}/${index}`, diagnostics);
+    });
+    return diagnostics;
   }
+  if (!isMap(value)) return diagnostics;
 
-  const nodes = valueForStringKey(contents, 'nodes');
-  if (!isSeq(nodes)) return diagnostics;
-  nodes.items.forEach((node, nodeIndex) => {
-    const inputBindings = valueForStringKey(node, 'inputs');
-    if (!isMap(inputBindings)) return;
-    for (const binding of inputBindings.items) {
-      if (!isScalar(binding.key) || typeof binding.key.value !== 'string') {
-        diagnostics.push(
-          schemaDiagnostic(
-            `/nodes/${nodeIndex}/inputs/${nonStringKeyPathSegment(binding.key)}`,
-            'Input Binding identifiers must be strings.',
-          ),
-        );
-      }
+  for (const pair of value.items) {
+    const stringKey =
+      isScalar(pair.key) && typeof pair.key.value === 'string' ? pair.key.value : undefined;
+    const pathSegment =
+      stringKey === undefined ? nonStringKeyPathSegment(pair.key) : escapePointerSegment(stringKey);
+    const pairPath = `${path}/${pathSegment}`;
+    if (stringKey === undefined) {
+      diagnostics.push(schemaDiagnostic(pairPath, 'JSON-compatible mapping keys must be strings.'));
     }
-  });
-
+    collectNonStringMappingKeyDiagnostics(pair.value, pairPath, diagnostics);
+  }
   return diagnostics;
 }
 
@@ -354,6 +359,259 @@ function validateInputBindings(value: unknown, nodePath: string, diagnostics: Di
       }
     }
   }
+}
+
+const dataContractTypes = new Set<string>(DATA_CONTRACT_TYPES);
+
+function isValidDataContractType(value: unknown) {
+  if (typeof value === 'string') return dataContractTypes.has(value);
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => typeof item === 'string' && dataContractTypes.has(item)) &&
+    new Set(value).size === value.length
+  );
+}
+
+function isNonNegativeInteger(value: unknown) {
+  return (
+    (typeof value === 'number' && Number.isInteger(value) && value >= 0) ||
+    (typeof value === 'bigint' && value >= 0n) ||
+    isNonNegativeRawJsonInteger(value)
+  );
+}
+
+function isFiniteJsonNumber(value: unknown) {
+  return (
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    typeof value === 'bigint' ||
+    isRawJsonNumber(value)
+  );
+}
+
+function validateDataContractSchema(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[],
+  allowBoolean: boolean,
+) {
+  if (allowBoolean && typeof value === 'boolean') return;
+  if (!isRecord(value)) {
+    diagnostics.push(schemaDiagnostic(path, 'Data Contract schemas must be mappings.'));
+    return;
+  }
+
+  for (const keyword of Object.keys(value)) {
+    const keywordPath = `${path}/${escapePointerSegment(keyword)}`;
+    const keywordKind = Object.hasOwn(DATA_CONTRACT_KEYWORD_KINDS, keyword)
+      ? DATA_CONTRACT_KEYWORD_KINDS[keyword as keyof typeof DATA_CONTRACT_KEYWORD_KINDS]
+      : undefined;
+    if (keywordKind === undefined) {
+      diagnostics.push(
+        schemaDiagnostic(keywordPath, `Unsupported Data Contract keyword: ${keyword}.`),
+      );
+      continue;
+    }
+
+    const keywordValue = value[keyword];
+    switch (keywordKind) {
+      case 'type':
+        if (!isValidDataContractType(keywordValue)) {
+          diagnostics.push(
+            schemaDiagnostic(keywordPath, 'type must name one or more unique JSON value types.'),
+          );
+        }
+        break;
+      case 'enum':
+        if (!Array.isArray(keywordValue)) {
+          diagnostics.push(schemaDiagnostic(keywordPath, 'enum must be an array of JSON values.'));
+        }
+        break;
+      case 'any':
+        break;
+      case 'string':
+        if (typeof keywordValue !== 'string') {
+          diagnostics.push(schemaDiagnostic(keywordPath, `${keyword} must be a string.`));
+        }
+        break;
+      case 'schemas':
+        if (!isRecord(keywordValue)) {
+          diagnostics.push(schemaDiagnostic(keywordPath, 'properties must be a mapping.'));
+          break;
+        }
+        for (const [property, propertySchema] of Object.entries(keywordValue)) {
+          validateDataContractSchema(
+            propertySchema,
+            `${keywordPath}/${escapePointerSegment(property)}`,
+            diagnostics,
+            true,
+          );
+        }
+        break;
+      case 'string-array':
+        if (
+          !Array.isArray(keywordValue) ||
+          !keywordValue.every((item) => typeof item === 'string') ||
+          new Set(keywordValue).size !== keywordValue.length
+        ) {
+          diagnostics.push(
+            schemaDiagnostic(keywordPath, 'required must be an array of unique strings.'),
+          );
+        }
+        break;
+      case 'schema':
+        validateDataContractSchema(keywordValue, keywordPath, diagnostics, true);
+        break;
+      case 'non-negative-integer':
+        if (!isNonNegativeInteger(keywordValue)) {
+          diagnostics.push(
+            schemaDiagnostic(keywordPath, `${keyword} must be a non-negative integer.`),
+          );
+        }
+        break;
+      case 'number':
+        if (!isFiniteJsonNumber(keywordValue)) {
+          diagnostics.push(schemaDiagnostic(keywordPath, `${keyword} must be a finite number.`));
+        }
+        break;
+    }
+  }
+}
+
+function validateDataContract(value: unknown, nodePath: string, diagnostics: Diagnostic[]) {
+  if (value === undefined) return;
+  validateDataContractSchema(value, `${nodePath}/data_contract`, diagnostics, false);
+}
+
+const reverseDnsNamespacePattern =
+  /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+function validateExtensions(value: unknown, path: string, diagnostics: Diagnostic[]) {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    diagnostics.push(schemaDiagnostic(path, 'extensions must be a mapping.'));
+    return;
+  }
+
+  for (const [namespace, extension] of Object.entries(value)) {
+    const extensionPath = `${path}/${escapePointerSegment(namespace)}`;
+    if (!reverseDnsNamespacePattern.test(namespace)) {
+      diagnostics.push(
+        schemaDiagnostic(extensionPath, 'Extension keys must be reverse-DNS namespaces.'),
+      );
+    }
+    if (!isRecord(extension)) {
+      diagnostics.push(schemaDiagnostic(extensionPath, 'Extension values must be JSON objects.'));
+    }
+  }
+}
+
+function yamlCollectionDepth(value: unknown, parentDepth = 0): number {
+  if (isSeq(value)) {
+    const depth = parentDepth + 1;
+    let maximum = depth;
+    for (const item of value.items) {
+      maximum = Math.max(maximum, yamlCollectionDepth(item, depth));
+    }
+    return maximum;
+  }
+  if (isMap(value)) {
+    const depth = parentDepth + 1;
+    let maximum = depth;
+    for (const item of value.items) {
+      maximum = Math.max(
+        maximum,
+        yamlCollectionDepth(item.key, depth),
+        yamlCollectionDepth(item.value, depth),
+      );
+    }
+    return maximum;
+  }
+  return parentDepth;
+}
+
+function normalizeJsonIntegers(value: unknown): unknown {
+  if (isRawJsonNumber(value)) return value;
+  if (typeof value === 'bigint') {
+    if (value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      return Number(value);
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(normalizeJsonIntegers);
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, normalizeJsonIntegers(item)]),
+    );
+  }
+  return value;
+}
+
+function dataContractSchemaNodeCount(value: unknown): number {
+  if (!isRecord(value)) return 1;
+
+  let count = 1;
+  if (isRecord(value.properties)) {
+    for (const schema of Object.values(value.properties)) {
+      count += dataContractSchemaNodeCount(schema);
+      if (count > FIXED_LIMITS.data_contract_schema_nodes) return count;
+    }
+  }
+  if (value.items !== undefined) {
+    count += dataContractSchemaNodeCount(value.items);
+  }
+  if (value.additionalProperties !== undefined) {
+    count += dataContractSchemaNodeCount(value.additionalProperties);
+  }
+  return count;
+}
+
+function exceedsDefinitionStructuralLimits(value: unknown) {
+  if (!isRecord(value)) return false;
+  if (Array.isArray(value.nodes) && value.nodes.length > FIXED_LIMITS.nodes_per_workflow) {
+    return true;
+  }
+  if (
+    isRecord(value.inputs) &&
+    Object.keys(value.inputs).length > FIXED_LIMITS.workflow_inputs_per_workflow
+  ) {
+    return true;
+  }
+  if (isRecord(value.inputs)) {
+    for (const input of Object.values(value.inputs)) {
+      if (
+        isRecord(input) &&
+        typeof input.default === 'string' &&
+        Buffer.byteLength(input.default) > FIXED_LIMITS.project_relative_path_bytes
+      ) {
+        return true;
+      }
+    }
+  }
+  if (!Array.isArray(value.nodes)) return false;
+
+  for (const node of value.nodes) {
+    if (!isRecord(node)) continue;
+    if (
+      isRecord(node.inputs) &&
+      Object.keys(node.inputs).length > FIXED_LIMITS.input_bindings_per_node
+    ) {
+      return true;
+    }
+    if (
+      typeof node.prompt === 'string' &&
+      Buffer.byteLength(node.prompt) > FIXED_LIMITS.node_prompt_bytes
+    ) {
+      return true;
+    }
+    if (
+      node.data_contract !== undefined &&
+      dataContractSchemaNodeCount(node.data_contract) > FIXED_LIMITS.data_contract_schema_nodes
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 type BindingSourceKind = 'workflow_input' | 'node';
@@ -628,6 +886,7 @@ function validateWorkflowShape(
     validateOptionalDescription(value.description, '/description', diagnostics, 2_000);
   }
   validateWorkflowInputs(value.inputs, diagnostics);
+  validateExtensions(value.extensions, '/extensions', diagnostics);
 
   if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
     diagnostics.push(schemaDiagnostic('/nodes', 'nodes must be a non-empty array.'));
@@ -665,6 +924,8 @@ function validateWorkflowShape(
       validateName(node.name, `${nodePath}/name`, diagnostics);
       validatePrompt(node.prompt, `${nodePath}/prompt`, diagnostics);
       validateInputBindings(node.inputs, nodePath, diagnostics);
+      validateDataContract(node.data_contract, nodePath, diagnostics);
+      validateExtensions(node.extensions, `${nodePath}/extensions`, diagnostics);
     });
   }
 
@@ -732,6 +993,9 @@ export async function operate(
       },
     };
   }
+  if (bytes.byteLength > FIXED_LIMITS.workflow_definition_bytes) {
+    return resourceLimitFailure();
+  }
   let source: string;
   try {
     source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -752,6 +1016,7 @@ export async function operate(
   }
 
   const document = parseDocument(source, {
+    intAsBigInt: true,
     schema: 'core',
     strict: true,
     uniqueKeys: true,
@@ -762,6 +1027,9 @@ export async function operate(
     return unsupportedYamlVersionFailure();
   }
 
+  if (document.errors.some((error) => error.code === 'RESOURCE_EXHAUSTION')) {
+    return resourceLimitFailure();
+  }
   if (document.errors.length > 0) {
     return validationFailure([
       {
@@ -798,8 +1066,16 @@ export async function operate(
       if (node.tag && !allowedTags.has(node.tag)) {
         forbiddenFeatures.add('custom tags');
       }
-      if (isScalar(node) && typeof node.value === 'number' && !Number.isFinite(node.value)) {
-        forbiddenFeatures.add('non-finite numbers');
+      if (isScalar(node) && (typeof node.value === 'number' || typeof node.value === 'bigint')) {
+        const exactNumber =
+          typeof node.source === 'string'
+            ? preserveYamlJsonNumber(node.source, node.value)
+            : undefined;
+        if (exactNumber === undefined) {
+          forbiddenFeatures.add('non-finite numbers');
+        } else {
+          node.value = exactNumber;
+        }
       }
     },
     Pair(_key, pair) {
@@ -831,6 +1107,10 @@ export async function operate(
     ]);
   }
 
+  if (yamlCollectionDepth(document.contents) > FIXED_LIMITS.yaml_json_nesting_depth) {
+    return resourceLimitFailure();
+  }
+
   if (!isMap(document.contents)) {
     return validationFailure([
       {
@@ -842,9 +1122,15 @@ export async function operate(
     ]);
   }
 
-  const yamlIdentifierKeyDiagnostics = collectNonStringIdentifierKeyDiagnostics(document.contents);
-  const workflow: unknown = document.toJS({ maxAliasCount: 0 });
-  const diagnostics = validateWorkflowShape(workflow, yamlIdentifierKeyDiagnostics);
+  const yamlMappingKeyDiagnostics = collectNonStringMappingKeyDiagnostics(document.contents);
+  const workflow: unknown = normalizeJsonIntegers(document.toJS({ maxAliasCount: 0 }));
+  if (exceedsDefinitionStructuralLimits(workflow)) {
+    return resourceLimitFailure();
+  }
+  const diagnostics = validateWorkflowShape(workflow, yamlMappingKeyDiagnostics);
+  if (diagnostics.length > FIXED_LIMITS.diagnostics_returned) {
+    return resourceLimitFailure(diagnostics.slice(0, FIXED_LIMITS.diagnostics_returned));
+  }
   if (diagnostics.length > 0) {
     const usesUnsupportedVersion = diagnostics.some(
       (diagnostic) => diagnostic.code === 'unsupported_version',

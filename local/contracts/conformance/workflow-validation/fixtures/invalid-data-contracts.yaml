@@ -1,0 +1,59 @@
+schema_version: breakdown.workflow.v1
+id: invalid-data-contracts
+name: Invalid Data Contracts
+nodes:
+  - id: invalid-root
+    name: Invalid Root
+    prompt: Reject a boolean Data Contract root.
+    data_contract: true
+  - id: unsupported
+    name: Unsupported
+    prompt: Reject every unsupported keyword family.
+    data_contract:
+      $schema: https://json-schema.org/draft/2020-12/schema
+      $id: https://example.com/schema
+      $ref: https://example.com/remote
+      $defs: {}
+      $vocabulary: {}
+      definitions: {}
+      allOf: []
+      anyOf: []
+      oneOf: []
+      not: {}
+      if: {}
+      then: {}
+      else: {}
+      pattern: '.*'
+      format: email
+      default: {}
+      __proto__: {}
+      constructor: {}
+      hasOwnProperty: {}
+      toString: {}
+  - id: invalid-shapes
+    name: Invalid Shapes
+    prompt: Reject invalid allowed-keyword shapes.
+    data_contract:
+      type: [string, string]
+      enum: not-an-array
+      title: []
+      description: 1
+      properties:
+        invalid: not-a-schema
+        nested:
+          pattern: '.*'
+      required: [value, value, 1]
+      additionalProperties: not-a-schema
+      items: 1
+      minItems: -1
+      maxItems: 1.5
+      minLength: -1
+      maxLength: 1.5
+      minimum: not-a-number
+      maximum: false
+      exclusiveMinimum: []
+      exclusiveMaximum: {}
+  - id: invalid-null-root
+    name: Invalid Null Root
+    prompt: Reject a null Data Contract root.
+    data_contract: null

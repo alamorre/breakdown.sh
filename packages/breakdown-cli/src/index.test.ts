@@ -252,6 +252,53 @@ describe('breakdown', () => {
     });
   });
 
+  it('should serialize exact large JSON integers without converting them to strings', async () => {
+    const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: exact-integers
+name: Exact Integers
+extensions:
+  com.example.metadata:
+    serial: 9007199254740993
+nodes:
+  - id: inspect
+    name: Inspect
+    prompt: Preserve the exact integer.
+`);
+
+    const result = await runBreakdown(['workflow', 'validate', '--project', projectRoot, '--json']);
+
+    expect(result).toMatchObject({
+      status: 0,
+      stderr: '',
+    });
+    expect(result.stdout).toContain('"serial":9007199254740993');
+    expect(result.stdout).not.toContain('"serial":"9007199254740993"');
+  });
+
+  it('should serialize exact scientific integers and high-precision decimals', async () => {
+    const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: exact-numbers
+name: Exact Numbers
+extensions:
+  com.example.metadata:
+    scientific: 9.007199254740993e15
+    decimal: 0.10000000000000001
+nodes:
+  - id: inspect
+    name: Inspect
+    prompt: Preserve exact JSON numbers.
+`);
+
+    const result = await runBreakdown(['workflow', 'validate', '--project', projectRoot, '--json']);
+
+    expect(result).toMatchObject({
+      status: 0,
+      stderr: '',
+    });
+    expect(result.stdout).toContain('"scientific":9007199254740993');
+    expect(result.stdout).toContain('"decimal":1.0000000000000001e-1');
+  });
+
   it('should report a concise human success', async () => {
     const projectRoot = await createProject();
 
@@ -291,6 +338,28 @@ nodes: []
               file: 'breakdown.yaml',
             },
           ],
+        },
+      })}\n`,
+      stderr: '',
+    });
+  });
+
+  it('should preserve fixed resource-limit failures and exit 7 in JSON mode', async () => {
+    const projectRoot = await createProject(' '.repeat(1_048_577));
+
+    const result = await runBreakdown(['workflow', 'validate', '--project', projectRoot, '--json']);
+
+    expect(result).toEqual({
+      status: 7,
+      stdout: `${JSON.stringify({
+        schema_version: 'breakdown.cli-output.v1',
+        operation: 'validate_workflow',
+        ok: false,
+        error: {
+          kind: 'resource_limit',
+          code: 'limit_exceeded',
+          message: 'A fixed resource limit was exceeded.',
+          diagnostics: [],
         },
       })}\n`,
       stderr: '',
