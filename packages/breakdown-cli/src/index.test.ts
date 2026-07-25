@@ -396,6 +396,74 @@ nodes:
     expect(result.stdout).toMatch(/^Created Run \d{8}T\d{6}\.\d{3}Z--research--[a-z2-7]{12}\.\n$/);
   });
 
+  it('should inspect one exact Run through the JSON command surface', async () => {
+    const projectRoot = await createProject();
+    const created = await runBreakdown(['run', 'create', '--project', projectRoot, '--json']);
+    expectSuccess(created);
+    const runId = (JSON.parse(created.stdout) as { data: { run_id: string } }).data.run_id;
+
+    const result = await runBreakdown([
+      'run',
+      'inspect',
+      '--project',
+      projectRoot,
+      '--run',
+      runId,
+      '--json',
+    ]);
+
+    expectSuccess(result);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      schema_version: 'breakdown.cli-output.v1',
+      operation: 'inspect_run',
+      ok: true,
+      data: {
+        run_id: runId,
+        status: 'incomplete',
+        resumable: true,
+        nodes: [
+          {
+            node_id: 'investigate',
+            state: 'runnable',
+            next_attempt: 1,
+          },
+        ],
+        attempts: [],
+        terminal_results: [],
+      },
+    });
+  });
+
+  it('should report a concise human Run inspection success', async () => {
+    const projectRoot = await createProject();
+    const created = await runBreakdown(['run', 'create', '--project', projectRoot, '--json']);
+    const runId = (JSON.parse(created.stdout) as { data: { run_id: string } }).data.run_id;
+
+    const result = await runBreakdown(['run', 'inspect', '--project', projectRoot, '--run', runId]);
+
+    expect(result).toEqual({
+      status: 0,
+      stdout: `Inspected Run ${runId}: incomplete (1 runnable, 0 complete, 0 blocked).\n`,
+      stderr: '',
+    });
+  });
+
+  it('should reject Run inspection without an exact --run argument', async () => {
+    const projectRoot = await createProject();
+
+    const result = await runBreakdown(['run', 'inspect', '--project', projectRoot, '--json']);
+
+    expect(result).toEqual({
+      status: 2,
+      stdout: '',
+      stderr: `Usage:
+  breakdown workflow validate --project PATH [--json]
+  breakdown run create --project PATH [--input ID=PATH]... [--json]
+  breakdown run inspect --project PATH --run RUN_ID [--json]
+`,
+    });
+  });
+
   it('should reject duplicate Workflow Input overrides before publication', async () => {
     const projectRoot = await createProject();
 
@@ -417,6 +485,7 @@ nodes:
       stderr: `Usage:
   breakdown workflow validate --project PATH [--json]
   breakdown run create --project PATH [--input ID=PATH]... [--json]
+  breakdown run inspect --project PATH --run RUN_ID [--json]
 `,
     });
     await expect(access(join(projectRoot, 'outputs'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -486,6 +555,7 @@ nodes: []
       stderr: `Usage:
   breakdown workflow validate --project PATH [--json]
   breakdown run create --project PATH [--input ID=PATH]... [--json]
+  breakdown run inspect --project PATH --run RUN_ID [--json]
 `,
     });
   });
@@ -501,6 +571,7 @@ nodes: []
       stderr: `Usage:
   breakdown workflow validate --project PATH [--json]
   breakdown run create --project PATH [--input ID=PATH]... [--json]
+  breakdown run inspect --project PATH --run RUN_ID [--json]
 `,
     });
   });
@@ -514,6 +585,7 @@ nodes: []
       stderr: `Usage:
   breakdown workflow validate --project PATH [--json]
   breakdown run create --project PATH [--input ID=PATH]... [--json]
+  breakdown run inspect --project PATH --run RUN_ID [--json]
 `,
     });
   });

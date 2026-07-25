@@ -17,6 +17,7 @@ const EXIT_BY_FAILURE_KIND = {
 const USAGE = `Usage:
   breakdown workflow validate --project PATH [--json]
   breakdown run create --project PATH [--input ID=PATH]... [--json]
+  breakdown run inspect --project PATH --run RUN_ID [--json]
 `;
 
 interface ValidateArguments {
@@ -32,7 +33,14 @@ interface CreateArguments {
   json: boolean;
 }
 
-type ParsedArguments = ValidateArguments | CreateArguments;
+interface InspectArguments {
+  operation: 'inspect_run';
+  project: string;
+  runId: string;
+  json: boolean;
+}
+
+type ParsedArguments = ValidateArguments | CreateArguments | InspectArguments;
 
 function stringifyMachineValue(value: unknown) {
   const json = JSON as typeof JSON & {
@@ -49,10 +57,13 @@ function parseArguments(args: string[]): ParsedArguments | undefined {
       ? 'validate_workflow'
       : args[0] === 'run' && args[1] === 'create'
         ? 'create_run'
-        : undefined;
+        : args[0] === 'run' && args[1] === 'inspect'
+          ? 'inspect_run'
+          : undefined;
   if (operation === undefined) return undefined;
 
   let project: string | undefined;
+  let runId: string | undefined;
   let json = false;
   const inputs: Record<string, string> = Object.create(null) as Record<string, string>;
 
@@ -73,6 +84,18 @@ function parseArguments(args: string[]): ParsedArguments | undefined {
     } else if (argument === '--json') {
       if (json) return undefined;
       json = true;
+    } else if (argument === '--run' && operation === 'inspect_run') {
+      const value = args[index + 1];
+      if (
+        runId !== undefined ||
+        value === undefined ||
+        value.length === 0 ||
+        value.startsWith('--')
+      ) {
+        return undefined;
+      }
+      runId = value;
+      index += 1;
     } else if (argument === '--input' && operation === 'create_run') {
       const value = args[index + 1];
       const separatorIndex = value?.indexOf('=') ?? -1;
@@ -96,9 +119,9 @@ function parseArguments(args: string[]): ParsedArguments | undefined {
   }
 
   if (project === undefined) return undefined;
-  return operation === 'validate_workflow'
-    ? { operation, project, json }
-    : { operation, project, inputs, json };
+  if (operation === 'validate_workflow') return { operation, project, json };
+  if (operation === 'create_run') return { operation, project, inputs, json };
+  return runId === undefined ? undefined : { operation, project, runId, json };
 }
 
 async function main() {
@@ -112,10 +135,10 @@ async function main() {
 
   const projectRoot = resolve(process.cwd(), parsed.project);
 
-  const result =
-    parsed.operation === 'validate_workflow'
-      ? await operate({ operation: 'validate_workflow' }, { projectRoot })
-      : await operate(
+  const result = await (parsed.operation === 'validate_workflow'
+    ? operate({ operation: 'validate_workflow' }, { projectRoot })
+    : parsed.operation === 'create_run'
+      ? operate(
           { operation: 'create_run', inputs: parsed.inputs },
           {
             projectRoot,
@@ -124,7 +147,8 @@ async function main() {
               version: '1.0.0-beta.1',
             },
           },
-        );
+        )
+      : operate({ operation: 'inspect_run', run_id: parsed.runId }, { projectRoot }));
   if (parsed.json) {
     const envelope = result.ok
       ? {
@@ -148,7 +172,18 @@ async function main() {
         `Validated ${result.value.definitionPath} (${nodeCount} ${nodeLabel}).\n`,
       );
     } else if ('run_id' in result.value) {
-      process.stdout.write(`Created Run ${result.value.run_id}.\n`);
+      if ('status' in result.value && 'nodes' in result.value) {
+        const counts = {
+          runnable: result.value.nodes.filter((node) => node.state === 'runnable').length,
+          complete: result.value.nodes.filter((node) => node.state === 'complete').length,
+          blocked: result.value.nodes.filter((node) => node.state === 'blocked').length,
+        };
+        process.stdout.write(
+          `Inspected Run ${result.value.run_id}: ${result.value.status} (${counts.runnable} runnable, ${counts.complete} complete, ${counts.blocked} blocked).\n`,
+        );
+      } else {
+        process.stdout.write(`Created Run ${result.value.run_id}.\n`);
+      }
     }
   } else {
     process.stderr.write(`${result.failure.message}\n`);

@@ -1,0 +1,26 @@
+{
+  "schema_version": "breakdown.run-inspection-fixtures.v1",
+  "statuses": ["succeeded", "failed", "blocked", "cancelled"],
+  "corruptions": [
+    "run-manifest",
+    "workflow-snapshot",
+    "workflow-input",
+    "step-frontmatter",
+    "step-filename",
+    "step-identity",
+    "step-timestamp",
+    "step-context",
+    "step-input-membership",
+    "result-reference",
+    "result-markdown-hash",
+    "result-json-hash",
+    "data-contract",
+    "missing-pair",
+    "unexpected-pair",
+    "attempt-gap",
+    "duplicate-attempt",
+    "unsupported-run-version",
+    "unsupported-step-version"
+  ],
+  "ignored_entries": ["temporary-entry", "orphan-json", "unrelated-markdown", "unrelated-entry"]
+}

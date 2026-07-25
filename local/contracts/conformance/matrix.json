@@ -10,6 +10,10 @@
       "path": "run-creation/matrix.json"
     },
     {
+      "group": "INS",
+      "path": "run-inspection/matrix.json"
+    },
+    {
       "group": "CLI",
       "path": "cli/matrix.json"
     },

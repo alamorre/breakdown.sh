@@ -252,6 +252,34 @@ export async function readSecureRegularFile(
   }
 }
 
+export async function readSecureDirectoryEntries(
+  projectRoot: string,
+  path: string,
+  maximumEntries: number,
+) {
+  const segments = path.split('/');
+  let directoryPath = projectRoot;
+  const projectFacts = await lstat(projectRoot, { bigint: true });
+  const { mounts: linuxMounts, rootMountId } = await linuxMountContext(projectRoot);
+  for (const segment of segments) {
+    const aliases = await matchingDirectoryEntries(directoryPath, segment);
+    if (aliases.length !== 1 || aliases[0] !== segment) {
+      throw new Error('Directory path has an ambiguous case or Unicode alias.');
+    }
+    directoryPath = join(directoryPath, segment);
+    assertSameLinuxMount(linuxMounts, rootMountId, directoryPath);
+    const facts = await lstat(directoryPath, { bigint: true });
+    if (facts.isSymbolicLink() || !facts.isDirectory() || facts.dev !== projectFacts.dev) {
+      throw new Error('Directory path traverses a linked, mounted, or non-directory entry.');
+    }
+  }
+  const entries = await readdir(directoryPath);
+  if (entries.length > maximumEntries) {
+    throw new ResourceLimitError('A secure directory exceeds its fixed entry limit.');
+  }
+  return entries;
+}
+
 export async function ensurePrivateDirectoryPath(projectRoot: string, segments: string[]) {
   let currentPath = projectRoot;
   const projectFacts = await lstat(projectRoot, { bigint: true });

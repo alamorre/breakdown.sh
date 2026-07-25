@@ -38,8 +38,8 @@
     },
     {
       "id": "CLI-005",
-      "requirement": "Issues #143 and #146: expose only delivered human commands",
-      "oracle": "A command outside workflow validate and run create exits 2 with usage on stderr and no stdout."
+      "requirement": "Issues #143, #146, and #147: expose only delivered human commands",
+      "oracle": "A command outside workflow validate, run create, and exact run inspect exits 2 with usage on stderr and no stdout."
     },
     {
       "id": "CLI-006",
@@ -50,6 +50,16 @@
       "id": "CLI-007",
       "requirement": "Issue #146: reject duplicate or malformed --input overrides as CLI usage errors",
       "oracle": "Exit 2; stderr contains usage; stdout is empty; no Run is published."
+    },
+    {
+      "id": "CLI-008",
+      "requirement": "Issue #147: expose breakdown run inspect --project PATH --run RUN_ID --json",
+      "oracle": "Exit 0; stdout is one compact breakdown.cli-output.v1 inspect_run success document plus LF; stderr is empty."
+    },
+    {
+      "id": "CLI-009",
+      "requirement": "Issue #147: require one exact non-empty --run argument for inspection",
+      "oracle": "Missing, empty, or duplicate --run exits 2 with usage on stderr and no stdout; no Run is inferred."
     }
   ]
 }

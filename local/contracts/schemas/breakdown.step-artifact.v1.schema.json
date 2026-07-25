@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breakdown.sh/contracts/schemas/breakdown.step-artifact.v1.schema.json",
+  "title": "Breakdown StepArtifact v1",
+  "description": "The immutable settled-attempt frontmatter contract. Run-context validation is additionally required.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "node_id",
+    "attempt",
+    "status",
+    "started_at",
+    "settled_at",
+    "context_sha256",
+    "inputs",
+    "executor"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "breakdown.step-artifact.v1"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^\\d{8}T\\d{6}\\.\\d{3}Z--[a-z][a-z0-9]*(?:-[a-z0-9]+)*--[a-z2-7]{12}$"
+    },
+    "node_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "status": {
+      "enum": ["succeeded", "failed", "blocked", "cancelled"]
+    },
+    "started_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "settled_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "context_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "inputs": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["workflow_input"],
+            "properties": {
+              "workflow_input": {
+                "$ref": "#/$defs/identifier"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["result"],
+            "properties": {
+              "result": {
+                "$ref": "#/$defs/result-reference"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {
+          "enum": ["agent", "human", "program"]
+        },
+        "name": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "version": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "model": {
+          "$ref": "#/$defs/nonempty"
+        }
+      }
+    },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "message": {
+          "$ref": "#/$defs/nonempty"
+        }
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "file-descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "result-reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "attempt", "markdown"],
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "markdown": {
+          "$ref": "#/$defs/file-descriptor"
+        },
+        "json": {
+          "$ref": "#/$defs/file-descriptor"
+        }
+      }
+    },
+    "extension-namespace": {
+      "type": "string",
+      "pattern": "^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/extension-namespace"
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  }
+}

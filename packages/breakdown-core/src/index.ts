@@ -11,6 +11,7 @@ import {
   preserveYamlJsonNumber,
 } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
+import { inspectRun, type InspectRunRequest, type InspectRunValue } from './run-inspection.js';
 import {
   assertSupportedFilesystem,
   ensurePrivateDirectoryPath,
@@ -21,6 +22,16 @@ import {
   UnsupportedFilesystemError,
   writePrivateFile,
 } from './secure-store.js';
+
+export type {
+  InspectRunRequest,
+  InspectRunValue,
+  InspectedAttempt,
+  InspectedNode,
+  ObservedRunLock,
+  ResultFileDescriptor,
+  SelectedResultDescriptor,
+} from './run-inspection.js';
 
 export interface ValidateWorkflowRequest {
   operation: 'validate_workflow';
@@ -1420,12 +1431,20 @@ export function operate(
   request: CreateRunRequest,
   trustedContext: TrustedContext,
 ): Promise<OperationResult<CreateRunValue>>;
-export async function operate(
-  request: ValidateWorkflowRequest | CreateRunRequest,
+export function operate(
+  request: InspectRunRequest,
   trustedContext: TrustedContext,
-): Promise<OperationResult<ValidateWorkflowValue | CreateRunValue>> {
+): Promise<OperationResult<InspectRunValue>>;
+export async function operate(
+  request: ValidateWorkflowRequest | CreateRunRequest | InspectRunRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<ValidateWorkflowValue | CreateRunValue | InspectRunValue>> {
   const requestedOperation = (request as { operation?: unknown }).operation;
-  if (requestedOperation !== 'create_run' && requestedOperation !== 'validate_workflow') {
+  if (
+    requestedOperation !== 'create_run' &&
+    requestedOperation !== 'inspect_run' &&
+    requestedOperation !== 'validate_workflow'
+  ) {
     return {
       ok: false,
       failure: {
@@ -1440,6 +1459,21 @@ export async function operate(
   if (!trustedContext.projectRoot) return projectRootRequiredFailure();
   if (requestedOperation === 'create_run') {
     return createRun(request as CreateRunRequest, trustedContext);
+  }
+  if (requestedOperation === 'inspect_run') {
+    let projectRoot: string;
+    try {
+      projectRoot = await realpath(trustedContext.projectRoot);
+    } catch {
+      return ioFailure('Could not select the project root.');
+    }
+    return inspectRun(request as InspectRunRequest, projectRoot, {
+      validateSnapshot: (definitionBytes, selectedProjectRoot) =>
+        operate({ operation: 'validate_workflow' }, {
+          projectRoot: selectedProjectRoot,
+          definitionBytes,
+        } as InternalTrustedContext),
+    });
   }
 
   let bytes: Buffer;
