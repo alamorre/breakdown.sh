@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
@@ -10,13 +11,51 @@ import {
   preserveYamlJsonNumber,
 } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
+import {
+  assertSupportedFilesystem,
+  ensurePrivateDirectoryPath,
+  readSecureRegularFile,
+  ResourceLimitError,
+  type SecureFileIdentity,
+  syncDirectory,
+  UnsupportedFilesystemError,
+  writePrivateFile,
+} from './secure-store.js';
 
 export interface ValidateWorkflowRequest {
   operation: 'validate_workflow';
 }
 
+export interface CreateRunRequest {
+  operation: 'create_run';
+  inputs?: Record<string, string>;
+}
+
+export interface ProducerIdentity {
+  name: string;
+  version: string;
+}
+
+export type RunPublicationBoundary =
+  | 'after_inputs_read'
+  | 'after_staging_created'
+  | 'after_snapshot_written'
+  | 'after_manifest_written'
+  | 'before_publish'
+  | 'after_publish';
+
 export interface TrustedContext {
   projectRoot?: string;
+  producer?: ProducerIdentity;
+  testControls?: {
+    now?: () => Date;
+    randomBytes?: (size: number) => Uint8Array;
+    onRunPublicationBoundary?: (boundary: RunPublicationBoundary) => void | Promise<void>;
+  };
+}
+
+interface InternalTrustedContext extends TrustedContext {
+  definitionBytes?: Uint8Array;
 }
 
 export interface NodeDefinition {
@@ -48,6 +87,29 @@ export interface WorkflowDefinition {
 export interface ValidateWorkflowValue {
   definitionPath: 'breakdown.yaml';
   workflow: WorkflowDefinition;
+}
+
+export interface ResolvedWorkflowInput {
+  path: string;
+  sha256: string;
+}
+
+interface ResolvedWorkflowInputs {
+  records: Record<string, ResolvedWorkflowInput>;
+  identities: Record<string, SecureFileIdentity>;
+}
+
+export interface CreateRunValue {
+  run_id: string;
+  path: string;
+  created_at: string;
+  workflow: {
+    id: string;
+    snapshot: 'breakdown.yaml';
+    sha256: string;
+  };
+  inputs: Record<string, ResolvedWorkflowInput>;
+  producer: ProducerIdentity;
 }
 
 export interface OperationSuccess<T> {
@@ -112,6 +174,66 @@ function resourceLimitFailure(diagnostics: Diagnostic[] = []): OperationFailure 
   };
 }
 
+function ioFailure(message = 'A filesystem operation failed.'): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'io',
+      code: 'io_error',
+      message,
+      diagnostics: [],
+    },
+  };
+}
+
+function runIdCollisionFailure(): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'conflict',
+      code: 'run_id_collision',
+      message: 'Could not allocate a unique Run ID.',
+      diagnostics: [],
+    },
+  };
+}
+
+function unsupportedFilesystemFailure(): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'unsupported',
+      code: 'unsupported_filesystem',
+      message: 'The selected project root is on an unsupported filesystem.',
+      diagnostics: [],
+    },
+  };
+}
+
+function invalidProducerFailure(): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'internal',
+      code: 'internal_error',
+      message: 'The trusted producer identity is invalid.',
+      diagnostics: [],
+    },
+  };
+}
+
+function projectRootRequiredFailure(): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'invalid',
+      code: 'project_root_required',
+      message: 'An explicit project root is required.',
+      diagnostics: [],
+    },
+  };
+}
+
 function unsupportedYamlVersionFailure(): OperationFailure {
   return validationFailure(
     [
@@ -146,7 +268,7 @@ function invalidPathDiagnostic(path: string): Diagnostic {
   return {
     code: 'invalid_path',
     path,
-    message: 'Workflow Input defaults must be portable project-relative paths.',
+    message: 'Workflow Input paths must be portable project-relative paths.',
     file: 'breakdown.yaml',
   };
 }
@@ -950,12 +1072,360 @@ function normalizeWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
   };
 }
 
-export async function operate(
+const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
+
+function sha256(bytes: Uint8Array) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function base32Suffix(bytes: Uint8Array) {
+  let bits = 0;
+  let bitCount = 0;
+  let encoded = '';
+  for (const byte of bytes) {
+    bits = (bits << 8) | byte;
+    bitCount += 8;
+    while (bitCount >= 5 && encoded.length < 12) {
+      bitCount -= 5;
+      encoded += BASE32_ALPHABET[(bits >>> bitCount) & 31];
+    }
+    if (encoded.length === 12) return encoded;
+    bits &= (1 << bitCount) - 1;
+  }
+  throw new Error('Cryptographic entropy did not provide enough bytes for a Run ID.');
+}
+
+function runManifestBytes(value: CreateRunValue) {
+  const inputLines = Object.entries(value.inputs).flatMap(([inputId, input]) => [
+    `  ${inputId}:`,
+    `    path: ${JSON.stringify(input.path)}`,
+    `    sha256: ${input.sha256}`,
+  ]);
+  return Buffer.from(
+    [
+      '---',
+      'schema_version: breakdown.run.v1',
+      `run_id: ${value.run_id}`,
+      `created_at: ${JSON.stringify(value.created_at)}`,
+      'workflow:',
+      `  id: ${value.workflow.id}`,
+      '  snapshot: breakdown.yaml',
+      `  sha256: ${value.workflow.sha256}`,
+      ...(inputLines.length === 0 ? ['inputs: {}'] : ['inputs:', ...inputLines]),
+      'producer:',
+      `  name: ${JSON.stringify(value.producer.name)}`,
+      `  version: ${JSON.stringify(value.producer.version)}`,
+      '---',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+function workflowInputFailure(diagnostics: Diagnostic[]): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'invalid',
+      code: 'invalid_workflow_input',
+      message: 'The Workflow Inputs are invalid.',
+      diagnostics: diagnostics.sort(compareDiagnostics),
+    },
+  };
+}
+
+async function resolveWorkflowInputs(
+  projectRoot: string,
+  workflow: WorkflowDefinition,
+  overrideValue: unknown,
+): Promise<OperationResult<ResolvedWorkflowInputs>> {
+  if (!isRecord(overrideValue)) {
+    return workflowInputFailure([
+      schemaDiagnostic('/inputs', 'Workflow Input overrides must be a mapping of paths.'),
+    ]);
+  }
+  const overrides = overrideValue;
+  const definitions = workflow.inputs ?? {};
+  const diagnostics = Object.keys(overrides)
+    .filter((inputId) => !Object.hasOwn(definitions, inputId))
+    .map((inputId) =>
+      schemaDiagnostic(
+        `/inputs/${escapePointerSegment(inputId)}`,
+        'Unknown Workflow Input override.',
+      ),
+    );
+  const paths: Record<string, string> = {};
+  for (const [inputId, definition] of Object.entries(definitions)) {
+    const hasOverride = Object.hasOwn(overrides, inputId);
+    const override = hasOverride ? overrides[inputId] : undefined;
+    if (hasOverride && typeof override !== 'string') {
+      diagnostics.push(
+        schemaDiagnostic(
+          `/inputs/${escapePointerSegment(inputId)}`,
+          'Workflow Input overrides must be path strings.',
+        ),
+      );
+      continue;
+    }
+    const path = typeof override === 'string' ? override : definition.default;
+    if (path === undefined) {
+      diagnostics.push(
+        schemaDiagnostic(
+          `/inputs/${escapePointerSegment(inputId)}`,
+          'A path is required for this Workflow Input.',
+        ),
+      );
+    } else if (Buffer.byteLength(path, 'utf8') > FIXED_LIMITS.project_relative_path_bytes) {
+      return resourceLimitFailure();
+    } else if (!isPortableProjectRelativePath(path)) {
+      diagnostics.push(invalidPathDiagnostic(`/inputs/${escapePointerSegment(inputId)}`));
+    } else {
+      paths[inputId] = path;
+    }
+  }
+  if (diagnostics.length > 0) return workflowInputFailure(diagnostics);
+
+  const resolved: Record<string, ResolvedWorkflowInput> = {};
+  const identities: Record<string, SecureFileIdentity> = {};
+  let aggregateBytes = 0;
+  for (const [inputId, path] of Object.entries(paths)) {
+    let secureRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
+    try {
+      secureRead = await readSecureRegularFile(
+        projectRoot,
+        path,
+        FIXED_LIMITS.workflow_input_file_bytes,
+      );
+    } catch (error) {
+      if (error instanceof ResourceLimitError) return resourceLimitFailure();
+      return workflowInputFailure([
+        {
+          code: 'invalid_path',
+          path: `/inputs/${escapePointerSegment(inputId)}`,
+          message: 'The Workflow Input must identify an existing readable regular file.',
+          file: 'breakdown.yaml',
+        },
+      ]);
+    }
+    const { bytes, identity } = secureRead;
+    if (bytes.byteLength > FIXED_LIMITS.workflow_input_file_bytes) {
+      return resourceLimitFailure();
+    }
+    aggregateBytes += bytes.byteLength;
+    if (aggregateBytes > FIXED_LIMITS.aggregate_workflow_input_bytes_per_run) {
+      return resourceLimitFailure();
+    }
+    resolved[inputId] = { path, sha256: sha256(bytes) };
+    identities[inputId] = identity;
+  }
+  return { ok: true, value: { records: resolved, identities } };
+}
+
+async function recheckWorkflowInputs(
+  projectRoot: string,
+  resolvedInputs: ResolvedWorkflowInputs,
+): Promise<OperationFailure | undefined> {
+  const integrityFailure = (inputId: string) =>
+    workflowInputFailure([
+      {
+        code: 'integrity',
+        path: `/inputs/${escapePointerSegment(inputId)}`,
+        message: 'The Workflow Input changed after it was resolved.',
+        file: 'breakdown.yaml',
+      },
+    ]);
+
+  for (const [inputId, input] of Object.entries(resolvedInputs.records)) {
+    let secureRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
+    try {
+      secureRead = await readSecureRegularFile(
+        projectRoot,
+        input.path,
+        FIXED_LIMITS.workflow_input_file_bytes,
+      );
+    } catch {
+      return integrityFailure(inputId);
+    }
+    const expectedIdentity = resolvedInputs.identities[inputId];
+    if (
+      sha256(secureRead.bytes) !== input.sha256 ||
+      expectedIdentity === undefined ||
+      secureRead.identity.device !== expectedIdentity.device ||
+      secureRead.identity.inode !== expectedIdentity.inode ||
+      secureRead.identity.birthtime !== expectedIdentity.birthtime
+    ) {
+      return integrityFailure(inputId);
+    }
+  }
+  return undefined;
+}
+
+async function createRun(
+  request: CreateRunRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<CreateRunValue>> {
+  let projectRoot: string;
+  let workflowBytes: Buffer;
+  try {
+    projectRoot = await realpath(trustedContext.projectRoot as string);
+    const rootFacts = await lstat(projectRoot);
+    if (!rootFacts.isDirectory()) return ioFailure('The selected project root is not a directory.');
+    await assertSupportedFilesystem(projectRoot);
+    workflowBytes = (
+      await readSecureRegularFile(
+        projectRoot,
+        'breakdown.yaml',
+        FIXED_LIMITS.workflow_definition_bytes,
+      )
+    ).bytes;
+  } catch (error) {
+    if (error instanceof UnsupportedFilesystemError) return unsupportedFilesystemFailure();
+    if (error instanceof ResourceLimitError) return resourceLimitFailure();
+    return ioFailure('Could not securely read breakdown.yaml.');
+  }
+
+  const validation = await operate({ operation: 'validate_workflow' }, {
+    projectRoot,
+    definitionBytes: workflowBytes,
+  } as InternalTrustedContext);
+  if (!validation.ok) return validation;
+
+  const producerValue: unknown = trustedContext.producer ?? {
+    name: '@breakdown-sh/core',
+    version: '1.0.0-beta.1',
+  };
+  if (
+    !isRecord(producerValue) ||
+    typeof producerValue.name !== 'string' ||
+    producerValue.name.trim().length === 0 ||
+    typeof producerValue.version !== 'string' ||
+    producerValue.version.trim().length === 0
+  ) {
+    return invalidProducerFailure();
+  }
+  const producer: ProducerIdentity = {
+    name: producerValue.name,
+    version: producerValue.version,
+  };
+
+  const createdAt = (trustedContext.testControls?.now ?? (() => new Date()))().toISOString();
+  const compactTimestamp = createdAt.replaceAll('-', '').replaceAll(':', '');
+  const entropySource = trustedContext.testControls?.randomBytes ?? randomBytes;
+  let runId: string | undefined;
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = `${compactTimestamp}--${validation.value.workflow.id}--${base32Suffix(
+      entropySource(8),
+    )}`;
+    try {
+      await lstat(join(projectRoot, 'outputs', candidate));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        runId = candidate;
+        break;
+      }
+      return ioFailure();
+    }
+  }
+  if (runId === undefined) return runIdCollisionFailure();
+  const runPath = `outputs/${runId}`;
+  const resolvedInputs = await resolveWorkflowInputs(
+    projectRoot,
+    validation.value.workflow,
+    request.inputs ?? {},
+  );
+  if (!resolvedInputs.ok) return resolvedInputs;
+  try {
+    await trustedContext.testControls?.onRunPublicationBoundary?.('after_inputs_read');
+  } catch {
+    return ioFailure();
+  }
+  const changedInputFailure = await recheckWorkflowInputs(projectRoot, resolvedInputs.value);
+  if (changedInputFailure !== undefined) return changedInputFailure;
+  const value: CreateRunValue = {
+    run_id: runId,
+    path: runPath,
+    created_at: createdAt,
+    workflow: {
+      id: validation.value.workflow.id,
+      snapshot: 'breakdown.yaml',
+      sha256: sha256(workflowBytes),
+    },
+    inputs: resolvedInputs.value.records,
+    producer,
+  };
+
+  const outputsPath = join(projectRoot, 'outputs');
+  const stagingRoot = join(projectRoot, '.breakdown', 'tmp', 'runs');
+  try {
+    await ensurePrivateDirectoryPath(projectRoot, ['outputs']);
+    await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'tmp', 'runs']);
+  } catch {
+    return ioFailure();
+  }
+  let stagingPath: string;
+  try {
+    stagingPath = await mkdtemp(join(stagingRoot, `${runId}.`));
+  } catch {
+    return ioFailure();
+  }
+  try {
+    await trustedContext.testControls?.onRunPublicationBoundary?.('after_staging_created');
+    const stepsPath = join(stagingPath, 'steps');
+    await mkdir(stepsPath, { mode: 0o700 });
+    await syncDirectory(stepsPath);
+    await writePrivateFile(join(stagingPath, 'breakdown.yaml'), workflowBytes);
+    await trustedContext.testControls?.onRunPublicationBoundary?.('after_snapshot_written');
+    await writePrivateFile(join(stagingPath, 'run.md'), runManifestBytes(value));
+    await syncDirectory(stagingPath);
+    await trustedContext.testControls?.onRunPublicationBoundary?.('after_manifest_written');
+    await trustedContext.testControls?.onRunPublicationBoundary?.('before_publish');
+    const inputFailureBeforePublish = await recheckWorkflowInputs(
+      projectRoot,
+      resolvedInputs.value,
+    );
+    if (inputFailureBeforePublish !== undefined) {
+      await rm(stagingPath, { recursive: true, force: true });
+      return inputFailureBeforePublish;
+    }
+    const destinationPath = join(projectRoot, runPath);
+    try {
+      await lstat(destinationPath);
+      await rm(stagingPath, { recursive: true, force: true });
+      return runIdCollisionFailure();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    await rename(stagingPath, destinationPath);
+    await syncDirectory(outputsPath);
+  } catch (error) {
+    await rm(stagingPath, { recursive: true, force: true });
+    if (['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+      return runIdCollisionFailure();
+    }
+    return ioFailure();
+  }
+  try {
+    await trustedContext.testControls?.onRunPublicationBoundary?.('after_publish');
+  } catch {
+    // The Run is already committed. A post-commit observation fault cannot roll it back.
+  }
+  return { ok: true, value };
+}
+
+export function operate(
   request: ValidateWorkflowRequest,
   trustedContext: TrustedContext,
-): Promise<OperationResult<ValidateWorkflowValue>> {
+): Promise<OperationResult<ValidateWorkflowValue>>;
+export function operate(
+  request: CreateRunRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<CreateRunValue>>;
+export async function operate(
+  request: ValidateWorkflowRequest | CreateRunRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<ValidateWorkflowValue | CreateRunValue>> {
   const requestedOperation = (request as { operation?: unknown }).operation;
-  if (requestedOperation !== 'validate_workflow') {
+  if (requestedOperation !== 'create_run' && requestedOperation !== 'validate_workflow') {
     return {
       ok: false,
       failure: {
@@ -967,31 +1437,29 @@ export async function operate(
     };
   }
 
-  if (!trustedContext.projectRoot) {
-    return {
-      ok: false,
-      failure: {
-        kind: 'invalid',
-        code: 'project_root_required',
-        message: 'An explicit project root is required.',
-        diagnostics: [],
-      },
-    };
+  if (!trustedContext.projectRoot) return projectRootRequiredFailure();
+  if (requestedOperation === 'create_run') {
+    return createRun(request as CreateRunRequest, trustedContext);
   }
 
   let bytes: Buffer;
-  try {
-    bytes = await readFile(join(trustedContext.projectRoot, 'breakdown.yaml'));
-  } catch {
-    return {
-      ok: false,
-      failure: {
-        kind: 'io',
-        code: 'io_error',
-        message: 'Could not read breakdown.yaml.',
-        diagnostics: [],
-      },
-    };
+  const definitionBytes = (trustedContext as InternalTrustedContext).definitionBytes;
+  if (definitionBytes !== undefined) {
+    bytes = Buffer.from(definitionBytes);
+  } else {
+    try {
+      bytes = await readFile(join(trustedContext.projectRoot, 'breakdown.yaml'));
+    } catch {
+      return {
+        ok: false,
+        failure: {
+          kind: 'io',
+          code: 'io_error',
+          message: 'Could not read breakdown.yaml.',
+          diagnostics: [],
+        },
+      };
+    }
   }
   if (bytes.byteLength > FIXED_LIMITS.workflow_definition_bytes) {
     return resourceLimitFailure();

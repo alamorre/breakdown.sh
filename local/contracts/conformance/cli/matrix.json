@@ -38,8 +38,18 @@
     },
     {
       "id": "CLI-005",
-      "requirement": "Issue #143: expose only the delivered validation command",
-      "oracle": "A command outside workflow validate exits 2 with usage on stderr and no stdout."
+      "requirement": "Issues #143 and #146: expose only delivered human commands",
+      "oracle": "A command outside workflow validate and run create exits 2 with usage on stderr and no stdout."
+    },
+    {
+      "id": "CLI-006",
+      "requirement": "Issue #146: expose breakdown run create --project PATH [--input ID=PATH]... --json",
+      "oracle": "Exit 0; stdout is one compact breakdown.cli-output.v1 create_run success document plus LF; stderr is empty; the complete Run is visible on disk."
+    },
+    {
+      "id": "CLI-007",
+      "requirement": "Issue #146: reject duplicate or malformed --input overrides as CLI usage errors",
+      "oracle": "Exit 2; stderr contains usage; stdout is empty; no Run is published."
     }
   ]
 }

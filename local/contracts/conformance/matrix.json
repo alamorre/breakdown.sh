@@ -6,6 +6,10 @@
       "path": "workflow-validation/matrix.json"
     },
     {
+      "group": "RUN",
+      "path": "run-creation/matrix.json"
+    },
+    {
       "group": "CLI",
       "path": "cli/matrix.json"
     },

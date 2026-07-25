@@ -1,6 +1,15 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -311,6 +320,108 @@ nodes:
     });
   });
 
+  it('should create a new Run with exact Workflow Input overrides through the JSON surface', async () => {
+    const workflow = `schema_version: breakdown.workflow.v1
+id: cli-run
+name: CLI Run
+inputs:
+  brief: {}
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume the brief.
+    inputs:
+      brief:
+        workflow_input: brief
+`;
+    const projectRoot = await createProject(workflow);
+    await mkdir(join(projectRoot, 'sources'));
+    await writeFile(join(projectRoot, 'sources', 'brief.txt'), 'input bytes');
+
+    const result = await runBreakdown([
+      'run',
+      'create',
+      '--project',
+      projectRoot,
+      '--input',
+      'brief=sources/brief.txt',
+      '--json',
+    ]);
+
+    expectSuccess(result);
+    const envelope = JSON.parse(result.stdout) as {
+      schema_version: string;
+      operation: string;
+      ok: boolean;
+      data: {
+        run_id: string;
+        path: string;
+        inputs: Record<string, { path: string; sha256: string }>;
+        producer: { name: string; version: string };
+      };
+    };
+    expect(envelope).toMatchObject({
+      schema_version: 'breakdown.cli-output.v1',
+      operation: 'create_run',
+      ok: true,
+      data: {
+        inputs: {
+          brief: {
+            path: 'sources/brief.txt',
+            sha256: 'f7c39aa7e478d51b7d49669703d94df49f158ea1d73b58760601f9c1857c4bdf',
+          },
+        },
+        producer: {
+          name: '@breakdown-sh/cli',
+          version: '1.0.0-beta.1',
+        },
+      },
+    });
+    expect(envelope.data.run_id).toMatch(/^\d{8}T\d{6}\.\d{3}Z--cli-run--[a-z2-7]{12}$/);
+    expect(envelope.data.path).toBe(`outputs/${envelope.data.run_id}`);
+    expect(await readFile(join(projectRoot, envelope.data.path, 'breakdown.yaml'), 'utf8')).toBe(
+      workflow,
+    );
+  });
+
+  it('should report a concise human Run creation success', async () => {
+    const projectRoot = await createProject();
+
+    const result = await runBreakdown(['run', 'create', '--project', projectRoot]);
+
+    expect(result).toMatchObject({
+      status: 0,
+      stderr: '',
+    });
+    expect(result.stdout).toMatch(/^Created Run \d{8}T\d{6}\.\d{3}Z--research--[a-z2-7]{12}\.\n$/);
+  });
+
+  it('should reject duplicate Workflow Input overrides before publication', async () => {
+    const projectRoot = await createProject();
+
+    const result = await runBreakdown([
+      'run',
+      'create',
+      '--project',
+      projectRoot,
+      '--input',
+      'brief=first.txt',
+      '--input',
+      'brief=second.txt',
+      '--json',
+    ]);
+
+    expect(result).toEqual({
+      status: 2,
+      stdout: '',
+      stderr: `Usage:
+  breakdown workflow validate --project PATH [--json]
+  breakdown run create --project PATH [--input ID=PATH]... [--json]
+`,
+    });
+    await expect(access(join(projectRoot, 'outputs'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('should preserve structured validation failures and exit 3 in JSON mode', async () => {
     const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
 id: research
@@ -372,7 +483,10 @@ nodes: []
     expect(result).toEqual({
       status: 2,
       stdout: '',
-      stderr: 'Usage: breakdown workflow validate --project PATH [--json]\n',
+      stderr: `Usage:
+  breakdown workflow validate --project PATH [--json]
+  breakdown run create --project PATH [--input ID=PATH]... [--json]
+`,
     });
   });
 
@@ -384,7 +498,10 @@ nodes: []
     expect(result).toEqual({
       status: 2,
       stdout: '',
-      stderr: 'Usage: breakdown workflow validate --project PATH [--json]\n',
+      stderr: `Usage:
+  breakdown workflow validate --project PATH [--json]
+  breakdown run create --project PATH [--input ID=PATH]... [--json]
+`,
     });
   });
 
@@ -394,7 +511,10 @@ nodes: []
     expect(result).toEqual({
       status: 2,
       stdout: '',
-      stderr: 'Usage: breakdown workflow validate --project PATH [--json]\n',
+      stderr: `Usage:
+  breakdown workflow validate --project PATH [--json]
+  breakdown run create --project PATH [--input ID=PATH]... [--json]
+`,
     });
   });
 
