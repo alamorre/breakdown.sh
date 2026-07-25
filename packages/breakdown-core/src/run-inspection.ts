@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { isMap, isScalar, parseDocument, visit } from 'yaml';
 
+import { canonicalizeJson } from './canonical-json.js';
 import { isRawJsonNumber } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
 import {
@@ -13,6 +14,7 @@ import {
   ResourceLimitError,
   UnsupportedFilesystemError,
 } from './secure-store.js';
+import { isUnicodeScalarString } from './unicode.js';
 import type {
   Diagnostic,
   OperationFailure,
@@ -432,7 +434,7 @@ function contractNumber(value: unknown) {
 
 function jsonValuesEqual(left: unknown, right: unknown) {
   try {
-    return canonicalJson(left) === canonicalJson(right);
+    return canonicalizeJson(left) === canonicalizeJson(right);
   } catch {
     return false;
   }
@@ -627,6 +629,7 @@ function validSha256(value: unknown): value is string {
 function isPortableProjectRelativePath(value: unknown): value is string {
   if (
     typeof value !== 'string' ||
+    !isUnicodeScalarString(value) ||
     value.length === 0 ||
     Buffer.byteLength(value) > FIXED_LIMITS.project_relative_path_bytes ||
     value.startsWith('/') ||
@@ -1223,38 +1226,6 @@ function sortIdentifierMap<T>(value: Record<string, T>) {
   );
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null) return 'null';
-  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('Canonical JSON requires finite numbers.');
-    return JSON.stringify(value);
-  }
-  if (typeof value === 'bigint') {
-    const number = Number(value);
-    if (!Number.isSafeInteger(number) || BigInt(number) !== value) {
-      throw new Error('Canonical JSON requires I-JSON numbers.');
-    }
-    return JSON.stringify(number);
-  }
-  if (isRawJsonNumber(value)) {
-    const source = JSON.stringify(value);
-    const number = Number(source);
-    if (!Number.isFinite(number)) {
-      throw new Error('Canonical JSON requires I-JSON numbers.');
-    }
-    return JSON.stringify(number);
-  }
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (isRecord(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(',')}}`;
-  }
-  throw new Error('Canonical JSON cannot encode this value.');
-}
-
 function contextHash(
   runId: string,
   workflow: WorkflowDefinition,
@@ -1274,7 +1245,7 @@ function contextHash(
     },
     resolved_inputs: sortIdentifierMap(resolvedInputs),
   };
-  return sha256(Buffer.from(canonicalJson(preimage), 'utf8'));
+  return sha256(Buffer.from(canonicalizeJson(preimage), 'utf8'));
 }
 
 function topologicalNodes(workflow: WorkflowDefinition) {

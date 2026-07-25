@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,6 +12,10 @@ const inspectionConformanceRoot = new URL(
   '../../../local/contracts/conformance/run-inspection/',
   import.meta.url,
 );
+const derivationConformanceRoot = new URL(
+  '../../../local/contracts/conformance/run-derivation/',
+  import.meta.url,
+);
 const inspectionMatrix = JSON.parse(
   await readFile(new URL('matrix.json', inspectionConformanceRoot), 'utf8'),
 ) as { rows: Array<{ id: string; requirement: string; oracle: string }> };
@@ -22,6 +26,32 @@ const inspectionScenarios = JSON.parse(
   statuses: string[];
   corruptions: string[];
   ignored_entries: string[];
+};
+const derivationMatrix = JSON.parse(
+  await readFile(new URL('matrix.json', derivationConformanceRoot), 'utf8'),
+) as { rows: Array<{ id: string; requirement: string; oracle: string }> };
+const hashVectors = JSON.parse(
+  await readFile(new URL('fixtures/hash-vectors.json', derivationConformanceRoot), 'utf8'),
+) as {
+  schema_version: string;
+  raw_files: Array<{
+    id: string;
+    bytes_base64: string;
+    sha256: string;
+  }>;
+  node_contexts: Array<{
+    id: string;
+    canonical_jcs: string;
+    sha256: string;
+  }>;
+  included_context_factors: Array<{
+    factor: string;
+    literal_vector: string;
+  }>;
+  excluded_context_factors: Array<{
+    factor: string;
+    literal_vector: string;
+  }>;
 };
 const stepArtifactSchema = JSON.parse(
   await readFile(
@@ -37,17 +67,33 @@ const stepArtifactSchema = JSON.parse(
   properties: Record<string, unknown>;
 };
 
-async function createRun(workflow: string, setup?: (projectRoot: string) => void | Promise<void>) {
+function nodeContextVector(id: string) {
+  const vector = hashVectors.node_contexts.find((candidate) => candidate.id === id);
+  if (vector === undefined) throw new Error(`Missing Node Context vector: ${id}`);
+  return vector;
+}
+
+async function createRun(
+  workflow: string,
+  setup?: (projectRoot: string) => void | Promise<void>,
+  options: {
+    inputs?: Record<string, string>;
+    now?: string;
+  } = {},
+) {
   const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-inspection-'));
   temporaryProjects.push(projectRoot);
   await writeFile(join(projectRoot, 'breakdown.yaml'), workflow, 'utf8');
   await setup?.(projectRoot);
   const created = await operate(
-    { operation: 'create_run' },
+    {
+      operation: 'create_run',
+      ...(options.inputs === undefined ? {} : { inputs: options.inputs }),
+    },
     {
       projectRoot,
       testControls: {
-        now: () => new Date('2026-07-24T20:00:00.000Z'),
+        now: () => new Date(options.now ?? '2026-07-24T20:00:00.000Z'),
         randomBytes: () => Buffer.alloc(8),
       },
     },
@@ -141,6 +187,21 @@ async function writeSidecar(projectRoot: string, markdownPath: string, value: un
   return resultFileDescriptor(projectRoot, path);
 }
 
+async function replaceWorkflowSnapshot(
+  projectRoot: string,
+  run: { path: string; workflow: { sha256: string } },
+  replace: (snapshot: string) => string,
+) {
+  const snapshotPath = join(projectRoot, run.path, 'breakdown.yaml');
+  const snapshot = await readFile(snapshotPath, 'utf8');
+  const replacement = replace(snapshot);
+  await writeFile(snapshotPath, replacement, 'utf8');
+  const replacementDigest = createHash('sha256').update(replacement).digest('hex');
+  const manifestPath = join(projectRoot, run.path, 'run.md');
+  const manifest = await readFile(manifestPath, 'utf8');
+  await writeFile(manifestPath, manifest.replace(run.workflow.sha256, replacementDigest), 'utf8');
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryProjects
@@ -211,6 +272,124 @@ describe('inspect_run', () => {
     });
   });
 
+  it('should publish the complete Run derivation conformance catalog', () => {
+    expect(derivationMatrix.rows.map((row) => row.id)).toEqual(
+      Array.from({ length: 7 }, (_, index) => `DER-${String(index + 1).padStart(3, '0')}`),
+    );
+    expect(hashVectors).toMatchObject({
+      schema_version: 'breakdown.hash-vectors.v1',
+      raw_files: [
+        { id: 'empty' },
+        { id: 'binary' },
+        { id: 'utf8-bom' },
+        { id: 'lf' },
+        { id: 'crlf' },
+        { id: 'no-trailing-newline' },
+      ],
+    });
+    expect(hashVectors.node_contexts.map((vector) => vector.id)).toEqual([
+      'node-definition-workflow-input-baseline',
+      'included-run-id',
+      'included-node-id',
+      'included-node-name',
+      'included-node-prompt',
+      'included-input-bindings',
+      'included-data-contract',
+      'included-workflow-input-id',
+      'included-workflow-input-description',
+      'included-workflow-input-path',
+      'included-workflow-input-sha256',
+      'included-predecessor-result',
+      'normalized-absent-node-fields',
+      'normalized-absent-result-json',
+      'normalized-absent-workflow-input-description',
+      'rfc-8785-numbers',
+      'rfc-8785-unicode-ordering',
+    ]);
+    expect(hashVectors.included_context_factors.map(({ factor }) => factor)).toEqual([
+      'run-id',
+      'node-id',
+      'node-name',
+      'node-prompt',
+      'input-bindings',
+      'data-contract',
+      'workflow-input-id',
+      'workflow-input-description',
+      'workflow-input-path',
+      'workflow-input-sha256',
+      'predecessor-node-id',
+      'predecessor-attempt',
+      'predecessor-markdown-path',
+      'predecessor-markdown-sha256',
+      'predecessor-json-path',
+      'predecessor-json-sha256',
+    ]);
+    expect(hashVectors.excluded_context_factors.map(({ factor }) => factor)).toEqual([
+      'extensions',
+      'unrelated-nodes',
+      'author-order-position',
+      'workflow-input-default-after-resolution',
+      'timestamps',
+      'executor-model',
+      'status-problem-outcome',
+      'executing-attempt',
+      'candidate-result',
+      'host-transport-environment',
+      'absolute-root',
+      'filesystem-metadata',
+    ]);
+    const vectorIds = new Set(hashVectors.node_contexts.map((vector) => vector.id));
+    for (const factor of [
+      ...hashVectors.included_context_factors,
+      ...hashVectors.excluded_context_factors,
+    ]) {
+      expect(vectorIds.has(factor.literal_vector), factor.factor).toBe(true);
+    }
+    for (const vector of hashVectors.node_contexts) {
+      expect(createHash('sha256').update(vector.canonical_jcs).digest('hex'), vector.id).toBe(
+        vector.sha256,
+      );
+    }
+  });
+
+  it.each(hashVectors.raw_files)(
+    'should match the independent $id raw file SHA-256 vector',
+    async (vector) => {
+      const { projectRoot, created } = await createRun(
+        `schema_version: breakdown.workflow.v1
+id: raw-${vector.id}
+name: Raw Hash
+inputs:
+  source:
+    default: source.bin
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume the source.
+    inputs:
+      source:
+        workflow_input: source
+`,
+        (projectRoot) =>
+          writeFile(join(projectRoot, 'source.bin'), Buffer.from(vector.bytes_base64, 'base64')),
+      );
+
+      const result = await inspect(projectRoot, created.run_id);
+
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          inputs: {
+            source: {
+              path: 'source.bin',
+              sha256: vector.sha256,
+            },
+          },
+        },
+      });
+    },
+  );
+
   it('should inspect one exact newly created Run and derive its initial runnable state', async () => {
     const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
 id: inspect
@@ -247,6 +426,552 @@ nodes:
         attempts: [],
         terminal_results: [],
         lock: null,
+      },
+    });
+  });
+
+  it('should match the independent RFC 8785 Node Context number vector', async () => {
+    const vector = nodeContextVector('rfc-8785-numbers');
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: jcs-numbers
+name: JCS Numbers
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+    data_contract:
+      const:
+        numbers:
+          - 333333333.33333329
+          - 1E30
+          - 4.50
+          - 2e-3
+          - 0.000000000000000000000000001
+          - 9007199254740993
+`);
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(createHash('sha256').update(vector.canonical_jcs).digest('hex')).toBe(vector.sha256);
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        nodes: [
+          {
+            node_id: 'execute',
+            context_sha256: vector.sha256,
+          },
+        ],
+      },
+    });
+  });
+
+  it('should match the independent Node Definition and Workflow Input context vector', async () => {
+    const vector = nodeContextVector('node-definition-workflow-input-baseline');
+    const { projectRoot, created } = await createRun(
+      `schema_version: breakdown.workflow.v1
+id: context-factors
+name: Context Factors
+inputs:
+  source:
+    description: Source material.
+    default: default.txt
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Use source.
+    inputs:
+      material:
+        workflow_input: source
+    data_contract:
+      type: string
+`,
+      (projectRoot) => writeFile(join(projectRoot, 'selected.bin'), 'content'),
+      { inputs: { source: 'selected.bin' } },
+    );
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(createHash('sha256').update(vector.canonical_jcs).digest('hex')).toBe(vector.sha256);
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        nodes: [
+          {
+            node_id: 'execute',
+            context_sha256: vector.sha256,
+          },
+        ],
+      },
+    });
+  });
+
+  it('should match a Node Context vector containing the Selected Result from a Predecessor', async () => {
+    const vector = nodeContextVector('included-predecessor-result');
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: predecessor-vector
+name: Predecessor Vector
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+    data_contract:
+      type: object
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      evidence:
+        node: gather
+`);
+    const gatherContext = await currentContext(projectRoot, created.run_id, 'gather');
+    const gatherPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      body: 'Evidence',
+    });
+    await writeSidecar(projectRoot, gatherPath, { a: 1 });
+
+    expect(await currentContext(projectRoot, created.run_id, 'consume')).toBe(vector.sha256);
+  });
+
+  it('should match independent absent-field normalization vectors', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: null-normalizations
+name: Null Normalizations
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      evidence:
+        node: gather
+`);
+    const gatherContext = await currentContext(projectRoot, created.run_id, 'gather');
+    expect(gatherContext).toBe(nodeContextVector('normalized-absent-node-fields').sha256);
+    await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+    });
+    expect(await currentContext(projectRoot, created.run_id, 'consume')).toBe(
+      nodeContextVector('normalized-absent-result-json').sha256,
+    );
+
+    const withoutDescription = await createRun(
+      `schema_version: breakdown.workflow.v1
+id: null-description
+name: Null Description
+inputs:
+  source:
+    default: source.bin
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      source:
+        workflow_input: source
+`,
+      (projectRoot) => writeFile(join(projectRoot, 'source.bin'), Buffer.alloc(0)),
+    );
+    expect(
+      await currentContext(
+        withoutDescription.projectRoot,
+        withoutDescription.created.run_id,
+        'consume',
+      ),
+    ).toBe(nodeContextVector('normalized-absent-workflow-input-description').sha256);
+  });
+
+  it('should include every core Node Definition and Workflow Input factor in Node Context', async () => {
+    const workflow = `schema_version: breakdown.workflow.v1
+id: context-factors
+name: Context Factors
+inputs:
+  source:
+    description: Source material.
+    default: default.txt
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Use source.
+    inputs:
+      material:
+        workflow_input: source
+    data_contract:
+      type: string
+`;
+    async function nodeContextHashFor({
+      definition = workflow,
+      inputId = 'source',
+      path = 'selected.bin',
+      bytes = 'content',
+      now,
+    }: {
+      definition?: string;
+      inputId?: string;
+      path?: string;
+      bytes?: string;
+      now?: string;
+    } = {}) {
+      const { projectRoot, created } = await createRun(
+        definition,
+        (projectRoot) => writeFile(join(projectRoot, path), bytes),
+        {
+          inputs: { [inputId]: path },
+          ...(now === undefined ? {} : { now }),
+        },
+      );
+      const result = await inspect(projectRoot, created.run_id);
+      if (!result.ok) throw new Error(`Could not inspect factor fixture: ${result.failure.code}`);
+      const contextHash = result.value.nodes[0]?.context_sha256;
+      if (contextHash === undefined) throw new Error('Factor fixture has no Node Context hash.');
+      return contextHash;
+    }
+
+    expect(await nodeContextHashFor()).toBe(
+      nodeContextVector('node-definition-workflow-input-baseline').sha256,
+    );
+    const variants: Array<{
+      vectorId: string;
+      observe: () => Promise<string>;
+    }> = [
+      {
+        vectorId: 'included-run-id',
+        observe: () => nodeContextHashFor({ now: '2026-07-24T20:00:01.000Z' }),
+      },
+      {
+        vectorId: 'included-node-id',
+        observe: () =>
+          nodeContextHashFor({ definition: workflow.replace('- id: execute', '- id: changed') }),
+      },
+      {
+        vectorId: 'included-node-name',
+        observe: () =>
+          nodeContextHashFor({ definition: workflow.replace('name: Execute', 'name: Changed') }),
+      },
+      {
+        vectorId: 'included-node-prompt',
+        observe: () =>
+          nodeContextHashFor({
+            definition: workflow.replace('prompt: Use source.', 'prompt: Changed.'),
+          }),
+      },
+      {
+        vectorId: 'included-input-bindings',
+        observe: () =>
+          nodeContextHashFor({ definition: workflow.replaceAll('material:', 'evidence:') }),
+      },
+      {
+        vectorId: 'included-data-contract',
+        observe: () =>
+          nodeContextHashFor({ definition: workflow.replace('type: string', 'type: number') }),
+      },
+      {
+        vectorId: 'included-workflow-input-id',
+        observe: () =>
+          nodeContextHashFor({
+            definition: workflow
+              .replace('  source:\n', '  source-two:\n')
+              .replace('workflow_input: source', 'workflow_input: source-two'),
+            inputId: 'source-two',
+          }),
+      },
+      {
+        vectorId: 'included-workflow-input-description',
+        observe: () =>
+          nodeContextHashFor({
+            definition: workflow.replace('description: Source material.', 'description: Changed.'),
+          }),
+      },
+      {
+        vectorId: 'included-workflow-input-path',
+        observe: () => nodeContextHashFor({ path: 'other.bin' }),
+      },
+      {
+        vectorId: 'included-workflow-input-sha256',
+        observe: () => nodeContextHashFor({ bytes: 'changed content' }),
+      },
+    ];
+    for (const variant of variants) {
+      expect(await variant.observe(), variant.vectorId).toBe(
+        nodeContextVector(variant.vectorId).sha256,
+      );
+    }
+  });
+
+  it('should exclude inert definition and execution metadata from Node Context', async () => {
+    const workflow = `schema_version: breakdown.workflow.v1
+id: context-factors
+name: Context Factors
+inputs:
+  source:
+    description: Source material.
+    default: default.txt
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Use source.
+    inputs:
+      material:
+        workflow_input: source
+    data_contract:
+      type: string
+`;
+    async function createFactorRun(definition: string) {
+      return createRun(
+        definition,
+        (projectRoot) => writeFile(join(projectRoot, 'selected.bin'), 'content'),
+        { inputs: { source: 'selected.bin' } },
+      );
+    }
+
+    const baselineRun = await createFactorRun(workflow);
+    const baseline = await currentContext(
+      baselineRun.projectRoot,
+      baselineRun.created.run_id,
+      'execute',
+    );
+    const baselineVector = nodeContextVector('node-definition-workflow-input-baseline');
+    expect(baseline).toBe(baselineVector.sha256);
+    const variants = [
+      workflow.replace(
+        '    inputs:\n',
+        `    extensions:
+      com.example.metadata:
+        ignored: true
+    inputs:
+`,
+      ),
+      workflow.replace(
+        'nodes:\n',
+        `nodes:
+  - id: unrelated
+    name: Unrelated
+    prompt: Unrelated.
+`,
+      ),
+      workflow.replace('default: default.txt', 'default: other.txt'),
+      `# Raw comments and authored key order do not enter Node Context.
+name: Context Factors
+schema_version: breakdown.workflow.v1
+id: context-factors
+inputs:
+  source:
+    description: Source material.
+    default: default.txt
+nodes:
+  - prompt: Use source.
+    inputs:
+      material:
+        workflow_input: source
+    name: Execute
+    id: execute
+    data_contract:
+      type: string
+`,
+    ];
+    for (const variant of variants) {
+      const run = await createFactorRun(variant);
+      expect(await currentContext(run.projectRoot, run.created.run_id, 'execute')).toBe(
+        baselineVector.sha256,
+      );
+      expect(run.created.workflow.sha256).not.toBe(baselineRun.created.workflow.sha256);
+    }
+
+    const stepPath = await writeStep(baselineRun.projectRoot, baselineRun.created.run_id, {
+      nodeId: 'execute',
+      attempt: 1,
+      status: 'failed',
+      contextSha256: baseline,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      inputs: {
+        material: {
+          workflow_input: 'source',
+        },
+      },
+      body: 'Candidate diagnostic content.',
+    });
+    const step = await readFile(join(baselineRun.projectRoot, stepPath), 'utf8');
+    await writeFile(
+      join(baselineRun.projectRoot, stepPath),
+      step
+        .replace(
+          '"name": "inspection-fixture"',
+          '"name": "changed-executor",\n    "version": "2",\n    "model": "opaque-model"',
+        )
+        .replace('\n}\n---', ',\n  "extensions": {"com.example.audit":{"ignored":true}}\n}\n---'),
+      'utf8',
+    );
+
+    expect(
+      await currentContext(baselineRun.projectRoot, baselineRun.created.run_id, 'execute'),
+    ).toBe(baseline);
+  });
+
+  it('should include exact predecessor Result identity, paths, and raw hashes in Node Context', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: predecessor-factors
+name: Predecessor Factors
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+    data_contract:
+      type: object
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      evidence:
+        node: gather
+`);
+    const gatherContext = await currentContext(projectRoot, created.run_id, 'gather');
+    const firstPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      body: 'Evidence',
+    });
+    const firstJsonPath = firstPath.replace(/\.md$/, '.json');
+    await writeFile(join(projectRoot, firstJsonPath), '{"a":1,"b":2}', 'utf8');
+    const baseline = await currentContext(projectRoot, created.run_id, 'consume');
+
+    await writeFile(join(projectRoot, firstJsonPath), '{ "b": 2, "a": 1 }', 'utf8');
+    const changedJsonHash = await currentContext(projectRoot, created.run_id, 'consume');
+    expect(changedJsonHash).not.toBe(baseline);
+
+    await writeFile(join(projectRoot, firstJsonPath), '{"a":1,"b":2}', 'utf8');
+    const firstMarkdown = await readFile(join(projectRoot, firstPath), 'utf8');
+    await writeFile(
+      join(projectRoot, firstPath),
+      firstMarkdown.replace('Evidence', 'Changed evidence'),
+      'utf8',
+    );
+    const changedMarkdownHash = await currentContext(projectRoot, created.run_id, 'consume');
+    expect(changedMarkdownHash).not.toBe(baseline);
+
+    await writeFile(join(projectRoot, firstPath), firstMarkdown, 'utf8');
+    const secondPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 2,
+      status: 'succeeded',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:02:00.000Z',
+      body: 'Evidence',
+    });
+    await writeFile(join(projectRoot, secondPath.replace(/\.md$/, '.json')), '{"a":1,"b":2}');
+    const changedIdentityAndPaths = await currentContext(projectRoot, created.run_id, 'consume');
+    expect(changedIdentityAndPaths).not.toBe(baseline);
+  });
+
+  it('should match the independent RFC 8785 Unicode ordering vector without normalization', async () => {
+    const vector = nodeContextVector('rfc-8785-unicode-ordering');
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: jcs-unicode-order
+name: JCS Unicode Order
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+    data_contract:
+      const:
+        "\\u20ac": Euro Sign
+        "\\r": Carriage Return
+        "\\ufb33": Hebrew Letter Dalet With Dagesh
+        "1": One
+        "\\U0001F600": "Emoji: Grinning Face"
+        "\\u0080": Control
+        "\\u00f6": Latin Small Letter O With Diaeresis
+        composed: "\\u00e9"
+        decomposed: "e\\u0301"
+`);
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(createHash('sha256').update(vector.canonical_jcs).digest('hex')).toBe(vector.sha256);
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        nodes: [
+          {
+            node_id: 'execute',
+            context_sha256: vector.sha256,
+          },
+        ],
+      },
+    });
+  });
+
+  it('should reject invalid Unicode before deriving a Node Context', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: jcs-unicode
+name: JCS Unicode
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+`);
+    await replaceWorkflowSnapshot(projectRoot, created, (snapshot) =>
+      snapshot.replace('prompt: Execute.', 'prompt: "\\uD800"'),
+    );
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        code: 'invalid_run',
+        diagnostics: [
+          {
+            code: 'schema',
+            file: `${created.path}/breakdown.yaml`,
+            path: '/nodes/0/prompt',
+          },
+        ],
+      },
+    });
+  });
+
+  it('should reject invalid Unicode nested in a Data Contract before derivation', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: jcs-contract-unicode
+name: JCS Contract Unicode
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+    data_contract:
+      const: valid
+`);
+    await replaceWorkflowSnapshot(projectRoot, created, (snapshot) =>
+      snapshot.replace('const: valid', 'const: "\\uDEAD"'),
+    );
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        code: 'invalid_run',
+        diagnostics: [
+          {
+            code: 'schema',
+            file: `${created.path}/breakdown.yaml`,
+            path: '/nodes/0/data_contract/const',
+          },
+        ],
       },
     });
   });
@@ -413,7 +1138,7 @@ nodes:
       status: 'succeeded',
       contextSha256: gatherContext,
       settledAt: '2026-07-24T20:03:00.000Z',
-      body: 'Refreshed evidence with identical semantics',
+      body: 'First evidence',
     });
 
     const refreshed = await inspect(projectRoot, created.run_id);
@@ -437,6 +1162,124 @@ nodes:
         terminal_results: [],
       },
     });
+  });
+
+  it('should derive blocked nodes while independent branches remain runnable', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: independent-branches
+name: Independent Branches
+nodes:
+  - id: failed-root
+    name: Failed Root
+    prompt: Fail once.
+  - id: blocked-child
+    name: Blocked Child
+    prompt: Wait for the failed root.
+    inputs:
+      source:
+        node: failed-root
+  - id: independent-root
+    name: Independent Root
+    prompt: Remain runnable.
+`);
+    const failedContext = await currentContext(projectRoot, created.run_id, 'failed-root');
+    await writeStep(projectRoot, created.run_id, {
+      nodeId: 'failed-root',
+      attempt: 1,
+      status: 'failed',
+      contextSha256: failedContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      body: 'Failed branch diagnostic.',
+    });
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        status: 'incomplete',
+        nodes: [
+          {
+            node_id: 'failed-root',
+            state: 'runnable',
+            stale: false,
+            next_attempt: 2,
+          },
+          {
+            node_id: 'independent-root',
+            state: 'runnable',
+            stale: false,
+            next_attempt: 1,
+          },
+          {
+            node_id: 'blocked-child',
+            state: 'blocked',
+            stale: false,
+            next_attempt: 1,
+          },
+        ],
+        terminal_results: [],
+      },
+    });
+  });
+
+  it('should report selected empty Markdown Terminal Results in deterministic order', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: terminal-results
+name: Terminal Results
+nodes:
+  - id: zeta-terminal
+    name: Zeta Terminal
+    prompt: Return an empty Result.
+  - id: alpha-terminal
+    name: Alpha Terminal
+    prompt: Return another empty Result.
+`);
+    const zetaContext = await currentContext(projectRoot, created.run_id, 'zeta-terminal');
+    const alphaContext = await currentContext(projectRoot, created.run_id, 'alpha-terminal');
+    const zetaPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'zeta-terminal',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: zetaContext,
+      settledAt: '2026-07-24T20:02:00.000Z',
+    });
+    const alphaPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'alpha-terminal',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: alphaContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+    });
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        terminal_results: [
+          {
+            node_id: 'zeta-terminal',
+            attempt: 1,
+            markdown: {
+              path: zetaPath,
+              sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+            },
+          },
+          {
+            node_id: 'alpha-terminal',
+            attempt: 1,
+            markdown: {
+              path: alphaPath,
+              sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+            },
+          },
+        ],
+      },
+    });
+    expect(await readFile(join(projectRoot, zetaPath), 'utf8')).toMatch(/---\n$/);
+    expect(await readFile(join(projectRoot, alphaPath), 'utf8')).toMatch(/---\n$/);
   });
 
   it('should retain a prior Selected Result after a later non-successful attempt', async () => {
@@ -480,6 +1323,82 @@ nodes:
             selected_result: { attempt: 1 },
           },
         ],
+      },
+    });
+  });
+
+  it('should preserve selected descendants after a failed predecessor refresh', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: failed-refresh
+name: Failed Refresh
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      evidence:
+        node: gather
+`);
+    const gatherContext = await currentContext(projectRoot, created.run_id, 'gather');
+    const gatherPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      body: 'Evidence',
+    });
+    const consumeContext = await currentContext(projectRoot, created.run_id, 'consume');
+    await writeStep(projectRoot, created.run_id, {
+      nodeId: 'consume',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: consumeContext,
+      settledAt: '2026-07-24T20:02:00.000Z',
+      inputs: {
+        evidence: {
+          result: {
+            node_id: 'gather',
+            attempt: 1,
+            markdown: await resultFileDescriptor(projectRoot, gatherPath),
+          },
+        },
+      },
+      body: 'Consumed',
+    });
+    await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 2,
+      status: 'failed',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:03:00.000Z',
+      body: 'Refresh failed.',
+    });
+
+    const result = await inspect(projectRoot, created.run_id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        nodes: [
+          {
+            node_id: 'gather',
+            state: 'complete',
+            selected_result: { attempt: 1 },
+            next_attempt: 3,
+          },
+          {
+            node_id: 'consume',
+            state: 'complete',
+            stale: false,
+            selected_result: { attempt: 1 },
+          },
+        ],
+        terminal_results: [{ node_id: 'consume', attempt: 1 }],
       },
     });
   });
@@ -871,6 +1790,76 @@ nodes:
       },
     });
     expect(after).toEqual(before);
+
+    await writeFile(join(projectRoot, 'brief.txt'), 'exact input');
+    expect(await inspect(projectRoot, created.run_id)).toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        resumable: true,
+      },
+    });
+  });
+
+  it('should resume an unchanged whole-project copy regardless of root, mtimes, or Git state', async () => {
+    const { projectRoot, created } = await createRun(
+      `schema_version: breakdown.workflow.v1
+id: context-factors
+name: Context Factors
+inputs:
+  source:
+    description: Source material.
+    default: default.txt
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Use source.
+    inputs:
+      material:
+        workflow_input: source
+    data_contract:
+      type: string
+`,
+      (projectRoot) => writeFile(join(projectRoot, 'selected.bin'), 'content'),
+      { inputs: { source: 'selected.bin' } },
+    );
+    const contextSha256 = await currentContext(projectRoot, created.run_id, 'execute');
+    expect(contextSha256).toBe(nodeContextVector('node-definition-workflow-input-baseline').sha256);
+    const markdownPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'execute',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      inputs: {
+        material: {
+          workflow_input: 'source',
+        },
+      },
+      body: 'Portable Result',
+    });
+    await writeSidecar(projectRoot, markdownPath, 'portable');
+    const original = await inspect(projectRoot, created.run_id);
+    if (!original.ok) throw new Error('Expected the original Run to be valid.');
+
+    const copyParent = await mkdtemp(join(tmpdir(), 'breakdown-project-copy-'));
+    temporaryProjects.push(copyParent);
+    const copiedRoot = join(copyParent, 'different-absolute-root');
+    await cp(projectRoot, copiedRoot, { recursive: true });
+    await mkdir(join(copiedRoot, '.git'));
+    const changedTime = new Date('2030-01-01T00:00:00.000Z');
+    await Promise.all(
+      [
+        'breakdown.yaml',
+        'selected.bin',
+        `${created.path}/run.md`,
+        `${created.path}/breakdown.yaml`,
+      ].map((path) => utimes(join(copiedRoot, path), changedTime, changedTime)),
+    );
+
+    const copied = await inspect(copiedRoot, created.run_id);
+
+    expect(copied).toEqual(original);
   });
 
   it.each([
@@ -979,6 +1968,69 @@ nodes:
           code: 'integrity',
           file: usePath,
           path: '/context_sha256',
+        }),
+      ]),
+    );
+  });
+
+  it('should fail integrity when a referenced committed Result is mutated', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: artifact-mutation
+name: Artifact Mutation
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      evidence:
+        node: gather
+`);
+    const gatherContext = await currentContext(projectRoot, created.run_id, 'gather');
+    const gatherPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'gather',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: gatherContext,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      body: 'Original evidence',
+    });
+    const consumeContext = await currentContext(projectRoot, created.run_id, 'consume');
+    const consumePath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'consume',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256: consumeContext,
+      settledAt: '2026-07-24T20:02:00.000Z',
+      inputs: {
+        evidence: {
+          result: {
+            node_id: 'gather',
+            attempt: 1,
+            markdown: await resultFileDescriptor(projectRoot, gatherPath),
+          },
+        },
+      },
+      body: 'Consumed',
+    });
+    const original = await readFile(join(projectRoot, gatherPath), 'utf8');
+    await writeFile(
+      join(projectRoot, gatherPath),
+      original.replace('Original evidence', 'Mutated evidence'),
+      'utf8',
+    );
+
+    const result = await inspect(projectRoot, created.run_id);
+    if (result.ok) throw new Error('Expected committed Result mutation to invalidate the Run.');
+
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'integrity',
+          file: consumePath,
+          path: '/inputs/evidence/result/markdown',
         }),
       ]),
     );

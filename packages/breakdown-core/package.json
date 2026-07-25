@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run src",
-    "test:coverage": "vitest run src --coverage --coverage.include='src/{index,run-inspection}.ts' --coverage.thresholds.lines=80",
+    "test:coverage": "vitest run src --coverage --coverage.include='src/{canonical-json,index,run-inspection,unicode}.ts' --coverage.thresholds.lines=80",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
+import { canonicalJsonDomainIssues } from './canonical-json.js';
 import { DATA_CONTRACT_KEYWORD_KINDS, DATA_CONTRACT_TYPES } from './data-contract-dialect.js';
 import {
   isNonNegativeRawJsonInteger,
@@ -22,6 +23,7 @@ import {
   UnsupportedFilesystemError,
   writePrivateFile,
 } from './secure-store.js';
+import { isUnicodeScalarString } from './unicode.js';
 
 export type {
   InspectRunRequest,
@@ -354,6 +356,7 @@ function validateIdentifier(value: unknown, path: string, diagnostics: Diagnosti
 function validateName(value: unknown, path: string, diagnostics: Diagnostic[]) {
   if (
     typeof value !== 'string' ||
+    !isUnicodeScalarString(value) ||
     value.length === 0 ||
     value !== value.trim() ||
     unicodeLength(value) > 200
@@ -365,7 +368,7 @@ function validateName(value: unknown, path: string, diagnostics: Diagnostic[]) {
 }
 
 function validatePrompt(value: unknown, path: string, diagnostics: Diagnostic[]) {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string' || !isUnicodeScalarString(value) || value.length === 0) {
     diagnostics.push(schemaDiagnostic(path, 'prompt must be a non-empty string.'));
   }
 }
@@ -378,6 +381,7 @@ function validateOptionalDescription(
 ) {
   if (
     typeof value !== 'string' ||
+    !isUnicodeScalarString(value) ||
     (maximumLength !== undefined && unicodeLength(value) > maximumLength)
   ) {
     diagnostics.push(
@@ -393,6 +397,7 @@ function validateOptionalDescription(
 
 function isPortableProjectRelativePath(value: string) {
   if (
+    !isUnicodeScalarString(value) ||
     value.length === 0 ||
     value.startsWith('/') ||
     value.startsWith('~') ||
@@ -522,6 +527,23 @@ function isFiniteJsonNumber(value: unknown) {
   );
 }
 
+function validateCanonicalJsonDomain(value: unknown, path: string, diagnostics: Diagnostic[]) {
+  for (const issue of canonicalJsonDomainIssues(value)) {
+    const issuePath = issue.path.reduce<string>(
+      (current, segment) => `${current}/${escapePointerSegment(String(segment))}`,
+      path,
+    );
+    diagnostics.push(
+      schemaDiagnostic(
+        issuePath,
+        issue.code === 'invalid_unicode'
+          ? 'Canonical JSON strings and property names must be valid Unicode.'
+          : 'Canonical JSON numbers must fit IEEE-754 binary64.',
+      ),
+    );
+  }
+}
+
 function validateDataContractSchema(
   value: unknown,
   path: string,
@@ -613,7 +635,9 @@ function validateDataContractSchema(
 
 function validateDataContract(value: unknown, nodePath: string, diagnostics: Diagnostic[]) {
   if (value === undefined) return;
-  validateDataContractSchema(value, `${nodePath}/data_contract`, diagnostics, false);
+  const path = `${nodePath}/data_contract`;
+  validateCanonicalJsonDomain(value, path, diagnostics);
+  validateDataContractSchema(value, path, diagnostics, false);
 }
 
 const reverseDnsNamespacePattern =
