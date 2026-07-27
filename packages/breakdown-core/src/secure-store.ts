@@ -176,8 +176,13 @@ async function hasExpectedPublicationStagingAlias(
 ) {
   if (facts.nlink !== 2n) return false;
   const extension = extname(path).slice(1);
-  if (extension !== 'md' && extension !== 'json') return false;
-  const stagingPattern = new RegExp(`^\\.submit-[0-9a-f]{16}\\.${extension}\\.tmp$`);
+  const stagingPattern =
+    extension === 'md' || extension === 'json'
+      ? new RegExp(`^\\.submit-[0-9a-f]{16}\\.${extension}\\.tmp$`)
+      : extension === 'lock'
+        ? /^\.acquire-[0-9a-f]{16}\.lock\.tmp$/
+        : undefined;
+  if (stagingPattern === undefined) return false;
   let matchingAliases = 0;
   for (const entry of await readdir(dirname(path))) {
     if (!stagingPattern.test(entry)) continue;

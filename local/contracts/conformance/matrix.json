@@ -18,6 +18,10 @@
       "path": "run-derivation/matrix.json"
     },
     {
+      "group": "PUB",
+      "path": "publication/matrix.json"
+    },
+    {
       "group": "CLI",
       "path": "cli/matrix.json"
     },

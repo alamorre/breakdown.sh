@@ -20,6 +20,12 @@ import {
   type WorkPacket,
 } from './prepare-work.js';
 import {
+  acquireRunWriterLock,
+  releaseRunWriterLock,
+  RunLockedError,
+  type RunWriterLock,
+} from './run-writer-lock.js';
+import {
   submitCandidate,
   type NonSuccessfulSubmitCandidateRequest,
   type NonSuccessfulSubmitCandidateValue,
@@ -107,6 +113,7 @@ export interface ProducerIdentity {
 
 export type RunPublicationBoundary =
   | 'after_inputs_read'
+  | 'after_lock_acquired'
   | 'after_staging_created'
   | 'after_snapshot_written'
   | 'after_manifest_written'
@@ -286,6 +293,18 @@ function runIdCollisionFailure(): OperationFailure {
       kind: 'conflict',
       code: 'run_id_collision',
       message: 'Could not allocate a unique Run ID.',
+      diagnostics: [],
+    },
+  };
+}
+
+function runLockedFailure(): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'conflict',
+      code: 'run_locked',
+      message: 'Another writer currently holds the Run lock.',
       diagnostics: [],
     },
   };
@@ -1423,7 +1442,8 @@ async function createRun(
     version: producerValue.version,
   };
 
-  const createdAt = (trustedContext.testControls?.now ?? (() => new Date()))().toISOString();
+  const now = trustedContext.testControls?.now ?? (() => new Date());
+  const createdAt = now().toISOString();
   const compactTimestamp = createdAt.replaceAll('-', '').replaceAll(':', '');
   const entropySource = trustedContext.testControls?.randomBytes ?? randomBytes;
   let runId: string | undefined;
@@ -1469,62 +1489,88 @@ async function createRun(
     producer,
   };
 
-  const outputsPath = join(projectRoot, 'outputs');
-  const stagingRoot = join(projectRoot, '.breakdown', 'tmp', 'runs');
+  let lock: RunWriterLock;
   try {
-    await ensurePrivateDirectoryPath(projectRoot, ['outputs']);
-    await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'tmp', 'runs']);
-  } catch {
-    return ioFailure();
-  }
-  let stagingPath: string;
-  try {
-    stagingPath = await mkdtemp(join(stagingRoot, `${runId}.`));
-  } catch {
-    return ioFailure();
-  }
-  try {
-    await trustedContext.testControls?.onRunPublicationBoundary?.('after_staging_created');
-    const stepsPath = join(stagingPath, 'steps');
-    await mkdir(stepsPath, { mode: 0o700 });
-    await syncDirectory(stepsPath);
-    await writePrivateFile(join(stagingPath, 'breakdown.yaml'), workflowBytes);
-    await trustedContext.testControls?.onRunPublicationBoundary?.('after_snapshot_written');
-    await writePrivateFile(join(stagingPath, 'run.md'), runManifestBytes(value));
-    await syncDirectory(stagingPath);
-    await trustedContext.testControls?.onRunPublicationBoundary?.('after_manifest_written');
-    await trustedContext.testControls?.onRunPublicationBoundary?.('before_publish');
-    const inputFailureBeforePublish = await recheckWorkflowInputs(
-      projectRoot,
-      resolvedInputs.value,
-    );
-    if (inputFailureBeforePublish !== undefined) {
-      await rm(stagingPath, { recursive: true, force: true });
-      return inputFailureBeforePublish;
-    }
-    const destinationPath = join(projectRoot, runPath);
-    try {
-      await lstat(destinationPath);
-      await rm(stagingPath, { recursive: true, force: true });
-      return runIdCollisionFailure();
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-    await rename(stagingPath, destinationPath);
-    await syncDirectory(outputsPath);
+    lock = await acquireRunWriterLock(projectRoot, runId, {
+      now,
+      randomBytes: entropySource,
+    });
   } catch (error) {
-    await rm(stagingPath, { recursive: true, force: true });
-    if (['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
-      return runIdCollisionFailure();
-    }
-    return ioFailure();
+    return error instanceof RunLockedError
+      ? runLockedFailure()
+      : ioFailure('Could not acquire the Run writer lock.');
   }
   try {
-    await trustedContext.testControls?.onRunPublicationBoundary?.('after_publish');
-  } catch {
-    // The Run is already committed. A post-commit observation fault cannot roll it back.
+    try {
+      await trustedContext.testControls?.onRunPublicationBoundary?.('after_lock_acquired');
+    } catch {
+      return ioFailure();
+    }
+
+    const outputsPath = join(projectRoot, 'outputs');
+    const stagingRoot = join(projectRoot, '.breakdown', 'tmp', 'runs');
+    try {
+      await ensurePrivateDirectoryPath(projectRoot, ['outputs']);
+      await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'tmp', 'runs']);
+    } catch {
+      return ioFailure();
+    }
+
+    let stagingPath: string;
+    try {
+      stagingPath = await mkdtemp(join(stagingRoot, `${runId}.`));
+    } catch {
+      return ioFailure();
+    }
+    try {
+      await trustedContext.testControls?.onRunPublicationBoundary?.('after_staging_created');
+      const stepsPath = join(stagingPath, 'steps');
+      await mkdir(stepsPath, { mode: 0o700 });
+      await syncDirectory(stepsPath);
+      await writePrivateFile(join(stagingPath, 'breakdown.yaml'), workflowBytes);
+      await trustedContext.testControls?.onRunPublicationBoundary?.('after_snapshot_written');
+      await writePrivateFile(join(stagingPath, 'run.md'), runManifestBytes(value));
+      await syncDirectory(stagingPath);
+      await trustedContext.testControls?.onRunPublicationBoundary?.('after_manifest_written');
+      await trustedContext.testControls?.onRunPublicationBoundary?.('before_publish');
+      const inputFailureBeforePublish = await recheckWorkflowInputs(
+        projectRoot,
+        resolvedInputs.value,
+      );
+      if (inputFailureBeforePublish !== undefined) {
+        await rm(stagingPath, { recursive: true, force: true });
+        return inputFailureBeforePublish;
+      }
+      const destinationPath = join(projectRoot, runPath);
+      try {
+        await lstat(destinationPath);
+        await rm(stagingPath, { recursive: true, force: true });
+        return runIdCollisionFailure();
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      await rename(stagingPath, destinationPath);
+      await syncDirectory(outputsPath);
+    } catch (error) {
+      await rm(stagingPath, { recursive: true, force: true });
+      if (['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        return runIdCollisionFailure();
+      }
+      return ioFailure();
+    }
+    try {
+      await trustedContext.testControls?.onRunPublicationBoundary?.('after_publish');
+    } catch {
+      // The Run is already committed. A post-commit observation fault cannot roll it back.
+    }
+    return { ok: true, value };
+  } finally {
+    try {
+      await releaseRunWriterLock(lock);
+    } catch {
+      // A later inspection exposes an unexpected leftover lock for explicit recovery.
+    }
   }
-  return { ok: true, value };
 }
 
 function isValidSha256(value: unknown): value is string {

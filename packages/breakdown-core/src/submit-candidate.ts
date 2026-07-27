@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { rm, unlink } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { canonicalizeJson } from './canonical-json.js';
@@ -14,11 +14,12 @@ import type {
 import type { SubmissionIdentity, WorkPacket } from './prepare-work.js';
 import { validateDataContractInstance } from './run-inspection.js';
 import {
-  ensurePrivateDirectoryPath,
-  publishPrivateFileNoReplace,
-  syncDirectory,
-  writePrivateFile,
-} from './secure-store.js';
+  acquireRunWriterLock,
+  releaseRunWriterLock,
+  RunLockedError,
+  type RunWriterLock,
+} from './run-writer-lock.js';
+import { publishPrivateFileNoReplace, syncDirectory, writePrivateFile } from './secure-store.js';
 import { isUnicodeScalarString } from './unicode.js';
 
 const RUN_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z--[a-z][a-z0-9]*(?:-[a-z0-9]+)*--[a-z2-7]{12}$/;
@@ -787,47 +788,6 @@ function artifactBytes(
   );
 }
 
-async function acquireRunLock(
-  projectRoot: string,
-  candidate: ValidatedCandidate,
-  dependencies: SubmitCandidateDependencies,
-): Promise<
-  { ok: true; lockPath: string; lockDirectory: string } | { ok: false; failure: OperationFailure }
-> {
-  let lockDirectory: string;
-  try {
-    lockDirectory = await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'locks', 'runs']);
-  } catch {
-    return { ok: false, failure: ioFailure('Could not prepare the Run writer lock.') };
-  }
-  const lockId = Buffer.from(dependencies.randomBytes(8)).toString('hex');
-  const lockPath = join(lockDirectory, `${candidate.submission.run_id}.lock`);
-  try {
-    await writePrivateFile(
-      lockPath,
-      Buffer.from(
-        JSON.stringify({
-          lock_id: lockId,
-          run_id: candidate.submission.run_id,
-          created_at: dependencies.now().toISOString(),
-          process_id: process.pid,
-        }),
-        'utf8',
-      ),
-    );
-    await syncDirectory(lockDirectory);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      return {
-        ok: false,
-        failure: conflictFailure('run_locked', 'Another writer currently holds the Run lock.'),
-      };
-    }
-    return { ok: false, failure: ioFailure('Could not acquire the Run writer lock.') };
-  }
-  return { ok: true, lockPath, lockDirectory };
-}
-
 export async function submitCandidate(
   request: SubmitCandidateRequest,
   projectRoot: string,
@@ -841,10 +801,14 @@ export async function submitCandidate(
     candidate.submission,
   );
   if (packetFailure !== undefined) return packetFailure;
-  const acquired = await acquireRunLock(projectRoot, candidate, dependencies);
-  if (!acquired.ok) return acquired.failure;
-
-  const { lockPath, lockDirectory } = acquired;
+  let lock: RunWriterLock;
+  try {
+    lock = await acquireRunWriterLock(projectRoot, candidate.submission.run_id, dependencies);
+  } catch (error) {
+    return error instanceof RunLockedError
+      ? conflictFailure('run_locked', 'Another writer currently holds the Run lock.')
+      : ioFailure('Could not acquire the Run writer lock.');
+  }
   try {
     await dependencies.onPublicationBoundary?.('after_lock_acquired');
     const inspected = await dependencies.inspect(candidate.submission.run_id);
@@ -1073,8 +1037,7 @@ export async function submitCandidate(
     return ioFailure();
   } finally {
     try {
-      await unlink(lockPath);
-      await syncDirectory(lockDirectory);
+      await releaseRunWriterLock(lock);
     } catch {
       // Inspection exposes an unexpected leftover lock for explicit recovery.
     }

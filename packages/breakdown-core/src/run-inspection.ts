@@ -1610,7 +1610,9 @@ async function observeLock(projectRoot: string, runId: string): Promise<Observed
     };
   }
   try {
-    const lock = await readSecureRegularFile(projectRoot, relativePath, 65_536);
+    const lock = await readSecureRegularFile(projectRoot, relativePath, 65_536, {
+      allowPublicationStagingAlias: true,
+    });
     let lockId: string | null = null;
     try {
       const value: unknown = JSON.parse(

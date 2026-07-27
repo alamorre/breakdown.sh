@@ -1759,12 +1759,83 @@ nodes:
     expect(await readdir(join(projectRoot, 'outputs'))).toEqual([]);
   });
 
-  it('should leave no visible partial Run after a publication fault', async () => {
+  it('should serialize creation of the same Run identity with its per-Run writer lock', async () => {
+    const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: creation-lock
+name: Creation Lock
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+    let announceLock!: () => void;
+    const lockAcquired = new Promise<void>((resolve) => {
+      announceLock = resolve;
+    });
+    let releaseLock!: () => void;
+    const keepLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const controls = {
+      now: () => new Date('2026-07-27T19:00:00.000Z'),
+      randomBytes: () => Buffer.alloc(8, 9),
+    };
+
+    const firstCreation = operate(
+      { operation: 'create_run' },
+      {
+        projectRoot,
+        testControls: {
+          ...controls,
+          onRunPublicationBoundary: async (boundary: string) => {
+            if (boundary !== 'after_lock_acquired') return;
+            announceLock();
+            await keepLock;
+          },
+        },
+      },
+    );
+    await Promise.race([
+      lockAcquired,
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => reject(new Error('Run creation never acquired its writer lock.')), 500);
+      }),
+    ]);
+
+    const lockFiles = await readdir(join(projectRoot, '.breakdown', 'locks', 'runs'));
+    expect(lockFiles).toHaveLength(1);
+    expect(
+      JSON.parse(
+        await readFile(join(projectRoot, '.breakdown', 'locks', 'runs', lockFiles[0]!), 'utf8'),
+      ),
+    ).toMatchObject({
+      lock_id: '0909090909090909',
+      created_at: '2026-07-27T19:00:00.000Z',
+    });
+
+    const contender = await operate(
+      { operation: 'create_run' },
+      { projectRoot, testControls: controls },
+    );
+    expect(contender).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'run_locked' },
+    });
+
+    releaseLock();
+    await expect(firstCreation).resolves.toMatchObject({ ok: true });
+    expect(await readdir(join(projectRoot, '.breakdown', 'locks', 'runs'))).toEqual([]);
+  });
+
+  it('should expose only complete Runs when every publication boundary faults', async () => {
     const boundaries = [
+      'after_inputs_read',
+      'after_lock_acquired',
       'after_staging_created',
       'after_snapshot_written',
       'after_manifest_written',
       'before_publish',
+      'after_publish',
     ] as const;
 
     for (const boundaryToFail of boundaries) {
@@ -1776,6 +1847,8 @@ nodes:
     name: Test
     prompt: Test atomic publication.
 `);
+      await mkdir(join(projectRoot, 'outputs'));
+      await mkdir(join(projectRoot, '.breakdown', 'locks', 'runs'), { recursive: true });
       const result = await operate(
         { operation: 'create_run' },
         {
@@ -1792,14 +1865,32 @@ nodes:
         },
       );
 
-      expect(result, boundaryToFail).toMatchObject({
-        ok: false,
-        failure: {
-          kind: 'io',
-          code: 'io_error',
-        },
-      });
-      expect(await readdir(join(projectRoot, 'outputs')), boundaryToFail).toEqual([]);
+      const committed = boundaryToFail === 'after_publish';
+      expect(result, boundaryToFail).toMatchObject(
+        committed
+          ? {
+              ok: true,
+              value: {
+                created_at: '2026-07-24T14:00:00.000Z',
+                run_id: '20260724T140000.000Z--publication-fault--aaaaaaaaaaaa',
+              },
+            }
+          : {
+              ok: false,
+              failure: {
+                kind: 'io',
+                code: 'io_error',
+              },
+            },
+      );
+      const visibleRuns = await readdir(join(projectRoot, 'outputs'));
+      expect(visibleRuns, boundaryToFail).toEqual(
+        committed ? ['20260724T140000.000Z--publication-fault--aaaaaaaaaaaa'] : [],
+      );
+      expect(
+        await readdir(join(projectRoot, '.breakdown', 'locks', 'runs')),
+        boundaryToFail,
+      ).toEqual([]);
     }
   });
 
