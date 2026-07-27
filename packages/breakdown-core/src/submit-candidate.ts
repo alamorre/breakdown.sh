@@ -35,6 +35,11 @@ export interface CandidateExecutor {
   model?: string;
 }
 
+export interface CandidateProblem {
+  code: string;
+  message: string;
+}
+
 export interface SuccessfulCandidateOutcome {
   schema_version: 'breakdown.candidate.v1';
   submission: SubmissionIdentity;
@@ -44,20 +49,44 @@ export interface SuccessfulCandidateOutcome {
   json?: unknown;
 }
 
-export interface SubmitCandidateRequest {
+export interface NonSuccessfulCandidateOutcome {
+  schema_version: 'breakdown.candidate.v1';
+  submission: SubmissionIdentity;
+  status: 'failed' | 'blocked' | 'cancelled';
+  executor: CandidateExecutor;
+  markdown: string;
+  problem: CandidateProblem;
+}
+
+export type CandidateOutcome = SuccessfulCandidateOutcome | NonSuccessfulCandidateOutcome;
+
+export interface SuccessfulSubmitCandidateRequest {
   operation: 'submit_candidate';
   packet: WorkPacket;
   candidate: SuccessfulCandidateOutcome;
 }
 
-export interface SubmitCandidateValue {
+export interface NonSuccessfulSubmitCandidateRequest {
+  operation: 'submit_candidate';
+  packet: WorkPacket;
+  candidate: NonSuccessfulCandidateOutcome;
+}
+
+export type SubmitCandidateRequest =
+  | SuccessfulSubmitCandidateRequest
+  | NonSuccessfulSubmitCandidateRequest;
+
+interface SubmittedCandidateValue {
   run_id: string;
   node_id: string;
   attempt: number;
-  status: 'succeeded';
   started_at: string;
   settled_at: string;
   context_sha256: string;
+}
+
+export interface SuccessfulSubmitCandidateValue extends SubmittedCandidateValue {
+  status: 'succeeded';
   result: {
     markdown: {
       path: string;
@@ -69,6 +98,16 @@ export interface SubmitCandidateValue {
     } | null;
   };
 }
+
+export interface NonSuccessfulSubmitCandidateValue extends SubmittedCandidateValue {
+  status: 'failed' | 'blocked' | 'cancelled';
+  problem: CandidateProblem;
+  result: null;
+}
+
+export type SubmitCandidateValue =
+  | SuccessfulSubmitCandidateValue
+  | NonSuccessfulSubmitCandidateValue;
 
 export type StepPublicationBoundary =
   | 'after_lock_acquired'
@@ -87,8 +126,10 @@ interface SubmitCandidateDependencies {
 
 interface ValidatedCandidate {
   submission: SubmissionIdentity;
+  status: 'succeeded' | 'failed' | 'blocked' | 'cancelled';
   executor: CandidateExecutor;
   markdown: string;
+  problem?: CandidateProblem;
   json?: {
     value: unknown;
     bytes: Buffer;
@@ -350,7 +391,7 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
   const diagnostics: Diagnostic[] = [];
   exactFields(
     value,
-    ['schema_version', 'submission', 'status', 'executor', 'markdown', 'json'],
+    ['schema_version', 'submission', 'status', 'executor', 'markdown', 'json', 'problem'],
     '',
     diagnostics,
     ['schema_version', 'submission', 'status', 'executor', 'markdown'],
@@ -360,8 +401,44 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
       diagnostic('/schema_version', 'schema_version must be breakdown.candidate.v1.'),
     );
   }
-  if (value.status !== 'succeeded') {
-    diagnostics.push(diagnostic('/status', 'This operation currently accepts succeeded outcomes.'));
+  const statuses = new Set<unknown>(['succeeded', 'failed', 'blocked', 'cancelled']);
+  if (!statuses.has(value.status)) {
+    diagnostics.push(diagnostic('/status', 'status must be a settled Candidate Outcome status.'));
+  }
+  if (value.status === 'succeeded') {
+    if (Object.hasOwn(value, 'problem')) {
+      diagnostics.push(
+        diagnostic('/problem', 'A succeeded Candidate Outcome must not have a problem.'),
+      );
+    }
+  } else if (statuses.has(value.status)) {
+    if (Object.hasOwn(value, 'json')) {
+      diagnostics.push(
+        diagnostic('/json', 'A non-success Candidate Outcome must not include JSON.'),
+      );
+    }
+    if (!isRecord(value.problem)) {
+      diagnostics.push(
+        diagnostic('/problem', 'A non-success Candidate Outcome requires a problem.'),
+      );
+    } else {
+      exactFields(value.problem, ['code', 'message'], '/problem', diagnostics);
+      if (
+        typeof value.problem.code !== 'string' ||
+        !/^[a-z][a-z0-9_]{0,63}$/.test(value.problem.code)
+      ) {
+        diagnostics.push(diagnostic('/problem/code', 'problem code is invalid.'));
+      }
+      if (
+        typeof value.problem.message !== 'string' ||
+        value.problem.message.length === 0 ||
+        !isUnicodeScalarString(value.problem.message)
+      ) {
+        diagnostics.push(
+          diagnostic('/problem/message', 'problem message must be a nonempty Unicode string.'),
+        );
+      }
+    }
   }
 
   const submission = value.submission;
@@ -451,7 +528,7 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
   }
 
   let jsonBytes: Buffer | undefined;
-  if (Object.hasOwn(value, 'json')) {
+  if (value.status === 'succeeded' && Object.hasOwn(value, 'json')) {
     const withinDepthLimit = validateStrictJsonValue(
       value.json,
       '/json',
@@ -480,8 +557,12 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
     ok: true,
     value: {
       submission: submission as unknown as SubmissionIdentity,
+      status: value.status as ValidatedCandidate['status'],
       executor: executor as unknown as CandidateExecutor,
       markdown: value.markdown as string,
+      ...(value.status === 'succeeded'
+        ? {}
+        : { problem: value.problem as unknown as CandidateProblem }),
       ...(jsonBytes === undefined ? {} : { json: { value: value.json, bytes: jsonBytes } }),
     },
   };
@@ -596,7 +677,7 @@ function artifactBytes(
     run_id: candidate.submission.run_id,
     node_id: candidate.submission.node_id,
     attempt,
-    status: 'succeeded',
+    status: candidate.status,
     started_at: candidate.submission.prepared_at,
     settled_at: settledAt,
     context_sha256: candidate.submission.context_sha256,
@@ -607,6 +688,7 @@ function artifactBytes(
       ...(candidate.executor.version === undefined ? {} : { version: candidate.executor.version }),
       ...(candidate.executor.model === undefined ? {} : { model: candidate.executor.model }),
     },
+    ...(candidate.problem === undefined ? {} : { problem: candidate.problem }),
   };
   return Buffer.from(
     `---\n${JSON.stringify(frontmatter, null, 2)}\n---\n${candidate.markdown}`,
@@ -704,7 +786,7 @@ export async function submitCandidate(
       return conflictFailure('no_longer_runnable', 'The submitted node is no longer runnable.');
     }
     const requiresJson = definition.data_contract !== undefined;
-    if (requiresJson !== (candidate.json !== undefined)) {
+    if (candidate.status === 'succeeded' && requiresJson !== (candidate.json !== undefined)) {
       return invalidCandidateFailure([
         diagnostic(
           '/json',
@@ -714,7 +796,7 @@ export async function submitCandidate(
         ),
       ]);
     }
-    if (requiresJson && candidate.json !== undefined) {
+    if (candidate.status === 'succeeded' && requiresJson && candidate.json !== undefined) {
       const diagnostics: Diagnostic[] = [];
       validateDataContractInstance(
         candidate.json.value,
@@ -823,40 +905,68 @@ export async function submitCandidate(
           };
     const committedInspection = await dependencies.inspect(candidate.submission.run_id);
     if (!committedInspection.ok) return committedInspection;
-    const selectedResult = committedInspection.value.nodes.find(
-      (inspectedNode) => inspectedNode.node_id === candidate.submission.node_id,
-    )?.selected_result;
-    if (
-      selectedResult?.attempt !== attempt ||
-      selectedResult.markdown.path !== relativePath ||
-      selectedResult.markdown.sha256 !== artifactSha256 ||
-      (jsonDescriptor === null
-        ? selectedResult.json !== undefined
-        : selectedResult.json?.path !== jsonDescriptor.path ||
-          selectedResult.json.sha256 !== jsonDescriptor.sha256)
-    ) {
-      return internalFailure('Committed inspection did not select the published Result.');
+    if (candidate.status === 'succeeded') {
+      const selectedResult = committedInspection.value.nodes.find(
+        (inspectedNode) => inspectedNode.node_id === candidate.submission.node_id,
+      )?.selected_result;
+      if (
+        selectedResult?.attempt !== attempt ||
+        selectedResult.markdown.path !== relativePath ||
+        selectedResult.markdown.sha256 !== artifactSha256 ||
+        (jsonDescriptor === null
+          ? selectedResult.json !== undefined
+          : selectedResult.json?.path !== jsonDescriptor.path ||
+            selectedResult.json.sha256 !== jsonDescriptor.sha256)
+      ) {
+        return internalFailure('Committed inspection did not select the published Result.');
+      }
+    } else {
+      const committedAttempt = committedInspection.value.attempts.find(
+        (inspectedAttempt) =>
+          inspectedAttempt.node_id === candidate.submission.node_id &&
+          inspectedAttempt.attempt === attempt,
+      );
+      if (
+        committedAttempt?.file !== relativePath ||
+        committedAttempt.status !== candidate.status ||
+        committedAttempt.selected
+      ) {
+        return internalFailure('Committed inspection did not retain the non-success attempt.');
+      }
     }
 
-    return {
-      ok: true,
-      value: {
-        run_id: candidate.submission.run_id,
-        node_id: candidate.submission.node_id,
-        attempt,
-        status: 'succeeded',
-        started_at: candidate.submission.prepared_at,
-        settled_at: settledAt,
-        context_sha256: candidate.submission.context_sha256,
-        result: {
-          markdown: {
-            path: relativePath,
-            sha256: artifactSha256,
-          },
-          json: jsonDescriptor,
-        },
-      },
+    const commonValue = {
+      run_id: candidate.submission.run_id,
+      node_id: candidate.submission.node_id,
+      attempt,
+      started_at: candidate.submission.prepared_at,
+      settled_at: settledAt,
+      context_sha256: candidate.submission.context_sha256,
     };
+    return candidate.status === 'succeeded'
+      ? {
+          ok: true,
+          value: {
+            ...commonValue,
+            status: candidate.status,
+            result: {
+              markdown: {
+                path: relativePath,
+                sha256: artifactSha256,
+              },
+              json: jsonDescriptor,
+            },
+          },
+        }
+      : {
+          ok: true,
+          value: {
+            ...commonValue,
+            status: candidate.status,
+            problem: candidate.problem!,
+            result: null,
+          },
+        };
   } catch {
     return ioFailure();
   } finally {

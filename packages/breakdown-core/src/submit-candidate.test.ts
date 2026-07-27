@@ -4,7 +4,12 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { operate, type SuccessfulCandidateOutcome, type WorkPacket } from './index.js';
+import {
+  operate,
+  type NonSuccessfulCandidateOutcome,
+  type SuccessfulCandidateOutcome,
+  type WorkPacket,
+} from './index.js';
 
 const projects: string[] = [];
 
@@ -56,6 +61,26 @@ function successfulCandidate(
   };
 }
 
+function nonSuccessfulCandidate(
+  packet: WorkPacket,
+  status: NonSuccessfulCandidateOutcome['status'],
+): NonSuccessfulCandidateOutcome {
+  return {
+    schema_version: 'breakdown.candidate.v1',
+    submission: packet.submission,
+    status,
+    executor: {
+      kind: 'program',
+      name: 'test-executor',
+    },
+    markdown: `${status} diagnostic`,
+    problem: {
+      code: `executor_${status}`,
+      message: `The Executor reported ${status}.`,
+    },
+  };
+}
+
 afterEach(async () => {
   await Promise.all(
     projects.splice(0).map((project) => rm(project, { recursive: true, force: true })),
@@ -63,7 +88,7 @@ afterEach(async () => {
 });
 
 describe('submit_candidate', () => {
-  it('publishes the strict successful Candidate Outcome contract', async () => {
+  it('publishes the strict settled Candidate Outcome contract', async () => {
     const schema = JSON.parse(
       await readFile(
         new URL(
@@ -75,8 +100,21 @@ describe('submit_candidate', () => {
     ) as {
       additionalProperties: boolean;
       required: string[];
+      oneOf: [
+        {
+          properties: { status: { const: string } };
+          not: { required: string[] };
+        },
+        {
+          required: string[];
+          properties: { status: { enum: string[] } };
+          not: { required: string[] };
+        },
+      ];
       properties: {
         json: Record<string, never>;
+        problem: { $ref: string };
+        status: { enum: string[] };
         submission: {
           additionalProperties: boolean;
           required: string[];
@@ -87,8 +125,21 @@ describe('submit_candidate', () => {
     expect(schema).toMatchObject({
       additionalProperties: false,
       required: ['schema_version', 'submission', 'status', 'executor', 'markdown'],
+      oneOf: [
+        {
+          properties: { status: { const: 'succeeded' } },
+          not: { required: ['problem'] },
+        },
+        {
+          required: ['problem'],
+          properties: { status: { enum: ['failed', 'blocked', 'cancelled'] } },
+          not: { required: ['json'] },
+        },
+      ],
       properties: {
         json: {},
+        problem: { $ref: '#/$defs/problem' },
+        status: { enum: ['succeeded', 'failed', 'blocked', 'cancelled'] },
         submission: {
           additionalProperties: false,
           required: [
@@ -203,6 +254,325 @@ nodes:
       '"executor": {\n    "kind": "agent",\n    "name": "Codex",\n    "version": "1.2.3",\n    "model": "example-model"\n  }',
     );
     expect(committedMarkdown).toMatch(/---\n# Result\n\nExact candidate bytes\.\n$/);
+  });
+
+  it('publishes a failed attempt without a Result while independent prepared work progresses', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: independent-failure
+name: Independent Failure
+nodes:
+  - id: fail
+    name: Fail
+    prompt: Report an honest failure.
+  - id: blocked-child
+    name: Blocked Child
+    prompt: Wait for a successful Result.
+    inputs:
+      source:
+        node: fail
+  - id: independent
+    name: Independent
+    prompt: Produce independent work.
+`);
+    const prepared = await operate(
+      { operation: 'prepare_work', run_id: runId, limit: 3 },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:01:00.000Z') },
+      },
+    );
+    if (!prepared.ok) throw new Error(prepared.failure.code);
+    expect(prepared.value.packets.map((packet) => packet.node.id)).toEqual(['fail', 'independent']);
+    const failedPacket = prepared.value.packets[0]!;
+    const independentPacket = prepared.value.packets[1]!;
+    const failedCandidate: NonSuccessfulCandidateOutcome = {
+      schema_version: 'breakdown.candidate.v1',
+      submission: failedPacket.submission,
+      status: 'failed',
+      executor: {
+        kind: 'agent',
+        name: 'Codex',
+      },
+      markdown: 'The required source was unavailable.',
+      problem: {
+        code: 'source_unavailable',
+        message: 'The required source was unavailable.',
+      },
+    };
+
+    const failed = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: failedPacket,
+        candidate: failedCandidate,
+      },
+      {
+        projectRoot: project,
+        testControls: {
+          now: () => new Date('2026-07-27T18:02:00.000Z'),
+          randomBytes: () => Buffer.alloc(8, 2),
+        },
+      },
+    );
+
+    expect(failed).toMatchObject({
+      ok: true,
+      value: {
+        run_id: runId,
+        node_id: 'fail',
+        attempt: 1,
+        status: 'failed',
+        problem: {
+          code: 'source_unavailable',
+          message: 'The required source was unavailable.',
+        },
+        result: null,
+      },
+    });
+
+    const independent = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: independentPacket,
+        candidate: successfulCandidate(independentPacket, 'Independent Result'),
+      },
+      {
+        projectRoot: project,
+        testControls: {
+          now: () => new Date('2026-07-27T18:03:00.000Z'),
+          randomBytes: () => Buffer.alloc(8, 3),
+        },
+      },
+    );
+    expect(independent).toMatchObject({
+      ok: true,
+      value: { node_id: 'independent', attempt: 1, status: 'succeeded' },
+    });
+
+    const replay = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: failedPacket,
+        candidate: failedCandidate,
+      },
+      { projectRoot: project },
+    );
+    expect(replay).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'attempt_advanced' },
+    });
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: {
+        status: 'incomplete',
+        nodes: [
+          { node_id: 'fail', state: 'runnable', next_attempt: 2 },
+          { node_id: 'independent', state: 'complete', next_attempt: 2 },
+          { node_id: 'blocked-child', state: 'blocked', next_attempt: 1 },
+        ],
+        attempts: [
+          { node_id: 'fail', attempt: 1, status: 'failed', selected: false },
+          { node_id: 'independent', attempt: 1, status: 'succeeded', selected: true },
+        ],
+      },
+    });
+    if (!inspected.ok) throw new Error(inspected.failure.code);
+    const failedAttempt = inspected.value.attempts.find((attempt) => attempt.node_id === 'fail');
+    if (failedAttempt === undefined) throw new Error('Failed attempt was not published.');
+    const artifact = await readFile(join(project, failedAttempt.file), 'utf8');
+    expect(artifact).toContain('"status": "failed"');
+    expect(artifact).toContain(
+      '"problem": {\n    "code": "source_unavailable",\n    "message": "The required source was unavailable."\n  }',
+    );
+    expect(artifact).toMatch(/---\nThe required source was unavailable\.$/);
+    expect(
+      (await readdir(join(project, `outputs/${runId}/steps`))).filter((name) =>
+        name.endsWith('.json'),
+      ),
+    ).toEqual([]);
+
+    const nextOpportunity = await operate(
+      { operation: 'prepare_work', run_id: runId, limit: 3 },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:04:00.000Z') },
+      },
+    );
+    expect(nextOpportunity).toMatchObject({
+      ok: true,
+      value: {
+        packets: [
+          {
+            node: { id: 'fail' },
+            expected_attempt: 2,
+          },
+        ],
+      },
+    });
+  });
+
+  it.each(['failed', 'blocked', 'cancelled'] as const)(
+    'publishes an explicit %s Candidate Outcome as result-free history',
+    async (status) => {
+      const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: non-success-${status}
+name: Non-success ${status}
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Report the settled outcome.
+    data_contract:
+      type: object
+`);
+      const packet = await prepare(project, runId);
+      const submitted = await operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate: nonSuccessfulCandidate(packet, status),
+        },
+        {
+          projectRoot: project,
+          testControls: {
+            now: () => new Date('2026-07-27T18:02:00.000Z'),
+            randomBytes: () => Buffer.alloc(8, 4),
+          },
+        },
+      );
+
+      expect(submitted).toMatchObject({
+        ok: true,
+        value: {
+          run_id: runId,
+          node_id: 'execute',
+          attempt: 1,
+          status,
+          problem: {
+            code: `executor_${status}`,
+            message: `The Executor reported ${status}.`,
+          },
+          result: null,
+        },
+      });
+
+      const inspected = await operate(
+        { operation: 'inspect_run', run_id: runId },
+        { projectRoot: project },
+      );
+      expect(inspected).toMatchObject({
+        ok: true,
+        value: {
+          status: 'incomplete',
+          nodes: [
+            {
+              node_id: 'execute',
+              state: 'runnable',
+              stale: false,
+              next_attempt: 2,
+            },
+          ],
+          attempts: [{ node_id: 'execute', attempt: 1, status, selected: false }],
+          terminal_results: [],
+        },
+      });
+      if (!inspected.ok) throw new Error(inspected.failure.code);
+      const [attempt] = inspected.value.attempts;
+      if (attempt === undefined) throw new Error('Non-success attempt was not published.');
+      expect((await stat(join(project, attempt.file))).mode & 0o777).toBe(0o600);
+      expect(await readFile(join(project, attempt.file), 'utf8')).toContain(
+        `"status": "${status}"`,
+      );
+      expect(
+        (await readdir(join(project, `outputs/${runId}/steps`))).filter((name) =>
+          name.endsWith('.json'),
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it('rejects invalid status-specific Candidate Outcome fields without publishing history', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: invalid-non-success
+name: Invalid Non-success
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+`);
+    const packet = await prepare(project, runId);
+    const invalidCandidates = [
+      {
+        ...successfulCandidate(packet),
+        problem: {
+          code: 'unexpected_problem',
+          message: 'Success must not carry a problem.',
+        },
+      },
+      {
+        schema_version: 'breakdown.candidate.v1',
+        submission: packet.submission,
+        status: 'failed',
+        executor: { kind: 'program', name: 'test-executor' },
+        markdown: 'Missing problem.',
+      },
+      {
+        ...nonSuccessfulCandidate(packet, 'blocked'),
+        json: { unexpected: true },
+      },
+      {
+        ...nonSuccessfulCandidate(packet, 'cancelled'),
+        problem: {
+          code: 'INVALID-CODE',
+          message: '',
+          detail: 'Unknown problem field.',
+        },
+      },
+    ];
+    const expectedDiagnosticPaths = [
+      ['/problem'],
+      ['/problem'],
+      ['/json'],
+      ['/problem/detail', '/problem/code', '/problem/message'],
+    ];
+
+    for (const [index, candidate] of invalidCandidates.entries()) {
+      const rejected = await operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate: candidate as never,
+        },
+        { projectRoot: project },
+      );
+      expect(rejected).toMatchObject({
+        ok: false,
+        failure: {
+          kind: 'invalid',
+          code: 'invalid_candidate',
+          diagnostics: expectedDiagnosticPaths[index]!.map((path) => ({ path })),
+        },
+      });
+    }
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: {
+        nodes: [{ node_id: 'execute', state: 'runnable', next_attempt: 1 }],
+        attempts: [],
+      },
+    });
   });
 
   it('should publish and pass downstream one complete contracted Result', async () => {

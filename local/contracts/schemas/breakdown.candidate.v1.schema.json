@@ -2,10 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "breakdown.candidate.v1",
   "title": "Breakdown Candidate Outcome v1",
-  "description": "A successful Candidate Outcome. The core requires json exactly for a contracted Result and separately enforces UTF-8 byte limits and current Run eligibility.",
+  "description": "A settled Candidate Outcome. The core requires json exactly for a contracted success, problem exactly for non-success, and separately enforces UTF-8 byte limits and current Run eligibility.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "submission", "status", "executor", "markdown"],
+  "oneOf": [
+    {
+      "properties": {
+        "status": {
+          "const": "succeeded"
+        }
+      },
+      "not": {
+        "required": ["problem"]
+      }
+    },
+    {
+      "required": ["problem"],
+      "properties": {
+        "status": {
+          "enum": ["failed", "blocked", "cancelled"]
+        }
+      },
+      "not": {
+        "required": ["json"]
+      }
+    }
+  ],
   "properties": {
     "schema_version": {
       "const": "breakdown.candidate.v1"
@@ -46,7 +69,7 @@
       }
     },
     "status": {
-      "const": "succeeded"
+      "enum": ["succeeded", "failed", "blocked", "cancelled"]
     },
     "executor": {
       "type": "object",
@@ -72,6 +95,9 @@
     },
     "json": {
       "description": "The complete structured Result, required exactly when the Node Definition declares a Data Contract."
+    },
+    "problem": {
+      "$ref": "#/$defs/problem"
     }
   },
   "$defs": {
@@ -84,6 +110,20 @@
     "nonempty": {
       "type": "string",
       "minLength": 1
+    },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "message": {
+          "$ref": "#/$defs/nonempty"
+        }
+      }
     },
     "sha256": {
       "type": "string",

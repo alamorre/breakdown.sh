@@ -21,9 +21,13 @@ import {
 } from './prepare-work.js';
 import {
   submitCandidate,
+  type NonSuccessfulSubmitCandidateRequest,
+  type NonSuccessfulSubmitCandidateValue,
   type StepPublicationBoundary,
   type SubmitCandidateRequest,
   type SubmitCandidateValue,
+  type SuccessfulSubmitCandidateRequest,
+  type SuccessfulSubmitCandidateValue,
 } from './submit-candidate.js';
 import {
   assertSupportedFilesystem,
@@ -54,9 +58,16 @@ export type {
   WorkPacket,
 } from './prepare-work.js';
 export type {
+  CandidateOutcome,
   CandidateExecutor,
+  CandidateProblem,
   CandidateSubmission,
+  NonSuccessfulCandidateOutcome,
+  NonSuccessfulSubmitCandidateRequest,
+  NonSuccessfulSubmitCandidateValue,
   SuccessfulCandidateOutcome,
+  SuccessfulSubmitCandidateRequest,
+  SuccessfulSubmitCandidateValue,
   SubmitCandidateRequest,
   SubmitCandidateValue,
 } from './submit-candidate.js';
@@ -1969,6 +1980,14 @@ export function operate(
   request: ReadInputRequest,
   trustedContext: TrustedContext,
 ): Promise<OperationResult<ReadInputValue>>;
+export function operate(
+  request: SuccessfulSubmitCandidateRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<SuccessfulSubmitCandidateValue>>;
+export function operate(
+  request: NonSuccessfulSubmitCandidateRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<NonSuccessfulSubmitCandidateValue>>;
 export function operate(
   request: SubmitCandidateRequest,
   trustedContext: TrustedContext,
