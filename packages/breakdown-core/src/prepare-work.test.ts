@@ -14,10 +14,15 @@ afterEach(async () => {
   );
 });
 
-async function createProject(workflow: string) {
+interface ProjectOptions {
+  setup?: (project: string) => Promise<void> | void;
+}
+
+async function createProject(workflow: string, options?: ProjectOptions) {
   const project = await mkdtemp(join(tmpdir(), 'breakdown-prepare-'));
   projects.push(project);
   await writeFile(join(project, 'breakdown.yaml'), workflow);
+  await options?.setup?.(project);
   const created = await operate(
     { operation: 'create_run' },
     {
@@ -30,6 +35,53 @@ async function createProject(workflow: string) {
   );
   if (!created.ok) throw new Error(created.failure.code);
   return { project, runId: created.value.run_id };
+}
+
+function stepFilename(nodeId: string, attempt: number, settledAt: string) {
+  const timestamp = settledAt.replace(/[-:]/g, '');
+  return `${timestamp}--${nodeId}--a${attempt}.md`;
+}
+
+interface StepFixture {
+  project: string;
+  runId: string;
+  nodeId: string;
+  attempt: number;
+  contextSha256: string;
+  settledAt: string;
+  startedAt: string;
+  body: string;
+  inputs?: Record<string, unknown>;
+  json?: unknown;
+}
+
+async function writeStepFixture(opts: StepFixture) {
+  const filename = stepFilename(opts.nodeId, opts.attempt, opts.settledAt);
+  const file = join(opts.project, 'outputs', opts.runId, 'steps', filename);
+  await writeFile(
+    file,
+    `---\n${JSON.stringify(
+      {
+        schema_version: 'breakdown.step-artifact.v1',
+        run_id: opts.runId,
+        node_id: opts.nodeId,
+        attempt: opts.attempt,
+        status: 'succeeded',
+        started_at: opts.startedAt,
+        settled_at: opts.settledAt,
+        context_sha256: opts.contextSha256,
+        inputs: opts.inputs ?? {},
+        executor: { kind: 'program', name: 'fixture' },
+      },
+      null,
+      2,
+    )}\n---\n${opts.body}`,
+  );
+
+  if (opts.json !== undefined) {
+    await writeFile(file.replace(/\.md$/, '.json'), JSON.stringify(opts.json), 'utf8');
+  }
+  return filename;
 }
 
 describe('prepare_work', () => {
@@ -177,5 +229,302 @@ nodes:
       expected_attempt: 2,
       submission: { node_id: 'one', expected_attempt: 2 },
     });
+  });
+
+  it('reads a Workflow Input packet binding and validates integrity', async () => {
+    const sourceBody = 'workflow input text';
+    const { project, runId } = await createProject(
+      `
+schema_version: breakdown.workflow.v1
+id: read-work-input
+name: Read Work Input
+inputs:
+  source:
+    default: source.txt
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume the source.
+    inputs:
+      source:
+        workflow_input: source
+`,
+      {
+        setup: async (projectPath) => {
+          await writeFile(join(projectPath, 'source.txt'), sourceBody, 'utf8');
+        },
+      },
+    );
+
+    const prepared = await operate(
+      { operation: 'prepare_work', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(prepared).toMatchObject({ ok: true });
+    if (!prepared.ok) throw new Error(prepared.failure.code);
+    expect(prepared.value.packets[0]).toMatchObject({
+      node: { id: 'consume' },
+      inputs: {
+        source: {
+          workflow_input: {
+            path: 'source.txt',
+            identity: {
+              device: expect.any(String),
+              inode: expect.any(String),
+              birthtime: expect.any(String),
+            },
+          },
+        },
+      },
+    });
+
+    const read = await operate(
+      { operation: 'read_work_input', packet: prepared.value.packets[0], binding: 'source' },
+      { projectRoot: project },
+    );
+    expect(read).toMatchObject({ ok: true, value: { kind: 'workflow_input' } });
+    if (!read.ok || read.value.kind !== 'workflow_input') {
+      throw new Error(read.ok ? 'Expected a Workflow Input.' : read.failure.code);
+    }
+    expect(Buffer.from(read.value.bytes_base64, 'base64').toString('utf8')).toBe(sourceBody);
+
+    const forged = structuredClone(prepared.value.packets[0]);
+    if (forged.inputs.source?.workflow_input === undefined) {
+      throw new Error('Prepared packet is missing source input.');
+    }
+    forged.inputs.source.workflow_input.identity = {
+      device: '1',
+      inode: '2',
+      birthtime: '3',
+    };
+    const mutated = await operate(
+      { operation: 'read_work_input', packet: forged, binding: 'source' },
+      { projectRoot: project },
+    );
+    expect(mutated).toMatchObject({
+      ok: false,
+      failure: { code: 'invalid_work_input', diagnostics: [{ code: 'integrity' }] },
+    });
+  });
+
+  it('rejects forged Workflow Input descriptor paths during read_work_input', async () => {
+    const { project, runId } = await createProject(
+      `
+schema_version: breakdown.workflow.v1
+id: forge-work-input
+name: Forge Work Input
+inputs:
+  source:
+    default: source.txt
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume the source.
+    inputs:
+      source:
+        workflow_input: source
+`,
+      {
+        setup: async (projectPath) => {
+          await writeFile(join(projectPath, 'source.txt'), 'source text', 'utf8');
+        },
+      },
+    );
+
+    const prepared = await operate(
+      { operation: 'prepare_work', run_id: runId },
+      { projectRoot: project },
+    );
+    if (!prepared.ok) throw new Error(prepared.failure.code);
+
+    const forged = structuredClone(prepared.value.packets[0]);
+    if (forged.inputs.source?.workflow_input === undefined) {
+      throw new Error('Prepared packet is missing source input.');
+    }
+    forged.inputs.source.workflow_input.path = '../../source.txt';
+    const forgedResult = await operate(
+      { operation: 'read_work_input', packet: forged, binding: 'source' },
+      { projectRoot: project },
+    );
+    expect(forgedResult).toMatchObject({
+      ok: false,
+      failure: {
+        code: 'invalid_work_input',
+        diagnostics: [{ code: 'schema', path: '/inputs/source/workflow_input' }],
+      },
+    });
+  });
+
+  it('reads predecessor result markdown/json and preserves result identities', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: result-input
+name: Result Input
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+    data_contract:
+      type: object
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      predecessor:
+        node: gather
+`);
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    if (!inspected.ok) throw new Error(inspected.failure.code);
+    const gatherContext = inspected.value.nodes.find(
+      (node) => node.node_id === 'gather',
+    )?.context_sha256;
+    if (gatherContext === undefined) throw new Error('Missing gather context');
+
+    const resultFilename = await writeStepFixture({
+      project,
+      runId,
+      nodeId: 'gather',
+      attempt: 1,
+      contextSha256: gatherContext,
+      settledAt: '2026-07-26T12:01:00.000Z',
+      startedAt: '2026-07-26T12:00:00.000Z',
+      body: 'gathered result',
+      json: { score: 42 },
+    });
+
+    const prepared = await operate(
+      { operation: 'prepare_work', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(prepared).toMatchObject({ ok: true });
+    if (!prepared.ok) throw new Error(prepared.failure.code);
+    const consumePacket = prepared.value.packets.find((packet) => packet.node.id === 'consume');
+    expect(consumePacket).toBeDefined();
+    expect(consumePacket?.inputs.predecessor?.result).toMatchObject({
+      markdown: {
+        path: `outputs/${runId}/steps/${resultFilename}`,
+        identity: expect.any(Object),
+      },
+      json: {
+        path: `outputs/${runId}/steps/${resultFilename.replace(/\.md$/, '.json')}`,
+        identity: expect.any(Object),
+      },
+    });
+
+    const read = await operate(
+      {
+        operation: 'read_work_input',
+        packet: consumePacket!,
+        binding: 'predecessor',
+      },
+      { projectRoot: project },
+    );
+    expect(read).toMatchObject({ ok: true, value: { kind: 'result' } });
+    if (!read.ok || read.value.kind !== 'result') {
+      throw new Error(read.ok ? 'Expected a Result Input.' : read.failure.code);
+    }
+    expect(Buffer.from(read.value.markdown_bytes_base64, 'base64').toString('utf8')).toBe(`---
+{
+  "schema_version": "breakdown.step-artifact.v1",
+  "run_id": "${runId}",
+  "node_id": "gather",
+  "attempt": 1,
+  "status": "succeeded",
+  "started_at": "2026-07-26T12:00:00.000Z",
+  "settled_at": "2026-07-26T12:01:00.000Z",
+  "context_sha256": "${gatherContext}",
+  "inputs": {},
+  "executor": {
+    "kind": "program",
+    "name": "fixture"
+  }
+}
+---
+gathered result`);
+    expect(
+      read.value.json_bytes_base64 === null
+        ? ''
+        : Buffer.from(read.value.json_bytes_base64, 'base64').toString('utf8'),
+    ).toBe('{"score":42}');
+  });
+
+  it('invalidates preparation when a Workflow Input changes after run creation', async () => {
+    const { project, runId } = await createProject(
+      `
+schema_version: breakdown.workflow.v1
+id: stale-work-input
+name: Stale Work Input
+inputs:
+  source:
+    default: source.txt
+nodes:
+  - id: consume
+    name: Consume
+    prompt: Consume the source.
+    inputs:
+      source:
+        workflow_input: source
+`,
+      {
+        setup: async (projectPath) => {
+          await writeFile(join(projectPath, 'source.txt'), 'original', 'utf8');
+        },
+      },
+    );
+
+    await writeFile(join(project, 'source.txt'), 'updated', 'utf8');
+    const prepared = await operate(
+      { operation: 'prepare_work', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(prepared).toMatchObject({ ok: false, failure: { code: 'invalid_run' } });
+  });
+
+  it('invalidates preparation when a selected predecessor Result changes after snapshot', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: stale-result
+name: Stale Result
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      predecessor:
+        node: gather
+`);
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    if (!inspected.ok) throw new Error(inspected.failure.code);
+    const gatherContext = inspected.value.nodes.find(
+      (node) => node.node_id === 'gather',
+    )?.context_sha256;
+    if (gatherContext === undefined) throw new Error('Missing gather context');
+
+    const filename = await writeStepFixture({
+      project,
+      runId,
+      nodeId: 'gather',
+      attempt: 1,
+      contextSha256: gatherContext,
+      settledAt: '2026-07-26T12:01:00.000Z',
+      startedAt: '2026-07-26T12:00:00.000Z',
+      body: 'gathered result',
+    });
+    await writeFile(join(project, 'outputs', runId, 'steps', filename), 'mutated result', 'utf8');
+
+    const prepared = await operate(
+      { operation: 'prepare_work', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(prepared).toMatchObject({ ok: false, failure: { code: 'invalid_run' } });
   });
 });

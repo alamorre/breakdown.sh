@@ -13,7 +13,12 @@ import {
 } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
 import { inspectRun, type InspectRunRequest, type InspectRunValue } from './run-inspection.js';
-import { prepareWork, type PrepareWorkRequest, type PrepareWorkValue } from './prepare-work.js';
+import {
+  prepareWork,
+  type PrepareWorkRequest,
+  type PrepareWorkValue,
+  type WorkPacket,
+} from './prepare-work.js';
 import {
   submitCandidate,
   type StepPublicationBoundary,
@@ -64,6 +69,25 @@ export interface CreateRunRequest {
   inputs?: Record<string, string>;
 }
 
+export interface ReadWorkInputRequest {
+  operation: 'read_work_input';
+  packet: WorkPacket;
+  binding: string;
+}
+
+export interface ReadWorkflowInputValue {
+  kind: 'workflow_input';
+  bytes_base64: string;
+}
+
+export interface ReadResultInputValue {
+  kind: 'result';
+  markdown_bytes_base64: string;
+  json_bytes_base64: string | null;
+}
+
+export type ReadWorkInputValue = ReadWorkflowInputValue | ReadResultInputValue;
+
 export interface ProducerIdentity {
   name: string;
   version: string;
@@ -84,9 +108,7 @@ export interface TrustedContext {
     now?: () => Date;
     randomBytes?: (size: number) => Uint8Array;
     onRunPublicationBoundary?: (boundary: RunPublicationBoundary) => void | Promise<void>;
-    onStepPublicationBoundary?: (
-      boundary: StepPublicationBoundary,
-    ) => void | Promise<void>;
+    onStepPublicationBoundary?: (boundary: StepPublicationBoundary) => void | Promise<void>;
   };
 }
 
@@ -222,6 +244,29 @@ function ioFailure(message = 'A filesystem operation failed.'): OperationFailure
       diagnostics: [],
     },
   };
+}
+
+function readWorkInputFailure(
+  diagnostics: Diagnostic[] = [],
+  kind: OperationFailure['failure']['kind'] = 'invalid',
+  code = 'invalid_work_input',
+): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind,
+      code,
+      message:
+        code === 'invalid_work_input'
+          ? 'The Work Input is invalid.'
+          : 'The Work Packet is invalid.',
+      diagnostics,
+    },
+  };
+}
+
+function toBase64(bytes: Uint8Array) {
+  return Buffer.from(bytes).toString('base64');
 }
 
 function runIdCollisionFailure(): OperationFailure {
@@ -1472,6 +1517,443 @@ async function createRun(
   return { ok: true, value };
 }
 
+function isValidSha256(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
+function identityFromPacketDescriptor(value: unknown): SecureFileIdentity | undefined {
+  if (!isRecord(value)) return undefined;
+  const identity = value.identity;
+  if (!isRecord(identity)) return undefined;
+  if (
+    typeof identity.device !== 'string' ||
+    typeof identity.inode !== 'string' ||
+    typeof identity.birthtime !== 'string'
+  ) {
+    return undefined;
+  }
+  return { device: identity.device, inode: identity.inode, birthtime: identity.birthtime };
+}
+
+function fileDescriptorFromRecord(value: unknown): { path: string; sha256: string } | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.path !== 'string' || !isPortableProjectRelativePath(value.path)) return null;
+  if (!isValidSha256(value.sha256)) return null;
+  return { path: value.path, sha256: value.sha256 };
+}
+
+function resultDescriptorFromRecord(
+  value: unknown,
+): { path: string; sha256: string; identity?: SecureFileIdentity } | null {
+  const result = fileDescriptorFromRecord(value);
+  if (result === null) return null;
+  const identity = identityFromPacketDescriptor(value);
+  return identity === undefined ? result : { ...result, identity };
+}
+
+function normalizePathDiagnostic(path: string, code: string, message: string) {
+  return { code, path, message, file: 'work-packet' };
+}
+
+async function readWorkInput(
+  request: ReadWorkInputRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<ReadWorkInputValue>> {
+  const packet = request.packet;
+  const binding = request.binding;
+  if (!isRecord(packet)) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic('/packet', 'schema', 'A Work Packet is required.'),
+    ]);
+  }
+  if (!isValidIdentifier(binding)) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic('/binding', 'schema', 'The input binding is invalid.'),
+    ]);
+  }
+  if (!isRecord(packet.submission) || typeof packet.submission.run_id !== 'string') {
+    return readWorkInputFailure([
+      normalizePathDiagnostic('/submission', 'schema', 'The Work Packet submission is invalid.'),
+    ]);
+  }
+  if (typeof packet.run_id !== 'string' || packet.run_id !== packet.submission.run_id) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        '/submission/run_id',
+        'reference_mismatch',
+        'submission.run_id must match packet run_id.',
+      ),
+    ]);
+  }
+  if (packet.submission.node_id !== packet.node?.id) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        '/submission/node_id',
+        'reference_mismatch',
+        'submission.node_id must identify the submitted node.',
+      ),
+    ]);
+  }
+  if (
+    typeof packet.submission.expected_attempt !== 'number' ||
+    !Number.isInteger(packet.submission.expected_attempt) ||
+    packet.submission.expected_attempt !== packet.expected_attempt ||
+    packet.submission.intent !== packet.intent ||
+    packet.submission.prepared_at !== packet.prepared_at ||
+    typeof packet.submission.context_sha256 !== 'string' ||
+    packet.submission.expected_attempt < 1 ||
+    packet.submission.context_sha256 !== packet.context_sha256
+  ) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        '/submission/expected_attempt',
+        'reference_mismatch',
+        'The Work Packet submission must be consistent.',
+      ),
+    ]);
+  }
+
+  if (packet.inputs === undefined || !isRecord(packet.inputs)) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic('/inputs', 'schema', 'The Work Packet inputs map is invalid.'),
+    ]);
+  }
+  if (!Object.hasOwn(packet.inputs, binding)) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}`,
+        'reference_mismatch',
+        'The binding is not present in the Work Packet.',
+      ),
+    ]);
+  }
+  const bindingValue = packet.inputs[binding];
+  if (!isRecord(bindingValue)) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}`,
+        'schema',
+        'A Work Packet input binding must be a mapping.',
+      ),
+    ]);
+  }
+
+  let projectRoot: string;
+  try {
+    projectRoot = await realpath(trustedContext.projectRoot as string);
+  } catch {
+    return ioFailure('Could not select the project root.');
+  }
+  const inspected = await operate(
+    { operation: 'inspect_run', run_id: packet.run_id },
+    { projectRoot },
+  );
+  if (!inspected.ok) return inspected;
+
+  const inspectedNode = inspected.value.nodes.find(
+    (candidate) => candidate.node_id === packet.submission.node_id,
+  );
+  if (
+    inspectedNode === undefined ||
+    inspectedNode.context_sha256 !== packet.submission.context_sha256 ||
+    inspectedNode.next_attempt !== packet.submission.expected_attempt
+  ) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        '/submission/node_id',
+        'integrity',
+        'The Work Packet submission does not match current Run state.',
+      ),
+    ]);
+  }
+
+  const workflowRef = bindingValue.workflow_input;
+  const resultRef = bindingValue.result;
+  if (
+    (workflowRef === undefined && resultRef === undefined) ||
+    (workflowRef !== undefined && resultRef !== undefined)
+  ) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}`,
+        'schema',
+        'An input binding must identify exactly one source.',
+      ),
+    ]);
+  }
+
+  if (workflowRef !== undefined) {
+    if (!isRecord(workflowRef)) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/workflow_input`,
+          'schema',
+          'workflow_input must be a mapping.',
+        ),
+      ]);
+    }
+    if (
+      typeof workflowRef.id !== 'string' ||
+      typeof workflowRef.path !== 'string' ||
+      !isValidSha256(workflowRef.sha256) ||
+      !isPortableProjectRelativePath(workflowRef.path)
+    ) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/workflow_input`,
+          'schema',
+          'workflow_input must include a valid id, path, and sha256.',
+        ),
+      ]);
+    }
+    const runInput = inspected.value.inputs[workflowRef.id];
+    if (runInput === undefined) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/workflow_input/id`,
+          'reference_mismatch',
+          'The referenced Workflow Input is absent in the inspected Run.',
+        ),
+      ]);
+    }
+    if (runInput.path !== workflowRef.path || runInput.sha256 !== workflowRef.sha256) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/workflow_input`,
+          'reference_mismatch',
+          'The Work Packet input descriptor does not match the inspected Run.',
+        ),
+      ]);
+    }
+    let verified: Awaited<ReturnType<typeof readSecureRegularFile>>;
+    try {
+      verified = await readSecureRegularFile(
+        projectRoot,
+        workflowRef.path,
+        FIXED_LIMITS.workflow_input_file_bytes,
+      );
+    } catch {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/workflow_input/path`,
+          'integrity',
+          'Could not securely read the referenced Workflow Input.',
+        ),
+      ]);
+    }
+    if (
+      createHash('sha256').update(verified.bytes).digest('hex') !== workflowRef.sha256 ||
+      (isRecord(workflowRef.identity) &&
+        (verified.identity.device !== workflowRef.identity.device ||
+          verified.identity.inode !== workflowRef.identity.inode ||
+          verified.identity.birthtime !== workflowRef.identity.birthtime))
+    ) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/workflow_input`,
+          'integrity',
+          'The referenced Workflow Input changed after packet preparation.',
+        ),
+      ]);
+    }
+    return {
+      ok: true,
+      value: {
+        kind: 'workflow_input',
+        bytes_base64: toBase64(verified.bytes),
+      },
+    };
+  }
+
+  if (!isRecord(resultRef)) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result`,
+        'schema',
+        'result must be a mapping.',
+      ),
+    ]);
+  }
+  if (
+    typeof resultRef.node_id !== 'string' ||
+    typeof resultRef.attempt !== 'number' ||
+    !Number.isInteger(resultRef.attempt) ||
+    resultRef.attempt < 1 ||
+    resultRef.attempt > FIXED_LIMITS.attempts_per_node
+  ) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result`,
+        'schema',
+        'result.node_id and result.attempt must identify a predecessor result.',
+      ),
+    ]);
+  }
+  const predecessorResult = resultRef.markdown
+    ? resultDescriptorFromRecord(resultRef.markdown)
+    : null;
+  if (predecessorResult === null) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result/markdown`,
+        'schema',
+        'result.markdown must be a file descriptor.',
+      ),
+    ]);
+  }
+  const predecessorNode = inspected.value.nodes.find(
+    (candidate) => candidate.node_id === resultRef.node_id,
+  );
+  if (predecessorNode === undefined || predecessorNode.selected_result === undefined) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result/node_id`,
+        'missing_reference',
+        'The referenced predecessor has no selected result.',
+      ),
+    ]);
+  }
+  if (
+    predecessorNode.selected_result.attempt !== resultRef.attempt ||
+    predecessorNode.selected_result.markdown.path !== predecessorResult.path ||
+    predecessorNode.selected_result.markdown.sha256 !== predecessorResult.sha256
+  ) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result`,
+        'reference_mismatch',
+        'The result descriptor does not match the inspected predecessor result.',
+      ),
+    ]);
+  }
+  const resultJson =
+    resultRef.json === undefined ? null : resultDescriptorFromRecord(resultRef.json);
+  const selectedJson = predecessorNode.selected_result.json;
+  if (selectedJson === undefined) {
+    if (resultJson !== null) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/result/json`,
+          'reference_mismatch',
+          'result.json must be absent because the inspected predecessor has no JSON result.',
+        ),
+      ]);
+    }
+  } else {
+    if (resultJson === null) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/result/json`,
+          'reference_mismatch',
+          'result.json is required because the inspected predecessor has a JSON result.',
+        ),
+      ]);
+    }
+    if (selectedJson.path !== resultJson.path || selectedJson.sha256 !== resultJson.sha256) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/result/json`,
+          'reference_mismatch',
+          'The result.json descriptor does not match the inspected predecessor result.',
+        ),
+      ]);
+    }
+  }
+
+  let markdownRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
+  try {
+    markdownRead = await readSecureRegularFile(
+      projectRoot,
+      predecessorResult.path,
+      FIXED_LIMITS.candidate_markdown_bytes,
+    );
+  } catch {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result/markdown/path`,
+        'integrity',
+        'Could not securely read the predecessor markdown.',
+      ),
+    ]);
+  }
+  if (createHash('sha256').update(markdownRead.bytes).digest('hex') !== predecessorResult.sha256) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result/markdown`,
+        'integrity',
+        'The predecessor markdown changed after packet preparation.',
+      ),
+    ]);
+  }
+  if (
+    isRecord(predecessorResult.identity) &&
+    (markdownRead.identity.device !== predecessorResult.identity.device ||
+      markdownRead.identity.inode !== predecessorResult.identity.inode ||
+      markdownRead.identity.birthtime !== predecessorResult.identity.birthtime)
+  ) {
+    return readWorkInputFailure([
+      normalizePathDiagnostic(
+        `/inputs/${escapePointerSegment(binding)}/result/markdown`,
+        'integrity',
+        'The predecessor markdown identity changed after packet preparation.',
+      ),
+    ]);
+  }
+
+  let jsonBytes: string | null = null;
+  if (resultJson !== null) {
+    let jsonRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
+    try {
+      jsonRead = await readSecureRegularFile(
+        projectRoot,
+        resultJson.path,
+        FIXED_LIMITS.candidate_json_bytes,
+      );
+    } catch {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/result/json/path`,
+          'integrity',
+          'Could not securely read the predecessor json.',
+        ),
+      ]);
+    }
+    if (createHash('sha256').update(jsonRead.bytes).digest('hex') !== resultJson.sha256) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/result/json`,
+          'integrity',
+          'The predecessor json changed after packet preparation.',
+        ),
+      ]);
+    }
+    if (
+      isRecord(resultJson.identity) &&
+      (jsonRead.identity.device !== resultJson.identity.device ||
+        jsonRead.identity.inode !== resultJson.identity.inode ||
+        jsonRead.identity.birthtime !== resultJson.identity.birthtime)
+    ) {
+      return readWorkInputFailure([
+        normalizePathDiagnostic(
+          `/inputs/${escapePointerSegment(binding)}/result/json`,
+          'integrity',
+          'The predecessor json identity changed after packet preparation.',
+        ),
+      ]);
+    }
+    jsonBytes = toBase64(jsonRead.bytes);
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: 'result',
+      markdown_bytes_base64: toBase64(markdownRead.bytes),
+      json_bytes_base64: jsonBytes,
+    },
+  };
+}
+
 export function operate(
   request: ValidateWorkflowRequest,
   trustedContext: TrustedContext,
@@ -1484,6 +1966,10 @@ export function operate(
   request: PrepareWorkRequest,
   trustedContext: TrustedContext,
 ): Promise<OperationResult<PrepareWorkValue>>;
+export function operate(
+  request: ReadWorkInputRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<ReadWorkInputValue>>;
 export function operate(
   request: SubmitCandidateRequest,
   trustedContext: TrustedContext,
@@ -1498,6 +1984,7 @@ export async function operate(
     | CreateRunRequest
     | InspectRunRequest
     | PrepareWorkRequest
+    | ReadWorkInputRequest
     | SubmitCandidateRequest,
   trustedContext: TrustedContext,
 ): Promise<
@@ -1506,6 +1993,7 @@ export async function operate(
     | CreateRunValue
     | InspectRunValue
     | PrepareWorkValue
+    | ReadWorkInputValue
     | SubmitCandidateValue
   >
 > {
@@ -1514,6 +2002,7 @@ export async function operate(
     requestedOperation !== 'create_run' &&
     requestedOperation !== 'inspect_run' &&
     requestedOperation !== 'prepare_work' &&
+    requestedOperation !== 'read_work_input' &&
     requestedOperation !== 'submit_candidate' &&
     requestedOperation !== 'validate_workflow'
   ) {
@@ -1607,11 +2096,16 @@ export async function operate(
         {
           inspected: inspected.value,
           workflow: snapshot.value.workflow,
+          projectRoot,
         },
       );
     } catch {
       return ioFailure('Could not read the Workflow Snapshot.');
     }
+  }
+
+  if (requestedOperation === 'read_work_input') {
+    return readWorkInput(request as ReadWorkInputRequest, trustedContext);
   }
 
   if (requestedOperation === 'submit_candidate') {
@@ -1622,8 +2116,7 @@ export async function operate(
       return ioFailure('Could not select the project root.');
     }
     return submitCandidate(request as SubmitCandidateRequest, projectRoot, {
-      inspect: (runId) =>
-        operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+      inspect: (runId) => operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
       loadWorkflow: async (inspected) => {
         let snapshotBytes: Buffer;
         try {
@@ -1655,9 +2148,7 @@ export async function operate(
           projectRoot,
           definitionBytes: snapshotBytes,
         } as InternalTrustedContext);
-        return snapshot.ok
-          ? { ok: true, value: snapshot.value.workflow }
-          : snapshot;
+        return snapshot.ok ? { ok: true, value: snapshot.value.workflow } : snapshot;
       },
       now: trustedContext.testControls?.now ?? (() => new Date()),
       randomBytes: trustedContext.testControls?.randomBytes ?? randomBytes,

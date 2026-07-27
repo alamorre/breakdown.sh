@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   Diagnostic,
   InspectRunValue,
@@ -8,6 +9,7 @@ import type {
 } from './index.js';
 import { canonicalizeJson } from './canonical-json.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
+import { readSecureRegularFile, type SecureFileIdentity } from './secure-store.js';
 
 export interface PrepareWorkRequest {
   operation: 'prepare_work';
@@ -23,12 +25,13 @@ export interface WorkPacketInput {
     description: string | null;
     path: string;
     sha256: string;
+    identity?: SecureFileIdentity;
   };
   result?: {
     node_id: string;
     attempt: number;
-    markdown: { path: string; sha256: string };
-    json: { path: string; sha256: string } | null;
+    markdown: { path: string; sha256: string; identity?: SecureFileIdentity };
+    json: { path: string; sha256: string; identity?: SecureFileIdentity } | null;
   };
 }
 
@@ -76,6 +79,7 @@ export interface PrepareWorkValue {
 interface PrepareWorkDependencies {
   inspected: InspectRunValue;
   workflow: WorkflowDefinition;
+  projectRoot: string;
 }
 
 function failure(code: string, message: string, diagnostics: Diagnostic[] = []): OperationFailure {
@@ -114,11 +118,12 @@ function packetNode(node: NodeDefinition): Omit<NodeDefinition, 'extensions'> {
   };
 }
 
-function makeInputDescriptors(
+async function makeInputDescriptors(
   node: NodeDefinition,
   inspected: InspectRunValue,
   workflow: WorkflowDefinition,
-): Record<string, WorkPacketInput> | undefined {
+  projectRoot: string,
+): Promise<Record<string, WorkPacketInput> | undefined> {
   const descriptors: Record<string, WorkPacketInput> = {};
   for (const [bindingId, binding] of Object.entries(node.inputs ?? {}).sort(([a], [b]) =>
     compareText(a, b),
@@ -126,24 +131,84 @@ function makeInputDescriptors(
     if ('workflow_input' in binding) {
       const input = inspected.inputs[binding.workflow_input];
       if (input === undefined) return undefined;
+      let workflowInputRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
+      try {
+        workflowInputRead = await readSecureRegularFile(
+          projectRoot,
+          input.path,
+          FIXED_LIMITS.workflow_input_file_bytes,
+        );
+      } catch {
+        return undefined;
+      }
+      if (createHash('sha256').update(workflowInputRead.bytes).digest('hex') !== input.sha256) {
+        return undefined;
+      }
       descriptors[bindingId] = {
         workflow_input: {
           id: binding.workflow_input,
           description: workflow.inputs?.[binding.workflow_input]?.description ?? null,
           path: input.path,
           sha256: input.sha256,
+          identity: workflowInputRead.identity,
         },
       };
       continue;
     }
     const predecessor = inspected.nodes.find((candidate) => candidate.node_id === binding.node);
     if (predecessor?.selected_result === undefined) return undefined;
+
+    let selectedMarkdown: Awaited<ReturnType<typeof readSecureRegularFile>>;
+    try {
+      selectedMarkdown = await readSecureRegularFile(
+        projectRoot,
+        predecessor.selected_result.markdown.path,
+        FIXED_LIMITS.candidate_markdown_bytes,
+      );
+    } catch {
+      return undefined;
+    }
+    if (
+      createHash('sha256').update(selectedMarkdown.bytes).digest('hex') !==
+      predecessor.selected_result.markdown.sha256
+    ) {
+      return undefined;
+    }
+
+    const selectedJsonDescriptor = predecessor.selected_result.json;
+    let selectedJson: Awaited<ReturnType<typeof readSecureRegularFile>> | null = null;
+    if (selectedJsonDescriptor !== undefined) {
+      try {
+        selectedJson = await readSecureRegularFile(
+          projectRoot,
+          selectedJsonDescriptor.path,
+          FIXED_LIMITS.candidate_json_bytes,
+        );
+      } catch {
+        return undefined;
+      }
+      if (
+        createHash('sha256').update(selectedJson.bytes).digest('hex') !==
+        selectedJsonDescriptor.sha256
+      ) {
+        return undefined;
+      }
+    }
     descriptors[bindingId] = {
       result: {
         node_id: predecessor.selected_result.node_id,
         attempt: predecessor.selected_result.attempt,
-        markdown: predecessor.selected_result.markdown,
-        json: predecessor.selected_result.json ?? null,
+        markdown: {
+          ...predecessor.selected_result.markdown,
+          identity: selectedMarkdown.identity,
+        },
+        json:
+          selectedJsonDescriptor === undefined
+            ? null
+            : {
+                ...selectedJsonDescriptor,
+                identity: selectedJson?.identity,
+              },
       },
     };
   }
@@ -199,7 +264,12 @@ export async function prepareWork(
     const definition = dependencies.workflow.nodes.find((candidate) => candidate.id === nodeId);
     if (state === undefined || definition === undefined || state.context_sha256 === undefined)
       continue;
-    const inputs = makeInputDescriptors(definition, inspected, dependencies.workflow);
+    const inputs = await makeInputDescriptors(
+      definition,
+      inspected,
+      dependencies.workflow,
+      dependencies.projectRoot,
+    );
     if (inputs === undefined) continue;
     const contracted = definition.data_contract !== undefined;
     const packet: WorkPacket = {
