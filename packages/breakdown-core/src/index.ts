@@ -12,6 +12,13 @@ import {
   preserveYamlJsonNumber,
 } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
+import {
+  cancelledFailure,
+  InvocationCancelledError,
+  isCancelled,
+  preferCancellation,
+  throwIfCancelled,
+} from './invocation-cancellation.js';
 import { inspectRun, type InspectRunRequest, type InspectRunValue } from './run-inspection.js';
 import {
   prepareWork,
@@ -21,6 +28,7 @@ import {
 } from './prepare-work.js';
 import {
   acquireRunWriterLock,
+  type LockRecoveryBoundary,
   releaseRunWriterLock,
   RunLockedError,
   type RunWriterLock,
@@ -63,6 +71,7 @@ export type {
   SubmissionIdentity,
   WorkPacket,
 } from './prepare-work.js';
+export type { LockRecoveryIntent } from './run-writer-lock.js';
 export type {
   CandidateOutcome,
   CandidateExecutor,
@@ -123,11 +132,13 @@ export type RunPublicationBoundary =
 export interface TrustedContext {
   projectRoot?: string;
   producer?: ProducerIdentity;
+  signal?: AbortSignal;
   testControls?: {
     now?: () => Date;
     randomBytes?: (size: number) => Uint8Array;
     onRunPublicationBoundary?: (boundary: RunPublicationBoundary) => void | Promise<void>;
     onStepPublicationBoundary?: (boundary: StepPublicationBoundary) => void | Promise<void>;
+    onLockRecoveryBoundary?: (boundary: LockRecoveryBoundary) => void | Promise<void>;
   };
 }
 
@@ -1398,6 +1409,7 @@ async function createRun(
   request: CreateRunRequest,
   trustedContext: TrustedContext,
 ): Promise<OperationResult<CreateRunValue>> {
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
   let projectRoot: string;
   let workflowBytes: Buffer;
   try {
@@ -1421,8 +1433,10 @@ async function createRun(
   const validation = await operate({ operation: 'validate_workflow' }, {
     projectRoot,
     definitionBytes: workflowBytes,
+    signal: trustedContext.signal,
   } as InternalTrustedContext);
   if (!validation.ok) return validation;
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
 
   const producerValue: unknown = trustedContext.producer ?? {
     name: '@breakdown-sh/core',
@@ -1469,13 +1483,16 @@ async function createRun(
     request.inputs ?? {},
   );
   if (!resolvedInputs.ok) return resolvedInputs;
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
   try {
     await trustedContext.testControls?.onRunPublicationBoundary?.('after_inputs_read');
   } catch {
     return ioFailure();
   }
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
   const changedInputFailure = await recheckWorkflowInputs(projectRoot, resolvedInputs.value);
   if (changedInputFailure !== undefined) return changedInputFailure;
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
   const value: CreateRunValue = {
     run_id: runId,
     path: runPath,
@@ -1506,6 +1523,7 @@ async function createRun(
     } catch {
       return ioFailure();
     }
+    if (isCancelled(trustedContext.signal)) return cancelledFailure();
 
     const outputsPath = join(projectRoot, 'outputs');
     const stagingRoot = join(projectRoot, '.breakdown', 'tmp', 'runs');
@@ -1523,16 +1541,21 @@ async function createRun(
       return ioFailure();
     }
     try {
+      throwIfCancelled(trustedContext.signal);
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_staging_created');
+      throwIfCancelled(trustedContext.signal);
       const stepsPath = join(stagingPath, 'steps');
       await mkdir(stepsPath, { mode: 0o700 });
       await syncDirectory(stepsPath);
       await writePrivateFile(join(stagingPath, 'breakdown.yaml'), workflowBytes);
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_snapshot_written');
+      throwIfCancelled(trustedContext.signal);
       await writePrivateFile(join(stagingPath, 'run.md'), runManifestBytes(value));
       await syncDirectory(stagingPath);
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_manifest_written');
+      throwIfCancelled(trustedContext.signal);
       await trustedContext.testControls?.onRunPublicationBoundary?.('before_publish');
+      throwIfCancelled(trustedContext.signal);
       const inputFailureBeforePublish = await recheckWorkflowInputs(
         projectRoot,
         resolvedInputs.value,
@@ -1541,6 +1564,7 @@ async function createRun(
         await rm(stagingPath, { recursive: true, force: true });
         return inputFailureBeforePublish;
       }
+      throwIfCancelled(trustedContext.signal);
       const destinationPath = join(projectRoot, runPath);
       try {
         await lstat(destinationPath);
@@ -1553,6 +1577,7 @@ async function createRun(
       await syncDirectory(outputsPath);
     } catch (error) {
       await rm(stagingPath, { recursive: true, force: true });
+      if (error instanceof InvocationCancelledError) return cancelledFailure();
       if (['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
         return runIdCollisionFailure();
       }
@@ -1563,6 +1588,7 @@ async function createRun(
     } catch {
       // The Run is already committed. A post-commit observation fault cannot roll it back.
     }
+    if (isCancelled(trustedContext.signal)) return cancelledFailure();
     return { ok: true, value };
   } finally {
     try {
@@ -1702,7 +1728,7 @@ async function readInputFromPacket(
   }
   const inspected = await operate(
     { operation: 'inspect_run', run_id: packet.run_id },
-    { projectRoot },
+    { projectRoot, signal: trustedContext.signal },
   );
   if (!inspected.ok) return inspected;
 
@@ -2061,6 +2087,7 @@ export async function operate(
     | SubmitCandidateValue
   >
 > {
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
   const requestedOperation = (request as { operation?: unknown }).operation;
   if (
     requestedOperation !== 'create_run' &&
@@ -2092,13 +2119,15 @@ export async function operate(
     } catch {
       return ioFailure('Could not select the project root.');
     }
-    return inspectRun(request as InspectRunRequest, projectRoot, {
+    const inspected = await inspectRun(request as InspectRunRequest, projectRoot, {
       validateSnapshot: (definitionBytes, selectedProjectRoot) =>
         operate({ operation: 'validate_workflow' }, {
           projectRoot: selectedProjectRoot,
           definitionBytes,
+          signal: trustedContext.signal,
         } as InternalTrustedContext),
     });
+    return preferCancellation(trustedContext.signal, inspected);
   }
 
   if (requestedOperation === 'prepare_work') {
@@ -2124,7 +2153,7 @@ export async function operate(
     try {
       const inspected = await operate(
         { operation: 'inspect_run', run_id: prepareRequest.run_id },
-        { projectRoot },
+        { projectRoot, signal: trustedContext.signal },
       );
       if (!inspected.ok) return inspected;
       snapshotBytes = Buffer.from(
@@ -2152,16 +2181,20 @@ export async function operate(
       const snapshot = await operate({ operation: 'validate_workflow' }, {
         projectRoot,
         definitionBytes: snapshotBytes,
+        signal: trustedContext.signal,
       } as InternalTrustedContext);
       if (!snapshot.ok) return snapshot;
-      return prepareWork(
-        prepareRequest,
-        (trustedContext.testControls?.now ?? (() => new Date()))().toISOString(),
-        {
-          inspected: inspected.value,
-          workflow: snapshot.value.workflow,
-          projectRoot,
-        },
+      return preferCancellation(
+        trustedContext.signal,
+        await prepareWork(
+          prepareRequest,
+          (trustedContext.testControls?.now ?? (() => new Date()))().toISOString(),
+          {
+            inspected: inspected.value,
+            workflow: snapshot.value.workflow,
+            projectRoot,
+          },
+        ),
       );
     } catch {
       return ioFailure('Could not read the Workflow Snapshot.');
@@ -2169,7 +2202,10 @@ export async function operate(
   }
 
   if (requestedOperation === 'read_work_input') {
-    return readInputFromPacket(request as ReadInputRequest, trustedContext);
+    return preferCancellation(
+      trustedContext.signal,
+      await readInputFromPacket(request as ReadInputRequest, trustedContext),
+    );
   }
 
   if (requestedOperation === 'submit_candidate') {
@@ -2179,8 +2215,12 @@ export async function operate(
     } catch {
       return ioFailure('Could not select the project root.');
     }
-    return submitCandidate(request as SubmitCandidateRequest, projectRoot, {
-      inspect: (runId) => operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    const submitted = await submitCandidate(request as SubmitCandidateRequest, projectRoot, {
+      inspect: (runId) =>
+        operate(
+          { operation: 'inspect_run', run_id: runId },
+          { projectRoot, signal: trustedContext.signal },
+        ),
       loadWorkflow: async (inspected) => {
         let snapshotBytes: Buffer;
         try {
@@ -2211,13 +2251,17 @@ export async function operate(
         const snapshot = await operate({ operation: 'validate_workflow' }, {
           projectRoot,
           definitionBytes: snapshotBytes,
+          signal: trustedContext.signal,
         } as InternalTrustedContext);
         return snapshot.ok ? { ok: true, value: snapshot.value.workflow } : snapshot;
       },
       now: trustedContext.testControls?.now ?? (() => new Date()),
       randomBytes: trustedContext.testControls?.randomBytes ?? randomBytes,
       onPublicationBoundary: trustedContext.testControls?.onStepPublicationBoundary,
+      onLockRecoveryBoundary: trustedContext.testControls?.onLockRecoveryBoundary,
+      signal: trustedContext.signal,
     });
+    return preferCancellation(trustedContext.signal, submitted);
   }
 
   let bytes: Buffer;
@@ -2239,6 +2283,7 @@ export async function operate(
       };
     }
   }
+  if (isCancelled(trustedContext.signal)) return cancelledFailure();
   if (bytes.byteLength > FIXED_LIMITS.workflow_definition_bytes) {
     return resourceLimitFailure();
   }
@@ -2388,11 +2433,11 @@ export async function operate(
     );
   }
 
-  return {
+  return preferCancellation(trustedContext.signal, {
     ok: true,
     value: {
       definitionPath: 'breakdown.yaml',
       workflow: normalizeWorkflow(workflow as WorkflowDefinition),
     },
-  };
+  });
 }

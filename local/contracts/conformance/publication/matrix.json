@@ -55,6 +55,36 @@
       "id": "PUB-008",
       "requirement": "Issue #155: retain race seeds and diagnostic facts on failure",
       "oracle": "Every race assertion reports its seed and the structured success or failure facts from both contenders."
+    },
+    {
+      "id": "PUB-009",
+      "requirement": "Issue #156: recover an abandoned writer lock only with explicit confirmation and its exact observed opaque ID",
+      "oracle": "Confirmed recovery of the unchanged observed lock permits the pending submission; age and diagnostic process ID provide no recovery authority."
+    },
+    {
+      "id": "PUB-010",
+      "requirement": "Issue #156: fail missing, changed, or incorrectly identified lock recovery without blocking read-only operations",
+      "oracle": "Every recovery mismatch returns conflict/lock_recovery_mismatch and preserves in-place and replacement lock changes, while inspection and Work Packet preparation remain available."
+    },
+    {
+      "id": "PUB-011",
+      "requirement": "Issue #156: propagate trusted invocation cancellation without durable Run cancellation state",
+      "oracle": "Cancellation before final publication returns cancelled/cancelled, releases the lock, publishes no StepArtifact, and consumes no attempt."
+    },
+    {
+      "id": "PUB-012",
+      "requirement": "Issue #156: defer cancellation after final publication begins through the Markdown commit marker",
+      "oracle": "Cancellation at every in-process and subprocess publication boundary is unambiguous: pre-critical boundaries commit nothing and critical/post-commit boundaries leave exactly one inspectable attempt."
+    },
+    {
+      "id": "PUB-013",
+      "requirement": "Issue #156: keep explicit cancelled Candidate Outcomes distinct from invocation cancellation",
+      "oracle": "A non-aborted submit_candidate call with Candidate status cancelled succeeds and commits one cancelled StepArtifact, while an aborted invocation returns cancelled/cancelled."
+    },
+    {
+      "id": "PUB-014",
+      "requirement": "Issue #156: make lock recovery race-safe across processes",
+      "oracle": "Concurrent and terminated recovery processes preserve the current identity-specific claim, elect one submission winner, and leave one contiguous attempt."
     }
   ]
 }

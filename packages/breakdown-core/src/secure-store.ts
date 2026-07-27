@@ -1,6 +1,8 @@
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, readFile, readdir, statfs, unlink } from 'node:fs/promises';
-import { dirname, extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
+
+import { isRunLockQuarantineAlias, isRunLockRecoveryAlias } from './run-lock-paths.js';
 
 export class ResourceLimitError extends Error {}
 export class UnsupportedFilesystemError extends Error {}
@@ -175,17 +177,20 @@ async function hasExpectedPublicationStagingAlias(
   facts: Awaited<ReturnType<typeof lstat>>,
 ) {
   if (facts.nlink !== 2n) return false;
+  const filename = basename(path);
   const extension = extname(path).slice(1);
-  const stagingPattern =
-    extension === 'md' || extension === 'json'
-      ? new RegExp(`^\\.submit-[0-9a-f]{16}\\.${extension}\\.tmp$`)
+  const isAcceptedAlias = /\.lock\.recovering-[0-9a-f]{16}$/.test(filename)
+    ? isRunLockQuarantineAlias
+    : extension === 'md' || extension === 'json'
+      ? (entry: string) => new RegExp(`^\\.submit-[0-9a-f]{16}\\.${extension}\\.tmp$`).test(entry)
       : extension === 'lock'
-        ? /^\.acquire-[0-9a-f]{16}\.lock\.tmp$/
+        ? (entry: string) =>
+            /^\.acquire-[0-9a-f]{16}\.lock\.tmp$/.test(entry) || isRunLockRecoveryAlias(path, entry)
         : undefined;
-  if (stagingPattern === undefined) return false;
+  if (isAcceptedAlias === undefined) return false;
   let matchingAliases = 0;
   for (const entry of await readdir(dirname(path))) {
-    if (!stagingPattern.test(entry)) continue;
+    if (!isAcceptedAlias(entry)) continue;
     const aliasFacts = await lstat(join(dirname(path), entry), { bigint: true });
     if (
       !aliasFacts.isSymbolicLink() &&

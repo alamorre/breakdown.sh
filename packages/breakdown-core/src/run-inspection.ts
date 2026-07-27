@@ -7,6 +7,7 @@ import { isMap, isScalar, parseDocument, visit } from 'yaml';
 import { canonicalizeJson } from './canonical-json.js';
 import { isRawJsonNumber } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
+import { isRunLockRecoveryAlias } from './run-lock-paths.js';
 import {
   assertSupportedFilesystem,
   readSecureDirectoryEntries,
@@ -1599,15 +1600,43 @@ function deriveNodeState(
 }
 
 async function observeLock(projectRoot: string, runId: string): Promise<ObservedRunLock | null> {
-  const relativePath = `.breakdown/locks/runs/${runId}.lock`;
+  const lockDirectory = '.breakdown/locks/runs';
+  const lockFilename = `${runId}.lock`;
+  const lockPath = `${lockDirectory}/${lockFilename}`;
+  let relativePath = lockPath;
   try {
     await lstat(join(projectRoot, relativePath));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    return {
-      lock_id: null,
-      recovery: 'Confirm the prior writer stopped, then recover with this exact observed lock ID.',
-    };
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      return {
+        lock_id: null,
+        recovery:
+          'Confirm the prior writer stopped, then recover with this exact observed lock ID.',
+      };
+    }
+    try {
+      const recoveryEntries = (
+        await readSecureDirectoryEntries(projectRoot, lockDirectory, Number.MAX_SAFE_INTEGER)
+      )
+        .filter((entry) => isRunLockRecoveryAlias(lockFilename, entry))
+        .sort();
+      if (recoveryEntries.length === 0) return null;
+      if (recoveryEntries.length > 1) {
+        return {
+          lock_id: null,
+          recovery:
+            'Confirm the prior writer stopped, then recover with this exact observed lock ID.',
+        };
+      }
+      relativePath = `${lockDirectory}/${recoveryEntries[0]}`;
+    } catch (recoveryError) {
+      if ((recoveryError as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      return {
+        lock_id: null,
+        recovery:
+          'Confirm the prior writer stopped, then recover with this exact observed lock ID.',
+      };
+    }
   }
   try {
     const lock = await readSecureRegularFile(projectRoot, relativePath, 65_536, {

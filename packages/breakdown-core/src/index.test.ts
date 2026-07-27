@@ -660,6 +660,35 @@ nodes:
     });
   });
 
+  it('should propagate a trusted invocation abort without creating durable state', async () => {
+    const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: cancelled-invocation
+name: Cancelled Invocation
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Do not execute.
+`);
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await operate(
+      { operation: 'create_run' },
+      { projectRoot, signal: controller.signal },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      failure: {
+        kind: 'cancelled',
+        code: 'cancelled',
+        message: 'The operation was cancelled.',
+        diagnostics: [],
+      },
+    });
+    await expect(access(join(projectRoot, 'outputs'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('should return a structured I/O failure when breakdown.yaml is absent', async () => {
     const projectRoot = await createEmptyProject();
 

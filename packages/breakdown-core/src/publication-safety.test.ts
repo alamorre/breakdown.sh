@@ -189,32 +189,56 @@ interface ChildInput {
   now: string;
   entropyByte: number;
   request: unknown;
+  behavior?: 'abort';
+  lockReplacement?: {
+    boundary: string;
+    path: string;
+    contents: string;
+    replaceFile?: boolean;
+  };
 }
 
-function killAtPublicationBoundary(input: ChildInput) {
-  return new Promise<void>((resolve, reject) => {
+interface PublicationChildResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  reachedBoundary: boolean;
+}
+
+function executePublicationChild(
+  input: ChildInput,
+  stopAtBoundary: boolean,
+  beforeStop?: () => void | Promise<void>,
+): Promise<PublicationChildResult> {
+  return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [publicationChild], {
       cwd: packageRoot,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
-    let settled = false;
+    let reachedBoundary = false;
     const timeout = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(
-        new Error(
-          `Publication child did not reach ${input.boundary}. stdout=${stdout} stderr=${stderr}`,
-        ),
-      );
+      reject(new Error(`Publication child timed out. stdout=${stdout} stderr=${stderr}`));
     }, 10_000);
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk;
-      if (settled || !stdout.includes(`boundary:${input.boundary}\n`)) return;
-      settled = true;
-      child.kill('SIGKILL');
+      if (reachedBoundary || !stdout.includes(`boundary:${input.boundary}\n`)) return;
+      reachedBoundary = true;
+      if (stopAtBoundary) {
+        void Promise.resolve()
+          .then(beforeStop)
+          .then(
+            () => child.kill('SIGKILL'),
+            (error: unknown) => {
+              child.kill('SIGKILL');
+              reject(error);
+            },
+          );
+      }
     });
     child.stderr.on('data', (chunk: string) => {
       stderr += chunk;
@@ -223,20 +247,40 @@ function killAtPublicationBoundary(input: ChildInput) {
       clearTimeout(timeout);
       reject(error);
     });
-    child.once('close', () => {
+    child.once('close', (code) => {
       clearTimeout(timeout);
-      if (!settled) {
-        reject(
-          new Error(
-            `Publication child exited before ${input.boundary}. stdout=${stdout} stderr=${stderr}`,
-          ),
-        );
-        return;
-      }
-      resolve();
+      resolve({ code, stdout, stderr, reachedBoundary });
     });
     child.stdin.end(JSON.stringify(input));
   });
+}
+
+async function killAtPublicationBoundary(
+  input: ChildInput,
+  beforeStop?: () => void | Promise<void>,
+): Promise<void> {
+  const result = await executePublicationChild(input, true, beforeStop);
+  if (!result.reachedBoundary) {
+    throw new Error(
+      `Publication child exited before ${input.boundary}. stdout=${result.stdout} stderr=${result.stderr}`,
+    );
+  }
+}
+
+async function runPublicationChild(
+  input: ChildInput,
+): Promise<OperationResult<SubmitCandidateValue>> {
+  const result = await executePublicationChild(input, false);
+  const resultLine = result.stdout
+    .split('\n')
+    .find((line) => line.startsWith('result:'))
+    ?.slice('result:'.length);
+  if (result.code !== 0 || resultLine === undefined) {
+    throw new Error(
+      `Publication child failed with code ${String(result.code)}. stdout=${result.stdout} stderr=${result.stderr}`,
+    );
+  }
+  return JSON.parse(resultLine) as OperationResult<SubmitCandidateValue>;
 }
 
 beforeAll(async () => {
@@ -255,6 +299,465 @@ afterAll(async () => {
 });
 
 describe('operate', () => {
+  it('should cancel Run creation before publication and defer cancellation after commit', async () => {
+    for (const [boundaryToCancel, committed] of [
+      ['after_inputs_read', false],
+      ['after_lock_acquired', false],
+      ['after_staging_created', false],
+      ['after_snapshot_written', false],
+      ['after_manifest_written', false],
+      ['before_publish', false],
+      ['after_publish', true],
+    ] as const) {
+      const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-run-cancellation-'));
+      temporaryProjects.push(projectRoot);
+      await writeFile(
+        join(projectRoot, 'breakdown.yaml'),
+        workflow(`  - id: execute
+    name: Execute
+    prompt: Execute once.`),
+        'utf8',
+      );
+      const controller = new AbortController();
+      const result = await operate(
+        { operation: 'create_run' },
+        {
+          projectRoot,
+          signal: controller.signal,
+          testControls: {
+            now: () => new Date(fixedRunTime),
+            randomBytes: (size) => Buffer.alloc(size),
+            onRunPublicationBoundary: (boundary) => {
+              if (boundary === boundaryToCancel) controller.abort();
+            },
+          },
+        },
+      );
+
+      expect(result, boundaryToCancel).toMatchObject({
+        ok: false,
+        failure: { kind: 'cancelled', code: 'cancelled' },
+      });
+      const outputs = await readdir(join(projectRoot, 'outputs')).catch(() => []);
+      expect(outputs, boundaryToCancel).toEqual(
+        committed ? ['20260727T200000.000Z--publication-safety--aaaaaaaaaaaa'] : [],
+      );
+      const locks = await readdir(join(projectRoot, '.breakdown', 'locks', 'runs')).catch(() => []);
+      expect(locks, boundaryToCancel).toEqual([]);
+    }
+  });
+
+  it('should cancel submission before final publication and defer through Markdown commit', async () => {
+    for (const [boundaryToCancel, committed] of [
+      ['after_lock_acquired', false],
+      ['after_staging_written', false],
+      ['before_commit', true],
+      ['after_commit_visible', true],
+      ['after_commit', true],
+    ] as const) {
+      const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+      const packet = (await prepare(projectRoot, runId))[0]!;
+      const controller = new AbortController();
+      const submitted = await operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate: successfulCandidate(packet, boundaryToCancel),
+        },
+        {
+          projectRoot,
+          signal: controller.signal,
+          testControls: {
+            now: () => new Date(fixedSubmissionTime),
+            randomBytes: (size) => Buffer.alloc(size, 9),
+            onStepPublicationBoundary: (boundary) => {
+              if (boundary === boundaryToCancel) controller.abort();
+            },
+          },
+        },
+      );
+
+      expect(submitted, boundaryToCancel).toMatchObject({
+        ok: false,
+        failure: { kind: 'cancelled', code: 'cancelled' },
+      });
+      const inspected = await operate({ operation: 'inspect_run', run_id: runId }, { projectRoot });
+      expect(inspected, boundaryToCancel).toMatchObject({
+        ok: true,
+        value: {
+          lock: null,
+          attempts: committed ? [{ node_id: 'execute', attempt: 1 }] : [],
+          nodes: [
+            committed
+              ? { node_id: 'execute', state: 'complete', next_attempt: 2 }
+              : { node_id: 'execute', state: 'runnable', next_attempt: 1 },
+          ],
+        },
+      });
+    }
+  });
+
+  it('should preserve cancellation boundaries through a real core subprocess', async () => {
+    for (const [boundaryToCancel, committed] of [
+      ['after_lock_acquired', false],
+      ['after_staging_written', false],
+      ['before_commit', true],
+      ['after_commit_visible', true],
+      ['after_commit', true],
+    ] as const) {
+      const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+      const packet = (await prepare(projectRoot, runId))[0]!;
+      const submitted = await runPublicationChild({
+        operation: 'submit_candidate',
+        projectRoot,
+        boundary: boundaryToCancel,
+        now: fixedSubmissionTime,
+        entropyByte: 12,
+        behavior: 'abort',
+        request: {
+          operation: 'submit_candidate',
+          packet,
+          candidate: successfulCandidate(packet, `process ${boundaryToCancel}`),
+        },
+      });
+      expect(submitted, boundaryToCancel).toMatchObject({
+        ok: false,
+        failure: { kind: 'cancelled', code: 'cancelled' },
+      });
+      await expect(
+        operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: {
+          lock: null,
+          attempts: committed ? [{ node_id: 'execute', attempt: 1 }] : [],
+        },
+      });
+    }
+  });
+
+  it('should elect one exact-lock recovery winner across real core subprocesses', async () => {
+    const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+    const packet = (await prepare(projectRoot, runId))[0]!;
+    const staleLockId = '5555555555555555';
+    await writeFile(
+      join(projectRoot, '.breakdown', 'locks', 'runs', `${runId}.lock`),
+      JSON.stringify({
+        lock_id: staleLockId,
+        run_id: runId,
+        created_at: '2000-01-01T00:00:00.000Z',
+        process_id: 1,
+      }),
+      { mode: 0o600 },
+    );
+    const childInput = (markdown: string, entropyByte: number): ChildInput => ({
+      operation: 'submit_candidate',
+      projectRoot,
+      boundary: '',
+      now: fixedSubmissionTime,
+      entropyByte,
+      request: {
+        operation: 'submit_candidate',
+        packet,
+        candidate: successfulCandidate(packet, markdown),
+        lock_recovery: {
+          lock_id: staleLockId,
+          confirmed_stopped: true,
+        },
+      },
+    });
+
+    const results = await Promise.all([
+      runPublicationChild(childInput('first recovery', 13)),
+      runPublicationChild(childInput('second recovery', 14)),
+    ]);
+    const recoveryDiagnostics = {
+      results,
+      lockEntries: await readdir(join(projectRoot, '.breakdown', 'locks', 'runs')),
+      inspected: await operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    };
+    expect(
+      results.filter((result) => result.ok),
+      JSON.stringify(recoveryDiagnostics),
+    ).toHaveLength(1);
+    const loser = results.find((result) => !result.ok);
+    expect(loser).toMatchObject({ ok: false, failure: { kind: 'conflict' } });
+    if (loser?.ok === false) {
+      expect(['lock_recovery_mismatch', 'run_locked']).toContain(loser.failure.code);
+    }
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        lock: null,
+        attempts: [{ node_id: 'execute', attempt: 1, status: 'succeeded' }],
+      },
+    });
+  });
+
+  it('should resume exact-lock recovery after process termination', async () => {
+    for (const recoveryBoundary of ['after_recovery_claimed', 'after_lock_quarantined'] as const) {
+      const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+      const packet = (await prepare(projectRoot, runId))[0]!;
+      const staleLockId = '6666666666666666';
+      await writeFile(
+        join(projectRoot, '.breakdown', 'locks', 'runs', `${runId}.lock`),
+        JSON.stringify({
+          lock_id: staleLockId,
+          run_id: runId,
+          created_at: '2000-01-01T00:00:00.000Z',
+          process_id: 1,
+        }),
+        { mode: 0o600 },
+      );
+      const request = {
+        operation: 'submit_candidate' as const,
+        packet,
+        candidate: successfulCandidate(packet, `recovered after ${recoveryBoundary}`),
+        lock_recovery: {
+          lock_id: staleLockId,
+          confirmed_stopped: true as const,
+        },
+      };
+
+      await killAtPublicationBoundary({
+        operation: 'submit_candidate',
+        projectRoot,
+        boundary: recoveryBoundary,
+        now: fixedSubmissionTime,
+        entropyByte: 15,
+        request,
+      });
+      await expect(
+        operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: {
+          lock: { lock_id: staleLockId },
+          attempts: [],
+        },
+      });
+
+      const recovered = await operate(request, {
+        projectRoot,
+        testControls: {
+          now: () => new Date(fixedSubmissionTime),
+          randomBytes: (size) => Buffer.alloc(size, 16),
+        },
+      });
+      expect(recovered, recoveryBoundary).toMatchObject({
+        ok: true,
+        value: { node_id: 'execute', attempt: 1 },
+      });
+      await expect(
+        operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: {
+          lock: null,
+          attempts: [{ node_id: 'execute', attempt: 1 }],
+        },
+      });
+    }
+  });
+
+  it.each([
+    {
+      replacementTiming: 'before quarantine',
+      replacementBoundary: 'after_recovery_claimed',
+      replaceFile: true,
+    },
+    {
+      replacementTiming: 'in place before quarantine',
+      replacementBoundary: 'after_recovery_claimed',
+      replaceFile: false,
+    },
+    {
+      replacementTiming: 'after quarantine',
+      replacementBoundary: undefined,
+      replaceFile: true,
+    },
+  ])(
+    'should preserve a replacement lock installed $replacementTiming during termination',
+    async ({ replacementBoundary, replaceFile }) => {
+      const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+      const packet = (await prepare(projectRoot, runId))[0]!;
+      const staleLockId = '7777777777777777';
+      const replacementLockId = '8888888888888888';
+      const lockDirectory = join(projectRoot, '.breakdown', 'locks', 'runs');
+      const lockPath = join(lockDirectory, `${runId}.lock`);
+      await writeFile(
+        lockPath,
+        JSON.stringify({
+          lock_id: staleLockId,
+          run_id: runId,
+          created_at: '2000-01-01T00:00:00.000Z',
+          process_id: 1,
+        }),
+        { mode: 0o600 },
+      );
+      const recoveryRequest = {
+        operation: 'submit_candidate' as const,
+        packet,
+        candidate: successfulCandidate(packet, 'recovery after replacement'),
+        lock_recovery: {
+          lock_id: staleLockId,
+          confirmed_stopped: true as const,
+        },
+      };
+      const replacementContents = JSON.stringify({
+        lock_id: replacementLockId,
+        run_id: runId,
+        created_at: fixedSubmissionTime,
+        process_id: process.pid,
+      });
+
+      await killAtPublicationBoundary(
+        {
+          operation: 'submit_candidate',
+          projectRoot,
+          boundary: 'after_lock_quarantined',
+          now: fixedSubmissionTime,
+          entropyByte: 17,
+          request: recoveryRequest,
+          ...(replacementBoundary === undefined
+            ? {}
+            : {
+                lockReplacement: {
+                  boundary: replacementBoundary,
+                  path: lockPath,
+                  contents: replacementContents,
+                  replaceFile,
+                },
+              }),
+        },
+        replacementBoundary === undefined
+          ? () => writeFile(lockPath, replacementContents, { mode: 0o600 })
+          : undefined,
+      );
+
+      await expect(operate(recoveryRequest, { projectRoot })).resolves.toMatchObject({
+        ok: false,
+        failure: { kind: 'conflict', code: 'lock_recovery_mismatch' },
+      });
+      expect(JSON.parse(await readFile(lockPath, 'utf8'))).toMatchObject({
+        lock_id: replacementLockId,
+      });
+      expect(
+        (await readdir(lockDirectory)).filter(
+          (entry) => entry.includes('.recovering-') || entry.startsWith('.recover-remove-'),
+        ),
+      ).toEqual([]);
+
+      await expect(
+        operate(
+          {
+            ...recoveryRequest,
+            lock_recovery: {
+              lock_id: replacementLockId,
+              confirmed_stopped: true,
+            },
+          },
+          {
+            projectRoot,
+            testControls: {
+              now: () => new Date(fixedSubmissionTime),
+              randomBytes: (size) => Buffer.alloc(size, 18),
+            },
+          },
+        ),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: { node_id: 'execute', attempt: 1 },
+      });
+    },
+  );
+
+  it('should discard an invalid recovery alias after its real writer releases', async () => {
+    const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+    const packet = (await prepare(projectRoot, runId))[0]!;
+    const staleLockId = '9999999999999999';
+    const replacementLockId = 'aaaaaaaaaaaaaaaa';
+    const lockDirectory = join(projectRoot, '.breakdown', 'locks', 'runs');
+    const lockPath = join(lockDirectory, `${runId}.lock`);
+    await writeFile(
+      lockPath,
+      JSON.stringify({
+        lock_id: staleLockId,
+        run_id: runId,
+        created_at: '2000-01-01T00:00:00.000Z',
+        process_id: 1,
+      }),
+      { mode: 0o600 },
+    );
+
+    await killAtPublicationBoundary({
+      operation: 'submit_candidate',
+      projectRoot,
+      boundary: 'after_recovery_alias_linked',
+      now: fixedSubmissionTime,
+      entropyByte: 19,
+      request: {
+        operation: 'submit_candidate',
+        packet,
+        candidate: successfulCandidate(packet, 'stopped invalid recovery'),
+        lock_recovery: {
+          lock_id: staleLockId,
+          confirmed_stopped: true,
+        },
+      },
+      lockReplacement: {
+        boundary: 'after_lock_observed',
+        path: lockPath,
+        contents: JSON.stringify({
+          lock_id: replacementLockId,
+          run_id: runId,
+          created_at: fixedSubmissionTime,
+          process_id: process.pid,
+        }),
+      },
+    });
+    await rm(lockPath);
+
+    await expect(
+      operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate: successfulCandidate(packet, 'fresh writer'),
+        },
+        {
+          projectRoot,
+          testControls: {
+            now: () => new Date(fixedSubmissionTime),
+            randomBytes: (size) => Buffer.alloc(size, 20),
+          },
+        },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { node_id: 'execute', attempt: 1 },
+    });
+    expect(
+      (await readdir(lockDirectory)).filter(
+        (entry) => entry.includes('.recovering-') || entry.startsWith('.recover-remove-'),
+      ),
+    ).toEqual([]);
+  });
+
   it('should make process termination before and after a Run commit unambiguous', async () => {
     for (const [boundary, committed] of [
       ['before_publish', false],

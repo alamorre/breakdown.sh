@@ -4,6 +4,12 @@ import { join } from 'node:path';
 
 import { canonicalizeJson } from './canonical-json.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
+import {
+  cancelledFailure,
+  InvocationCancelledError,
+  isCancelled,
+  throwIfCancelled,
+} from './invocation-cancellation.js';
 import type {
   Diagnostic,
   InspectRunValue,
@@ -15,6 +21,10 @@ import type { SubmissionIdentity, WorkPacket } from './prepare-work.js';
 import { validateDataContractInstance } from './run-inspection.js';
 import {
   acquireRunWriterLock,
+  type LockRecoveryBoundary,
+  LockRecoveryMismatchError,
+  type LockRecoveryIntent,
+  recoverRunWriterLock,
   releaseRunWriterLock,
   RunLockedError,
   type RunWriterLock,
@@ -65,12 +75,14 @@ export interface SuccessfulSubmitCandidateRequest {
   operation: 'submit_candidate';
   packet: WorkPacket;
   candidate: SuccessfulCandidateOutcome;
+  lock_recovery?: LockRecoveryIntent;
 }
 
 export interface NonSuccessfulSubmitCandidateRequest {
   operation: 'submit_candidate';
   packet: WorkPacket;
   candidate: NonSuccessfulCandidateOutcome;
+  lock_recovery?: LockRecoveryIntent;
 }
 
 export type SubmitCandidateRequest =
@@ -123,6 +135,8 @@ interface SubmitCandidateDependencies {
   now(): Date;
   randomBytes(size: number): Uint8Array;
   onPublicationBoundary?: (boundary: StepPublicationBoundary) => void | Promise<void>;
+  onLockRecoveryBoundary?: (boundary: LockRecoveryBoundary) => void | Promise<void>;
+  signal?: AbortSignal;
 }
 
 interface ValidatedCandidate {
@@ -172,6 +186,18 @@ function unsupportedCandidateFailure(): OperationFailure {
           file: 'candidate',
         },
       ],
+    },
+  };
+}
+
+function lockRecoveryMismatchFailure(): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'conflict',
+      code: 'lock_recovery_mismatch',
+      message: 'The observed Run lock changed or is missing.',
+      diagnostics: [],
     },
   };
 }
@@ -793,6 +819,7 @@ export async function submitCandidate(
   projectRoot: string,
   dependencies: SubmitCandidateDependencies,
 ): Promise<OperationResult<SubmitCandidateValue>> {
+  if (isCancelled(dependencies.signal)) return cancelledFailure();
   const validated = validateCandidate((request as { candidate?: unknown }).candidate);
   if (!validated.ok) return validated;
   const candidate = validated.value;
@@ -801,6 +828,22 @@ export async function submitCandidate(
     candidate.submission,
   );
   if (packetFailure !== undefined) return packetFailure;
+  if (request.lock_recovery !== undefined) {
+    if (isCancelled(dependencies.signal)) return cancelledFailure();
+    try {
+      await recoverRunWriterLock(
+        projectRoot,
+        candidate.submission.run_id,
+        request.lock_recovery,
+        dependencies,
+      );
+    } catch (error) {
+      return error instanceof LockRecoveryMismatchError
+        ? lockRecoveryMismatchFailure()
+        : ioFailure('Could not recover the Run writer lock.');
+    }
+    if (isCancelled(dependencies.signal)) return cancelledFailure();
+  }
   let lock: RunWriterLock;
   try {
     lock = await acquireRunWriterLock(projectRoot, candidate.submission.run_id, dependencies);
@@ -811,8 +854,10 @@ export async function submitCandidate(
   }
   try {
     await dependencies.onPublicationBoundary?.('after_lock_acquired');
+    if (isCancelled(dependencies.signal)) return cancelledFailure();
     const inspected = await dependencies.inspect(candidate.submission.run_id);
     if (!inspected.ok) return inspected;
+    if (isCancelled(dependencies.signal)) return cancelledFailure();
     const node = inspected.value.nodes.find(
       (inspectedNode) => inspectedNode.node_id === candidate.submission.node_id,
     );
@@ -845,6 +890,7 @@ export async function submitCandidate(
 
     const loadedWorkflow = await dependencies.loadWorkflow(inspected.value);
     if (!loadedWorkflow.ok) return loadedWorkflow;
+    if (isCancelled(dependencies.signal)) return cancelledFailure();
     const definition = loadedWorkflow.value.nodes.find(
       (nodeDefinition) => nodeDefinition.id === candidate.submission.node_id,
     );
@@ -915,12 +961,14 @@ export async function submitCandidate(
     }
 
     try {
+      throwIfCancelled(dependencies.signal);
       if (candidate.json !== undefined) {
         await writePrivateFile(jsonStagingPath, candidate.json.bytes);
       }
       await writePrivateFile(markdownStagingPath, bytes);
       await syncDirectory(stepsPath);
       await dependencies.onPublicationBoundary?.('after_staging_written');
+      throwIfCancelled(dependencies.signal);
       if (candidate.json !== undefined && jsonRelativePath !== undefined) {
         await publishPrivateFileNoReplace(
           jsonStagingPath,
@@ -948,6 +996,7 @@ export async function submitCandidate(
         rm(markdownStagingPath, { force: true }),
         rm(jsonStagingPath, { force: true }),
       ]);
+      if (error instanceof InvocationCancelledError) return cancelledFailure();
       if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
         return conflictFailure(
           'attempt_advanced',
@@ -961,6 +1010,7 @@ export async function submitCandidate(
     } catch {
       // The StepArtifact is committed; a post-commit observation fault cannot roll it back.
     }
+    if (isCancelled(dependencies.signal)) return cancelledFailure();
     const artifactSha256 = createHash('sha256').update(bytes).digest('hex');
     const jsonDescriptor =
       candidate.json === undefined || jsonRelativePath === undefined

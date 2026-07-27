@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   operate,
   type NonSuccessfulCandidateOutcome,
+  type OperationResult,
+  type SubmitCandidateValue,
   type SuccessfulCandidateOutcome,
   type WorkPacket,
 } from './index.js';
@@ -43,6 +45,23 @@ async function prepare(project: string, runId: string) {
   const packet = prepared.value.packets[0];
   if (packet === undefined) throw new Error('No Work Packet was prepared.');
   return packet;
+}
+
+async function writeRunLock(project: string, runId: string, lockId: string) {
+  const lockDirectory = join(project, '.breakdown', 'locks', 'runs');
+  await mkdir(lockDirectory, { recursive: true });
+  const path = join(lockDirectory, `${runId}.lock`);
+  await writeFile(
+    path,
+    JSON.stringify({
+      lock_id: lockId,
+      run_id: runId,
+      created_at: '2026-07-27T18:01:30.000Z',
+      process_id: 1234,
+    }),
+    { mode: 0o600 },
+  );
+  return path;
 }
 
 function successfulCandidate(
@@ -1738,6 +1757,311 @@ nodes:
     expect(settled).toMatchObject({
       ok: true,
       value: { lock: null, attempts: [{ node_id: 'execute', attempt: 1 }] },
+    });
+  });
+
+  it('should keep read-only operations available while a Run lock exists', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: read-while-locked
+name: Read While Locked
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+    await writeRunLock(project, runId, '1111111111111111');
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: { lock: { lock_id: '1111111111111111' }, attempts: [] },
+    });
+    await expect(
+      operate({ operation: 'prepare_work', run_id: runId, limit: 1 }, { projectRoot: project }),
+    ).resolves.toMatchObject({ ok: true, value: { packets: [expect.any(Object)] } });
+  });
+
+  it.each([
+    {
+      recoveryName: 'incorrectly identified',
+      lockRecovery: {
+        lock_id: '2222222222222222',
+        confirmed_stopped: true,
+      },
+    },
+    {
+      recoveryName: 'unconfirmed',
+      lockRecovery: {
+        lock_id: '1111111111111111',
+        confirmed_stopped: false,
+      },
+    },
+  ])('should reject $recoveryName lock recovery', async ({ lockRecovery }) => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: rejected-lock-recovery
+name: Rejected Lock Recovery
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+    const packet = await prepare(project, runId);
+    const lockPath = await writeRunLock(project, runId, '1111111111111111');
+    const result = await operate(
+      {
+        operation: 'submit_candidate',
+        packet,
+        candidate: successfulCandidate(packet, 'rejected recovery'),
+        lock_recovery: lockRecovery,
+      } as unknown as Parameters<typeof operate>[0],
+      { projectRoot: project },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'lock_recovery_mismatch' },
+    });
+    expect(JSON.parse(await readFile(lockPath, 'utf8'))).toMatchObject({
+      lock_id: '1111111111111111',
+    });
+  });
+
+  it('should recover only the exact observed lock after explicit confirmation', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: exact-lock-recovery
+name: Exact Lock Recovery
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+    const packet = await prepare(project, runId);
+    await writeRunLock(project, runId, '1111111111111111');
+    const recovered = await operate(
+      {
+        operation: 'submit_candidate',
+        packet,
+        candidate: successfulCandidate(packet, 'recovered'),
+        lock_recovery: {
+          lock_id: '1111111111111111',
+          confirmed_stopped: true,
+        },
+      },
+      {
+        projectRoot: project,
+        testControls: {
+          now: () => new Date('2026-07-27T18:02:00.000Z'),
+          randomBytes: () => Buffer.alloc(8, 3),
+        },
+      },
+    );
+    expect(recovered).toMatchObject({
+      ok: true,
+      value: { node_id: 'execute', attempt: 1, status: 'succeeded' },
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot: project }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { lock: null, attempts: [{ node_id: 'execute', attempt: 1 }] },
+    });
+  });
+
+  it('should fail recovery when the observed lock is missing', async () => {
+    const missing = await createProject(`
+schema_version: breakdown.workflow.v1
+id: missing-lock-recovery
+name: Missing Lock Recovery
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+    const missingPacket = await prepare(missing.project, missing.runId);
+    await expect(
+      operate(
+        {
+          operation: 'submit_candidate',
+          packet: missingPacket,
+          candidate: successfulCandidate(missingPacket),
+          lock_recovery: {
+            lock_id: '1111111111111111',
+            confirmed_stopped: true,
+          },
+        },
+        { projectRoot: missing.project },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'lock_recovery_mismatch' },
+    });
+  });
+
+  it('should preserve a lock changed during every recovery boundary', async () => {
+    for (const { recoveryBoundary, replaceFile, removeCurrent } of [
+      {
+        recoveryBoundary: 'after_lock_observed',
+        replaceFile: true,
+        removeCurrent: true,
+      },
+      {
+        recoveryBoundary: 'after_recovery_claimed',
+        replaceFile: true,
+        removeCurrent: true,
+      },
+      {
+        recoveryBoundary: 'after_recovery_claimed',
+        replaceFile: false,
+        removeCurrent: false,
+      },
+      {
+        recoveryBoundary: 'after_lock_quarantined',
+        replaceFile: true,
+        removeCurrent: false,
+      },
+    ] as const) {
+      const caseName = `${recoveryBoundary}-${replaceFile ? 'replacement' : 'rewrite'}`;
+      const changed = await createProject(`
+schema_version: breakdown.workflow.v1
+id: changed-lock-${caseName.replaceAll('_', '-')}
+name: Changed Lock ${caseName}
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+      const changedPacket = await prepare(changed.project, changed.runId);
+      const changedLockPath = await writeRunLock(
+        changed.project,
+        changed.runId,
+        '3333333333333333',
+      );
+      const changedResult = await operate(
+        {
+          operation: 'submit_candidate',
+          packet: changedPacket,
+          candidate: successfulCandidate(changedPacket),
+          lock_recovery: {
+            lock_id: '3333333333333333',
+            confirmed_stopped: true,
+          },
+        },
+        {
+          projectRoot: changed.project,
+          testControls: {
+            onLockRecoveryBoundary: async (boundary) => {
+              if (boundary !== recoveryBoundary) return;
+              if (removeCurrent) await rm(changedLockPath);
+              await writeRunLock(changed.project, changed.runId, '4444444444444444');
+            },
+          },
+        },
+      );
+      expect(changedResult, caseName).toMatchObject({
+        ok: false,
+        failure: { kind: 'conflict', code: 'lock_recovery_mismatch' },
+      });
+      expect(JSON.parse(await readFile(changedLockPath, 'utf8')), caseName).toMatchObject({
+        lock_id: '4444444444444444',
+      });
+      const lockEntries = await readdir(join(changed.project, '.breakdown', 'locks', 'runs'));
+      expect(
+        lockEntries.filter(
+          (entry) => entry.includes('.recovering-') || entry.startsWith('.recover-remove-'),
+        ),
+        caseName,
+      ).toEqual([]);
+    }
+  });
+
+  it('should preserve a later recovery claim when an earlier recovery loses its race', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: recovery-claim-race
+name: Recovery Claim Race
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute once.
+`);
+    const packet = await prepare(project, runId);
+    const lockPath = await writeRunLock(project, runId, '5555555555555555');
+    let announceLaterClaim!: () => void;
+    const laterClaimed = new Promise<void>((resolve) => {
+      announceLaterClaim = resolve;
+    });
+    let releaseLaterClaim!: () => void;
+    const holdLaterClaim = new Promise<void>((resolve) => {
+      releaseLaterClaim = resolve;
+    });
+    let laterRecovery!: Promise<OperationResult<SubmitCandidateValue>>;
+
+    const earlierRecovery = await operate(
+      {
+        operation: 'submit_candidate',
+        packet,
+        candidate: successfulCandidate(packet, 'earlier recovery'),
+        lock_recovery: {
+          lock_id: '5555555555555555',
+          confirmed_stopped: true,
+        },
+      },
+      {
+        projectRoot: project,
+        testControls: {
+          onLockRecoveryBoundary: async (boundary) => {
+            if (boundary !== 'after_recovery_claimed') return;
+            await rm(lockPath);
+            await writeRunLock(project, runId, '6666666666666666');
+            laterRecovery = operate(
+              {
+                operation: 'submit_candidate',
+                packet,
+                candidate: successfulCandidate(packet, 'later recovery'),
+                lock_recovery: {
+                  lock_id: '6666666666666666',
+                  confirmed_stopped: true,
+                },
+              },
+              {
+                projectRoot: project,
+                testControls: {
+                  now: () => new Date('2026-07-27T18:02:00.000Z'),
+                  randomBytes: () => Buffer.alloc(8, 7),
+                  onLockRecoveryBoundary: async (laterBoundary) => {
+                    if (laterBoundary !== 'after_recovery_claimed') return;
+                    announceLaterClaim();
+                    await holdLaterClaim;
+                  },
+                },
+              },
+            );
+            await laterClaimed;
+          },
+        },
+      },
+    );
+
+    expect(earlierRecovery).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'lock_recovery_mismatch' },
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot: project }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { lock: { lock_id: '6666666666666666' }, attempts: [] },
+    });
+
+    releaseLaterClaim();
+    await expect(laterRecovery).resolves.toMatchObject({
+      ok: true,
+      value: { node_id: 'execute', attempt: 1 },
     });
   });
 
