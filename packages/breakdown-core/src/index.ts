@@ -13,6 +13,7 @@ import {
 } from './exact-json-number.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
 import { inspectRun, type InspectRunRequest, type InspectRunValue } from './run-inspection.js';
+import { prepareWork, type PrepareWorkRequest, type PrepareWorkValue } from './prepare-work.js';
 import {
   assertSupportedFilesystem,
   ensurePrivateDirectoryPath,
@@ -34,6 +35,7 @@ export type {
   ResultFileDescriptor,
   SelectedResultDescriptor,
 } from './run-inspection.js';
+export type { PrepareWorkRequest, PrepareWorkValue, WorkPacket } from './prepare-work.js';
 
 export interface ValidateWorkflowRequest {
   operation: 'validate_workflow';
@@ -124,6 +126,8 @@ export interface CreateRunValue {
   inputs: Record<string, ResolvedWorkflowInput>;
   producer: ProducerIdentity;
 }
+
+export type { WorkPacketInput } from './prepare-work.js';
 
 export interface OperationSuccess<T> {
   ok: true;
@@ -1456,17 +1460,24 @@ export function operate(
   trustedContext: TrustedContext,
 ): Promise<OperationResult<CreateRunValue>>;
 export function operate(
+  request: PrepareWorkRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<PrepareWorkValue>>;
+export function operate(
   request: InspectRunRequest,
   trustedContext: TrustedContext,
 ): Promise<OperationResult<InspectRunValue>>;
 export async function operate(
-  request: ValidateWorkflowRequest | CreateRunRequest | InspectRunRequest,
+  request: ValidateWorkflowRequest | CreateRunRequest | InspectRunRequest | PrepareWorkRequest,
   trustedContext: TrustedContext,
-): Promise<OperationResult<ValidateWorkflowValue | CreateRunValue | InspectRunValue>> {
+): Promise<
+  OperationResult<ValidateWorkflowValue | CreateRunValue | InspectRunValue | PrepareWorkValue>
+> {
   const requestedOperation = (request as { operation?: unknown }).operation;
   if (
     requestedOperation !== 'create_run' &&
     requestedOperation !== 'inspect_run' &&
+    requestedOperation !== 'prepare_work' &&
     requestedOperation !== 'validate_workflow'
   ) {
     return {
@@ -1498,6 +1509,72 @@ export async function operate(
           definitionBytes,
         } as InternalTrustedContext),
     });
+  }
+
+  if (requestedOperation === 'prepare_work') {
+    const prepareRequest = request as PrepareWorkRequest;
+    if (typeof prepareRequest.run_id !== 'string') {
+      return {
+        ok: false,
+        failure: {
+          kind: 'invalid',
+          code: 'invalid_prepare_work',
+          message: 'An exact Run ID is required.',
+          diagnostics: [],
+        },
+      };
+    }
+    let projectRoot: string;
+    try {
+      projectRoot = await realpath(trustedContext.projectRoot);
+    } catch {
+      return ioFailure('Could not select the project root.');
+    }
+    let snapshotBytes: Buffer;
+    try {
+      const inspected = await operate(
+        { operation: 'inspect_run', run_id: prepareRequest.run_id },
+        { projectRoot },
+      );
+      if (!inspected.ok) return inspected;
+      snapshotBytes = Buffer.from(
+        (
+          await readSecureRegularFile(
+            projectRoot,
+            `${inspected.value.path}/breakdown.yaml`,
+            FIXED_LIMITS.workflow_definition_bytes,
+          )
+        ).bytes,
+      );
+      if (
+        createHash('sha256').update(snapshotBytes).digest('hex') !== inspected.value.workflow.sha256
+      ) {
+        return {
+          ok: false,
+          failure: {
+            kind: 'invalid',
+            code: 'invalid_run',
+            message: 'The Run changed while Work Packet preparation was in progress.',
+            diagnostics: [],
+          },
+        };
+      }
+      const snapshot = await operate({ operation: 'validate_workflow' }, {
+        projectRoot,
+        definitionBytes: snapshotBytes,
+      } as InternalTrustedContext);
+      if (!snapshot.ok) return snapshot;
+      return prepareWork(
+        prepareRequest,
+        (trustedContext.testControls?.now ?? (() => new Date()))().toISOString(),
+        {
+          inspected: inspected.value,
+          workflow: snapshot.value.workflow,
+        },
+      );
+    } catch {
+      return ioFailure('Could not read the Workflow Snapshot.');
+    }
   }
 
   let bytes: Buffer;
