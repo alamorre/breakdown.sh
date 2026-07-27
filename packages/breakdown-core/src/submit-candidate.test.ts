@@ -99,6 +99,7 @@ describe('submit_candidate', () => {
       ),
     ) as {
       additionalProperties: boolean;
+      allOf: unknown[];
       required: string[];
       oneOf: [
         {
@@ -118,12 +119,16 @@ describe('submit_candidate', () => {
         submission: {
           additionalProperties: boolean;
           required: string[];
+          properties: {
+            refresh_base: { $ref: string };
+          };
         };
       };
     };
 
     expect(schema).toMatchObject({
       additionalProperties: false,
+      allOf: expect.any(Array),
       required: ['schema_version', 'submission', 'status', 'executor', 'markdown'],
       oneOf: [
         {
@@ -150,6 +155,9 @@ describe('submit_candidate', () => {
             'expected_attempt',
             'context_sha256',
           ],
+          properties: {
+            refresh_base: { $ref: '#/$defs/selectedResult' },
+          },
         },
       },
     });
@@ -254,6 +262,619 @@ nodes:
       '"executor": {\n    "kind": "agent",\n    "name": "Codex",\n    "version": "1.2.3",\n    "model": "example-model"\n  }',
     );
     expect(committedMarkdown).toMatch(/---\n# Result\n\nExact candidate bytes\.\n$/);
+  });
+
+  it('should refresh identical Markdown and recompute consuming descendants from new provenance', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: refresh-provenance
+name: Refresh Provenance
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather evidence.
+  - id: synthesize
+    name: Synthesize
+    prompt: Synthesize the evidence.
+    inputs:
+      evidence:
+        node: gather
+  - id: publish
+    name: Publish
+    prompt: Publish the synthesis.
+    inputs:
+      synthesis:
+        node: synthesize
+`);
+    const prepareAt = async (
+      preparedAt: string,
+      options: { intent?: 'resume' | 'refresh'; node_id?: string } = {},
+    ) => {
+      const prepared = await operate(
+        {
+          operation: 'prepare_work',
+          run_id: runId,
+          limit: 1,
+          ...options,
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date(preparedAt) },
+        },
+      );
+      if (!prepared.ok) throw new Error(prepared.failure.code);
+      const packet = prepared.value.packets[0];
+      if (packet === undefined) throw new Error('No Work Packet was prepared.');
+      return packet;
+    };
+    const submitAt = async (packet: WorkPacket, markdown: string, settledAt: string) =>
+      operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate: successfulCandidate(packet, markdown),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date(settledAt) },
+        },
+      );
+
+    const gatherOne = await prepareAt('2026-07-27T18:01:00.000Z');
+    expect(
+      await submitAt(gatherOne, 'unchanged evidence', '2026-07-27T18:02:00.000Z'),
+    ).toMatchObject({ ok: true, value: { node_id: 'gather', attempt: 1 } });
+    const synthesizeOne = await prepareAt('2026-07-27T18:03:00.000Z');
+    expect(synthesizeOne.inputs.evidence?.result?.attempt).toBe(1);
+    expect(
+      await submitAt(synthesizeOne, 'unchanged synthesis', '2026-07-27T18:04:00.000Z'),
+    ).toMatchObject({ ok: true, value: { node_id: 'synthesize', attempt: 1 } });
+    const publishOne = await prepareAt('2026-07-27T18:05:00.000Z');
+    expect(publishOne.inputs.synthesis?.result?.attempt).toBe(1);
+    expect(
+      await submitAt(publishOne, 'unchanged publication', '2026-07-27T18:06:00.000Z'),
+    ).toMatchObject({ ok: true, value: { node_id: 'publish', attempt: 1 } });
+
+    const refresh = await prepareAt('2026-07-27T18:07:00.000Z', {
+      intent: 'refresh',
+      node_id: 'gather',
+    });
+    expect(refresh.refresh_base).toMatchObject({ node_id: 'gather', attempt: 1 });
+    expect(await submitAt(refresh, 'unchanged evidence', '2026-07-27T18:08:00.000Z')).toMatchObject(
+      { ok: true, value: { node_id: 'gather', attempt: 2 } },
+    );
+
+    const afterRefresh = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(afterRefresh).toMatchObject({
+      ok: true,
+      value: {
+        status: 'incomplete',
+        nodes: [
+          { node_id: 'gather', state: 'complete', selected_result: { attempt: 2 } },
+          { node_id: 'synthesize', state: 'runnable', stale: true, next_attempt: 2 },
+          { node_id: 'publish', state: 'blocked', next_attempt: 2 },
+        ],
+        terminal_results: [],
+      },
+    });
+
+    const synthesizeTwo = await prepareAt('2026-07-27T18:09:00.000Z');
+    expect(synthesizeTwo.node.id).toBe('synthesize');
+    expect(synthesizeTwo.inputs.evidence?.result?.attempt).toBe(2);
+    expect(
+      await submitAt(synthesizeTwo, 'unchanged synthesis', '2026-07-27T18:10:00.000Z'),
+    ).toMatchObject({ ok: true, value: { node_id: 'synthesize', attempt: 2 } });
+
+    const publishTwo = await prepareAt('2026-07-27T18:11:00.000Z');
+    expect(publishTwo.node.id).toBe('publish');
+    expect(publishTwo.inputs.synthesis?.result?.attempt).toBe(2);
+    expect(
+      await submitAt(publishTwo, 'unchanged publication', '2026-07-27T18:12:00.000Z'),
+    ).toMatchObject({ ok: true, value: { node_id: 'publish', attempt: 2 } });
+
+    const complete = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(complete).toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        nodes: [
+          { node_id: 'gather', selected_result: { attempt: 2 } },
+          { node_id: 'synthesize', selected_result: { attempt: 2 } },
+          { node_id: 'publish', selected_result: { attempt: 2 } },
+        ],
+        terminal_results: [{ node_id: 'publish', attempt: 2 }],
+      },
+    });
+  });
+
+  it('should refresh a contracted Markdown-plus-JSON Result as one selected provenance', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: refresh-contracted
+name: Refresh Contracted
+nodes:
+  - id: measure
+    name: Measure
+    prompt: Produce a measurement.
+    data_contract:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: integer
+      additionalProperties: false
+`);
+    const initialPacket = await prepare(project, runId);
+    const initial = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: initialPacket,
+        candidate: { ...successfulCandidate(initialPacket, 'measurement'), json: { value: 1 } },
+      },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+      },
+    );
+    expect(initial).toMatchObject({
+      ok: true,
+      value: { attempt: 1, result: { json: { sha256: expect.stringMatching(/^[0-9a-f]{64}$/) } } },
+    });
+
+    const prepared = await operate(
+      {
+        operation: 'prepare_work',
+        run_id: runId,
+        intent: 'refresh',
+        node_id: 'measure',
+        limit: 1,
+      },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:03:00.000Z') },
+      },
+    );
+    if (!prepared.ok) throw new Error(prepared.failure.code);
+    const refreshPacket = prepared.value.packets[0];
+    if (refreshPacket === undefined) throw new Error('No refresh packet was prepared.');
+    expect(refreshPacket.refresh_base).toMatchObject({
+      node_id: 'measure',
+      attempt: 1,
+      json: {
+        path: expect.stringMatching(/--measure--a1\.json$/),
+        sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      },
+    });
+
+    const refreshed = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: refreshPacket,
+        candidate: {
+          ...successfulCandidate(refreshPacket, 'measurement'),
+          json: { value: 2 },
+        },
+      },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:04:00.000Z') },
+      },
+    );
+    expect(refreshed).toMatchObject({
+      ok: true,
+      value: {
+        node_id: 'measure',
+        attempt: 2,
+        result: {
+          json: {
+            path: expect.stringMatching(/--measure--a2\.json$/),
+            sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+          },
+        },
+      },
+    });
+    if (!refreshed.ok || refreshed.value.result.json === null) {
+      throw new Error(refreshed.ok ? 'Expected refreshed JSON.' : refreshed.failure.code);
+    }
+    expect(await readFile(join(project, refreshed.value.result.json.path), 'utf8')).toBe(
+      '{"value":2}',
+    );
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        nodes: [
+          {
+            node_id: 'measure',
+            selected_result: {
+              attempt: 2,
+              markdown: refreshed.value.result.markdown,
+              json: refreshed.value.result.json,
+            },
+          },
+        ],
+        terminal_results: [{ node_id: 'measure', attempt: 2 }],
+      },
+    });
+  });
+
+  it.each(['failed', 'blocked', 'cancelled'] as const)(
+    'should preserve the prior Result and descendants after a %s refresh',
+    async (status) => {
+      const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: unsuccessful-refresh-${status}
+name: Unsuccessful Refresh ${status}
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather evidence.
+  - id: consume
+    name: Consume
+    prompt: Consume evidence.
+    inputs:
+      evidence:
+        node: gather
+`);
+      const gatherPacket = await prepare(project, runId);
+      const gathered = await operate(
+        {
+          operation: 'submit_candidate',
+          packet: gatherPacket,
+          candidate: successfulCandidate(gatherPacket, 'retained evidence'),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+        },
+      );
+      expect(gathered).toMatchObject({ ok: true });
+
+      const consumePrepared = await operate(
+        { operation: 'prepare_work', run_id: runId, limit: 1 },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:03:00.000Z') },
+        },
+      );
+      if (!consumePrepared.ok) throw new Error(consumePrepared.failure.code);
+      const consumePacket = consumePrepared.value.packets[0];
+      if (consumePacket === undefined) throw new Error('No consumer packet was prepared.');
+      const consumed = await operate(
+        {
+          operation: 'submit_candidate',
+          packet: consumePacket,
+          candidate: successfulCandidate(consumePacket, 'retained consumption'),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:04:00.000Z') },
+        },
+      );
+      expect(consumed).toMatchObject({ ok: true });
+
+      const refreshPrepared = await operate(
+        {
+          operation: 'prepare_work',
+          run_id: runId,
+          intent: 'refresh',
+          node_id: 'gather',
+          limit: 1,
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:05:00.000Z') },
+        },
+      );
+      if (!refreshPrepared.ok) throw new Error(refreshPrepared.failure.code);
+      const refreshPacket = refreshPrepared.value.packets[0];
+      if (refreshPacket === undefined) throw new Error('No refresh packet was prepared.');
+
+      const unsuccessful = await operate(
+        {
+          operation: 'submit_candidate',
+          packet: refreshPacket,
+          candidate: nonSuccessfulCandidate(refreshPacket, status),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:06:00.000Z') },
+        },
+      );
+      expect(unsuccessful).toMatchObject({
+        ok: true,
+        value: { node_id: 'gather', attempt: 2, status, result: null },
+      });
+
+      const inspected = await operate(
+        { operation: 'inspect_run', run_id: runId },
+        { projectRoot: project },
+      );
+      expect(inspected).toMatchObject({
+        ok: true,
+        value: {
+          status: 'complete',
+          nodes: [
+            {
+              node_id: 'gather',
+              state: 'complete',
+              stale: false,
+              next_attempt: 3,
+              selected_result: { attempt: 1 },
+            },
+            {
+              node_id: 'consume',
+              state: 'complete',
+              stale: false,
+              next_attempt: 2,
+              selected_result: { attempt: 1 },
+            },
+          ],
+          attempts: [
+            { node_id: 'gather', attempt: 1, status: 'succeeded', selected: true },
+            { node_id: 'gather', attempt: 2, status, selected: false },
+            { node_id: 'consume', attempt: 1, status: 'succeeded', selected: true },
+          ],
+          terminal_results: [{ node_id: 'consume', attempt: 1 }],
+        },
+      });
+    },
+  );
+
+  it('should reject an incomplete refresh target or mismatched refresh base without an artifact', async () => {
+    const incomplete = await createProject(`
+schema_version: breakdown.workflow.v1
+id: incomplete-refresh
+name: Incomplete Refresh
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+`);
+    const resumePacket = await prepare(incomplete.project, incomplete.runId);
+    const forgedRefresh = structuredClone(resumePacket);
+    const forgedBase = {
+      node_id: 'execute',
+      attempt: 1,
+      markdown: {
+        path: `outputs/${incomplete.runId}/steps/forged.md`,
+        sha256: '0'.repeat(64),
+      },
+    };
+    forgedRefresh.intent = 'refresh';
+    forgedRefresh.refresh_base = forgedBase;
+    forgedRefresh.submission = {
+      ...forgedRefresh.submission,
+      intent: 'refresh',
+      refresh_base: forgedBase,
+    };
+    const incompleteResult = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: forgedRefresh,
+        candidate: successfulCandidate(forgedRefresh),
+      },
+      { projectRoot: incomplete.project },
+    );
+    expect(incompleteResult).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'refresh_target_not_complete' },
+    });
+    expect(
+      await operate(
+        { operation: 'inspect_run', run_id: incomplete.runId },
+        { projectRoot: incomplete.project },
+      ),
+    ).toMatchObject({ ok: true, value: { attempts: [] } });
+
+    const complete = await createProject(`
+schema_version: breakdown.workflow.v1
+id: mismatched-refresh-base
+name: Mismatched Refresh Base
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+`);
+    const initialPacket = await prepare(complete.project, complete.runId);
+    expect(
+      await operate(
+        {
+          operation: 'submit_candidate',
+          packet: initialPacket,
+          candidate: successfulCandidate(initialPacket),
+        },
+        {
+          projectRoot: complete.project,
+          testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+        },
+      ),
+    ).toMatchObject({ ok: true });
+    const refreshPrepared = await operate(
+      {
+        operation: 'prepare_work',
+        run_id: complete.runId,
+        intent: 'refresh',
+        node_id: 'execute',
+      },
+      {
+        projectRoot: complete.project,
+        testControls: { now: () => new Date('2026-07-27T18:03:00.000Z') },
+      },
+    );
+    if (!refreshPrepared.ok) throw new Error(refreshPrepared.failure.code);
+    const wrongBasePacket = structuredClone(refreshPrepared.value.packets[0]!);
+    const wrongBase = { ...wrongBasePacket.refresh_base!, attempt: 999 };
+    wrongBasePacket.refresh_base = wrongBase;
+    wrongBasePacket.submission = {
+      ...wrongBasePacket.submission,
+      refresh_base: wrongBase,
+    };
+
+    const mismatchedResult = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: wrongBasePacket,
+        candidate: successfulCandidate(wrongBasePacket),
+      },
+      { projectRoot: complete.project },
+    );
+    expect(mismatchedResult).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'refresh_target_not_complete' },
+    });
+    expect(
+      await operate(
+        { operation: 'inspect_run', run_id: complete.runId },
+        { projectRoot: complete.project },
+      ),
+    ).toMatchObject({ ok: true, value: { attempts: [{ attempt: 1 }] } });
+  });
+
+  it('should reject a refresh whose context or expected attempt advanced without another artifact', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: stale-refresh
+name: Stale Refresh
+nodes:
+  - id: gather
+    name: Gather
+    prompt: Gather.
+  - id: consume
+    name: Consume
+    prompt: Consume.
+    inputs:
+      evidence:
+        node: gather
+`);
+    const gatherOne = await prepare(project, runId);
+    expect(
+      await operate(
+        {
+          operation: 'submit_candidate',
+          packet: gatherOne,
+          candidate: successfulCandidate(gatherOne, 'first evidence'),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+        },
+      ),
+    ).toMatchObject({ ok: true });
+    const consumeOnePrepared = await operate(
+      { operation: 'prepare_work', run_id: runId, limit: 1 },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:03:00.000Z') },
+      },
+    );
+    if (!consumeOnePrepared.ok) throw new Error(consumeOnePrepared.failure.code);
+    const consumeOne = consumeOnePrepared.value.packets[0]!;
+    expect(
+      await operate(
+        {
+          operation: 'submit_candidate',
+          packet: consumeOne,
+          candidate: successfulCandidate(consumeOne, 'first consumption'),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:04:00.000Z') },
+        },
+      ),
+    ).toMatchObject({ ok: true });
+
+    const oldConsumeRefreshPrepared = await operate(
+      {
+        operation: 'prepare_work',
+        run_id: runId,
+        intent: 'refresh',
+        node_id: 'consume',
+      },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:05:00.000Z') },
+      },
+    );
+    if (!oldConsumeRefreshPrepared.ok) throw new Error(oldConsumeRefreshPrepared.failure.code);
+    const oldConsumeRefresh = oldConsumeRefreshPrepared.value.packets[0]!;
+
+    const gatherRefreshPrepared = await operate(
+      {
+        operation: 'prepare_work',
+        run_id: runId,
+        intent: 'refresh',
+        node_id: 'gather',
+      },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:06:00.000Z') },
+      },
+    );
+    if (!gatherRefreshPrepared.ok) throw new Error(gatherRefreshPrepared.failure.code);
+    const gatherRefresh = gatherRefreshPrepared.value.packets[0]!;
+    expect(
+      await operate(
+        {
+          operation: 'submit_candidate',
+          packet: gatherRefresh,
+          candidate: successfulCandidate(gatherRefresh, 'second evidence'),
+        },
+        {
+          projectRoot: project,
+          testControls: { now: () => new Date('2026-07-27T18:07:00.000Z') },
+        },
+      ),
+    ).toMatchObject({ ok: true, value: { attempt: 2 } });
+
+    const staleContext = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: oldConsumeRefresh,
+        candidate: successfulCandidate(oldConsumeRefresh, 'stale refresh'),
+      },
+      { projectRoot: project },
+    );
+    expect(staleContext).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'stale_context' },
+    });
+
+    const gatherRefreshReplay = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: gatherRefresh,
+        candidate: successfulCandidate(gatherRefresh, 'duplicate refresh'),
+      },
+      { projectRoot: project },
+    );
+    expect(gatherRefreshReplay).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'attempt_advanced' },
+    });
+    expect(
+      await operate({ operation: 'inspect_run', run_id: runId }, { projectRoot: project }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        attempts: [
+          { node_id: 'gather', attempt: 1 },
+          { node_id: 'gather', attempt: 2 },
+          { node_id: 'consume', attempt: 1 },
+        ],
+      },
+    });
   });
 
   it('publishes a failed attempt without a Result while independent prepared work progresses', async () => {

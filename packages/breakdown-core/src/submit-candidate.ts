@@ -254,6 +254,67 @@ function validTimestamp(value: unknown): value is string {
   }
 }
 
+function validateResultFileDescriptor(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[],
+): void {
+  if (!isRecord(value)) {
+    diagnostics.push(diagnostic(path, 'Result file descriptor must be a mapping.'));
+    return;
+  }
+  exactFields(value, ['path', 'sha256'], path, diagnostics);
+  if (
+    typeof value.path !== 'string' ||
+    value.path.length === 0 ||
+    !isUnicodeScalarString(value.path)
+  ) {
+    diagnostics.push(diagnostic(`${path}/path`, 'Result path is invalid.'));
+  }
+  if (typeof value.sha256 !== 'string' || !SHA256_PATTERN.test(value.sha256)) {
+    diagnostics.push(diagnostic(`${path}/sha256`, 'Result sha256 is invalid.'));
+  }
+}
+
+function validateRefreshBase(value: unknown, path: string, diagnostics: Diagnostic[]): void {
+  if (!isRecord(value)) {
+    diagnostics.push(diagnostic(path, 'refresh_base must be a Selected Result mapping.'));
+    return;
+  }
+  exactFields(value, ['node_id', 'attempt', 'markdown', 'json'], path, diagnostics, [
+    'node_id',
+    'attempt',
+    'markdown',
+  ]);
+  if (
+    typeof value.node_id !== 'string' ||
+    value.node_id.length > 64 ||
+    !IDENTIFIER_PATTERN.test(value.node_id)
+  ) {
+    diagnostics.push(diagnostic(`${path}/node_id`, 'refresh_base node_id is invalid.'));
+  }
+  if (
+    typeof value.attempt !== 'number' ||
+    !Number.isInteger(value.attempt) ||
+    value.attempt < 1 ||
+    value.attempt > FIXED_LIMITS.attempts_per_node
+  ) {
+    diagnostics.push(diagnostic(`${path}/attempt`, 'refresh_base attempt is invalid.'));
+  }
+  validateResultFileDescriptor(value.markdown, `${path}/markdown`, diagnostics);
+  if (Object.hasOwn(value, 'json')) {
+    validateResultFileDescriptor(value.json, `${path}/json`, diagnostics);
+  }
+}
+
+function canonicalValuesEqual(left: unknown, right: unknown): boolean {
+  try {
+    return canonicalizeJson(left) === canonicalizeJson(right);
+  } catch {
+    return false;
+  }
+}
+
 function escapePointerSegment(segment: string) {
   return segment.replaceAll('~', '~0').replaceAll('/', '~1');
 }
@@ -447,9 +508,18 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
   } else {
     exactFields(
       submission,
-      ['run_id', 'node_id', 'intent', 'prepared_at', 'expected_attempt', 'context_sha256'],
+      [
+        'run_id',
+        'node_id',
+        'intent',
+        'prepared_at',
+        'expected_attempt',
+        'context_sha256',
+        'refresh_base',
+      ],
       '/submission',
       diagnostics,
+      ['run_id', 'node_id', 'intent', 'prepared_at', 'expected_attempt', 'context_sha256'],
     );
     if (typeof submission.run_id !== 'string' || !RUN_ID_PATTERN.test(submission.run_id)) {
       diagnostics.push(diagnostic('/submission/run_id', 'run_id is invalid.'));
@@ -480,6 +550,19 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
       !SHA256_PATTERN.test(submission.context_sha256)
     ) {
       diagnostics.push(diagnostic('/submission/context_sha256', 'context_sha256 is invalid.'));
+    }
+    if (submission.intent === 'refresh') {
+      if (!Object.hasOwn(submission, 'refresh_base')) {
+        diagnostics.push(
+          diagnostic('/submission/refresh_base', 'Refresh submission requires refresh_base.'),
+        );
+      } else {
+        validateRefreshBase(submission.refresh_base, '/submission/refresh_base', diagnostics);
+      }
+    } else if (submission.intent === 'resume' && Object.hasOwn(submission, 'refresh_base')) {
+      diagnostics.push(
+        diagnostic('/submission/refresh_base', 'Resume submission must not have refresh_base.'),
+      );
     }
   }
 
@@ -584,14 +667,21 @@ function validatePacketIdentity(
     'prepared_at',
     'expected_attempt',
     'context_sha256',
+    ...(submission.intent === 'refresh' ? (['refresh_base'] as const) : []),
   ] as const;
   const packetSubmission = value.submission;
   const exactSubmissionFields =
     Object.keys(packetSubmission).length === identityFields.length &&
     identityFields.every(
       (field) =>
-        Object.hasOwn(packetSubmission, field) && packetSubmission[field] === submission[field],
+        Object.hasOwn(packetSubmission, field) &&
+        canonicalValuesEqual(packetSubmission[field], submission[field]),
     );
+  const refreshBaseIsConsistent =
+    submission.intent === 'refresh'
+      ? Object.hasOwn(value, 'refresh_base') &&
+        canonicalValuesEqual(value.refresh_base, submission.refresh_base)
+      : !Object.hasOwn(value, 'refresh_base');
   const consistentPacket =
     value.schema_version === 'breakdown.work-packet.v1' &&
     value.run_id === submission.run_id &&
@@ -599,7 +689,8 @@ function validatePacketIdentity(
     value.prepared_at === submission.prepared_at &&
     value.expected_attempt === submission.expected_attempt &&
     value.context_sha256 === submission.context_sha256 &&
-    value.node.id === submission.node_id;
+    value.node.id === submission.node_id &&
+    refreshBaseIsConsistent;
   if (exactSubmissionFields && consistentPacket) return undefined;
   return invalidCandidateFailure([
     diagnostic(
@@ -770,11 +861,22 @@ export async function submitCandidate(
         'The submitted node attempt has already advanced.',
       );
     }
-    if (node.state !== 'runnable' || candidate.submission.intent !== 'resume') {
-      return conflictFailure('no_longer_runnable', 'The submitted node is no longer runnable.');
-    }
     if (node.context_sha256 !== candidate.submission.context_sha256) {
       return conflictFailure('stale_context', 'The submitted Node Context is stale.');
+    }
+    if (candidate.submission.intent === 'refresh') {
+      if (
+        node.state !== 'complete' ||
+        node.selected_result === undefined ||
+        !canonicalValuesEqual(node.selected_result, candidate.submission.refresh_base)
+      ) {
+        return conflictFailure(
+          'refresh_target_not_complete',
+          'The refresh target is no longer complete at its prepared Result.',
+        );
+      }
+    } else if (node.state !== 'runnable') {
+      return conflictFailure('no_longer_runnable', 'The submitted node is no longer runnable.');
     }
 
     const loadedWorkflow = await dependencies.loadWorkflow(inspected.value);

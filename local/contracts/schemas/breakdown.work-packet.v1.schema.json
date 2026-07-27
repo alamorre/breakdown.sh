@@ -4,6 +4,27 @@
   "title": "Breakdown Work Packet v1",
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "intent": { "const": "refresh" }
+        }
+      },
+      "then": {
+        "required": ["refresh_base"],
+        "properties": {
+          "submission": { "required": ["refresh_base"] }
+        }
+      },
+      "else": {
+        "not": { "required": ["refresh_base"] },
+        "properties": {
+          "submission": { "not": { "required": ["refresh_base"] } }
+        }
+      }
+    }
+  ],
   "required": [
     "schema_version",
     "run_id",
@@ -71,6 +92,7 @@
     },
     "expected_attempt": { "type": "integer", "minimum": 1 },
     "context_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "refresh_base": { "$ref": "#/$defs/selectedResult" },
     "submission": {
       "type": "object",
       "additionalProperties": false,
@@ -88,7 +110,40 @@
         "intent": { "enum": ["resume", "refresh"] },
         "prepared_at": { "type": "string", "format": "date-time" },
         "expected_attempt": { "type": "integer", "minimum": 1 },
-        "context_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        "context_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "refresh_base": { "$ref": "#/$defs/selectedResult" }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resultFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "selectedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "attempt", "markdown"],
+      "properties": {
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "markdown": { "$ref": "#/$defs/resultFile" },
+        "json": { "$ref": "#/$defs/resultFile" }
       }
     }
   }

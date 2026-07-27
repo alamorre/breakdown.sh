@@ -5,6 +5,7 @@ import type {
   NodeDefinition,
   OperationFailure,
   OperationResult,
+  SelectedResultDescriptor,
   WorkflowDefinition,
 } from './index.js';
 import { canonicalizeJson } from './canonical-json.js';
@@ -46,6 +47,7 @@ export interface SubmissionIdentity {
   prepared_at: string;
   expected_attempt: number;
   context_sha256: string;
+  refresh_base?: SelectedResultDescriptor;
 }
 
 export interface WorkPacket {
@@ -69,6 +71,7 @@ export interface WorkPacket {
   };
   expected_attempt: number;
   context_sha256: string;
+  refresh_base?: SelectedResultDescriptor;
   submission: SubmissionIdentity;
 }
 
@@ -88,6 +91,10 @@ interface PrepareWorkDependencies {
 
 function failure(code: string, message: string, diagnostics: Diagnostic[] = []): OperationFailure {
   return { ok: false, failure: { kind: 'invalid', code, message, diagnostics } };
+}
+
+function conflictFailure(code: string, message: string): OperationFailure {
+  return { ok: false, failure: { kind: 'conflict', code, message, diagnostics: [] } };
 }
 
 function resourceLimitFailure(): OperationFailure {
@@ -258,7 +265,10 @@ export async function prepareWork(
   if (intent === 'refresh') {
     const target = inspected.nodes.find((node) => node.node_id === request.node_id);
     if (target?.state !== 'complete') {
-      return failure('invalid_prepare_work', 'Refresh preparation requires one complete node.');
+      return conflictFailure(
+        'refresh_target_not_complete',
+        'Refresh preparation requires one complete node.',
+      );
     }
   }
 
@@ -276,6 +286,13 @@ export async function prepareWork(
     );
     if (inputs === undefined) continue;
     const contracted = definition.data_contract !== undefined;
+    const refreshBase = intent === 'refresh' ? state.selected_result : undefined;
+    if (intent === 'refresh' && refreshBase === undefined) {
+      return conflictFailure(
+        'refresh_target_not_complete',
+        'Refresh preparation requires one complete node.',
+      );
+    }
     const packet: WorkPacket = {
       schema_version: 'breakdown.work-packet.v1',
       run_id: request.run_id,
@@ -301,6 +318,7 @@ export async function prepareWork(
       },
       expected_attempt: state.next_attempt,
       context_sha256: state.context_sha256,
+      ...(refreshBase === undefined ? {} : { refresh_base: refreshBase }),
       submission: {
         run_id: request.run_id,
         node_id: nodeId,
@@ -308,6 +326,7 @@ export async function prepareWork(
         prepared_at: preparedAt,
         expected_attempt: state.next_attempt,
         context_sha256: state.context_sha256,
+        ...(refreshBase === undefined ? {} : { refresh_base: refreshBase }),
       },
     };
     if (Buffer.byteLength(canonicalizeJson(packet), 'utf8') > FIXED_LIMITS.work_packet_bytes) {

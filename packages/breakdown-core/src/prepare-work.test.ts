@@ -85,6 +85,52 @@ async function writeStepFixture(opts: StepFixture) {
 }
 
 describe('prepare_work', () => {
+  it('should publish refresh-base requirements in the strict Work Packet contract', async () => {
+    const schema = JSON.parse(
+      await readFile(
+        new URL(
+          '../../../local/contracts/schemas/breakdown.work-packet.v1.schema.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ) as {
+      allOf: unknown[];
+      properties: {
+        refresh_base: { $ref: string };
+        submission: {
+          properties: {
+            refresh_base: { $ref: string };
+          };
+        };
+      };
+      $defs: {
+        selectedResult: {
+          additionalProperties: boolean;
+          required: string[];
+        };
+      };
+    };
+
+    expect(schema).toMatchObject({
+      allOf: expect.any(Array),
+      properties: {
+        refresh_base: { $ref: '#/$defs/selectedResult' },
+        submission: {
+          properties: {
+            refresh_base: { $ref: '#/$defs/selectedResult' },
+          },
+        },
+      },
+      $defs: {
+        selectedResult: {
+          additionalProperties: false,
+          required: ['node_id', 'attempt', 'markdown'],
+        },
+      },
+    });
+  });
+
   it('prepares deterministic bounded packets without creating durable state', async () => {
     const { project, runId } = await createProject(`
 schema_version: breakdown.workflow.v1
@@ -227,8 +273,53 @@ nodes:
     expect(refreshed.value.packets[0]).toMatchObject({
       intent: 'refresh',
       expected_attempt: 2,
-      submission: { node_id: 'one', expected_attempt: 2 },
+      refresh_base: {
+        node_id: 'one',
+        attempt: 1,
+        markdown: {
+          path: `outputs/${runId}/steps/${filename}`,
+          sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+        },
+      },
+      submission: {
+        node_id: 'one',
+        expected_attempt: 2,
+        refresh_base: {
+          node_id: 'one',
+          attempt: 1,
+          markdown: {
+            path: `outputs/${runId}/steps/${filename}`,
+            sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+          },
+        },
+      },
     });
+  });
+
+  it('should settle refresh preparation for an incomplete target as a conflict', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: incomplete-refresh
+name: Incomplete Refresh
+nodes:
+  - id: one
+    name: One
+    prompt: One.
+`);
+
+    const refreshed = await operate(
+      { operation: 'prepare_work', run_id: runId, intent: 'refresh', node_id: 'one' },
+      { projectRoot: project },
+    );
+
+    expect(refreshed).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'conflict',
+        code: 'refresh_target_not_complete',
+      },
+    });
+    expect(await readdir(join(project, 'outputs', runId, 'steps'))).toEqual([]);
   });
 
   it('reads a Workflow Input packet binding and validates integrity', async () => {

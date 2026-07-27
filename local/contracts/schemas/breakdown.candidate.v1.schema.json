@@ -5,6 +5,29 @@
   "description": "A settled Candidate Outcome. The core requires json exactly for a contracted success, problem exactly for non-success, and separately enforces UTF-8 byte limits and current Run eligibility.",
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "submission": {
+            "properties": {
+              "intent": { "const": "refresh" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "submission": { "required": ["refresh_base"] }
+        }
+      },
+      "else": {
+        "properties": {
+          "submission": { "not": { "required": ["refresh_base"] } }
+        }
+      }
+    }
+  ],
   "required": ["schema_version", "submission", "status", "executor", "markdown"],
   "oneOf": [
     {
@@ -65,6 +88,9 @@
         },
         "context_sha256": {
           "$ref": "#/$defs/sha256"
+        },
+        "refresh_base": {
+          "$ref": "#/$defs/selectedResult"
         }
       }
     },
@@ -122,6 +148,40 @@
         },
         "message": {
           "$ref": "#/$defs/nonempty"
+        }
+      }
+    },
+    "resultFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "selectedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "attempt", "markdown"],
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "markdown": {
+          "$ref": "#/$defs/resultFile"
+        },
+        "json": {
+          "$ref": "#/$defs/resultFile"
         }
       }
     },
