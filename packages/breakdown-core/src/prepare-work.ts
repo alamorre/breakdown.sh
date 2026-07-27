@@ -9,7 +9,11 @@ import type {
 } from './index.js';
 import { canonicalizeJson } from './canonical-json.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
-import { readSecureRegularFile, type SecureFileIdentity } from './secure-store.js';
+import {
+  readSecureRegularFile,
+  readSecureResultFile,
+  type SecureFileIdentity,
+} from './secure-store.js';
 
 export interface PrepareWorkRequest {
   operation: 'prepare_work';
@@ -160,7 +164,7 @@ async function makeInputDescriptors(
 
     let selectedMarkdown: Awaited<ReturnType<typeof readSecureRegularFile>>;
     try {
-      selectedMarkdown = await readSecureRegularFile(
+      selectedMarkdown = await readSecureResultFile(
         projectRoot,
         predecessor.selected_result.markdown.path,
         FIXED_LIMITS.automation_response_bytes,
@@ -179,7 +183,7 @@ async function makeInputDescriptors(
     let selectedJson: Awaited<ReturnType<typeof readSecureRegularFile>> | null = null;
     if (selectedJsonDescriptor !== undefined) {
       try {
-        selectedJson = await readSecureRegularFile(
+        selectedJson = await readSecureResultFile(
           projectRoot,
           selectedJsonDescriptor.path,
           FIXED_LIMITS.candidate_json_bytes,

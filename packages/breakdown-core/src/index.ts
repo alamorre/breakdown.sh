@@ -29,6 +29,7 @@ import {
   assertSupportedFilesystem,
   ensurePrivateDirectoryPath,
   readSecureRegularFile,
+  readSecureResultFile,
   ResourceLimitError,
   type SecureFileIdentity,
   syncDirectory,
@@ -1860,7 +1861,7 @@ async function readInputFromPacket(
 
   let markdownRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
   try {
-    markdownRead = await readSecureRegularFile(
+    markdownRead = await readSecureResultFile(
       projectRoot,
       predecessorResult.path,
       FIXED_LIMITS.automation_response_bytes,
@@ -1902,7 +1903,7 @@ async function readInputFromPacket(
   if (resultJson !== null) {
     let jsonRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
     try {
-      jsonRead = await readSecureRegularFile(
+      jsonRead = await readSecureResultFile(
         projectRoot,
         resultJson.path,
         FIXED_LIMITS.candidate_json_bytes,

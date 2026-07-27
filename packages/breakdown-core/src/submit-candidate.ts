@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { rm, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { canonicalizeJson } from './canonical-json.js';
 import { FIXED_LIMITS } from './fixed-limits.js';
 import type {
   Diagnostic,
@@ -11,6 +12,7 @@ import type {
   WorkflowDefinition,
 } from './index.js';
 import type { SubmissionIdentity, WorkPacket } from './prepare-work.js';
+import { validateDataContractInstance } from './run-inspection.js';
 import {
   ensurePrivateDirectoryPath,
   publishPrivateFileNoReplace,
@@ -39,6 +41,7 @@ export interface SuccessfulCandidateOutcome {
   status: 'succeeded';
   executor: CandidateExecutor;
   markdown: string;
+  json?: unknown;
 }
 
 export interface SubmitCandidateRequest {
@@ -60,7 +63,10 @@ export interface SubmitCandidateValue {
       path: string;
       sha256: string;
     };
-    json: null;
+    json: {
+      path: string;
+      sha256: string;
+    } | null;
   };
 }
 
@@ -68,6 +74,7 @@ export type StepPublicationBoundary =
   | 'after_lock_acquired'
   | 'after_staging_written'
   | 'before_commit'
+  | 'after_commit_visible'
   | 'after_commit';
 
 interface SubmitCandidateDependencies {
@@ -82,6 +89,10 @@ interface ValidatedCandidate {
   submission: SubmissionIdentity;
   executor: CandidateExecutor;
   markdown: string;
+  json?: {
+    value: unknown;
+    bytes: Buffer;
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -176,6 +187,7 @@ function exactFields(
   fields: readonly string[],
   path: string,
   diagnostics: Diagnostic[],
+  requiredFields: readonly string[] = fields,
 ) {
   const allowed = new Set(fields);
   for (const field of Object.keys(value)) {
@@ -185,7 +197,7 @@ function exactFields(
       );
     }
   }
-  for (const field of fields) {
+  for (const field of requiredFields) {
     if (!Object.hasOwn(value, field)) {
       diagnostics.push(diagnostic(`${path}/${field}`, `${field} is required.`));
     }
@@ -198,6 +210,130 @@ function validTimestamp(value: unknown): value is string {
     return new Date(value).toISOString() === value;
   } catch {
     return false;
+  }
+}
+
+function escapePointerSegment(segment: string) {
+  return segment.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+
+function validateStrictJsonValue(
+  value: unknown,
+  path: string,
+  depth: number,
+  activeObjects: Set<object>,
+  diagnostics: Diagnostic[],
+): boolean {
+  if (depth > FIXED_LIMITS.yaml_json_nesting_depth) return false;
+  if (diagnostics.length >= FIXED_LIMITS.diagnostics_returned) return true;
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'string') {
+    if (!isUnicodeScalarString(value)) {
+      diagnostics.push(diagnostic(path, 'JSON strings must contain valid Unicode.'));
+    }
+    return true;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      diagnostics.push(diagnostic(path, 'JSON numbers must be finite IEEE-754 values.'));
+    }
+    return true;
+  }
+  if (typeof value !== 'object') {
+    diagnostics.push(diagnostic(path, 'json must contain only strict JSON values.'));
+    return true;
+  }
+
+  if (activeObjects.has(value)) {
+    diagnostics.push(diagnostic(path, 'json must not contain circular references.'));
+    return true;
+  }
+  activeObjects.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const ownKeys = Reflect.ownKeys(value);
+      if (
+        ownKeys.some((key) => {
+          if (key === 'length') return false;
+          if (typeof key !== 'string') return true;
+          const index = Number(key);
+          return (
+            !Number.isInteger(index) || index < 0 || index >= value.length || String(index) !== key
+          );
+        })
+      ) {
+        diagnostics.push(diagnostic(path, 'JSON arrays must not have named properties.'));
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        const itemPath = `${path}/${index}`;
+        if (!Object.hasOwn(value, index)) {
+          diagnostics.push(diagnostic(itemPath, 'JSON arrays must not be sparse.'));
+          continue;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (
+          descriptor === undefined ||
+          !descriptor.enumerable ||
+          !Object.hasOwn(descriptor, 'value')
+        ) {
+          diagnostics.push(diagnostic(itemPath, 'JSON array items must be data values.'));
+          continue;
+        }
+        if (
+          !validateStrictJsonValue(
+            descriptor.value,
+            itemPath,
+            depth + 1,
+            activeObjects,
+            diagnostics,
+          )
+        ) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      diagnostics.push(diagnostic(path, 'json objects must be ordinary JSON mappings.'));
+      return true;
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== 'string') {
+        diagnostics.push(diagnostic(path, 'JSON object property names must be strings.'));
+        continue;
+      }
+      const propertyPath = `${path}/${escapePointerSegment(key)}`;
+      if (!isUnicodeScalarString(key)) {
+        diagnostics.push(
+          diagnostic(propertyPath, 'JSON object property names must contain valid Unicode.'),
+        );
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (
+        descriptor === undefined ||
+        !descriptor.enumerable ||
+        !Object.hasOwn(descriptor, 'value')
+      ) {
+        diagnostics.push(diagnostic(propertyPath, 'JSON object properties must be data values.'));
+        continue;
+      }
+      if (
+        !validateStrictJsonValue(
+          descriptor.value,
+          propertyPath,
+          depth + 1,
+          activeObjects,
+          diagnostics,
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
+  } finally {
+    activeObjects.delete(value);
   }
 }
 
@@ -214,9 +350,10 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
   const diagnostics: Diagnostic[] = [];
   exactFields(
     value,
-    ['schema_version', 'submission', 'status', 'executor', 'markdown'],
+    ['schema_version', 'submission', 'status', 'executor', 'markdown', 'json'],
     '',
     diagnostics,
+    ['schema_version', 'submission', 'status', 'executor', 'markdown'],
   );
   if (value.schema_version !== 'breakdown.candidate.v1') {
     diagnostics.push(
@@ -313,8 +450,30 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
     diagnostics.push(diagnostic('/markdown', 'markdown must use LF line endings.'));
   }
 
+  let jsonBytes: Buffer | undefined;
+  if (Object.hasOwn(value, 'json')) {
+    const withinDepthLimit = validateStrictJsonValue(
+      value.json,
+      '/json',
+      0,
+      new Set(),
+      diagnostics,
+    );
+    if (!withinDepthLimit) return resourceLimitFailure();
+    if (diagnostics.length === 0) {
+      try {
+        jsonBytes = Buffer.from(canonicalizeJson(value.json), 'utf8');
+      } catch {
+        diagnostics.push(diagnostic('/json', 'json must contain one strict JSON value.'));
+      }
+    }
+  }
+
   if (diagnostics.length > 0) return invalidCandidateFailure(diagnostics);
   if (Buffer.byteLength(value.markdown as string, 'utf8') > FIXED_LIMITS.candidate_markdown_bytes) {
+    return resourceLimitFailure();
+  }
+  if (jsonBytes !== undefined && jsonBytes.byteLength > FIXED_LIMITS.candidate_json_bytes) {
     return resourceLimitFailure();
   }
   return {
@@ -323,6 +482,7 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
       submission: submission as unknown as SubmissionIdentity,
       executor: executor as unknown as CandidateExecutor,
       markdown: value.markdown as string,
+      ...(jsonBytes === undefined ? {} : { json: { value: value.json, bytes: jsonBytes } }),
     },
   };
 }
@@ -543,10 +703,27 @@ export async function submitCandidate(
     if (definition === undefined) {
       return conflictFailure('no_longer_runnable', 'The submitted node is no longer runnable.');
     }
-    if (definition.data_contract !== undefined) {
+    const requiresJson = definition.data_contract !== undefined;
+    if (requiresJson !== (candidate.json !== undefined)) {
       return invalidCandidateFailure([
-        diagnostic('/json', 'A successful contracted Result requires JSON.'),
+        diagnostic(
+          '/json',
+          requiresJson
+            ? 'A successful contracted Result requires JSON.'
+            : 'A successful uncontracted Result must not include JSON.',
+        ),
       ]);
+    }
+    if (requiresJson && candidate.json !== undefined) {
+      const diagnostics: Diagnostic[] = [];
+      validateDataContractInstance(
+        candidate.json.value,
+        definition.data_contract,
+        'candidate',
+        '/json',
+        diagnostics,
+      );
+      if (diagnostics.length > 0) return invalidCandidateFailure(diagnostics);
     }
     const earliestStart = earliestExecutionStart(
       inspected.value,
@@ -575,27 +752,54 @@ export async function submitCandidate(
     const attempt = node.next_attempt;
     const compactSettledAt = settledAt.replaceAll('-', '').replaceAll(':', '');
     const filename = `${compactSettledAt}--${candidate.submission.node_id}--a${attempt}.md`;
+    const stem = filename.slice(0, -'.md'.length);
     const stepsRelativePath = `${inspected.value.path}/steps`;
     const relativePath = `${stepsRelativePath}/${filename}`;
+    const jsonRelativePath =
+      candidate.json === undefined ? undefined : `${stepsRelativePath}/${stem}.json`;
     const stepsPath = join(projectRoot, stepsRelativePath);
-    const stagingPath = join(
-      stepsPath,
-      `.submit-${Buffer.from(dependencies.randomBytes(8)).toString('hex')}.tmp`,
-    );
+    const stagingToken = Buffer.from(dependencies.randomBytes(8)).toString('hex');
+    const markdownStagingPath = join(stepsPath, `.submit-${stagingToken}.md.tmp`);
+    const jsonStagingPath = join(stepsPath, `.submit-${stagingToken}.json.tmp`);
     const bytes = artifactBytes(candidate, attempt, settledAt, inputs);
     if (bytes.byteLength > FIXED_LIMITS.automation_response_bytes) {
       return resourceLimitFailure();
     }
 
     try {
-      await writePrivateFile(stagingPath, bytes);
+      if (candidate.json !== undefined) {
+        await writePrivateFile(jsonStagingPath, candidate.json.bytes);
+      }
+      await writePrivateFile(markdownStagingPath, bytes);
       await syncDirectory(stepsPath);
       await dependencies.onPublicationBoundary?.('after_staging_written');
+      if (candidate.json !== undefined && jsonRelativePath !== undefined) {
+        await publishPrivateFileNoReplace(
+          jsonStagingPath,
+          join(projectRoot, jsonRelativePath),
+          () => syncDirectory(stepsPath),
+        );
+        await syncDirectory(stepsPath);
+      }
       await dependencies.onPublicationBoundary?.('before_commit');
-      await publishPrivateFileNoReplace(stagingPath, join(projectRoot, relativePath));
+      await publishPrivateFileNoReplace(
+        markdownStagingPath,
+        join(projectRoot, relativePath),
+        async () => {
+          await syncDirectory(stepsPath);
+          try {
+            await dependencies.onPublicationBoundary?.('after_commit_visible');
+          } catch {
+            // The Markdown visibility marker is committed; observation cannot roll it back.
+          }
+        },
+      );
       await syncDirectory(stepsPath);
     } catch (error) {
-      await rm(stagingPath, { force: true });
+      await Promise.all([
+        rm(markdownStagingPath, { force: true }),
+        rm(jsonStagingPath, { force: true }),
+      ]);
       if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
         return conflictFailure(
           'attempt_advanced',
@@ -610,6 +814,13 @@ export async function submitCandidate(
       // The StepArtifact is committed; a post-commit observation fault cannot roll it back.
     }
     const artifactSha256 = createHash('sha256').update(bytes).digest('hex');
+    const jsonDescriptor =
+      candidate.json === undefined || jsonRelativePath === undefined
+        ? null
+        : {
+            path: jsonRelativePath,
+            sha256: createHash('sha256').update(candidate.json.bytes).digest('hex'),
+          };
     const committedInspection = await dependencies.inspect(candidate.submission.run_id);
     if (!committedInspection.ok) return committedInspection;
     const selectedResult = committedInspection.value.nodes.find(
@@ -618,7 +829,11 @@ export async function submitCandidate(
     if (
       selectedResult?.attempt !== attempt ||
       selectedResult.markdown.path !== relativePath ||
-      selectedResult.markdown.sha256 !== artifactSha256
+      selectedResult.markdown.sha256 !== artifactSha256 ||
+      (jsonDescriptor === null
+        ? selectedResult.json !== undefined
+        : selectedResult.json?.path !== jsonDescriptor.path ||
+          selectedResult.json.sha256 !== jsonDescriptor.sha256)
     ) {
       return internalFailure('Committed inspection did not select the published Result.');
     }
@@ -638,7 +853,7 @@ export async function submitCandidate(
             path: relativePath,
             sha256: artifactSha256,
           },
-          json: null,
+          json: jsonDescriptor,
         },
       },
     };

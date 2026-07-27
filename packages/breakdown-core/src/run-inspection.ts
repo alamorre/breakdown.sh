@@ -11,6 +11,7 @@ import {
   assertSupportedFilesystem,
   readSecureDirectoryEntries,
   readSecureRegularFile,
+  readSecureResultFile,
   ResourceLimitError,
   UnsupportedFilesystemError,
 } from './secure-store.js';
@@ -449,7 +450,7 @@ function dataContractDiagnostic(
   diagnostics.push(diagnostic('data_contract', file, path, message));
 }
 
-function validateDataContractInstance(
+export function validateDataContractInstance(
   instance: unknown,
   schema: unknown,
   file: string,
@@ -1832,7 +1833,7 @@ export async function inspectRun(
     let markdownBytes: Uint8Array;
     try {
       markdownBytes = (
-        await readSecureRegularFile(projectRoot, file, FIXED_LIMITS.automation_response_bytes)
+        await readSecureResultFile(projectRoot, file, FIXED_LIMITS.automation_response_bytes)
       ).bytes;
     } catch (error) {
       if (error instanceof ResourceLimitError) return resourceLimitFailure();
@@ -1884,7 +1885,7 @@ export async function inspectRun(
     if (hasSidecar) {
       try {
         const jsonBytes = (
-          await readSecureRegularFile(projectRoot, sidecarFile, FIXED_LIMITS.candidate_json_bytes)
+          await readSecureResultFile(projectRoot, sidecarFile, FIXED_LIMITS.candidate_json_bytes)
         ).bytes;
         const jsonValue = parseStrictJson(jsonBytes, sidecarFile, diagnostics);
         if (requiresSidecar && jsonValue !== undefined) {

@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, readFile, readdir, statfs, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 
 export class ResourceLimitError extends Error {}
 export class UnsupportedFilesystemError extends Error {}
@@ -9,6 +9,10 @@ export interface SecureFileIdentity {
   device: string;
   inode: string;
   birthtime: string;
+}
+
+export interface SecureReadOptions {
+  allowPublicationStagingAlias?: boolean;
 }
 
 interface LinuxMount {
@@ -166,10 +170,47 @@ async function matchingDirectoryEntries(directoryPath: string, expectedName: str
   );
 }
 
-export async function readSecureRegularFile(
+async function hasExpectedPublicationStagingAlias(
+  path: string,
+  facts: Awaited<ReturnType<typeof lstat>>,
+) {
+  if (facts.nlink !== 2n) return false;
+  const extension = extname(path).slice(1);
+  if (extension !== 'md' && extension !== 'json') return false;
+  const stagingPattern = new RegExp(`^\\.submit-[0-9a-f]{16}\\.${extension}\\.tmp$`);
+  let matchingAliases = 0;
+  for (const entry of await readdir(dirname(path))) {
+    if (!stagingPattern.test(entry)) continue;
+    const aliasFacts = await lstat(join(dirname(path), entry), { bigint: true });
+    if (
+      !aliasFacts.isSymbolicLink() &&
+      aliasFacts.isFile() &&
+      aliasFacts.dev === facts.dev &&
+      aliasFacts.ino === facts.ino
+    ) {
+      matchingAliases += 1;
+    }
+  }
+  return matchingAliases === 1;
+}
+
+async function hasAcceptedFileLinkCount(
+  path: string,
+  facts: Awaited<ReturnType<typeof lstat>>,
+  options: SecureReadOptions,
+) {
+  return (
+    facts.nlink === 1n ||
+    (options.allowPublicationStagingAlias === true &&
+      (await hasExpectedPublicationStagingAlias(path, facts)))
+  );
+}
+
+async function readSecureRegularFileOnce(
   projectRoot: string,
   path: string,
   maximumBytes: number,
+  options: SecureReadOptions,
 ) {
   const segments = path.split('/');
   let inputPath = projectRoot;
@@ -185,10 +226,14 @@ export async function readSecureRegularFile(
     assertSameLinuxMount(linuxMounts, rootMountId, inputPath);
     const facts = await lstat(inputPath, { bigint: true });
     const isFinalSegment = index === segments.length - 1;
+    const validFinalFile =
+      isFinalSegment &&
+      facts.isFile() &&
+      (await hasAcceptedFileLinkCount(inputPath, facts, options));
     if (
       facts.isSymbolicLink() ||
       facts.dev !== projectFacts.dev ||
-      (isFinalSegment ? !facts.isFile() || facts.nlink !== 1n : !facts.isDirectory())
+      (isFinalSegment ? !validFinalFile : !facts.isDirectory())
     ) {
       throw new Error('Workflow Input path traverses a linked, mounted, or non-regular entry.');
     }
@@ -201,7 +246,7 @@ export async function readSecureRegularFile(
     const openedFactsBefore = await handle.stat({ bigint: true });
     if (
       !openedFactsBefore.isFile() ||
-      openedFactsBefore.nlink !== 1n ||
+      !(await hasAcceptedFileLinkCount(inputPath, openedFactsBefore, options)) ||
       openedFactsBefore.dev !== pathFactsBefore.dev ||
       openedFactsBefore.ino !== pathFactsBefore.ino
     ) {
@@ -250,6 +295,37 @@ export async function readSecureRegularFile(
   } finally {
     await handle.close();
   }
+}
+
+export async function readSecureRegularFile(
+  projectRoot: string,
+  path: string,
+  maximumBytes: number,
+  options: SecureReadOptions = {},
+) {
+  // Removing a recognized publication alias can change ctime during the first read.
+  // One full retry accepts only a freshly revalidated stable Result path.
+  const attempts = options.allowPublicationStagingAlias === true ? 2 : 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await readSecureRegularFileOnce(projectRoot, path, maximumBytes, options);
+    } catch (error) {
+      if (
+        attempt === attempts ||
+        error instanceof ResourceLimitError ||
+        error instanceof UnsupportedFilesystemError
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw new Error('A secure file could not be read.');
+}
+
+export function readSecureResultFile(projectRoot: string, path: string, maximumBytes: number) {
+  return readSecureRegularFile(projectRoot, path, maximumBytes, {
+    allowPublicationStagingAlias: true,
+  });
 }
 
 export async function readSecureDirectoryEntries(
@@ -317,12 +393,22 @@ export async function writePrivateFile(path: string, bytes: Uint8Array) {
   }
 }
 
-export async function publishPrivateFileNoReplace(stagingPath: string, destinationPath: string) {
+export async function publishPrivateFileNoReplace(
+  stagingPath: string,
+  destinationPath: string,
+  afterDestinationVisible?: () => void | Promise<void>,
+) {
+  // Hard-link publication is the portable atomic no-replace move available in Node.
+  // The final name is complete when it appears; removing the staging alias finishes the move.
   await link(stagingPath, destinationPath);
   try {
-    await unlink(stagingPath);
-  } catch {
-    // The complete destination is already committed. A leftover staging name is non-normative.
+    await afterDestinationVisible?.();
+  } finally {
+    try {
+      await unlink(stagingPath);
+    } catch {
+      // The no-replace destination is committed; a leftover staging alias is non-normative.
+    }
   }
 }
 

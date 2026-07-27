@@ -76,6 +76,7 @@ describe('submit_candidate', () => {
       additionalProperties: boolean;
       required: string[];
       properties: {
+        json: Record<string, never>;
         submission: {
           additionalProperties: boolean;
           required: string[];
@@ -87,6 +88,7 @@ describe('submit_candidate', () => {
       additionalProperties: false,
       required: ['schema_version', 'submission', 'status', 'executor', 'markdown'],
       properties: {
+        json: {},
         submission: {
           additionalProperties: false,
           required: [
@@ -201,6 +203,470 @@ nodes:
       '"executor": {\n    "kind": "agent",\n    "name": "Codex",\n    "version": "1.2.3",\n    "model": "example-model"\n  }',
     );
     expect(committedMarkdown).toMatch(/---\n# Result\n\nExact candidate bytes\.\n$/);
+  });
+
+  it('should publish and pass downstream one complete contracted Result', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: submit-contracted
+name: Submit Contracted
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce a contracted Result.
+    data_contract:
+      type: object
+      required: [answer, numbers, z]
+      properties:
+        answer:
+          const: yes
+        numbers:
+          type: array
+          items:
+            type: number
+        z:
+          type: boolean
+      additionalProperties: false
+  - id: consume
+    name: Consume
+    prompt: Consume the complete Result.
+    inputs:
+      source:
+        node: produce
+`);
+    const packet = await prepare(project, runId);
+    const candidate = {
+      ...successfulCandidate(packet, ''),
+      json: {
+        z: true,
+        numbers: [333333333.3333333, 1e30, 4.5, 0.002, 1e-27],
+        answer: 'yes',
+      },
+    };
+
+    const submitted = await operate(
+      { operation: 'submit_candidate', packet, candidate },
+      {
+        projectRoot: project,
+        testControls: {
+          now: () => new Date('2026-07-27T18:02:00.000Z'),
+          randomBytes: () => Buffer.alloc(8, 5),
+        },
+      },
+    );
+
+    const expectedJson =
+      '{"answer":"yes","numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"z":true}';
+    expect(submitted).toMatchObject({
+      ok: true,
+      value: {
+        result: {
+          markdown: {
+            path: `outputs/${runId}/steps/20260727T180200.000Z--produce--a1.md`,
+          },
+          json: {
+            path: `outputs/${runId}/steps/20260727T180200.000Z--produce--a1.json`,
+            sha256: 'fd7028103e991aa8b55226ce154c9509f2ad50b49b3570e509e4f192f817416a',
+          },
+        },
+      },
+    });
+    if (!submitted.ok) throw new Error(submitted.failure.code);
+    expect(await readFile(join(project, submitted.value.result.json!.path), 'utf8')).toBe(
+      expectedJson,
+    );
+    expect((await stat(join(project, submitted.value.result.json!.path))).mode & 0o777).toBe(0o600);
+
+    const committedMarkdown = await readFile(
+      join(project, submitted.value.result.markdown.path),
+      'utf8',
+    );
+    expect(committedMarkdown).toMatch(/---\n$/);
+    expect(committedMarkdown).not.toContain(expectedJson);
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: {
+        nodes: [
+          {
+            node_id: 'produce',
+            state: 'complete',
+            selected_result: {
+              markdown: submitted.value.result.markdown,
+              json: submitted.value.result.json,
+            },
+          },
+          { node_id: 'consume', state: 'runnable' },
+        ],
+      },
+    });
+
+    const consumerPrepared = await operate(
+      { operation: 'prepare_work', run_id: runId, limit: 1 },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:03:00.000Z') },
+      },
+    );
+    if (!consumerPrepared.ok) throw new Error(consumerPrepared.failure.code);
+    const consumerPacket = consumerPrepared.value.packets[0];
+    if (consumerPacket === undefined) throw new Error('No consumer packet was prepared.');
+    expect(consumerPacket.inputs.source?.result).toMatchObject({
+      node_id: 'produce',
+      attempt: 1,
+      markdown: submitted.value.result.markdown,
+      json: submitted.value.result.json,
+    });
+    const read = await operate(
+      { operation: 'read_work_input', packet: consumerPacket, binding: 'source' },
+      { projectRoot: project },
+    );
+    expect(read).toMatchObject({ ok: true, value: { kind: 'result' } });
+    if (!read.ok || read.value.kind !== 'result') {
+      throw new Error(read.ok ? 'Expected a Result Input.' : read.failure.code);
+    }
+    expect(Buffer.from(read.value.json_bytes_base64!, 'base64').toString('utf8')).toBe(
+      expectedJson,
+    );
+    expect(Buffer.from(read.value.markdown_bytes_base64, 'base64').toString('utf8')).not.toContain(
+      expectedJson,
+    );
+
+    const consumed = await operate(
+      {
+        operation: 'submit_candidate',
+        packet: consumerPacket,
+        candidate: successfulCandidate(consumerPacket, 'Consumed whole Result.'),
+      },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:04:00.000Z') },
+      },
+    );
+    expect(consumed).toMatchObject({ ok: true });
+    if (!consumed.ok) throw new Error(consumed.failure.code);
+    const consumerArtifact = await readFile(
+      join(project, consumed.value.result.markdown.path),
+      'utf8',
+    );
+    const consumerFrontmatter = JSON.parse(consumerArtifact.split('---\n')[1]!) as {
+      inputs: Record<string, unknown>;
+    };
+    expect(consumerFrontmatter.inputs.source).toEqual({
+      result: {
+        node_id: 'produce',
+        attempt: 1,
+        markdown: submitted.value.result.markdown,
+        json: submitted.value.result.json,
+      },
+    });
+  });
+
+  it('should reject contracted JSON that does not satisfy its Data Contract', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: reject-contract
+name: Reject Contract
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce a valid score.
+    data_contract:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+`);
+    const packet = await prepare(project, runId);
+    const candidate = {
+      ...successfulCandidate(packet),
+      json: { score: 0.5, extra: true },
+    };
+
+    const submitted = await operate(
+      { operation: 'submit_candidate', packet, candidate },
+      { projectRoot: project },
+    );
+
+    expect(submitted).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'invalid',
+        code: 'invalid_candidate',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            code: 'data_contract',
+            file: 'candidate',
+            path: '/json/score',
+          }),
+          expect.objectContaining({
+            code: 'data_contract',
+            file: 'candidate',
+            path: '/json/extra',
+          }),
+        ]),
+      },
+    });
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: { attempts: [], nodes: [{ state: 'runnable', next_attempt: 1 }] },
+    });
+    expect(await readdir(join(project, 'outputs', runId, 'steps'))).toEqual([]);
+  });
+
+  it('should reject values outside the strict JSON data model', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: strict-json
+name: Strict JSON
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce strict JSON.
+    data_contract: {}
+`);
+    const packet = await prepare(project, runId);
+    const sparse = Array.from({ length: 2 }, (_, index) => (index === 0 ? true : undefined));
+    delete sparse[1];
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+    const accessorArray: unknown[] = [];
+    Object.defineProperty(accessorArray, '0', {
+      enumerable: true,
+      get: () => true,
+    });
+    const namedArray: unknown[] = [];
+    Object.defineProperty(namedArray, '4294967295', {
+      enumerable: true,
+      value: true,
+    });
+    const invalidValues: unknown[] = [
+      undefined,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      1n,
+      '\uD800',
+      [undefined],
+      { value: undefined },
+      sparse,
+      accessorArray,
+      namedArray,
+      new Date('2026-07-27T18:00:00.000Z'),
+      circular,
+    ];
+
+    for (const json of invalidValues) {
+      const candidate = { ...successfulCandidate(packet), json };
+      const submitted = await operate(
+        { operation: 'submit_candidate', packet, candidate },
+        { projectRoot: project },
+      );
+      expect(submitted, String(json)).toMatchObject({
+        ok: false,
+        failure: { kind: 'invalid', code: 'invalid_candidate' },
+      });
+    }
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({ ok: true, value: { attempts: [] } });
+  });
+
+  it.each([
+    ['object', { answer: true }, '{"answer":true}'],
+    ['array', [1, 'two'], '[1,"two"]'],
+    ['string', 'root', '"root"'],
+    ['number', 1.5, '1.5'],
+    ['integer', 1, '1'],
+    ['boolean', false, 'false'],
+    ['null', null, 'null'],
+  ] as const)('should accept a permitted %s root JSON value', async (type, json, expectedBytes) => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: root-${type}
+name: Root ${type}
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce a root ${type}.
+    data_contract:
+      type: ${type === 'null' ? '"null"' : type}
+`);
+    const packet = await prepare(project, runId);
+    const candidate = { ...successfulCandidate(packet), json };
+
+    const submitted = await operate(
+      { operation: 'submit_candidate', packet, candidate },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+      },
+    );
+
+    expect(submitted).toMatchObject({
+      ok: true,
+      value: { result: { json: { path: expect.any(String) } } },
+    });
+    if (!submitted.ok || submitted.value.result.json === null) {
+      throw new Error(submitted.ok ? 'Expected a JSON Result.' : submitted.failure.code);
+    }
+    expect(await readFile(join(project, submitted.value.result.json.path), 'utf8')).toBe(
+      expectedBytes,
+    );
+  });
+
+  it('should record raw JSON bytes independently from semantic JSON equality', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: raw-json
+name: Raw JSON
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce JSON.
+    data_contract:
+      type: object
+  - id: consume
+    name: Consume
+    prompt: Consume JSON.
+    inputs:
+      source:
+        node: produce
+`);
+    const packet = await prepare(project, runId);
+    const candidate = { ...successfulCandidate(packet), json: { b: 2, a: 1 } };
+    const submitted = await operate(
+      { operation: 'submit_candidate', packet, candidate },
+      {
+        projectRoot: project,
+        testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+      },
+    );
+    if (!submitted.ok || submitted.value.result.json === null) {
+      throw new Error(submitted.ok ? 'Expected a JSON Result.' : submitted.failure.code);
+    }
+    expect(submitted.value.result.json.sha256).toBe(
+      '43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777',
+    );
+    const canonicalPacket = await prepare(project, runId);
+
+    await writeFile(
+      join(project, submitted.value.result.json.path),
+      '{ "b": 2, "a": 1 }\n',
+      'utf8',
+    );
+
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected.ok && inspected.value.nodes[0]?.selected_result?.json?.sha256).toBe(
+      'b9257cb792a3036e75f0c65d7dd3a7f38e5f6982652077a1c597e8957002d5b8',
+    );
+    const rawPacket = await prepare(project, runId);
+    expect(rawPacket.context_sha256).not.toBe(canonicalPacket.context_sha256);
+    expect(rawPacket.inputs.source?.result?.json).toMatchObject({
+      path: submitted.value.result.json.path,
+      sha256: 'b9257cb792a3036e75f0c65d7dd3a7f38e5f6982652077a1c597e8957002d5b8',
+    });
+  });
+
+  it('should accept the exact JSON byte limit and reject larger or deeper JSON', async () => {
+    const exact = await createProject(`
+schema_version: breakdown.workflow.v1
+id: exact-json-limit
+name: Exact JSON Limit
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce maximum JSON.
+    data_contract:
+      type: string
+`);
+    const exactPacket = await prepare(exact.project, exact.runId);
+    const exactCandidate = {
+      ...successfulCandidate(exactPacket),
+      json: 'x'.repeat(524_286),
+    };
+    const accepted = await operate(
+      { operation: 'submit_candidate', packet: exactPacket, candidate: exactCandidate },
+      {
+        projectRoot: exact.project,
+        testControls: { now: () => new Date('2026-07-27T18:02:00.000Z') },
+      },
+    );
+    expect(accepted).toMatchObject({ ok: true });
+    if (!accepted.ok || accepted.value.result.json === null) {
+      throw new Error(accepted.ok ? 'Expected a JSON Result.' : accepted.failure.code);
+    }
+    expect((await stat(join(exact.project, accepted.value.result.json.path))).size).toBe(524_288);
+
+    const oversized = await createProject(`
+schema_version: breakdown.workflow.v1
+id: large-json
+name: Large JSON
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce oversized JSON.
+    data_contract:
+      type: string
+`);
+    const oversizedPacket = await prepare(oversized.project, oversized.runId);
+    const oversizedCandidate = {
+      ...successfulCandidate(oversizedPacket),
+      json: 'x'.repeat(524_287),
+    };
+    await expect(
+      operate(
+        {
+          operation: 'submit_candidate',
+          packet: oversizedPacket,
+          candidate: oversizedCandidate,
+        },
+        { projectRoot: oversized.project },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'resource_limit', code: 'limit_exceeded' },
+    });
+
+    const tooDeep = await createProject(`
+schema_version: breakdown.workflow.v1
+id: deep-json
+name: Deep JSON
+nodes:
+  - id: produce
+    name: Produce
+    prompt: Produce deep JSON.
+    data_contract: {}
+`);
+    const tooDeepPacket = await prepare(tooDeep.project, tooDeep.runId);
+    let deepValue: unknown = true;
+    for (let depth = 0; depth < 65; depth += 1) deepValue = [deepValue];
+    const deepCandidate = { ...successfulCandidate(tooDeepPacket), json: deepValue };
+    await expect(
+      operate(
+        { operation: 'submit_candidate', packet: tooDeepPacket, candidate: deepCandidate },
+        { projectRoot: tooDeep.project },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'resource_limit', code: 'limit_exceeded' },
+    });
   });
 
   it('serializes concurrent submission with one observable per-Run writer lock', async () => {
@@ -637,6 +1103,147 @@ nodes:
 
     const mode = (await stat(destination)).mode & 0o777;
     expect(mode).toBe(0o600);
+  });
+
+  it('should commit JSON before Markdown and ignore an orphan after a pre-commit crash', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: contracted-crash
+name: Contracted Crash
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Publish atomically.
+    data_contract:
+      type: object
+`);
+    const packet = await prepare(project, runId);
+    const markdownDestination = join(
+      project,
+      'outputs',
+      runId,
+      'steps',
+      '20260727T180200.000Z--execute--a1.md',
+    );
+    const jsonDestination = markdownDestination.replace(/\.md$/, '.json');
+    let observedJsonBeforeMarkdown = false;
+
+    const submitted = await operate(
+      {
+        operation: 'submit_candidate',
+        packet,
+        candidate: { ...successfulCandidate(packet), json: { committed: true } },
+      },
+      {
+        projectRoot: project,
+        testControls: {
+          now: () => new Date('2026-07-27T18:02:00.000Z'),
+          randomBytes: () => Buffer.alloc(8, 6),
+          onStepPublicationBoundary: async (boundary) => {
+            if (boundary !== 'before_commit') return;
+            expect(await readFile(jsonDestination, 'utf8')).toBe('{"committed":true}');
+            await expect(stat(markdownDestination)).rejects.toMatchObject({ code: 'ENOENT' });
+            observedJsonBeforeMarkdown = true;
+            throw new Error('simulated crash before the logical commit');
+          },
+        },
+      },
+    );
+
+    expect(observedJsonBeforeMarkdown).toBe(true);
+    expect(submitted).toMatchObject({
+      ok: false,
+      failure: { kind: 'io', code: 'io_error' },
+    });
+    expect(await readdir(join(project, 'outputs', runId, 'steps'))).toEqual([
+      '20260727T180200.000Z--execute--a1.json',
+    ]);
+    const inspected = await operate(
+      { operation: 'inspect_run', run_id: runId },
+      { projectRoot: project },
+    );
+    expect(inspected).toMatchObject({
+      ok: true,
+      value: {
+        attempts: [],
+        nodes: [{ node_id: 'execute', state: 'runnable', next_attempt: 1 }],
+      },
+    });
+    expect(await readdir(join(project, '.breakdown', 'locks', 'runs'))).toEqual([]);
+  });
+
+  it('should keep the logical commit valid during no-replace publication', async () => {
+    const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: commit-visibility
+name: Commit Visibility
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Publish one complete Result.
+    data_contract:
+      type: object
+`);
+    const packet = await prepare(project, runId);
+    const markdownDestination = join(
+      project,
+      'outputs',
+      runId,
+      'steps',
+      '20260727T180200.000Z--execute--a1.md',
+    );
+    let observedValidCommit = false;
+
+    const submitted = await operate(
+      {
+        operation: 'submit_candidate',
+        packet,
+        candidate: { ...successfulCandidate(packet), json: { complete: true } },
+      },
+      {
+        projectRoot: project,
+        testControls: {
+          now: () => new Date('2026-07-27T18:02:00.000Z'),
+          randomBytes: () => Buffer.alloc(8, 7),
+          onStepPublicationBoundary: async (boundary) => {
+            if (boundary !== 'after_commit_visible') return;
+            expect((await stat(markdownDestination)).nlink).toBe(2);
+            const inspected = await operate(
+              { operation: 'inspect_run', run_id: runId },
+              { projectRoot: project },
+            );
+            expect(inspected).toMatchObject({
+              ok: true,
+              value: {
+                nodes: [
+                  {
+                    node_id: 'execute',
+                    state: 'complete',
+                    selected_result: {
+                      markdown: {
+                        path: `outputs/${runId}/steps/20260727T180200.000Z--execute--a1.md`,
+                      },
+                      json: {
+                        path: `outputs/${runId}/steps/20260727T180200.000Z--execute--a1.json`,
+                      },
+                    },
+                  },
+                ],
+              },
+            });
+            observedValidCommit = true;
+          },
+        },
+      },
+    );
+
+    expect(submitted).toMatchObject({ ok: true });
+    expect(observedValidCommit).toBe(true);
+    expect((await stat(markdownDestination)).nlink).toBe(1);
+    expect((await readdir(join(project, 'outputs', runId, 'steps'))).sort()).toEqual([
+      '20260727T180200.000Z--execute--a1.json',
+      '20260727T180200.000Z--execute--a1.md',
+    ]);
   });
 
   it('reports success only after committed inspection selects the Result', async () => {
