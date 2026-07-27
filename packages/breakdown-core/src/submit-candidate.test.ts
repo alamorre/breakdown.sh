@@ -373,6 +373,12 @@ nodes:
   - id: write
     name: Write
     prompt: Write the largest accepted Markdown Result.
+  - id: consume
+    name: Consume
+    prompt: Consume the largest accepted Markdown Result.
+    inputs:
+      source:
+        node: write
 `);
     const exactPacket = await prepare(exact.project, exact.runId);
     const accepted = await operate(
@@ -387,6 +393,21 @@ nodes:
       },
     );
     expect(accepted).toMatchObject({ ok: true, value: { attempt: 1 } });
+
+    const consumerPacket = await prepare(exact.project, exact.runId);
+    expect(consumerPacket.node.id).toBe('consume');
+    const read = await operate(
+      { operation: 'read_work_input', packet: consumerPacket, binding: 'source' },
+      { projectRoot: exact.project },
+    );
+    expect(read).toMatchObject({
+      ok: true,
+      value: { kind: 'result', json_bytes_base64: null },
+    });
+    if (!read.ok || read.value.kind !== 'result') throw new Error('Result Input was not read.');
+    expect(Buffer.from(read.value.markdown_bytes_base64, 'base64').subarray(-524_288)).toEqual(
+      Buffer.from('x'.repeat(524_288)),
+    );
 
     const contracted = await createProject(`
 schema_version: breakdown.workflow.v1

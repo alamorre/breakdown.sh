@@ -69,7 +69,7 @@ export interface CreateRunRequest {
   inputs?: Record<string, string>;
 }
 
-export interface ReadWorkInputRequest {
+export interface ReadInputRequest {
   operation: 'read_work_input';
   packet: WorkPacket;
   binding: string;
@@ -86,7 +86,7 @@ export interface ReadResultInputValue {
   json_bytes_base64: string | null;
 }
 
-export type ReadWorkInputValue = ReadWorkflowInputValue | ReadResultInputValue;
+export type ReadInputValue = ReadWorkflowInputValue | ReadResultInputValue;
 
 export interface ProducerIdentity {
   name: string;
@@ -257,9 +257,7 @@ function readWorkInputFailure(
       kind,
       code,
       message:
-        code === 'invalid_work_input'
-          ? 'The Work Input is invalid.'
-          : 'The Work Packet is invalid.',
+        code === 'invalid_work_input' ? 'The Input is invalid.' : 'The Work Packet is invalid.',
       diagnostics,
     },
   };
@@ -1555,10 +1553,10 @@ function normalizePathDiagnostic(path: string, code: string, message: string) {
   return { code, path, message, file: 'work-packet' };
 }
 
-async function readWorkInput(
-  request: ReadWorkInputRequest,
+async function readInputFromPacket(
+  request: ReadInputRequest,
   trustedContext: TrustedContext,
-): Promise<OperationResult<ReadWorkInputValue>> {
+): Promise<OperationResult<ReadInputValue>> {
   const packet = request.packet;
   const binding = request.binding;
   if (!isRecord(packet)) {
@@ -1651,7 +1649,7 @@ async function readWorkInput(
   if (!inspected.ok) return inspected;
 
   const inspectedNode = inspected.value.nodes.find(
-    (candidate) => candidate.node_id === packet.submission.node_id,
+    (inspectedNode) => inspectedNode.node_id === packet.submission.node_id,
   );
   if (
     inspectedNode === undefined ||
@@ -1802,7 +1800,7 @@ async function readWorkInput(
     ]);
   }
   const predecessorNode = inspected.value.nodes.find(
-    (candidate) => candidate.node_id === resultRef.node_id,
+    (inspectedNode) => inspectedNode.node_id === resultRef.node_id,
   );
   if (predecessorNode === undefined || predecessorNode.selected_result === undefined) {
     return readWorkInputFailure([
@@ -1865,7 +1863,7 @@ async function readWorkInput(
     markdownRead = await readSecureRegularFile(
       projectRoot,
       predecessorResult.path,
-      FIXED_LIMITS.candidate_markdown_bytes,
+      FIXED_LIMITS.automation_response_bytes,
     );
   } catch {
     return readWorkInputFailure([
@@ -1967,9 +1965,9 @@ export function operate(
   trustedContext: TrustedContext,
 ): Promise<OperationResult<PrepareWorkValue>>;
 export function operate(
-  request: ReadWorkInputRequest,
+  request: ReadInputRequest,
   trustedContext: TrustedContext,
-): Promise<OperationResult<ReadWorkInputValue>>;
+): Promise<OperationResult<ReadInputValue>>;
 export function operate(
   request: SubmitCandidateRequest,
   trustedContext: TrustedContext,
@@ -1984,7 +1982,7 @@ export async function operate(
     | CreateRunRequest
     | InspectRunRequest
     | PrepareWorkRequest
-    | ReadWorkInputRequest
+    | ReadInputRequest
     | SubmitCandidateRequest,
   trustedContext: TrustedContext,
 ): Promise<
@@ -1993,7 +1991,7 @@ export async function operate(
     | CreateRunValue
     | InspectRunValue
     | PrepareWorkValue
-    | ReadWorkInputValue
+    | ReadInputValue
     | SubmitCandidateValue
   >
 > {
@@ -2105,7 +2103,7 @@ export async function operate(
   }
 
   if (requestedOperation === 'read_work_input') {
-    return readWorkInput(request as ReadWorkInputRequest, trustedContext);
+    return readInputFromPacket(request as ReadInputRequest, trustedContext);
   }
 
   if (requestedOperation === 'submit_candidate') {

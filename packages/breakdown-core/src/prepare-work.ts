@@ -163,7 +163,7 @@ async function makeInputDescriptors(
       selectedMarkdown = await readSecureRegularFile(
         projectRoot,
         predecessor.selected_result.markdown.path,
-        FIXED_LIMITS.candidate_markdown_bytes,
+        FIXED_LIMITS.automation_response_bytes,
       );
     } catch {
       return undefined;

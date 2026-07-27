@@ -583,6 +583,9 @@ export async function submitCandidate(
       `.submit-${Buffer.from(dependencies.randomBytes(8)).toString('hex')}.tmp`,
     );
     const bytes = artifactBytes(candidate, attempt, settledAt, inputs);
+    if (bytes.byteLength > FIXED_LIMITS.automation_response_bytes) {
+      return resourceLimitFailure();
+    }
 
     try {
       await writePrivateFile(stagingPath, bytes);
