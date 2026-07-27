@@ -74,10 +74,19 @@
     "submission": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["run_id", "node_id", "expected_attempt", "context_sha256"],
+      "required": [
+        "run_id",
+        "node_id",
+        "intent",
+        "prepared_at",
+        "expected_attempt",
+        "context_sha256"
+      ],
       "properties": {
         "run_id": { "type": "string" },
         "node_id": { "type": "string" },
+        "intent": { "enum": ["resume", "refresh"] },
+        "prepared_at": { "type": "string", "format": "date-time" },
         "expected_attempt": { "type": "integer", "minimum": 1 },
         "context_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }

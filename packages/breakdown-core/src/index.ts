@@ -15,6 +15,12 @@ import { FIXED_LIMITS } from './fixed-limits.js';
 import { inspectRun, type InspectRunRequest, type InspectRunValue } from './run-inspection.js';
 import { prepareWork, type PrepareWorkRequest, type PrepareWorkValue } from './prepare-work.js';
 import {
+  submitCandidate,
+  type StepPublicationBoundary,
+  type SubmitCandidateRequest,
+  type SubmitCandidateValue,
+} from './submit-candidate.js';
+import {
   assertSupportedFilesystem,
   ensurePrivateDirectoryPath,
   readSecureRegularFile,
@@ -35,7 +41,19 @@ export type {
   ResultFileDescriptor,
   SelectedResultDescriptor,
 } from './run-inspection.js';
-export type { PrepareWorkRequest, PrepareWorkValue, WorkPacket } from './prepare-work.js';
+export type {
+  PrepareWorkRequest,
+  PrepareWorkValue,
+  SubmissionIdentity,
+  WorkPacket,
+} from './prepare-work.js';
+export type {
+  CandidateExecutor,
+  CandidateSubmission,
+  SuccessfulCandidateOutcome,
+  SubmitCandidateRequest,
+  SubmitCandidateValue,
+} from './submit-candidate.js';
 
 export interface ValidateWorkflowRequest {
   operation: 'validate_workflow';
@@ -66,6 +84,9 @@ export interface TrustedContext {
     now?: () => Date;
     randomBytes?: (size: number) => Uint8Array;
     onRunPublicationBoundary?: (boundary: RunPublicationBoundary) => void | Promise<void>;
+    onStepPublicationBoundary?: (
+      boundary: StepPublicationBoundary,
+    ) => void | Promise<void>;
   };
 }
 
@@ -1464,20 +1485,36 @@ export function operate(
   trustedContext: TrustedContext,
 ): Promise<OperationResult<PrepareWorkValue>>;
 export function operate(
+  request: SubmitCandidateRequest,
+  trustedContext: TrustedContext,
+): Promise<OperationResult<SubmitCandidateValue>>;
+export function operate(
   request: InspectRunRequest,
   trustedContext: TrustedContext,
 ): Promise<OperationResult<InspectRunValue>>;
 export async function operate(
-  request: ValidateWorkflowRequest | CreateRunRequest | InspectRunRequest | PrepareWorkRequest,
+  request:
+    | ValidateWorkflowRequest
+    | CreateRunRequest
+    | InspectRunRequest
+    | PrepareWorkRequest
+    | SubmitCandidateRequest,
   trustedContext: TrustedContext,
 ): Promise<
-  OperationResult<ValidateWorkflowValue | CreateRunValue | InspectRunValue | PrepareWorkValue>
+  OperationResult<
+    | ValidateWorkflowValue
+    | CreateRunValue
+    | InspectRunValue
+    | PrepareWorkValue
+    | SubmitCandidateValue
+  >
 > {
   const requestedOperation = (request as { operation?: unknown }).operation;
   if (
     requestedOperation !== 'create_run' &&
     requestedOperation !== 'inspect_run' &&
     requestedOperation !== 'prepare_work' &&
+    requestedOperation !== 'submit_candidate' &&
     requestedOperation !== 'validate_workflow'
   ) {
     return {
@@ -1575,6 +1612,57 @@ export async function operate(
     } catch {
       return ioFailure('Could not read the Workflow Snapshot.');
     }
+  }
+
+  if (requestedOperation === 'submit_candidate') {
+    let projectRoot: string;
+    try {
+      projectRoot = await realpath(trustedContext.projectRoot);
+    } catch {
+      return ioFailure('Could not select the project root.');
+    }
+    return submitCandidate(request as SubmitCandidateRequest, projectRoot, {
+      inspect: (runId) =>
+        operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+      loadWorkflow: async (inspected) => {
+        let snapshotBytes: Buffer;
+        try {
+          snapshotBytes = Buffer.from(
+            (
+              await readSecureRegularFile(
+                projectRoot,
+                `${inspected.path}/breakdown.yaml`,
+                FIXED_LIMITS.workflow_definition_bytes,
+              )
+            ).bytes,
+          );
+        } catch (error) {
+          if (error instanceof ResourceLimitError) return resourceLimitFailure();
+          return ioFailure('Could not securely read the Workflow Snapshot.');
+        }
+        if (sha256(snapshotBytes) !== inspected.workflow.sha256) {
+          return {
+            ok: false,
+            failure: {
+              kind: 'invalid',
+              code: 'invalid_run',
+              message: 'The Run changed while submission was in progress.',
+              diagnostics: [],
+            },
+          };
+        }
+        const snapshot = await operate({ operation: 'validate_workflow' }, {
+          projectRoot,
+          definitionBytes: snapshotBytes,
+        } as InternalTrustedContext);
+        return snapshot.ok
+          ? { ok: true, value: snapshot.value.workflow }
+          : snapshot;
+      },
+      now: trustedContext.testControls?.now ?? (() => new Date()),
+      randomBytes: trustedContext.testControls?.randomBytes ?? randomBytes,
+      onPublicationBoundary: trustedContext.testControls?.onStepPublicationBoundary,
+    });
   }
 
   let bytes: Buffer;

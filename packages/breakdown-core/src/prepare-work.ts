@@ -32,6 +32,15 @@ export interface WorkPacketInput {
   };
 }
 
+export interface SubmissionIdentity {
+  run_id: string;
+  node_id: string;
+  intent: 'resume' | 'refresh';
+  prepared_at: string;
+  expected_attempt: number;
+  context_sha256: string;
+}
+
 export interface WorkPacket {
   schema_version: 'breakdown.work-packet.v1';
   run_id: string;
@@ -53,12 +62,7 @@ export interface WorkPacket {
   };
   expected_attempt: number;
   context_sha256: string;
-  submission: {
-    run_id: string;
-    node_id: string;
-    expected_attempt: number;
-    context_sha256: string;
-  };
+  submission: SubmissionIdentity;
 }
 
 export interface PrepareWorkValue {
@@ -226,6 +230,8 @@ export async function prepareWork(
       submission: {
         run_id: request.run_id,
         node_id: nodeId,
+        intent,
+        prepared_at: preparedAt,
         expected_attempt: state.next_attempt,
         context_sha256: state.context_sha256,
       },

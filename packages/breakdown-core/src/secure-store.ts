@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, readdir, statfs } from 'node:fs/promises';
+import { link, lstat, mkdir, open, readFile, readdir, statfs, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export class ResourceLimitError extends Error {}
@@ -314,6 +314,15 @@ export async function writePrivateFile(path: string, bytes: Uint8Array) {
     await handle.sync();
   } finally {
     await handle.close();
+  }
+}
+
+export async function publishPrivateFileNoReplace(stagingPath: string, destinationPath: string) {
+  await link(stagingPath, destinationPath);
+  try {
+    await unlink(stagingPath);
+  } catch {
+    // The complete destination is already committed. A leftover staging name is non-normative.
   }
 }
 
