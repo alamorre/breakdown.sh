@@ -135,16 +135,22 @@ importers:
 
   packages/breakdown-mcp:
     dependencies:
+      '@breakdown-sh/core':
+        specifier: workspace:1.0.0-beta.1
+        version: link:../breakdown-core
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.3.6)
       zod:
-        specifier: ^4.3.6
+        specifier: 4.3.6
         version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: ^20
         version: 20.19.37
+      ajv:
+        specifier: 8.18.0
+        version: 8.18.0
       typescript:
         specifier: ^5
         version: 5.9.3

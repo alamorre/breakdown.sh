@@ -387,7 +387,7 @@ nodes:
           },
         },
         producer: {
-          name: '@breakdown-sh/cli',
+          name: '@breakdown-sh/core',
           version: '1.0.0-beta.1',
         },
       },
@@ -1399,7 +1399,7 @@ nodes:
           },
         },
         producer: {
-          name: '@breakdown-sh/cli',
+          name: '@breakdown-sh/core',
           version: '1.0.0-beta.1',
         },
       },

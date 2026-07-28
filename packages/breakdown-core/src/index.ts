@@ -299,6 +299,25 @@ export interface OperationFailure {
 
 export type OperationResult<T> = OperationSuccess<T> | OperationFailure;
 
+export const OPERATION_REQUEST_SCHEMA_VERSION = 'breakdown.operation-request.v1';
+
+export function unsupportedOperationRequestFailure(
+  reason: 'unsupported_version' | 'unsupported_operation',
+): OperationFailure {
+  return {
+    ok: false,
+    failure: {
+      kind: 'unsupported',
+      code: reason,
+      message:
+        reason === 'unsupported_version'
+          ? 'The automation request uses an unsupported version.'
+          : 'The requested operation is not supported.',
+      diagnostics: [],
+    },
+  };
+}
+
 function validationFailure(
   diagnostics: Diagnostic[],
   kind: OperationFailure['failure']['kind'] = 'invalid',

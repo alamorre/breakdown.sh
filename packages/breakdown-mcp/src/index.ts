@@ -1,817 +1,321 @@
 #!/usr/bin/env node
 
-import { randomUUID } from 'node:crypto';
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
+import { isAbsolute } from 'node:path';
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  InitializeRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import {
+  OPERATION_REQUEST_SCHEMA_VERSION,
+  operate,
+  type CandidateOutcome,
+  type LockRecoveryIntent,
+  type OperationFailure,
+  type OperationResult,
+  type PrepareWorkRequest,
+  type SubmitCandidateRequest,
+  type WorkPacket,
+  unsupportedOperationRequestFailure,
+} from '@breakdown-sh/core';
 
-interface HeadlessEnvelope<T = unknown> {
-  data: T | null;
-  error: null | {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-}
+import { OPERATION_NAMES, TOOL_CATALOG } from './protocol-assets.js';
+import {
+  validateCreateRunArguments,
+  validateInspectRunArguments,
+  validatePrepareWorkArguments,
+  validateReadWorkInputArguments,
+  validateSubmitCandidateArguments,
+  validateValidateWorkflowArguments,
+  type ProtocolValidator,
+} from './protocol-validators.js';
+import { BreakdownStdioTransport } from './stdio-transport.js';
 
-const BASE_URL = process.env.BREAKDOWN_BASE_URL ?? 'http://localhost:3000';
-const TOKEN_ENV_VAR = 'BREAKDOWN_API_TOKEN';
-const DIAGNOSTIC_TOOL = 'diagnose_breakdown_setup';
-const EXTERNAL_EVALUATOR_TOOLS = [
-  'create_external_run',
-  'get_next_step',
-  'get_step_context',
-  'submit_step_result',
-  'mark_step_blocked',
-  'finalize_external_run',
-  'summarize_run_delta',
-];
-const EXTERNAL_EVALUATOR_SCOPES = ['graphs:read', 'runs:external_execute', 'runs:write_results'];
+const RELEASE_VERSION = '1.0.0-beta.1';
+const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-11-25'];
+const PREFERRED_PROTOCOL_VERSION = '2025-11-25';
+type Operation = (typeof OPERATION_NAMES)[number];
 
-function readApiToken() {
-  return process.env[TOKEN_ENV_VAR]?.trim();
-}
-
-function endpoint(path: string) {
-  return new URL(path, BASE_URL).toString();
-}
+const ARGUMENT_VALIDATORS: Record<Operation, ProtocolValidator> = {
+  validate_workflow: validateValidateWorkflowArguments,
+  create_run: validateCreateRunArguments,
+  inspect_run: validateInspectRunArguments,
+  prepare_work: validatePrepareWorkArguments,
+  read_work_input: validateReadWorkInputArguments,
+  submit_candidate: validateSubmitCandidateArguments,
+};
+const exactJson = JSON as typeof JSON & {
+  isRawJSON(value: unknown): boolean;
+  rawJSON(text: string): object;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function missingTokenDiagnostics() {
+function normalizeForJson(value: unknown): unknown {
+  if (typeof value === 'bigint') return exactJson.rawJSON(value.toString());
+  if (value === null || typeof value !== 'object' || exactJson.isRawJSON(value)) return value;
+  if (Array.isArray(value)) return value.map(normalizeForJson);
+
+  const normalized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (item !== undefined) normalized[key] = normalizeForJson(item);
+  }
+  return normalized;
+}
+
+function operationEnvelope(
+  operation: Operation,
+  result: OperationResult<unknown>,
+): Record<string, unknown> {
+  return normalizeForJson({
+    schema_version: 'breakdown.mcp-output.v1',
+    release_version: RELEASE_VERSION,
+    supported_operation_schemas: [OPERATION_REQUEST_SCHEMA_VERSION],
+    operation,
+    ok: result.ok,
+    data: result.ok ? result.value : null,
+    error: result.ok ? null : result.failure,
+  }) as Record<string, unknown>;
+}
+
+function toolResult(operation: Operation, result: OperationResult<unknown>) {
+  const envelope = operationEnvelope(operation, result);
+  const text = JSON.stringify(envelope);
   return {
-    version: 'codex-setup-diagnostics.v1',
+    content: [{ type: 'text' as const, text }],
+    structuredContent: envelope,
+    ...(result.ok ? {} : { isError: true }),
+  };
+}
+
+function invalidProjectRootFailure(): OperationFailure {
+  return {
     ok: false,
-    state: 'missing_token',
-    summary: `${TOKEN_ENV_VAR} is not available to the Breakdown MCP process.`,
-    toolSurface: {
-      diagnosticTool: DIAGNOSTIC_TOOL,
-      externalEvaluatorTools: EXTERNAL_EVALUATOR_TOOLS,
-      externalEvaluatorToolsAvailable: false,
-      reason: 'Protected Breakdown tools require a bearer token before they can call the API.',
-    },
-    scopes: {
-      requiredForExternalEvaluator: EXTERNAL_EVALUATOR_SCOPES,
-      granted: [],
-      missing: EXTERNAL_EVALUATOR_SCOPES,
-    },
-    setup: {
-      agentSetupSessionsUrl: endpoint('/api/integrations/agent-setup-sessions'),
-      diagnosticsUrl: endpoint('/api/integrations/codex/diagnostics'),
-      mcpUrl: endpoint('/api/mcp'),
-      nextSteps: [
-        'Create a durable MCP connection token from Breakdown Settings under MCP Access, or create and approve an agent setup session.',
-        `Set ${TOKEN_ENV_VAR} in the environment or secret store that starts the MCP client.`,
-        `Run ${DIAGNOSTIC_TOOL} again to verify the token and scopes.`,
+    failure: {
+      kind: 'invalid',
+      code: 'invalid_path',
+      message: 'The project root must be an absolute OS-native path.',
+      diagnostics: [
+        {
+          code: 'invalid_path',
+          path: '/project_root',
+          message: 'project_root must be an absolute OS-native path.',
+        },
       ],
-      durableConnection:
-        'A bdk token remains valid until revoked, rotated, or until its optional expiry.',
-      agentSetup:
-        'Agent setup sessions are short-lived approval ceremonies that exchange into the same durable bdk token type.',
     },
   };
 }
 
-async function readCodexDiagnostics() {
-  const apiToken = readApiToken();
-  if (!apiToken) {
-    return missingTokenDiagnostics();
-  }
-
-  const response = await fetch(endpoint('/api/integrations/codex/diagnostics'), {
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-      Accept: 'application/json',
-    },
-  });
-  const body = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    return {
-      version: 'codex-setup-diagnostics.v1',
-      ok: false,
-      state: 'auth_error',
-      summary: `Breakdown diagnostics request failed with HTTP ${response.status}.`,
-      response: body,
-    };
-  }
-
-  return isRecord(body) && 'data' in body ? body.data : body;
+function isOperation(value: string): value is Operation {
+  return OPERATION_NAMES.some((operation) => operation === value);
 }
 
-async function headlessRequest<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
-  const apiToken = readApiToken();
-  if (!apiToken) {
-    throw new Error(
-      `${TOKEN_ENV_VAR} is not available. Call ${DIAGNOSTIC_TOOL} for setup diagnostics.`,
-    );
+class AdapterProtocolError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AdapterProtocolError';
   }
-
-  const response = await fetch(endpoint(path), {
-    method,
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-      Accept: 'application/json',
-      ...(body === undefined
-        ? {}
-        : {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': randomUUID(),
-          }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-
-  const envelope = (await response.json()) as HeadlessEnvelope<T>;
-  if (!response.ok || envelope.error) {
-    const message = envelope.error?.message ?? `Breakdown API request failed: ${response.status}`;
-    throw new Error(message);
-  }
-
-  return envelope.data as T;
 }
 
-function textResult(data: unknown) {
+function protocolError(code: number, message: string) {
+  return new AdapterProtocolError(code, message);
+}
+
+let initializeSeen = false;
+let initialized = false;
+const activeInvocations = new Set<Promise<void>>();
+const server = new Server(
+  {
+    name: '@breakdown-sh/mcp',
+    title: 'Breakdown Local',
+    version: RELEASE_VERSION,
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  },
+);
+
+server.setRequestHandler(InitializeRequestSchema, async (request) => {
+  if (initializeSeen) {
+    throw protocolError(ErrorCode.InvalidRequest, 'Server is already initialized.');
+  }
+  initializeSeen = true;
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(data, null, 2),
-      },
-    ],
+    protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(request.params.protocolVersion)
+      ? request.params.protocolVersion
+      : PREFERRED_PROTOCOL_VERSION,
+    capabilities: { tools: {} },
+    serverInfo: {
+      name: '@breakdown-sh/mcp',
+      title: 'Breakdown Local',
+      version: RELEASE_VERSION,
+    },
   };
-}
-
-function resourceText(uri: URL, data: unknown) {
-  return {
-    contents: [
-      {
-        uri: uri.href,
-        mimeType: 'application/json',
-        text: JSON.stringify(data, null, 2),
-      },
-    ],
-  };
-}
-
-const jsonRecord = z.record(z.string(), z.unknown());
-const uuid = z.string().uuid();
-
-const graphInput = {
-  graphId: uuid.describe('Breakdown graph id'),
-};
-
-const nodeInput = {
-  nodeId: uuid.describe('Breakdown node id'),
-};
-
-const edgeInput = {
-  edgeId: uuid.describe('Breakdown edge id'),
-};
-
-const runInput = {
-  runId: uuid.describe('External run id'),
-};
-
-const server = new McpServer({
-  name: 'breakdown-mcp',
-  version: '0.1.0',
 });
 
-server.registerTool(
-  DIAGNOSTIC_TOOL,
-  {
-    title: 'Diagnose Breakdown Setup',
-    description:
-      'Check whether Breakdown MCP is loaded, authenticated, scoped for external-evaluator mode, and ready for Codex use.',
-    inputSchema: {},
-  },
-  async () => textResult(await readCodexDiagnostics()),
-);
+server.oninitialized = () => {
+  if (initializeSeen) initialized = true;
+};
 
-server.registerTool(
-  'list_graphs',
-  {
-    title: 'List Breakdown Graphs',
-    description: 'List graphs available to the authenticated Breakdown integration token.',
-    inputSchema: {},
-  },
-  async () => textResult(await headlessRequest('GET', '/api/headless/graphs')),
-);
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  if (!initialized) {
+    throw protocolError(ErrorCode.InvalidRequest, 'Server initialization is not complete.');
+  }
+  return { tools: TOOL_CATALOG };
+});
 
-server.registerTool(
-  'get_graph',
-  {
-    title: 'Get Breakdown Graph',
-    description: 'Read a graph with its nodes and edges.',
-    inputSchema: graphInput,
-  },
-  async ({ graphId }) =>
-    textResult(await headlessRequest('GET', `/api/headless/graphs/${graphId}`)),
-);
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+  let finishInvocation!: () => void;
+  const activeInvocation = new Promise<void>((resolve) => {
+    finishInvocation = resolve;
+  });
+  activeInvocations.add(activeInvocation);
+  try {
+    if (!initialized) {
+      throw protocolError(ErrorCode.InvalidRequest, 'Server initialization is not complete.');
+    }
+    const operation = request.params.name;
+    if (!isOperation(operation)) {
+      throw protocolError(ErrorCode.MethodNotFound, 'Unknown Breakdown tool.');
+    }
+    const argumentsValue = request.params.arguments;
+    if (!isRecord(argumentsValue) || typeof argumentsValue.schema_version !== 'string') {
+      throw protocolError(ErrorCode.InvalidParams, `Invalid arguments for ${operation}.`);
+    }
+    const argumentsForValidation =
+      argumentsValue.schema_version === OPERATION_REQUEST_SCHEMA_VERSION
+        ? argumentsValue
+        : {
+            ...argumentsValue,
+            schema_version: OPERATION_REQUEST_SCHEMA_VERSION,
+          };
+    if (!ARGUMENT_VALIDATORS[operation](argumentsForValidation)) {
+      throw protocolError(ErrorCode.InvalidParams, `Invalid arguments for ${operation}.`);
+    }
+    if (argumentsValue.schema_version !== OPERATION_REQUEST_SCHEMA_VERSION) {
+      return toolResult(operation, unsupportedOperationRequestFailure('unsupported_version'));
+    }
+    const projectRoot = argumentsValue.project_root as string;
+    if (!isAbsolute(projectRoot) || projectRoot.includes('\0')) {
+      return toolResult(operation, invalidProjectRootFailure());
+    }
 
-server.registerTool(
-  'create_graph',
-  {
-    title: 'Create Breakdown Graph',
-    description: 'Create a new Breakdown reasoning graph.',
-    inputSchema: {
-      name: z.string().min(1).max(200),
-      description: z.string().max(1000).optional(),
-    },
-  },
-  async (input) => textResult(await headlessRequest('POST', '/api/headless/graphs', input)),
-);
+    const trustedContext = {
+      projectRoot,
+      signal: extra.signal,
+    };
+    let result: OperationResult<unknown>;
+    switch (operation) {
+      case 'validate_workflow':
+        result = await operate({ operation }, trustedContext);
+        break;
+      case 'create_run':
+        result = await operate(
+          {
+            operation,
+            ...(argumentsValue.inputs === undefined
+              ? {}
+              : { inputs: argumentsValue.inputs as Record<string, string> }),
+          },
+          trustedContext,
+        );
+        break;
+      case 'inspect_run':
+        result = await operate(
+          {
+            operation,
+            run_id: argumentsValue.run_id as string,
+          },
+          trustedContext,
+        );
+        break;
+      case 'prepare_work':
+        {
+          const mode = argumentsValue.mode as
+            | { kind: 'resume' }
+            | { kind: 'refresh'; node_id: string };
+          const prepareRequest: PrepareWorkRequest = {
+            operation,
+            run_id: argumentsValue.run_id as string,
+            intent: mode.kind,
+            ...(argumentsValue.limit === undefined
+              ? {}
+              : { limit: argumentsValue.limit as number }),
+            ...(mode.kind === 'refresh' ? { node_id: mode.node_id } : {}),
+          };
+          result = await operate(prepareRequest, trustedContext);
+        }
+        break;
+      case 'read_work_input':
+        result = await operate(
+          {
+            operation,
+            packet: argumentsValue.packet as WorkPacket,
+            binding: argumentsValue.binding as string,
+          },
+          trustedContext,
+        );
+        break;
+      case 'submit_candidate':
+        result = await operate(
+          {
+            operation,
+            packet: argumentsValue.packet as WorkPacket,
+            candidate: argumentsValue.candidate as CandidateOutcome,
+            ...(argumentsValue.lock_recovery === undefined
+              ? {}
+              : { lock_recovery: argumentsValue.lock_recovery as LockRecoveryIntent }),
+          } as SubmitCandidateRequest,
+          trustedContext,
+        );
+        break;
+    }
+    return toolResult(operation, result);
+  } catch (error) {
+    if (error instanceof AdapterProtocolError) throw error;
+    throw protocolError(ErrorCode.InternalError, 'Internal error');
+  } finally {
+    activeInvocations.delete(activeInvocation);
+    finishInvocation();
+  }
+});
 
-server.registerTool(
-  'update_graph',
-  {
-    title: 'Update Breakdown Graph',
-    description: 'Update graph metadata such as name, description, or model.',
-    inputSchema: {
-      ...graphInput,
-      name: z.string().min(1).max(200).optional(),
-      description: z.string().max(1000).nullable().optional(),
-      llmModel: z.string().optional(),
-    },
-  },
-  async ({ graphId, ...body }) =>
-    textResult(await headlessRequest('PATCH', `/api/headless/graphs/${graphId}`, body)),
-);
+const transport = new BreakdownStdioTransport();
+let stderrDiagnosticWritten = false;
+server.onerror = () => {
+  if (stderrDiagnosticWritten) return;
+  stderrDiagnosticWritten = true;
+  process.stderr.write('breakdown-mcp: protocol error.\n');
+};
 
-server.registerTool(
-  'delete_graph',
-  {
-    title: 'Delete Breakdown Graph',
-    description:
-      'Delete a graph and all of its nodes/edges. Use only after explicit user confirmation.',
-    inputSchema: graphInput,
-    annotations: { destructiveHint: true },
-  },
-  async ({ graphId }) =>
-    textResult(await headlessRequest('DELETE', `/api/headless/graphs/${graphId}`)),
-);
+await server.connect(transport);
 
-server.registerTool(
-  'create_node',
-  {
-    title: 'Create Breakdown Node',
-    description: 'Add a node to an existing Breakdown graph.',
-    inputSchema: {
-      ...graphInput,
-      name: z.string().min(1).max(200),
-      prompt: z.string().max(50000).optional(),
-      nodeType: z.string().max(80).optional(),
-      metadata: jsonRecord.optional(),
-      positionX: z.number().default(0),
-      positionY: z.number().default(0),
-    },
-  },
-  async ({ graphId, ...body }) =>
-    textResult(await headlessRequest('POST', `/api/headless/graphs/${graphId}/nodes`, body)),
-);
-
-server.registerTool(
-  'update_node',
-  {
-    title: 'Update Breakdown Node',
-    description: 'Update a node prompt, metadata, position, or execution state.',
-    inputSchema: {
-      ...nodeInput,
-      name: z.string().min(1).max(200).optional(),
-      prompt: z.string().max(50000).optional(),
-      output: z.string().max(250000).nullable().optional(),
-      nodeType: z.string().max(80).optional(),
-      metadata: jsonRecord.optional(),
-      positionX: z.number().optional(),
-      positionY: z.number().optional(),
-    },
-  },
-  async ({ nodeId, ...body }) =>
-    textResult(await headlessRequest('PATCH', `/api/headless/nodes/${nodeId}`, body)),
-);
-
-server.registerTool(
-  'delete_node',
-  {
-    title: 'Delete Breakdown Node',
-    description: 'Delete a node and incident edges. Use only after explicit user confirmation.',
-    inputSchema: nodeInput,
-    annotations: { destructiveHint: true },
-  },
-  async ({ nodeId }) =>
-    textResult(await headlessRequest('DELETE', `/api/headless/nodes/${nodeId}`)),
-);
-
-server.registerTool(
-  'connect_nodes',
-  {
-    title: 'Connect Breakdown Nodes',
-    description: 'Create a typed DAG edge between two nodes.',
-    inputSchema: {
-      ...graphInput,
-      sourceNodeId: uuid,
-      targetNodeId: uuid,
-      edgeType: z.string().min(1).max(80),
-      weight: z.number().min(0).max(1).optional(),
-      condition: z.string().max(2000).nullable().optional(),
-      transform: z.string().max(10000).nullable().optional(),
-    },
-  },
-  async ({ graphId, ...body }) =>
-    textResult(await headlessRequest('POST', `/api/headless/graphs/${graphId}/edges`, body)),
-);
-
-server.registerTool(
-  'update_edge',
-  {
-    title: 'Update Breakdown Edge',
-    description: 'Update or rewire an edge. Rewires are validated to keep the graph acyclic.',
-    inputSchema: {
-      ...edgeInput,
-      sourceNodeId: uuid.optional(),
-      targetNodeId: uuid.optional(),
-      edgeType: z.string().min(1).max(80).optional(),
-      weight: z.number().min(0).max(1).optional(),
-      condition: z.string().max(2000).nullable().optional(),
-      transform: z.string().max(10000).nullable().optional(),
-    },
-  },
-  async ({ edgeId, ...body }) =>
-    textResult(await headlessRequest('PATCH', `/api/headless/edges/${edgeId}`, body)),
-);
-
-server.registerTool(
-  'delete_edge',
-  {
-    title: 'Delete Breakdown Edge',
-    description: 'Delete an edge. Use only after explicit user confirmation.',
-    inputSchema: edgeInput,
-    annotations: { destructiveHint: true },
-  },
-  async ({ edgeId }) =>
-    textResult(await headlessRequest('DELETE', `/api/headless/edges/${edgeId}`)),
-);
-
-server.registerTool(
-  'export_graph',
-  {
-    title: 'Export Breakdown Graph',
-    description: 'Export a complete machine-readable graph representation.',
-    inputSchema: graphInput,
-  },
-  async ({ graphId }) =>
-    textResult(await headlessRequest('GET', `/api/headless/graphs/${graphId}/export`)),
-);
-
-server.registerTool(
-  'import_graph',
-  {
-    title: 'Import Breakdown Graph',
-    description: 'Create or replace a graph from the headless export/import shape.',
-    inputSchema: {
-      mode: z.enum(['create', 'replace']).default('create'),
-      graphId: uuid.optional(),
-      graph: jsonRecord,
-      nodes: z.array(jsonRecord),
-      edges: z.array(jsonRecord),
-    },
-  },
-  async (input) => textResult(await headlessRequest('POST', '/api/headless/graphs/import', input)),
-);
-
-server.registerTool(
-  'import_graph_and_create_external_run',
-  {
-    title: 'Import Graph And Create External Run',
-    description:
-      'Create or replace a graph from a generic import shape, then start an external-evaluator run for host-console execution.',
-    inputSchema: {
-      importGraph: jsonRecord,
-      externalRun: jsonRecord.optional(),
-    },
-    annotations: { destructiveHint: true },
-  },
-  async (input) =>
-    textResult(await headlessRequest('POST', '/api/headless/workflows/import-and-run', input)),
-);
-
-server.registerTool(
-  'get_workflow_manifest',
-  {
-    title: 'Get Workflow Manifest',
-    description: 'Get the execution-ready manifest for a graph, including topological order.',
-    inputSchema: graphInput,
-  },
-  async ({ graphId }) =>
-    textResult(await headlessRequest('GET', `/api/headless/graphs/${graphId}/manifest`)),
-);
-
-server.registerTool(
-  'apply_graph_patch',
-  {
-    title: 'Apply Graph Patch',
-    description:
-      'Preview or apply a structured graph patch. Use dryRun first and ask before destructive apply.',
-    inputSchema: {
-      ...graphInput,
-      dryRun: z.boolean().default(true),
-      operations: z.array(jsonRecord).min(1).max(100),
-    },
-  },
-  async ({ graphId, ...body }) =>
-    textResult(await headlessRequest('POST', `/api/headless/graphs/${graphId}/apply-patch`, body)),
-);
-
-server.registerTool(
-  'run_node',
-  {
-    title: 'Run Node Internally',
-    description: 'Ask Breakdown to execute one node using the configured model provider.',
-    inputSchema: {
-      ...nodeInput,
-      llmModel: z.string().optional(),
-    },
-  },
-  async ({ nodeId, ...body }) =>
-    textResult(await headlessRequest('POST', `/api/headless/nodes/${nodeId}/run`, body)),
-);
-
-server.registerTool(
-  'run_graph',
-  {
-    title: 'Run Graph Internally',
-    description: 'Ask Breakdown to execute the graph with its dependency-aware scheduler.',
-    inputSchema: {
-      ...graphInput,
-      runId: z.string().min(1).max(100).default(`mcp-${randomUUID()}`),
-    },
-  },
-  async ({ graphId, runId }) =>
-    textResult(await headlessRequest('POST', `/api/headless/graphs/${graphId}/run`, { runId })),
-);
-
-server.registerTool(
-  'get_run_status',
-  {
-    title: 'Get Run Status',
-    description: 'Poll current node run statuses for a graph.',
-    inputSchema: graphInput,
-  },
-  async ({ graphId }) =>
-    textResult(await headlessRequest('GET', `/api/headless/graphs/${graphId}/run-status`)),
-);
-
-server.registerTool(
-  'cancel_run',
-  {
-    title: 'Cancel Graph Run',
-    description: 'Cancel queued work for an internal graph run.',
-    inputSchema: graphInput,
-  },
-  async ({ graphId }) =>
-    textResult(await headlessRequest('POST', `/api/headless/graphs/${graphId}/run-cancel`, {})),
-);
-
-server.registerTool(
-  'create_external_run',
-  {
-    title: 'Create External Evaluator Run',
-    description:
-      'Create an external-evaluator run. The host model performs each step and writes results back.',
-    inputSchema: {
-      ...graphInput,
-      clientName: z.string().max(100).optional(),
-      providerName: z.string().max(100).optional(),
-      metadata: jsonRecord.optional(),
-    },
-  },
-  async ({ graphId, ...body }) =>
-    textResult(
-      await headlessRequest('POST', `/api/headless/graphs/${graphId}/external-runs`, body),
-    ),
-);
-
-server.registerTool(
-  'get_next_step',
-  {
-    title: 'Claim Next External Step',
-    description:
-      'Claim and return the next runnable external-evaluator work packet for a run, including prompt, upstream outputs, freshness warnings, and submit/block routes.',
-    inputSchema: runInput,
-  },
-  async ({ runId }) =>
-    textResult(await headlessRequest('GET', `/api/headless/external-runs/${runId}/next-step`)),
-);
-
-server.registerTool(
-  'get_step_context',
-  {
-    title: 'Get External Step Context',
-    description:
-      'Refresh or debug the executable work packet for a known step. get_next_step already returns this packet for the selected step.',
-    inputSchema: {
-      ...runInput,
-      stepId: uuid,
-    },
-  },
-  async ({ runId, stepId }) =>
-    textResult(
-      await headlessRequest('GET', `/api/headless/external-runs/${runId}/steps/${stepId}/context`),
-    ),
-);
-
-server.registerTool(
-  'submit_step_result',
-  {
-    title: 'Submit External Step Result',
-    description:
-      'Submit externally-produced output and citations for a step. This writes to Breakdown history.',
-    inputSchema: {
-      ...runInput,
-      stepId: uuid,
-      contextVersion: z.string().min(1),
-      output: z.string().min(1).max(250000),
-      structuredSummary: jsonRecord.optional(),
-      citations: z.array(jsonRecord).default([]),
-      clientName: z.string().max(100).optional(),
-      providerName: z.string().max(100).optional(),
-    },
-  },
-  async ({ runId, stepId, ...body }) =>
-    textResult(
-      await headlessRequest(
-        'POST',
-        `/api/headless/external-runs/${runId}/steps/${stepId}/result`,
-        body,
-      ),
-    ),
-);
-
-server.registerTool(
-  'mark_step_blocked',
-  {
-    title: 'Mark External Step Blocked',
-    description:
-      'Mark a step blocked when required host-console tools or current data are unavailable.',
-    inputSchema: {
-      ...runInput,
-      stepId: uuid,
-      contextVersion: z.string().min(1),
-      reason: z.string().min(1).max(5000),
-      requiredData: z.array(z.string()).default([]),
-      clientName: z.string().max(100).optional(),
-      providerName: z.string().max(100).optional(),
-    },
-  },
-  async ({ runId, stepId, ...body }) =>
-    textResult(
-      await headlessRequest(
-        'POST',
-        `/api/headless/external-runs/${runId}/steps/${stepId}/block`,
-        body,
-      ),
-    ),
-);
-
-server.registerTool(
-  'finalize_external_run',
-  {
-    title: 'Finalize External Run',
-    description: 'Finalize an external-evaluator run after all steps are submitted or blocked.',
-    inputSchema: {
-      ...runInput,
-      allowIncomplete: z.boolean().default(false),
-    },
-  },
-  async ({ runId, allowIncomplete }) =>
-    textResult(
-      await headlessRequest('POST', `/api/headless/external-runs/${runId}/finalize`, {
-        allowIncomplete,
-      }),
-    ),
-);
-
-server.registerTool(
-  'summarize_run_delta',
-  {
-    title: 'Summarize Run Delta',
-    description: 'Summarize submitted, blocked, and incomplete steps for an external run.',
-    inputSchema: runInput,
-  },
-  async ({ runId }) => {
-    const run = await headlessRequest<{
-      steps: Array<{ status: string }>;
-      run: { status: string };
-    }>('GET', `/api/headless/external-runs/${runId}`);
-    const counts = run.steps.reduce<Record<string, number>>((acc, step) => {
-      acc[step.status] = (acc[step.status] ?? 0) + 1;
-      return acc;
-    }, {});
-    return textResult({
-      runStatus: run.run.status,
-      stepCounts: counts,
-      summary: `${counts.submitted ?? 0} submitted, ${counts.blocked ?? 0} blocked, ${
-        (counts.pending ?? 0) + (counts.ready ?? 0) + (counts.in_progress ?? 0)
-      } incomplete.`,
-    });
-  },
-);
-
-server.registerResource(
-  'graphs',
-  'breakdown://graphs',
-  {
-    title: 'Breakdown Graphs',
-    mimeType: 'application/json',
-    description: 'List of graphs visible to the token.',
-  },
-  async (uri) => resourceText(uri, await headlessRequest('GET', '/api/headless/graphs')),
-);
-
-server.registerResource(
-  'graph',
-  new ResourceTemplate('breakdown://graphs/{graphId}', { list: undefined }),
-  {
-    title: 'Breakdown Graph',
-    mimeType: 'application/json',
-    description: 'Graph with nodes and edges.',
-  },
-  async (uri, variables) =>
-    resourceText(uri, await headlessRequest('GET', `/api/headless/graphs/${variables.graphId}`)),
-);
-
-server.registerResource(
-  'graph_manifest',
-  new ResourceTemplate('breakdown://graphs/{graphId}/manifest', { list: undefined }),
-  {
-    title: 'Breakdown Workflow Manifest',
-    mimeType: 'application/json',
-    description: 'Execution manifest for a graph.',
-  },
-  async (uri, variables) =>
-    resourceText(
-      uri,
-      await headlessRequest('GET', `/api/headless/graphs/${variables.graphId}/manifest`),
-    ),
-);
-
-server.registerResource(
-  'graph_node',
-  new ResourceTemplate('breakdown://graphs/{graphId}/nodes/{nodeId}', { list: undefined }),
-  {
-    title: 'Breakdown Graph Node',
-    mimeType: 'application/json',
-    description: 'One node from a graph.',
-  },
-  async (uri, variables) => {
-    const graph = await headlessRequest<{ nodes: Array<{ id: string }> }>(
-      'GET',
-      `/api/headless/graphs/${variables.graphId}`,
-    );
-    return resourceText(uri, graph.nodes.find((node) => node.id === variables.nodeId) ?? null);
-  },
-);
-
-server.registerResource(
-  'graph_run_status',
-  new ResourceTemplate('breakdown://graphs/{graphId}/runs/latest', { list: undefined }),
-  {
-    title: 'Breakdown Latest Run Status',
-    mimeType: 'application/json',
-    description: 'Current node run statuses for a graph.',
-  },
-  async (uri, variables) =>
-    resourceText(
-      uri,
-      await headlessRequest('GET', `/api/headless/graphs/${variables.graphId}/run-status`),
-    ),
-);
-
-server.registerResource(
-  'external_run',
-  new ResourceTemplate('breakdown://external-runs/{runId}', { list: undefined }),
-  {
-    title: 'Breakdown External Run',
-    mimeType: 'application/json',
-    description: 'External-evaluator run state.',
-  },
-  async (uri, variables) =>
-    resourceText(
-      uri,
-      await headlessRequest('GET', `/api/headless/external-runs/${variables.runId}`),
-    ),
-);
-
-server.registerResource(
-  'external_run_step',
-  new ResourceTemplate('breakdown://external-runs/{runId}/steps/{stepId}', { list: undefined }),
-  {
-    title: 'Breakdown External Step',
-    mimeType: 'application/json',
-    description: 'External-evaluator step context.',
-  },
-  async (uri, variables) =>
-    resourceText(
-      uri,
-      await headlessRequest(
-        'GET',
-        `/api/headless/external-runs/${variables.runId}/steps/${variables.stepId}/context`,
-      ),
-    ),
-);
-
-function promptText(text: string) {
-  return {
-    messages: [
-      {
-        role: 'user' as const,
-        content: { type: 'text' as const, text },
-      },
-    ],
-  };
+let shutdownPromise: Promise<void> | undefined;
+function shutdown(exitCode: number) {
+  if (shutdownPromise !== undefined) return shutdownPromise;
+  process.exitCode = exitCode;
+  const keepAlive = setInterval(() => undefined, 1_000);
+  shutdownPromise = (async () => {
+    await transport.close();
+    await Promise.allSettled([...activeInvocations]);
+    clearInterval(keepAlive);
+  })();
+  return shutdownPromise;
 }
 
-server.registerPrompt(
-  'decompose_reasoning_chain',
-  {
-    title: 'Decompose Reasoning Chain',
-    description: 'Turn a complex user goal into a Breakdown DAG outline.',
-    argsSchema: {
-      goal: z.string().min(1),
-    },
-  },
-  ({ goal }) =>
-    promptText(
-      `Create a Breakdown DAG for this goal: ${goal}\nName nodes as concise action phrases. Use depends_on, inputs_to, supports, contradicts, assumes, and sequences_before edges. Preview the graph before applying writes.`,
-    ),
-);
-
-server.registerPrompt(
-  'follow_breakdown_graph',
-  {
-    title: 'Follow Breakdown',
-    description: 'Execute an existing Breakdown externally step by step.',
-    argsSchema: {
-      graphId: uuid,
-    },
-  },
-  ({ graphId }) =>
-    promptText(
-      `Use Breakdown graph ${graphId} in external-evaluator mode. Create an external run, claim each step with get_next_step, perform the work from the returned packet using available tools/connectors, submit outputs with citations, and finalize the run.`,
-    ),
-);
-
-server.registerPrompt(
-  'extend_graph_from_research',
-  {
-    title: 'Extend Graph From Research',
-    description: 'Add or revise graph nodes based on new findings.',
-    argsSchema: {
-      graphId: uuid,
-      findings: z.string().min(1),
-    },
-  },
-  ({ graphId, findings }) =>
-    promptText(
-      `Review Breakdown graph ${graphId} against these findings:\n${findings}\nPropose a graph patch first. Use dryRun=true. Ask before applying destructive changes.`,
-    ),
-);
-
-server.registerPrompt(
-  'refresh_sources_and_propagate',
-  {
-    title: 'Refresh Sources And Propagate',
-    description:
-      'Refresh source/current-data steps using host tools and propagate downstream work.',
-    argsSchema: {
-      graphId: uuid,
-    },
-  },
-  ({ graphId }) =>
-    promptText(
-      `Inspect Breakdown graph ${graphId} for stale source/current-data nodes. Use host-console tools such as web, filings, or FMP when available, submit refreshed outputs/citations through external-evaluator steps, then continue dependent reasoning.`,
-    ),
-);
-
-server.registerPrompt(
-  'summarize_graph_delta',
-  {
-    title: 'Summarize Graph Delta',
-    description: 'Explain what changed after a run or patch.',
-    argsSchema: {
-      graphId: uuid,
-      runId: uuid.optional(),
-    },
-  },
-  ({ graphId, runId }) =>
-    promptText(
-      `Summarize what changed in Breakdown graph ${graphId}${runId ? ` after external run ${runId}` : ''}. Mention new outputs, blocked/data-gap steps, citations, and open questions.`,
-    ),
-);
-
-await server.connect(new StdioServerTransport());
+process.once('SIGINT', () => {
+  void shutdown(130);
+});
+process.once('SIGTERM', () => {
+  void shutdown(143);
+});

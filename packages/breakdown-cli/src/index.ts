@@ -4,10 +4,12 @@ import { resolve } from 'node:path';
 
 import {
   FIXED_LIMITS,
+  OPERATION_REQUEST_SCHEMA_VERSION,
   operate,
   type OperationFailure,
   type OperationResult,
   type SubmitCandidateRequest,
+  unsupportedOperationRequestFailure,
 } from '@breakdown-sh/core';
 
 import {
@@ -93,18 +95,6 @@ function invalidOperationRequest(
       code: 'invalid_operation_request',
       message: 'The automation operation request is invalid.',
       diagnostics,
-    },
-  };
-}
-
-function unsupportedOperationRequest(code: string, message: string): OperationFailure {
-  return {
-    ok: false,
-    failure: {
-      kind: 'unsupported',
-      code,
-      message,
-      diagnostics: [],
     },
   };
 }
@@ -358,21 +348,15 @@ async function main(signal: AbortSignal) {
     const operation = isOperation(request.operation) ? request.operation : 'unknown';
     if (
       typeof request.schema_version === 'string' &&
-      request.schema_version !== 'breakdown.operation-request.v1'
+      request.schema_version !== OPERATION_REQUEST_SCHEMA_VERSION
     ) {
-      const result = unsupportedOperationRequest(
-        'unsupported_version',
-        'The automation request uses an unsupported version.',
-      );
+      const result = unsupportedOperationRequestFailure('unsupported_version');
       writeMachineResult(operation, result);
       process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
       return;
     }
     if (typeof request.operation === 'string' && !isOperation(request.operation)) {
-      const result = unsupportedOperationRequest(
-        'unsupported_operation',
-        'The requested operation is not supported.',
-      );
+      const result = unsupportedOperationRequestFailure('unsupported_operation');
       writeMachineResult('unknown', result);
       process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
       return;
@@ -395,14 +379,7 @@ async function main(signal: AbortSignal) {
           operation: 'create_run',
           ...(operationRequest.inputs === undefined ? {} : { inputs: operationRequest.inputs }),
         },
-        {
-          projectRoot,
-          signal,
-          producer: {
-            name: '@breakdown-sh/cli',
-            version: CLI_VERSION,
-          },
-        },
+        { projectRoot, signal },
       );
     } else if (operationRequest.operation === 'inspect_run') {
       result = await operate(
@@ -454,17 +431,7 @@ async function main(signal: AbortSignal) {
   const result = await (parsed.operation === 'validate_workflow'
     ? operate({ operation: 'validate_workflow' }, { projectRoot, signal })
     : parsed.operation === 'create_run'
-      ? operate(
-          { operation: 'create_run', inputs: parsed.inputs },
-          {
-            projectRoot,
-            signal,
-            producer: {
-              name: '@breakdown-sh/cli',
-              version: CLI_VERSION,
-            },
-          },
-        )
+      ? operate({ operation: 'create_run', inputs: parsed.inputs }, { projectRoot, signal })
       : operate({ operation: 'inspect_run', run_id: parsed.runId }, { projectRoot, signal }));
   if (parsed.json) {
     const emittedResult = writeMachineResult(parsed.operation, result);

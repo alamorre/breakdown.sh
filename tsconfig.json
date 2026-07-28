@@ -30,5 +30,10 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "packages/breakdown-core", "packages/breakdown-cli"]
+  "exclude": [
+    "node_modules",
+    "packages/breakdown-core",
+    "packages/breakdown-cli",
+    "packages/breakdown-mcp"
+  ]
 }

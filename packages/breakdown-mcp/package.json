@@ -1,21 +1,36 @@
 {
-  "name": "@breakdown/mcp",
-  "version": "0.1.0",
+  "name": "@breakdown-sh/mcp",
+  "version": "1.0.0-beta.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^24.0.0"
+  },
   "bin": {
     "breakdown-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "package.json"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsc -p tsconfig.build.json && node scripts/generate-protocol-assets.mjs",
+    "pretest": "pnpm --filter @breakdown-sh/core build && pnpm --filter @breakdown-sh/cli build && pnpm run build",
+    "test": "vitest run src/index.test.ts",
+    "pretest:coverage": "pnpm --filter @breakdown-sh/core build && pnpm --filter @breakdown-sh/cli build && pnpm run build",
+    "test:coverage": "vitest run src/index.test.ts",
+    "test:inspector": "pnpm run build && npx --yes @modelcontextprotocol/inspector@1.0.0 --cli node dist/index.js --method tools/list",
+    "pretypecheck": "pnpm --filter @breakdown-sh/core build",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@breakdown-sh/core": "workspace:1.0.0-beta.1",
     "@modelcontextprotocol/sdk": "1.29.0",
-    "zod": "^4.3.6"
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "ajv": "8.18.0",
     "typescript": "^5"
   }
 }
