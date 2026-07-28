@@ -1,0 +1,76 @@
+{
+  "schema_version": "breakdown.cli-catalog.v1",
+  "human_commands": [
+    "breakdown workflow validate --project PATH [--json]",
+    "breakdown run create --project PATH [--input ID=PATH]... [--json]",
+    "breakdown run inspect --project PATH --run RUN_ID [--json]"
+  ],
+  "automation_command": "breakdown operate --project PATH",
+  "operations": [
+    "validate_workflow",
+    "create_run",
+    "inspect_run",
+    "prepare_work",
+    "read_work_input",
+    "submit_candidate"
+  ],
+  "schemas": {
+    "request": "breakdown.operation-request.v1",
+    "output": "breakdown.cli-output.v1"
+  },
+  "exit_codes": {
+    "success": 0,
+    "usage": 2,
+    "invalid": 3,
+    "conflict": 4,
+    "unsupported": 5,
+    "cancelled": 6,
+    "resource_limit": 7,
+    "io": 8,
+    "internal": 70
+  },
+  "failure_codes": {
+    "invalid": [
+      "invalid_candidate",
+      "invalid_operation_request",
+      "invalid_prepare_work",
+      "invalid_run",
+      "invalid_work_input",
+      "invalid_workflow",
+      "invalid_workflow_input",
+      "project_root_required",
+      "run_complete",
+      "run_not_found"
+    ],
+    "conflict": [
+      "attempt_advanced",
+      "lock_recovery_mismatch",
+      "no_longer_runnable",
+      "refresh_target_not_complete",
+      "run_id_collision",
+      "run_locked",
+      "stale_context"
+    ],
+    "unsupported": ["unsupported_filesystem", "unsupported_operation", "unsupported_version"],
+    "cancelled": ["cancelled"],
+    "resource_limit": ["limit_exceeded"],
+    "io": ["io_error"],
+    "internal": ["internal_error"]
+  },
+  "byte_fields": {
+    "read_work_input.workflow_input": ["bytes_base64"],
+    "read_work_input.result": ["markdown_bytes_base64", "json_bytes_base64"]
+  },
+  "presentation": {
+    "human_stderr_bytes": 65536,
+    "terminal_control_encoding": "lowercase \\uXXXX",
+    "color": "tty-only",
+    "no_color": "any present NO_COLOR value disables color"
+  },
+  "ordering": {
+    "maps": "identifier",
+    "workflow_diagnostics": ["path", "code"],
+    "run_diagnostics": ["file", "path", "code"],
+    "arrays": "core-defined deterministic order"
+  }
+}

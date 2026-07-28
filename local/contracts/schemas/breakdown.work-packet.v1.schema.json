@@ -14,13 +14,19 @@
       "then": {
         "required": ["refresh_base"],
         "properties": {
-          "submission": { "required": ["refresh_base"] }
+          "submission": {
+            "type": "object",
+            "required": ["refresh_base"]
+          }
         }
       },
       "else": {
         "not": { "required": ["refresh_base"] },
         "properties": {
-          "submission": { "not": { "required": ["refresh_base"] } }
+          "submission": {
+            "type": "object",
+            "not": { "required": ["refresh_base"] }
+          }
         }
       }
     }
@@ -44,7 +50,7 @@
     "schema_version": { "const": "breakdown.work-packet.v1" },
     "run_id": { "type": "string" },
     "intent": { "enum": ["resume", "refresh"] },
-    "prepared_at": { "type": "string", "format": "date-time" },
+    "prepared_at": { "$ref": "#/$defs/timestamp" },
     "node": {
       "type": "object",
       "additionalProperties": false,
@@ -108,7 +114,7 @@
         "run_id": { "type": "string" },
         "node_id": { "type": "string" },
         "intent": { "enum": ["resume", "refresh"] },
-        "prepared_at": { "type": "string", "format": "date-time" },
+        "prepared_at": { "$ref": "#/$defs/timestamp" },
         "expected_attempt": { "type": "integer", "minimum": 1 },
         "context_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "refresh_base": { "$ref": "#/$defs/selectedResult" }
@@ -125,6 +131,10 @@
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
     },
     "resultFile": {
       "type": "object",

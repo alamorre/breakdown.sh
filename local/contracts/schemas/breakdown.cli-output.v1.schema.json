@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "breakdown.cli-output.v1",
+  "title": "Breakdown CLI Output v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "ok", "data"],
+      "properties": {
+        "schema_version": { "const": "breakdown.cli-output.v1" },
+        "operation": { "$ref": "#/$defs/operation" },
+        "ok": { "const": true },
+        "data": {}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "ok", "error"],
+      "properties": {
+        "schema_version": { "const": "breakdown.cli-output.v1" },
+        "operation": { "$ref": "#/$defs/operation" },
+        "ok": { "const": false },
+        "error": { "$ref": "#/$defs/error" }
+      }
+    }
+  ],
+  "$defs": {
+    "operation": {
+      "enum": [
+        "validate_workflow",
+        "create_run",
+        "inspect_run",
+        "prepare_work",
+        "read_work_input",
+        "submit_candidate",
+        "unknown"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "code", "message", "diagnostics"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "invalid",
+            "conflict",
+            "unsupported",
+            "cancelled",
+            "resource_limit",
+            "io",
+            "internal"
+          ]
+        },
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "diagnostics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/diagnostic" }
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "path", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "path": { "type": "string" },
+        "message": { "type": "string" },
+        "file": { "type": "string" }
+      }
+    }
+  }
+}

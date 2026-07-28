@@ -10,6 +10,7 @@
       "if": {
         "properties": {
           "submission": {
+            "type": "object",
             "properties": {
               "intent": { "const": "refresh" }
             }
@@ -18,12 +19,18 @@
       },
       "then": {
         "properties": {
-          "submission": { "required": ["refresh_base"] }
+          "submission": {
+            "type": "object",
+            "required": ["refresh_base"]
+          }
         }
       },
       "else": {
         "properties": {
-          "submission": { "not": { "required": ["refresh_base"] } }
+          "submission": {
+            "type": "object",
+            "not": { "required": ["refresh_base"] }
+          }
         }
       }
     }

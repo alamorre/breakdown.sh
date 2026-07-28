@@ -14,14 +14,18 @@
     "package.json"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/generate-protocol-validator.mjs",
     "pretest": "pnpm --filter @breakdown-sh/core build && pnpm run build",
     "test": "vitest run src/index.test.ts",
     "pretest:coverage": "pnpm --filter @breakdown-sh/core build && pnpm run build",
     "test:coverage": "vitest run src/index.test.ts",
+    "pretypecheck": "pnpm --filter @breakdown-sh/core build",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@breakdown-sh/core": "workspace:1.0.0-beta.1"
+  },
+  "devDependencies": {
+    "ajv": "8.18.0"
   }
 }

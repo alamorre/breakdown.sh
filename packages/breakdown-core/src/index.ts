@@ -62,6 +62,7 @@ import {
 } from './secure-store.js';
 import { isUnicodeScalarString } from './unicode.js';
 
+export { FIXED_LIMITS } from './fixed-limits.js';
 export type {
   InspectRunRequest,
   InspectRunValue,

@@ -60,6 +60,51 @@
       "id": "CLI-009",
       "requirement": "Issue #147: require one exact non-empty --run argument for inspection",
       "oracle": "Missing, empty, or duplicate --run exits 2 with usage on stderr and no stdout; no Run is inferred."
+    },
+    {
+      "id": "CLI-010",
+      "requirement": "Issue #158: expose exactly the canonical human commands plus help and version metadata",
+      "oracle": "The three cataloged human commands, --help, and --version succeed as specified; prepare, retry, refresh, finalize, cancel, unlock, Git, publication, and Executor commands are usage failures."
+    },
+    {
+      "id": "CLI-011",
+      "requirement": "Issue #158: expose all six core operations through breakdown operate --project PATH",
+      "oracle": "Each breakdown.operation-request.v1 variant reaches the packaged core and returns the matching operation value and authoritative disk effects without adapter-side core behavior."
+    },
+    {
+      "id": "CLI-012",
+      "requirement": "Issue #158: require one strict bounded UTF-8 automation request",
+      "oracle": "Malformed JSON, invalid UTF-8, missing or unknown fields, wrong variant shapes, unsupported versions, and requests above 2 MiB produce the cataloged structured failure and no partial mutation."
+    },
+    {
+      "id": "CLI-013",
+      "requirement": "Issue #158: emit the exact machine stream contract",
+      "oracle": "Machine success and expected failure write exactly one compact breakdown.cli-output.v1 JSON document plus LF to stdout, keep stderr empty, and remain within the 12 MiB response limit."
+    },
+    {
+      "id": "CLI-014",
+      "requirement": "Issue #158: preserve byte fields and deterministic operation values",
+      "oracle": "Workflow Input bytes and complete predecessor Result bytes use the cataloged base64 fields; decoded values, ordered arrays/maps, diagnostics, and disk effects match the core operation result."
+    },
+    {
+      "id": "CLI-015",
+      "requirement": "Issue #158: implement the cataloged human stream presentation",
+      "oracle": "Human successes use stdout; failures and diagnostics use bounded stderr; terminal controls and active terminal content are escaped; color appears only on a TTY and NO_COLOR disables it."
+    },
+    {
+      "id": "CLI-016",
+      "requirement": "Issue #158: preserve the public failure-kind and exit-code catalog",
+      "oracle": "Success and usage plus invalid, conflict, unsupported, cancelled, resource_limit, io, and internal outcomes use the exact cataloged exit codes without message-text control flow."
+    },
+    {
+      "id": "CLI-017",
+      "requirement": "Issue #158: translate process signals to invocation cancellation",
+      "oracle": "SIGINT and SIGTERM abort the trusted core invocation; pre-commit cancellation publishes nothing, while the core publication critical section retains its settled commit semantics."
+    },
+    {
+      "id": "CLI-018",
+      "requirement": "Issue #158: remain independent of Git and inferred project context",
+      "oracle": "The installed executable succeeds with no Git executable on PATH and never selects a project, Workflow Definition, or Run from cwd, environment, repository, timestamps, or directory order."
     }
   ]
 }

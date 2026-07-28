@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "breakdown.operation-request.v1",
+  "title": "Breakdown Operation Request v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation"],
+      "properties": {
+        "schema_version": { "const": "breakdown.operation-request.v1" },
+        "operation": { "const": "validate_workflow" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation"],
+      "properties": {
+        "schema_version": { "const": "breakdown.operation-request.v1" },
+        "operation": { "const": "create_run" },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "run_id"],
+      "properties": {
+        "schema_version": { "const": "breakdown.operation-request.v1" },
+        "operation": { "const": "inspect_run" },
+        "run_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "run_id", "mode"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "type": "object",
+                "required": ["kind"],
+                "properties": { "kind": { "const": "refresh" } }
+              }
+            }
+          },
+          "then": {
+            "properties": { "limit": { "const": 1 } }
+          }
+        }
+      ],
+      "properties": {
+        "schema_version": { "const": "breakdown.operation-request.v1" },
+        "operation": { "const": "prepare_work" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "mode": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": { "kind": { "const": "resume" } }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "node_id"],
+              "properties": {
+                "kind": { "const": "refresh" },
+                "node_id": { "$ref": "#/$defs/identifier" }
+              }
+            }
+          ]
+        },
+        "limit": { "type": "integer", "minimum": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "packet", "binding"],
+      "properties": {
+        "schema_version": { "const": "breakdown.operation-request.v1" },
+        "operation": { "const": "read_work_input" },
+        "packet": { "$ref": "breakdown.work-packet.v1" },
+        "binding": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "packet", "candidate"],
+      "properties": {
+        "schema_version": { "const": "breakdown.operation-request.v1" },
+        "operation": { "const": "submit_candidate" },
+        "packet": { "$ref": "breakdown.work-packet.v1" },
+        "candidate": { "$ref": "breakdown.candidate.v1" },
+        "lock_recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lock_id", "confirmed_stopped"],
+          "properties": {
+            "lock_id": { "type": "string", "minLength": 1 },
+            "confirmed_stopped": { "const": true }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    }
+  }
+}
