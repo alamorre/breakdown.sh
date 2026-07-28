@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, realpath, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
@@ -28,6 +28,7 @@ import {
 } from './prepare-work.js';
 import {
   acquireRunWriterLock,
+  assertRunWriterLock,
   type LockRecoveryBoundary,
   releaseRunWriterLock,
   RunLockedError,
@@ -44,12 +45,17 @@ import {
   type SuccessfulSubmitCandidateValue,
 } from './submit-candidate.js';
 import {
+  assertSecureDirectoryIdentity,
   assertSupportedFilesystem,
   ensurePrivateDirectoryPath,
+  readSecureDirectory,
   readSecureRegularFile,
   readSecureResultFile,
   ResourceLimitError,
+  sameSecureFileIdentity,
+  secureFileIdentity,
   type SecureFileIdentity,
+  type SelectedProjectRoot,
   syncDirectory,
   UnsupportedFilesystemError,
   writePrivateFile,
@@ -127,6 +133,7 @@ export type RunPublicationBoundary =
   | 'after_snapshot_written'
   | 'after_manifest_written'
   | 'before_publish'
+  | 'after_destination_validated'
   | 'after_publish';
 
 export interface TrustedContext {
@@ -139,11 +146,69 @@ export interface TrustedContext {
     onRunPublicationBoundary?: (boundary: RunPublicationBoundary) => void | Promise<void>;
     onStepPublicationBoundary?: (boundary: StepPublicationBoundary) => void | Promise<void>;
     onLockRecoveryBoundary?: (boundary: LockRecoveryBoundary) => void | Promise<void>;
+    onProjectRootSelected?: () => void | Promise<void>;
+    onStepDirectoryListed?: () => void | Promise<void>;
   };
 }
 
+const INTERNAL_DEFINITION_BYTES: unique symbol = Symbol('internal-definition-bytes');
+const INTERNAL_SELECTED_PROJECT_ROOT: unique symbol = Symbol('internal-selected-project-root');
+
 interface InternalTrustedContext extends TrustedContext {
+  [INTERNAL_DEFINITION_BYTES]?: true;
+  [INTERNAL_SELECTED_PROJECT_ROOT]?: SelectedProjectRoot;
   definitionBytes?: Uint8Array;
+}
+
+function selectedProjectRootFromContext(context: TrustedContext) {
+  const selectedProjectRoot = (context as Partial<InternalTrustedContext>)[
+    INTERNAL_SELECTED_PROJECT_ROOT
+  ];
+  if (selectedProjectRoot === undefined) {
+    throw new Error('The internal selected project-root identity is missing.');
+  }
+  return selectedProjectRoot;
+}
+
+async function assertSelectedProjectRoot(selectedProjectRoot: SelectedProjectRoot) {
+  const facts = await lstat(selectedProjectRoot.path, { bigint: true });
+  if (
+    !facts.isDirectory() ||
+    !sameSecureFileIdentity(secureFileIdentity(facts), selectedProjectRoot.identity)
+  ) {
+    throw new Error('The selected project-root identity changed.');
+  }
+}
+
+function continueAtSelectedProjectRoot(
+  trustedContext: TrustedContext,
+  options: {
+    definitionBytes?: Uint8Array;
+  } = {},
+): InternalTrustedContext {
+  const selectedProjectRoot = selectedProjectRootFromContext(trustedContext);
+  return {
+    projectRoot: selectedProjectRoot.path,
+    [INTERNAL_SELECTED_PROJECT_ROOT]: selectedProjectRoot,
+    ...(options.definitionBytes === undefined
+      ? {}
+      : {
+          [INTERNAL_DEFINITION_BYTES]: true as const,
+          definitionBytes: options.definitionBytes,
+        }),
+    signal: trustedContext.signal,
+  };
+}
+
+async function withSelectedProjectRoot<T>(
+  trustedContext: TrustedContext,
+  action: (projectRoot: SelectedProjectRoot) => Promise<T>,
+): Promise<T> {
+  const selectedProjectRoot = selectedProjectRootFromContext(trustedContext);
+  await assertSelectedProjectRoot(selectedProjectRoot);
+  const value = await action(selectedProjectRoot);
+  await assertSelectedProjectRoot(selectedProjectRoot);
+  return value;
 }
 
 export interface NodeDefinition {
@@ -1280,7 +1345,7 @@ function workflowInputFailure(diagnostics: Diagnostic[]): OperationFailure {
 }
 
 async function resolveWorkflowInputs(
-  projectRoot: string,
+  selectedProjectRoot: SelectedProjectRoot,
   workflow: WorkflowDefinition,
   overrideValue: unknown,
 ): Promise<OperationResult<ResolvedWorkflowInputs>> {
@@ -1337,9 +1402,10 @@ async function resolveWorkflowInputs(
     let secureRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
     try {
       secureRead = await readSecureRegularFile(
-        projectRoot,
+        selectedProjectRoot.path,
         path,
         FIXED_LIMITS.workflow_input_file_bytes,
+        { expectedProjectIdentity: selectedProjectRoot.identity },
       );
     } catch (error) {
       if (error instanceof ResourceLimitError) return resourceLimitFailure();
@@ -1367,7 +1433,7 @@ async function resolveWorkflowInputs(
 }
 
 async function recheckWorkflowInputs(
-  projectRoot: string,
+  selectedProjectRoot: SelectedProjectRoot,
   resolvedInputs: ResolvedWorkflowInputs,
 ): Promise<OperationFailure | undefined> {
   const integrityFailure = (inputId: string) =>
@@ -1384,9 +1450,10 @@ async function recheckWorkflowInputs(
     let secureRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
     try {
       secureRead = await readSecureRegularFile(
-        projectRoot,
+        selectedProjectRoot.path,
         input.path,
         FIXED_LIMITS.workflow_input_file_bytes,
+        { expectedProjectIdentity: selectedProjectRoot.identity },
       );
     } catch {
       return integrityFailure(inputId);
@@ -1410,18 +1477,18 @@ async function createRun(
   trustedContext: TrustedContext,
 ): Promise<OperationResult<CreateRunValue>> {
   if (isCancelled(trustedContext.signal)) return cancelledFailure();
-  let projectRoot: string;
+  const selectedProjectRoot = selectedProjectRootFromContext(trustedContext);
+  const projectRoot = selectedProjectRoot.path;
   let workflowBytes: Buffer;
   try {
-    projectRoot = await realpath(trustedContext.projectRoot as string);
-    const rootFacts = await lstat(projectRoot);
-    if (!rootFacts.isDirectory()) return ioFailure('The selected project root is not a directory.');
-    await assertSupportedFilesystem(projectRoot);
     workflowBytes = (
-      await readSecureRegularFile(
-        projectRoot,
-        'breakdown.yaml',
-        FIXED_LIMITS.workflow_definition_bytes,
+      await withSelectedProjectRoot(trustedContext, (selectedProjectRoot) =>
+        readSecureRegularFile(
+          selectedProjectRoot.path,
+          'breakdown.yaml',
+          FIXED_LIMITS.workflow_definition_bytes,
+          { expectedProjectIdentity: selectedProjectRoot.identity },
+        ),
       )
     ).bytes;
   } catch (error) {
@@ -1430,11 +1497,10 @@ async function createRun(
     return ioFailure('Could not securely read breakdown.yaml.');
   }
 
-  const validation = await operate({ operation: 'validate_workflow' }, {
-    projectRoot,
-    definitionBytes: workflowBytes,
-    signal: trustedContext.signal,
-  } as InternalTrustedContext);
+  const validation = await operate(
+    { operation: 'validate_workflow' },
+    continueAtSelectedProjectRoot(trustedContext, { definitionBytes: workflowBytes }),
+  );
   if (!validation.ok) return validation;
   if (isCancelled(trustedContext.signal)) return cancelledFailure();
 
@@ -1478,7 +1544,7 @@ async function createRun(
   if (runId === undefined) return runIdCollisionFailure();
   const runPath = `outputs/${runId}`;
   const resolvedInputs = await resolveWorkflowInputs(
-    projectRoot,
+    selectedProjectRootFromContext(trustedContext),
     validation.value.workflow,
     request.inputs ?? {},
   );
@@ -1486,11 +1552,15 @@ async function createRun(
   if (isCancelled(trustedContext.signal)) return cancelledFailure();
   try {
     await trustedContext.testControls?.onRunPublicationBoundary?.('after_inputs_read');
+    await assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext));
   } catch {
     return ioFailure();
   }
   if (isCancelled(trustedContext.signal)) return cancelledFailure();
-  const changedInputFailure = await recheckWorkflowInputs(projectRoot, resolvedInputs.value);
+  const changedInputFailure = await recheckWorkflowInputs(
+    selectedProjectRootFromContext(trustedContext),
+    resolvedInputs.value,
+  );
   if (changedInputFailure !== undefined) return changedInputFailure;
   if (isCancelled(trustedContext.signal)) return cancelledFailure();
   const value: CreateRunValue = {
@@ -1505,10 +1575,14 @@ async function createRun(
     inputs: resolvedInputs.value.records,
     producer,
   };
+  const manifestBytes = runManifestBytes(value);
+  if (manifestBytes.byteLength > FIXED_LIMITS.automation_response_bytes) {
+    return resourceLimitFailure();
+  }
 
   let lock: RunWriterLock;
   try {
-    lock = await acquireRunWriterLock(projectRoot, runId, {
+    lock = await acquireRunWriterLock(selectedProjectRootFromContext(trustedContext), runId, {
       now,
       randomBytes: entropySource,
     });
@@ -1520,6 +1594,8 @@ async function createRun(
   try {
     try {
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_lock_acquired');
+      await assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext));
+      await assertRunWriterLock(lock);
     } catch {
       return ioFailure();
     }
@@ -1528,8 +1604,12 @@ async function createRun(
     const outputsPath = join(projectRoot, 'outputs');
     const stagingRoot = join(projectRoot, '.breakdown', 'tmp', 'runs');
     try {
-      await ensurePrivateDirectoryPath(projectRoot, ['outputs']);
-      await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'tmp', 'runs']);
+      await ensurePrivateDirectoryPath(projectRoot, ['outputs'], {
+        expectedProjectIdentity: selectedProjectRoot.identity,
+      });
+      await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'tmp', 'runs'], {
+        expectedProjectIdentity: selectedProjectRoot.identity,
+      });
     } catch {
       return ioFailure();
     }
@@ -1544,20 +1624,27 @@ async function createRun(
       throwIfCancelled(trustedContext.signal);
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_staging_created');
       throwIfCancelled(trustedContext.signal);
+      await assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext));
+      await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'tmp', 'runs'], {
+        expectedProjectIdentity: selectedProjectRoot.identity,
+      });
       const stepsPath = join(stagingPath, 'steps');
       await mkdir(stepsPath, { mode: 0o700 });
       await syncDirectory(stepsPath);
       await writePrivateFile(join(stagingPath, 'breakdown.yaml'), workflowBytes);
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_snapshot_written');
       throwIfCancelled(trustedContext.signal);
-      await writePrivateFile(join(stagingPath, 'run.md'), runManifestBytes(value));
+      await assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext));
+      await writePrivateFile(join(stagingPath, 'run.md'), manifestBytes);
       await syncDirectory(stagingPath);
       await trustedContext.testControls?.onRunPublicationBoundary?.('after_manifest_written');
       throwIfCancelled(trustedContext.signal);
+      await assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext));
       await trustedContext.testControls?.onRunPublicationBoundary?.('before_publish');
       throwIfCancelled(trustedContext.signal);
+      await assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext));
       const inputFailureBeforePublish = await recheckWorkflowInputs(
-        projectRoot,
+        selectedProjectRootFromContext(trustedContext),
         resolvedInputs.value,
       );
       if (inputFailureBeforePublish !== undefined) {
@@ -1565,6 +1652,14 @@ async function createRun(
         return inputFailureBeforePublish;
       }
       throwIfCancelled(trustedContext.signal);
+      await ensurePrivateDirectoryPath(projectRoot, ['outputs'], {
+        expectedProjectIdentity: selectedProjectRoot.identity,
+      });
+      const outputsIdentity = (
+        await readSecureDirectory(projectRoot, 'outputs', Number.MAX_SAFE_INTEGER, {
+          expectedProjectIdentity: selectedProjectRoot.identity,
+        })
+      ).identity;
       const destinationPath = join(projectRoot, runPath);
       try {
         await lstat(destinationPath);
@@ -1573,7 +1668,14 @@ async function createRun(
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
+      await trustedContext.testControls?.onRunPublicationBoundary?.('after_destination_validated');
       await rename(stagingPath, destinationPath);
+      try {
+        await assertSecureDirectoryIdentity(outputsPath, outputsIdentity);
+      } catch (error) {
+        await rename(destinationPath, stagingPath);
+        throw error;
+      }
       await syncDirectory(outputsPath);
     } catch (error) {
       await rm(stagingPath, { recursive: true, force: true });
@@ -1592,7 +1694,9 @@ async function createRun(
     return { ok: true, value };
   } finally {
     try {
-      await releaseRunWriterLock(lock);
+      await releaseRunWriterLock(lock, () =>
+        assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext)),
+      );
     } catch {
       // A later inspection exposes an unexpected leftover lock for explicit recovery.
     }
@@ -1720,15 +1824,11 @@ async function readInputFromPacket(
     ]);
   }
 
-  let projectRoot: string;
-  try {
-    projectRoot = await realpath(trustedContext.projectRoot as string);
-  } catch {
-    return ioFailure('Could not select the project root.');
-  }
+  const selectedProjectRoot = selectedProjectRootFromContext(trustedContext);
+  const projectRoot = selectedProjectRoot.path;
   const inspected = await operate(
     { operation: 'inspect_run', run_id: packet.run_id },
-    { projectRoot, signal: trustedContext.signal },
+    continueAtSelectedProjectRoot(trustedContext),
   );
   if (!inspected.ok) return inspected;
 
@@ -1813,6 +1913,7 @@ async function readInputFromPacket(
         projectRoot,
         workflowRef.path,
         FIXED_LIMITS.workflow_input_file_bytes,
+        { expectedProjectIdentity: selectedProjectRoot.identity },
       );
     } catch {
       return readWorkInputFailure([
@@ -1948,6 +2049,7 @@ async function readInputFromPacket(
       projectRoot,
       predecessorResult.path,
       FIXED_LIMITS.automation_response_bytes,
+      { expectedProjectIdentity: selectedProjectRoot.identity },
     );
   } catch {
     return readWorkInputFailure([
@@ -1990,6 +2092,7 @@ async function readInputFromPacket(
         projectRoot,
         resultJson.path,
         FIXED_LIMITS.candidate_json_bytes,
+        { expectedProjectIdentity: selectedProjectRoot.identity },
       );
     } catch {
       return readWorkInputFailure([
@@ -2109,25 +2212,66 @@ export async function operate(
   }
 
   if (!trustedContext.projectRoot) return projectRootRequiredFailure();
+  let selectedProjectRoot: SelectedProjectRoot;
+  const inheritedSelection = (trustedContext as Partial<InternalTrustedContext>)[
+    INTERNAL_SELECTED_PROJECT_ROOT
+  ];
+  if (inheritedSelection !== undefined) {
+    selectedProjectRoot = inheritedSelection;
+    try {
+      await assertSelectedProjectRoot(selectedProjectRoot);
+    } catch {
+      return ioFailure('The selected project root changed during the operation.');
+    }
+  } else {
+    try {
+      const projectRootPath = await realpath(trustedContext.projectRoot);
+      const rootFacts = await lstat(projectRootPath, { bigint: true });
+      if (!rootFacts.isDirectory()) {
+        return ioFailure('The selected project root is not a directory.');
+      }
+      await assertSupportedFilesystem(projectRootPath);
+      selectedProjectRoot = {
+        path: projectRootPath,
+        identity: secureFileIdentity(rootFacts),
+      };
+    } catch (error) {
+      if (error instanceof UnsupportedFilesystemError) return unsupportedFilesystemFailure();
+      return ioFailure('Could not select the project root.');
+    }
+  }
+  trustedContext = {
+    ...trustedContext,
+    projectRoot: selectedProjectRoot.path,
+    [INTERNAL_SELECTED_PROJECT_ROOT]: selectedProjectRoot,
+  } as InternalTrustedContext;
+  if (inheritedSelection === undefined) {
+    try {
+      await trustedContext.testControls?.onProjectRootSelected?.();
+      await assertSelectedProjectRoot(selectedProjectRoot);
+    } catch {
+      return ioFailure('The selected project root changed during the operation.');
+    }
+  }
   if (requestedOperation === 'create_run') {
     return createRun(request as CreateRunRequest, trustedContext);
   }
   if (requestedOperation === 'inspect_run') {
-    let projectRoot: string;
     try {
-      projectRoot = await realpath(trustedContext.projectRoot);
+      const inspected = await withSelectedProjectRoot(trustedContext, () =>
+        inspectRun(request as InspectRunRequest, selectedProjectRoot, {
+          onStepDirectoryListed: trustedContext.testControls?.onStepDirectoryListed,
+          validateSnapshot: (definitionBytes) =>
+            operate(
+              { operation: 'validate_workflow' },
+              continueAtSelectedProjectRoot(trustedContext, { definitionBytes }),
+            ),
+        }),
+      );
+      return preferCancellation(trustedContext.signal, inspected);
     } catch {
-      return ioFailure('Could not select the project root.');
+      return ioFailure('The selected project root changed during inspection.');
     }
-    const inspected = await inspectRun(request as InspectRunRequest, projectRoot, {
-      validateSnapshot: (definitionBytes, selectedProjectRoot) =>
-        operate({ operation: 'validate_workflow' }, {
-          projectRoot: selectedProjectRoot,
-          definitionBytes,
-          signal: trustedContext.signal,
-        } as InternalTrustedContext),
-    });
-    return preferCancellation(trustedContext.signal, inspected);
   }
 
   if (requestedOperation === 'prepare_work') {
@@ -2143,25 +2287,22 @@ export async function operate(
         },
       };
     }
-    let projectRoot: string;
-    try {
-      projectRoot = await realpath(trustedContext.projectRoot);
-    } catch {
-      return ioFailure('Could not select the project root.');
-    }
     let snapshotBytes: Buffer;
     try {
       const inspected = await operate(
         { operation: 'inspect_run', run_id: prepareRequest.run_id },
-        { projectRoot, signal: trustedContext.signal },
+        continueAtSelectedProjectRoot(trustedContext),
       );
       if (!inspected.ok) return inspected;
       snapshotBytes = Buffer.from(
         (
-          await readSecureRegularFile(
-            projectRoot,
-            `${inspected.value.path}/breakdown.yaml`,
-            FIXED_LIMITS.workflow_definition_bytes,
+          await withSelectedProjectRoot(trustedContext, (selectedProjectRoot) =>
+            readSecureRegularFile(
+              selectedProjectRoot.path,
+              `${inspected.value.path}/breakdown.yaml`,
+              FIXED_LIMITS.workflow_definition_bytes,
+              { expectedProjectIdentity: selectedProjectRoot.identity },
+            ),
           )
         ).bytes,
       );
@@ -2178,11 +2319,10 @@ export async function operate(
           },
         };
       }
-      const snapshot = await operate({ operation: 'validate_workflow' }, {
-        projectRoot,
-        definitionBytes: snapshotBytes,
-        signal: trustedContext.signal,
-      } as InternalTrustedContext);
+      const snapshot = await operate(
+        { operation: 'validate_workflow' },
+        continueAtSelectedProjectRoot(trustedContext, { definitionBytes: snapshotBytes }),
+      );
       if (!snapshot.ok) return snapshot;
       return preferCancellation(
         trustedContext.signal,
@@ -2192,7 +2332,7 @@ export async function operate(
           {
             inspected: inspected.value,
             workflow: snapshot.value.workflow,
-            projectRoot,
+            projectRoot: selectedProjectRoot,
           },
         ),
       );
@@ -2209,69 +2349,86 @@ export async function operate(
   }
 
   if (requestedOperation === 'submit_candidate') {
-    let projectRoot: string;
-    try {
-      projectRoot = await realpath(trustedContext.projectRoot);
-    } catch {
-      return ioFailure('Could not select the project root.');
-    }
-    const submitted = await submitCandidate(request as SubmitCandidateRequest, projectRoot, {
-      inspect: (runId) =>
-        operate(
-          { operation: 'inspect_run', run_id: runId },
-          { projectRoot, signal: trustedContext.signal },
-        ),
-      loadWorkflow: async (inspected) => {
-        let snapshotBytes: Buffer;
-        try {
-          snapshotBytes = Buffer.from(
-            (
-              await readSecureRegularFile(
-                projectRoot,
-                `${inspected.path}/breakdown.yaml`,
-                FIXED_LIMITS.workflow_definition_bytes,
-              )
-            ).bytes,
+    const submitted = await submitCandidate(
+      request as SubmitCandidateRequest,
+      selectedProjectRoot,
+      {
+        assertProjectRoot: () =>
+          assertSelectedProjectRoot(selectedProjectRootFromContext(trustedContext)),
+        inspect: (runId) =>
+          operate(
+            { operation: 'inspect_run', run_id: runId },
+            continueAtSelectedProjectRoot(trustedContext),
+          ),
+        loadWorkflow: async (inspected) => {
+          let snapshotBytes: Buffer;
+          try {
+            snapshotBytes = Buffer.from(
+              (
+                await withSelectedProjectRoot(trustedContext, (selectedProjectRoot) =>
+                  readSecureRegularFile(
+                    selectedProjectRoot.path,
+                    `${inspected.path}/breakdown.yaml`,
+                    FIXED_LIMITS.workflow_definition_bytes,
+                    { expectedProjectIdentity: selectedProjectRoot.identity },
+                  ),
+                )
+              ).bytes,
+            );
+          } catch (error) {
+            if (error instanceof ResourceLimitError) return resourceLimitFailure();
+            return ioFailure('Could not securely read the Workflow Snapshot.');
+          }
+          if (sha256(snapshotBytes) !== inspected.workflow.sha256) {
+            return {
+              ok: false,
+              failure: {
+                kind: 'invalid',
+                code: 'invalid_run',
+                message: 'The Run changed while submission was in progress.',
+                diagnostics: [],
+              },
+            };
+          }
+          const snapshot = await operate(
+            { operation: 'validate_workflow' },
+            continueAtSelectedProjectRoot(trustedContext, { definitionBytes: snapshotBytes }),
           );
-        } catch (error) {
-          if (error instanceof ResourceLimitError) return resourceLimitFailure();
-          return ioFailure('Could not securely read the Workflow Snapshot.');
-        }
-        if (sha256(snapshotBytes) !== inspected.workflow.sha256) {
-          return {
-            ok: false,
-            failure: {
-              kind: 'invalid',
-              code: 'invalid_run',
-              message: 'The Run changed while submission was in progress.',
-              diagnostics: [],
-            },
-          };
-        }
-        const snapshot = await operate({ operation: 'validate_workflow' }, {
-          projectRoot,
-          definitionBytes: snapshotBytes,
-          signal: trustedContext.signal,
-        } as InternalTrustedContext);
-        return snapshot.ok ? { ok: true, value: snapshot.value.workflow } : snapshot;
+          return snapshot.ok ? { ok: true, value: snapshot.value.workflow } : snapshot;
+        },
+        now: trustedContext.testControls?.now ?? (() => new Date()),
+        randomBytes: trustedContext.testControls?.randomBytes ?? randomBytes,
+        onPublicationBoundary: trustedContext.testControls?.onStepPublicationBoundary,
+        onLockRecoveryBoundary: trustedContext.testControls?.onLockRecoveryBoundary,
+        signal: trustedContext.signal,
       },
-      now: trustedContext.testControls?.now ?? (() => new Date()),
-      randomBytes: trustedContext.testControls?.randomBytes ?? randomBytes,
-      onPublicationBoundary: trustedContext.testControls?.onStepPublicationBoundary,
-      onLockRecoveryBoundary: trustedContext.testControls?.onLockRecoveryBoundary,
-      signal: trustedContext.signal,
-    });
+    );
     return preferCancellation(trustedContext.signal, submitted);
   }
 
   let bytes: Buffer;
-  const definitionBytes = (trustedContext as InternalTrustedContext).definitionBytes;
+  const internalContext = trustedContext as Partial<InternalTrustedContext>;
+  const definitionBytes =
+    internalContext[INTERNAL_DEFINITION_BYTES] === true
+      ? internalContext.definitionBytes
+      : undefined;
   if (definitionBytes !== undefined) {
     bytes = Buffer.from(definitionBytes);
   } else {
     try {
-      bytes = await readFile(join(trustedContext.projectRoot, 'breakdown.yaml'));
-    } catch {
+      bytes = (
+        await withSelectedProjectRoot(trustedContext, (projectRoot) =>
+          readSecureRegularFile(
+            projectRoot.path,
+            'breakdown.yaml',
+            FIXED_LIMITS.workflow_definition_bytes,
+            { expectedProjectIdentity: projectRoot.identity },
+          ),
+        )
+      ).bytes;
+    } catch (error) {
+      if (error instanceof UnsupportedFilesystemError) return unsupportedFilesystemFailure();
+      if (error instanceof ResourceLimitError) return resourceLimitFailure();
       return {
         ok: false,
         failure: {

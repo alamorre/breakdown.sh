@@ -10,8 +10,14 @@ import {
   runLockRecoveryPath,
 } from './run-lock-paths.js';
 import {
+  assertSecureDirectoryIdentity,
   ensurePrivateDirectoryPath,
   publishPrivateFileNoReplace,
+  readSecureDirectory,
+  sameSecureFileIdentity,
+  secureFileIdentity,
+  type SecureFileIdentity,
+  type SelectedProjectRoot,
   syncDirectory,
   writePrivateFile,
 } from './secure-store.js';
@@ -22,9 +28,12 @@ class LockRecoveryContendedError extends LockRecoveryMismatchError {}
 class LockRecoveryQuarantinedError extends Error {}
 
 export interface RunWriterLock {
+  projectRoot: SelectedProjectRoot;
   directory: string;
   path: string;
   lockId: string;
+  identity: SecureFileIdentity;
+  digest: string;
 }
 
 export interface LockRecoveryIntent {
@@ -64,9 +73,7 @@ async function finalLockExists(lockPath: string) {
 
 interface ObservedLock {
   lockId: string;
-  device: bigint;
-  inode: bigint;
-  birthtime: bigint;
+  identity: SecureFileIdentity;
   digest: string;
 }
 
@@ -104,9 +111,7 @@ async function observeLockFile(path: string): Promise<ObservedLock> {
     }
     return {
       lockId: (value as { lock_id: string }).lock_id,
-      device: openedFacts.dev,
-      inode: openedFacts.ino,
-      birthtime: openedFacts.birthtimeNs,
+      identity: secureFileIdentity(openedFacts),
       digest: createHash('sha256').update(bytes).digest('hex'),
     };
   } catch (error) {
@@ -120,16 +125,24 @@ async function observeLockFile(path: string): Promise<ObservedLock> {
 function sameLock(left: ObservedLock, right: ObservedLock) {
   return (
     left.lockId === right.lockId &&
-    left.device === right.device &&
-    left.inode === right.inode &&
-    left.birthtime === right.birthtime &&
+    sameSecureFileIdentity(left.identity, right.identity) &&
     left.digest === right.digest
+  );
+}
+
+function lockMatchesOwnership(lock: RunWriterLock, observed: ObservedLock) {
+  return (
+    observed.lockId === lock.lockId &&
+    sameSecureFileIdentity(observed.identity, lock.identity) &&
+    observed.digest === lock.digest
   );
 }
 
 function lockIdentityToken(lock: ObservedLock) {
   return createHash('sha256')
-    .update(`${lock.device}:${lock.inode}:${lock.birthtime}:${lock.lockId}:${lock.digest}`)
+    .update(
+      `${lock.identity.device}:${lock.identity.inode}:${lock.identity.birthtime}:${lock.lockId}:${lock.digest}`,
+    )
     .digest('hex')
     .slice(0, 16);
 }
@@ -299,13 +312,12 @@ function mismatch(): LockRecoveryMismatchError {
 }
 
 export async function recoverRunWriterLock(
-  projectRoot: string,
+  selectedProjectRoot: SelectedProjectRoot,
   runId: string,
   intent: unknown,
-  dependencies: Pick<RunWriterLockDependencies, 'onLockRecoveryBoundary' | 'randomBytes'> = {
-    randomBytes: cryptographicRandomBytes,
-  },
+  dependencies: Pick<RunWriterLockDependencies, 'onLockRecoveryBoundary' | 'randomBytes'>,
 ): Promise<void> {
+  const projectRoot = selectedProjectRoot.path;
   if (
     typeof intent !== 'object' ||
     intent === null ||
@@ -318,7 +330,9 @@ export async function recoverRunWriterLock(
   }
   const lockId = (intent as LockRecoveryIntent).lock_id;
 
-  const directory = await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'locks', 'runs']);
+  const directory = await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'locks', 'runs'], {
+    expectedProjectIdentity: selectedProjectRoot.identity,
+  });
   const path = join(directory, `${runId}.lock`);
   let claimedPath: string;
   let createdClaimPath: string | undefined;
@@ -449,11 +463,19 @@ export async function recoverRunWriterLock(
 }
 
 export async function acquireRunWriterLock(
-  projectRoot: string,
+  selectedProjectRoot: SelectedProjectRoot,
   runId: string,
   dependencies: RunWriterLockDependencies,
 ): Promise<RunWriterLock> {
-  const directory = await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'locks', 'runs']);
+  const projectRoot = selectedProjectRoot.path;
+  const directory = await ensurePrivateDirectoryPath(projectRoot, ['.breakdown', 'locks', 'runs'], {
+    expectedProjectIdentity: selectedProjectRoot.identity,
+  });
+  const directoryIdentity = (
+    await readSecureDirectory(projectRoot, '.breakdown/locks/runs', Number.MAX_SAFE_INTEGER, {
+      expectedProjectIdentity: selectedProjectRoot.identity,
+    })
+  ).identity;
   const lockId = randomHex(dependencies);
   const stagingToken = randomHex(dependencies);
   const path = join(directory, `${runId}.lock`);
@@ -476,14 +498,28 @@ export async function acquireRunWriterLock(
     if (await cleanupRecoveryClaimsAndCheckBlocked(directory, path)) {
       throw new RunLockedError('A Run lock recovery is in progress.');
     }
-    await publishPrivateFileNoReplace(stagingPath, path, () => syncDirectory(directory));
+    await publishPrivateFileNoReplace(stagingPath, path, {
+      afterDestinationVisible: () => syncDirectory(directory),
+      assertDestinationParent: () => assertSecureDirectoryIdentity(directory, directoryIdentity),
+    });
     if (await cleanupRecoveryClaimsAndCheckBlocked(directory, path)) {
       const current = await observeLockFile(path);
       if (current.lockId === lockId) await unlink(path);
       throw new RunLockedError('A Run lock recovery is in progress.');
     }
     await syncDirectory(directory);
-    return { directory, path, lockId };
+    const observed = await observeLockFile(path);
+    if (observed.lockId !== lockId) {
+      throw new RunLockedError('The created Run lock identity changed.');
+    }
+    return {
+      projectRoot: selectedProjectRoot,
+      directory,
+      path,
+      lockId,
+      identity: observed.identity,
+      digest: observed.digest,
+    };
   } catch (error) {
     await rm(stagingPath, { force: true });
     if (error instanceof RunLockedError) throw error;
@@ -494,15 +530,36 @@ export async function acquireRunWriterLock(
   }
 }
 
-export async function releaseRunWriterLock(lock: RunWriterLock): Promise<void> {
-  let current: ObservedLock;
+export async function assertRunWriterLock(lock: RunWriterLock): Promise<void> {
+  await readSecureDirectory(
+    lock.projectRoot.path,
+    '.breakdown/locks/runs',
+    Number.MAX_SAFE_INTEGER,
+    {
+      expectedProjectIdentity: lock.projectRoot.identity,
+    },
+  );
+  const directory = join(lock.projectRoot.path, '.breakdown', 'locks', 'runs');
+  if (directory !== lock.directory) {
+    throw new Error('The Run writer-lock directory changed.');
+  }
+  const current = await observeLockFile(lock.path);
+  if (!lockMatchesOwnership(lock, current)) {
+    throw new Error('The Run writer lock changed.');
+  }
+}
+
+export async function releaseRunWriterLock(
+  lock: RunWriterLock,
+  assertProjectRoot?: () => void | Promise<void>,
+): Promise<void> {
+  await assertProjectRoot?.();
   try {
-    current = await observeLockFile(lock.path);
+    await assertRunWriterLock(lock);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
     throw error;
   }
-  if (current.lockId !== lock.lockId) return;
   await unlink(lock.path);
   await syncDirectory(lock.directory);
 }

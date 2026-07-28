@@ -18,9 +18,10 @@ import type {
   WorkflowDefinition,
 } from './index.js';
 import type { SubmissionIdentity, WorkPacket } from './prepare-work.js';
-import { validateDataContractInstance } from './run-inspection.js';
+import { isCommittedStepArtifactFilename, validateDataContractInstance } from './run-inspection.js';
 import {
   acquireRunWriterLock,
+  assertRunWriterLock,
   type LockRecoveryBoundary,
   LockRecoveryMismatchError,
   type LockRecoveryIntent,
@@ -29,7 +30,15 @@ import {
   RunLockedError,
   type RunWriterLock,
 } from './run-writer-lock.js';
-import { publishPrivateFileNoReplace, syncDirectory, writePrivateFile } from './secure-store.js';
+import {
+  assertSecureDirectoryIdentity,
+  publishPrivateFileNoReplace,
+  readSecureDirectory,
+  ResourceLimitError,
+  type SelectedProjectRoot,
+  syncDirectory,
+  writePrivateFile,
+} from './secure-store.js';
 import { isUnicodeScalarString } from './unicode.js';
 
 const RUN_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z--[a-z][a-z0-9]*(?:-[a-z0-9]+)*--[a-z2-7]{12}$/;
@@ -126,10 +135,12 @@ export type StepPublicationBoundary =
   | 'after_lock_acquired'
   | 'after_staging_written'
   | 'before_commit'
+  | 'after_destination_validated'
   | 'after_commit_visible'
   | 'after_commit';
 
 interface SubmitCandidateDependencies {
+  assertProjectRoot(): Promise<void>;
   inspect(runId: string): Promise<OperationResult<InspectRunValue>>;
   loadWorkflow(inspected: InspectRunValue): Promise<OperationResult<WorkflowDefinition>>;
   now(): Date;
@@ -814,11 +825,36 @@ function artifactBytes(
   );
 }
 
+async function assertStepPublicationBoundary(
+  selectedProjectRoot: SelectedProjectRoot,
+  stepsRelativePath: string,
+  lock: RunWriterLock,
+  dependencies: SubmitCandidateDependencies,
+) {
+  const projectRoot = selectedProjectRoot.path;
+  await dependencies.assertProjectRoot();
+  await assertRunWriterLock(lock);
+  const stepsDirectory = await readSecureDirectory(
+    projectRoot,
+    stepsRelativePath,
+    FIXED_LIMITS.direct_step_entries_scanned,
+    { expectedProjectIdentity: selectedProjectRoot.identity },
+  );
+  if (
+    stepsDirectory.entries.filter(isCommittedStepArtifactFilename).length >=
+    FIXED_LIMITS.step_artifacts_per_run
+  ) {
+    throw new ResourceLimitError('The Run has reached its StepArtifact limit.');
+  }
+  return stepsDirectory.identity;
+}
+
 export async function submitCandidate(
   request: SubmitCandidateRequest,
-  projectRoot: string,
+  selectedProjectRoot: SelectedProjectRoot,
   dependencies: SubmitCandidateDependencies,
 ): Promise<OperationResult<SubmitCandidateValue>> {
+  const projectRoot = selectedProjectRoot.path;
   if (isCancelled(dependencies.signal)) return cancelledFailure();
   const validated = validateCandidate((request as { candidate?: unknown }).candidate);
   if (!validated.ok) return validated;
@@ -832,7 +868,7 @@ export async function submitCandidate(
     if (isCancelled(dependencies.signal)) return cancelledFailure();
     try {
       await recoverRunWriterLock(
-        projectRoot,
+        selectedProjectRoot,
         candidate.submission.run_id,
         request.lock_recovery,
         dependencies,
@@ -846,7 +882,11 @@ export async function submitCandidate(
   }
   let lock: RunWriterLock;
   try {
-    lock = await acquireRunWriterLock(projectRoot, candidate.submission.run_id, dependencies);
+    lock = await acquireRunWriterLock(
+      selectedProjectRoot,
+      candidate.submission.run_id,
+      dependencies,
+    );
   } catch (error) {
     return error instanceof RunLockedError
       ? conflictFailure('run_locked', 'Another writer currently holds the Run lock.')
@@ -854,6 +894,8 @@ export async function submitCandidate(
   }
   try {
     await dependencies.onPublicationBoundary?.('after_lock_acquired');
+    await dependencies.assertProjectRoot();
+    await assertRunWriterLock(lock);
     if (isCancelled(dependencies.signal)) return cancelledFailure();
     const inspected = await dependencies.inspect(candidate.submission.run_id);
     if (!inspected.ok) return inspected;
@@ -863,6 +905,9 @@ export async function submitCandidate(
     );
     if (node === undefined) {
       return conflictFailure('no_longer_runnable', 'The submitted node is no longer runnable.');
+    }
+    if (node.next_attempt > FIXED_LIMITS.attempts_per_node) {
+      return resourceLimitFailure();
     }
     if (node.next_attempt !== candidate.submission.expected_attempt) {
       return conflictFailure(
@@ -962,6 +1007,12 @@ export async function submitCandidate(
 
     try {
       throwIfCancelled(dependencies.signal);
+      await assertStepPublicationBoundary(
+        selectedProjectRoot,
+        stepsRelativePath,
+        lock,
+        dependencies,
+      );
       if (candidate.json !== undefined) {
         await writePrivateFile(jsonStagingPath, candidate.json.bytes);
       }
@@ -969,19 +1020,33 @@ export async function submitCandidate(
       await syncDirectory(stepsPath);
       await dependencies.onPublicationBoundary?.('after_staging_written');
       throwIfCancelled(dependencies.signal);
+      let stepsIdentity = await assertStepPublicationBoundary(
+        selectedProjectRoot,
+        stepsRelativePath,
+        lock,
+        dependencies,
+      );
       if (candidate.json !== undefined && jsonRelativePath !== undefined) {
-        await publishPrivateFileNoReplace(
-          jsonStagingPath,
-          join(projectRoot, jsonRelativePath),
-          () => syncDirectory(stepsPath),
-        );
+        await publishPrivateFileNoReplace(jsonStagingPath, join(projectRoot, jsonRelativePath), {
+          afterDestinationVisible: () => syncDirectory(stepsPath),
+          assertDestinationParent: () => assertSecureDirectoryIdentity(stepsPath, stepsIdentity),
+          afterDestinationValidated: () =>
+            dependencies.onPublicationBoundary?.('after_destination_validated'),
+        });
         await syncDirectory(stepsPath);
       }
       await dependencies.onPublicationBoundary?.('before_commit');
-      await publishPrivateFileNoReplace(
-        markdownStagingPath,
-        join(projectRoot, relativePath),
-        async () => {
+      stepsIdentity = await assertStepPublicationBoundary(
+        selectedProjectRoot,
+        stepsRelativePath,
+        lock,
+        dependencies,
+      );
+      await publishPrivateFileNoReplace(markdownStagingPath, join(projectRoot, relativePath), {
+        assertDestinationParent: () => assertSecureDirectoryIdentity(stepsPath, stepsIdentity),
+        afterDestinationValidated: () =>
+          dependencies.onPublicationBoundary?.('after_destination_validated'),
+        afterDestinationVisible: async () => {
           await syncDirectory(stepsPath);
           try {
             await dependencies.onPublicationBoundary?.('after_commit_visible');
@@ -989,7 +1054,7 @@ export async function submitCandidate(
             // The Markdown visibility marker is committed; observation cannot roll it back.
           }
         },
-      );
+      });
       await syncDirectory(stepsPath);
     } catch (error) {
       await Promise.all([
@@ -997,6 +1062,7 @@ export async function submitCandidate(
         rm(jsonStagingPath, { force: true }),
       ]);
       if (error instanceof InvocationCancelledError) return cancelledFailure();
+      if (error instanceof ResourceLimitError) return resourceLimitFailure();
       if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
         return conflictFailure(
           'attempt_advanced',
@@ -1087,7 +1153,7 @@ export async function submitCandidate(
     return ioFailure();
   } finally {
     try {
-      await releaseRunWriterLock(lock);
+      await releaseRunWriterLock(lock, dependencies.assertProjectRoot);
     } catch {
       // Inspection exposes an unexpected leftover lock for explicit recovery.
     }

@@ -22,6 +22,10 @@
       "path": "publication/matrix.json"
     },
     {
+      "group": "SEC",
+      "path": "security/matrix.json"
+    },
+    {
       "group": "CLI",
       "path": "cli/matrix.json"
     },

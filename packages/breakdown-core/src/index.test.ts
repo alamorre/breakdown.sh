@@ -1864,6 +1864,7 @@ nodes:
       'after_snapshot_written',
       'after_manifest_written',
       'before_publish',
+      'after_destination_validated',
       'after_publish',
     ] as const;
 

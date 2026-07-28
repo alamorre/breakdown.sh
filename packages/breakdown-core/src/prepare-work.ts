@@ -14,6 +14,7 @@ import {
   readSecureRegularFile,
   readSecureResultFile,
   type SecureFileIdentity,
+  type SelectedProjectRoot,
 } from './secure-store.js';
 
 export interface PrepareWorkRequest {
@@ -86,7 +87,7 @@ export interface PrepareWorkValue {
 interface PrepareWorkDependencies {
   inspected: InspectRunValue;
   workflow: WorkflowDefinition;
-  projectRoot: string;
+  projectRoot: SelectedProjectRoot;
 }
 
 function failure(code: string, message: string, diagnostics: Diagnostic[] = []): OperationFailure {
@@ -133,7 +134,7 @@ async function makeInputDescriptors(
   node: NodeDefinition,
   inspected: InspectRunValue,
   workflow: WorkflowDefinition,
-  projectRoot: string,
+  projectRoot: SelectedProjectRoot,
 ): Promise<Record<string, WorkPacketInput> | undefined> {
   const descriptors: Record<string, WorkPacketInput> = {};
   for (const [bindingId, binding] of Object.entries(node.inputs ?? {}).sort(([a], [b]) =>
@@ -145,9 +146,10 @@ async function makeInputDescriptors(
       let workflowInputRead: Awaited<ReturnType<typeof readSecureRegularFile>>;
       try {
         workflowInputRead = await readSecureRegularFile(
-          projectRoot,
+          projectRoot.path,
           input.path,
           FIXED_LIMITS.workflow_input_file_bytes,
+          { expectedProjectIdentity: projectRoot.identity },
         );
       } catch {
         return undefined;
@@ -172,9 +174,10 @@ async function makeInputDescriptors(
     let selectedMarkdown: Awaited<ReturnType<typeof readSecureRegularFile>>;
     try {
       selectedMarkdown = await readSecureResultFile(
-        projectRoot,
+        projectRoot.path,
         predecessor.selected_result.markdown.path,
         FIXED_LIMITS.automation_response_bytes,
+        { expectedProjectIdentity: projectRoot.identity },
       );
     } catch {
       return undefined;
@@ -191,9 +194,10 @@ async function makeInputDescriptors(
     if (selectedJsonDescriptor !== undefined) {
       try {
         selectedJson = await readSecureResultFile(
-          projectRoot,
+          projectRoot.path,
           selectedJsonDescriptor.path,
           FIXED_LIMITS.candidate_json_bytes,
+          { expectedProjectIdentity: projectRoot.identity },
         );
       } catch {
         return undefined;
@@ -278,6 +282,9 @@ export async function prepareWork(
     const definition = dependencies.workflow.nodes.find((candidate) => candidate.id === nodeId);
     if (state === undefined || definition === undefined || state.context_sha256 === undefined)
       continue;
+    if (state.next_attempt > FIXED_LIMITS.attempts_per_node) {
+      return resourceLimitFailure();
+    }
     const inputs = await makeInputDescriptors(
       definition,
       inspected,

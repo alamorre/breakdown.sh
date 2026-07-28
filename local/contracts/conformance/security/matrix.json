@@ -1,0 +1,71 @@
+{
+  "schema_version": "breakdown.conformance-matrix.v1",
+  "defaults": {
+    "prerequisites": "Create hostile fixtures on a real temporary supported local filesystem.",
+    "action": "Exercise all six operations through the core dispatcher with one explicit project root.",
+    "oracle_type": "effect",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "evidence": "packages/breakdown-core/src/security-boundary.test.ts"
+  },
+  "rows": [
+    {
+      "id": "SEC-001",
+      "requirement": "Issue #157: require and canonicalize one explicit selected project root before processing every operation",
+      "oracle": "Missing roots fail project_root_required; missing or unsupported selected roots fail before operation payloads are interpreted; a link used only in the supplied root route is accepted."
+    },
+    {
+      "id": "SEC-002",
+      "requirement": "Issue #157: reject every linked, mounted, redirected, case-aliased, or Unicode-aliased descendant contract path",
+      "oracle": "Secure descendant walks reject links and ambiguous aliases for definitions, Inputs, Runs, Results, locks, and temporary or final publication directories."
+    },
+    {
+      "id": "SEC-003",
+      "requirement": "Issue #157: reject known remote filesystems and detectable synchronized or redirected storage",
+      "oracle": "Controlled NFS, SMB/CIFS, remote mount, FUSE-remote, UNC, reparse, and visible synchronization indirection fixtures fail unsupported_filesystem or fail closed before access."
+    },
+    {
+      "id": "SEC-004",
+      "requirement": "Issue #157: confine Breakdown-owned state and make it current-user-only by default",
+      "oracle": "Only the Run directory and Breakdown-owned .breakdown transient locations change; new POSIX directories and files are 0700 and 0600, and existing Workflow Input permissions remain unchanged."
+    },
+    {
+      "id": "SEC-005",
+      "requirement": "Issue #157: fail closed on validation-to-open and staging-to-publication replacement races",
+      "oracle": "Input identity changes and replacement of Run or StepArtifact temporary and destination directories produce no redirected authoritative commit."
+    },
+    {
+      "id": "SEC-006",
+      "requirement": "Issue #157: keep project content structurally separated from Run Authority",
+      "oracle": "Hostile prompts, Inputs, Results, extensions, and filenames remain data; Work Packet policy, task, Input descriptors, Result requirements, and submission identity remain distinct."
+    },
+    {
+      "id": "SEC-007",
+      "requirement": "Issue #157: perform no project-directed execution, import, hook, Git, network, environment, credential-discovery, or undeclared-context side effect",
+      "oracle": "Hostile adjacent instructions, package hooks, repositories, environment files, URLs, templates, and command strings are neither loaded nor acted upon."
+    },
+    {
+      "id": "SEC-008",
+      "requirement": "Issue #157: keep ambient credentials and privileged host configuration out of durable and transient operation values",
+      "oracle": "Sentinel ambient secrets do not appear in Runs, StepArtifacts, Work Packets, diagnostics, logs, extensions added by the core, or child environments; the core creates no child process."
+    },
+    {
+      "id": "SEC-009",
+      "requirement": "Issue #157: reject special files and preserve exact Input identity and permissions",
+      "oracle": "Directories, devices, FIFOs, sockets, links, hard links, replacements, and mutations fail before disclosure or commit while ordinary Input mode bits remain unchanged."
+    },
+    {
+      "id": "SEC-010",
+      "requirement": "Issue #157: enforce the complete fixed limit profile without truncation or partial durable commits",
+      "oracle": "Every applicable limit-minus-one and limit value succeeds exactly; limit-plus-one fails resource_limit/limit_exceeded with no partial Run or StepArtifact.",
+      "evidence": "packages/breakdown-core/src/index.test.ts, packages/breakdown-core/src/prepare-work.test.ts, packages/breakdown-core/src/run-inspection.test.ts, packages/breakdown-core/src/submit-candidate.test.ts, packages/breakdown-core/src/security-boundary.test.ts"
+    }
+  ]
+}

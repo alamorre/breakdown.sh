@@ -5,6 +5,7 @@ import { basename, dirname, extname, join } from 'node:path';
 import { isRunLockQuarantineAlias, isRunLockRecoveryAlias } from './run-lock-paths.js';
 
 export class ResourceLimitError extends Error {}
+export class SecureDirectoryChangedError extends Error {}
 export class UnsupportedFilesystemError extends Error {}
 
 export interface SecureFileIdentity {
@@ -13,8 +14,48 @@ export interface SecureFileIdentity {
   birthtime: string;
 }
 
+export interface SelectedProjectRoot {
+  path: string;
+  identity: SecureFileIdentity;
+}
+
+export interface SecureDirectorySnapshot {
+  path: string;
+  identity: SecureFileIdentity;
+  mtime: string;
+  ctime: string;
+  entriesByCanonicalName: ReadonlyMap<string, readonly string[]>;
+}
+
+export function secureFileIdentity(facts: {
+  dev: bigint;
+  ino: bigint;
+  birthtimeNs: bigint;
+}): SecureFileIdentity {
+  return {
+    device: facts.dev.toString(),
+    inode: facts.ino.toString(),
+    birthtime: facts.birthtimeNs.toString(),
+  };
+}
+
+export function sameSecureFileIdentity(
+  left: SecureFileIdentity,
+  right: SecureFileIdentity,
+): boolean {
+  return (
+    left.device === right.device && left.inode === right.inode && left.birthtime === right.birthtime
+  );
+}
+
 export interface SecureReadOptions {
   allowPublicationStagingAlias?: boolean;
+  expectedParentSnapshot?: SecureDirectorySnapshot;
+  expectedProjectIdentity?: SecureFileIdentity;
+}
+
+export interface SecureDirectoryOptions {
+  expectedProjectIdentity?: SecureFileIdentity;
 }
 
 interface LinuxMount {
@@ -37,6 +78,16 @@ const UNSUPPORTED_FILESYSTEM_TYPES = new Set([
 const SUPPORTED_DARWIN_FILESYSTEM_TYPES = new Set([
   25n, // HFS
   26n, // APFS
+]);
+
+const SUPPORTED_LINUX_FILESYSTEM_TYPES = new Set([
+  0xef53n, // ext2/ext3/ext4
+  0x58465342n, // XFS
+  0x9123683en, // Btrfs
+  0x01021994n, // tmpfs
+  0x794c7630n, // OverlayFS
+  0x2fc12fc1n, // ZFS
+  0xf2f52010n, // F2FS
 ]);
 
 const UNSUPPORTED_MOUNT_TYPES = new Set([
@@ -126,13 +177,32 @@ function assertSameLinuxMount(
   }
 }
 
+function hasDetectableSynchronizedRoute(projectRoot: string) {
+  const segments = projectRoot.split(/[\\/]+/).map((segment) => segment.toLowerCase());
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    const next = segments[index + 1];
+    if (
+      process.platform === 'darwin' &&
+      segment === 'library' &&
+      (next === 'cloudstorage' || next === 'mobile documents')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function assertSupportedFilesystem(projectRoot: string) {
-  if (process.platform === 'win32' && /^[\\/]{2}/.test(projectRoot)) {
+  // Node/libuv reports no Windows filesystem type and POSIX modes do not enforce
+  // account-only ACLs there, so the required guarantees cannot be established.
+  if (process.platform === 'win32' || hasDetectableSynchronizedRoute(projectRoot)) {
     throw new UnsupportedFilesystemError();
   }
   const facts = await statfs(projectRoot, { bigint: true });
   if (
     UNSUPPORTED_FILESYSTEM_TYPES.has(facts.type) ||
+    (process.platform === 'linux' && !SUPPORTED_LINUX_FILESYSTEM_TYPES.has(facts.type)) ||
     (process.platform === 'darwin' && !SUPPORTED_DARWIN_FILESYSTEM_TYPES.has(facts.type))
   ) {
     throw new UnsupportedFilesystemError();
@@ -166,10 +236,41 @@ async function readBoundedFile(handle: Awaited<ReturnType<typeof open>>, maximum
 }
 
 async function matchingDirectoryEntries(directoryPath: string, expectedName: string) {
-  const normalizedExpectedName = expectedName.normalize('NFC').toLowerCase();
+  const normalizedExpectedName = canonicalEntryName(expectedName);
   return (await readdir(directoryPath)).filter(
-    (entry) => entry.normalize('NFC').toLowerCase() === normalizedExpectedName,
+    (entry) => canonicalEntryName(entry) === normalizedExpectedName,
   );
+}
+
+function canonicalEntryName(entry: string) {
+  return entry.normalize('NFC').toLowerCase();
+}
+
+function directoryEntryIndex(entries: string[]) {
+  const index = new Map<string, string[]>();
+  for (const entry of entries) {
+    const canonicalName = canonicalEntryName(entry);
+    const matches = index.get(canonicalName);
+    if (matches === undefined) {
+      index.set(canonicalName, [entry]);
+    } else {
+      matches.push(entry);
+    }
+  }
+  return index;
+}
+
+async function assertSecureDirectorySnapshot(snapshot: SecureDirectorySnapshot) {
+  const facts = await lstat(snapshot.path, { bigint: true });
+  if (
+    facts.isSymbolicLink() ||
+    !facts.isDirectory() ||
+    !sameSecureFileIdentity(secureFileIdentity(facts), snapshot.identity) ||
+    facts.mtimeNs.toString() !== snapshot.mtime ||
+    facts.ctimeNs.toString() !== snapshot.ctime
+  ) {
+    throw new SecureDirectoryChangedError('A secure directory changed after it was listed.');
+  }
 }
 
 async function hasExpectedPublicationStagingAlias(
@@ -225,17 +326,35 @@ async function readSecureRegularFileOnce(
   const segments = path.split('/');
   let inputPath = projectRoot;
   const projectFacts = await lstat(projectRoot, { bigint: true });
+  const projectIdentity = secureFileIdentity(projectFacts);
+  if (
+    options.expectedProjectIdentity !== undefined &&
+    !sameSecureFileIdentity(projectIdentity, options.expectedProjectIdentity)
+  ) {
+    throw new Error('The selected project-root identity changed before a file was read.');
+  }
   const { mounts: linuxMounts, rootMountId } = await linuxMountContext(projectRoot);
   const traversedEntries: Array<{ path: string; device: bigint; inode: bigint }> = [];
   for (const [index, segment] of segments.entries()) {
-    const aliases = await matchingDirectoryEntries(inputPath, segment);
+    const isFinalSegment = index === segments.length - 1;
+    let aliases: readonly string[];
+    if (isFinalSegment && options.expectedParentSnapshot !== undefined) {
+      if (inputPath !== options.expectedParentSnapshot.path) {
+        throw new Error('A secure file parent does not match its directory snapshot.');
+      }
+      await assertSecureDirectorySnapshot(options.expectedParentSnapshot);
+      aliases =
+        options.expectedParentSnapshot.entriesByCanonicalName.get(canonicalEntryName(segment)) ??
+        [];
+    } else {
+      aliases = await matchingDirectoryEntries(inputPath, segment);
+    }
     if (aliases.length !== 1 || aliases[0] !== segment) {
       throw new Error('Workflow Input path has an ambiguous case or Unicode alias.');
     }
     inputPath = join(inputPath, segment);
     assertSameLinuxMount(linuxMounts, rootMountId, inputPath);
     const facts = await lstat(inputPath, { bigint: true });
-    const isFinalSegment = index === segments.length - 1;
     const validFinalFile =
       isFinalSegment &&
       facts.isFile() &&
@@ -267,6 +386,13 @@ async function readSecureRegularFileOnce(
     }
     const bytes = await readBoundedFile(handle, maximumBytes);
     const openedFactsAfter = await handle.stat({ bigint: true });
+    const projectFactsAfter = await lstat(projectRoot, { bigint: true });
+    if (
+      !projectFactsAfter.isDirectory() ||
+      !sameSecureFileIdentity(secureFileIdentity(projectFactsAfter), projectIdentity)
+    ) {
+      throw new Error('The selected project-root identity changed while a file was read.');
+    }
     const { mounts: linuxMountsAfter, rootMountId: rootMountIdAfter } =
       await linuxMountContext(projectRoot);
     if (rootMountIdAfter !== rootMountId) {
@@ -284,6 +410,9 @@ async function readSecureRegularFileOnce(
       }
     }
     const pathFactsAfter = await lstat(inputPath, { bigint: true });
+    if (options.expectedParentSnapshot !== undefined) {
+      await assertSecureDirectorySnapshot(options.expectedParentSnapshot);
+    }
     const changed =
       openedFactsAfter.dev !== openedFactsBefore.dev ||
       openedFactsAfter.ino !== openedFactsBefore.ino ||
@@ -296,11 +425,7 @@ async function readSecureRegularFileOnce(
     if (changed) throw new Error('Workflow Input changed while it was being read.');
     return {
       bytes,
-      identity: {
-        device: openedFactsBefore.dev.toString(),
-        inode: openedFactsBefore.ino.toString(),
-        birthtime: openedFactsBefore.birthtimeNs.toString(),
-      } satisfies SecureFileIdentity,
+      identity: secureFileIdentity(openedFactsBefore),
     };
   } finally {
     await handle.close();
@@ -332,21 +457,36 @@ export async function readSecureRegularFile(
   throw new Error('A secure file could not be read.');
 }
 
-export function readSecureResultFile(projectRoot: string, path: string, maximumBytes: number) {
+export function readSecureResultFile(
+  projectRoot: string,
+  path: string,
+  maximumBytes: number,
+  options: Pick<SecureReadOptions, 'expectedParentSnapshot' | 'expectedProjectIdentity'> = {},
+) {
   return readSecureRegularFile(projectRoot, path, maximumBytes, {
     allowPublicationStagingAlias: true,
+    ...options,
   });
 }
 
-export async function readSecureDirectoryEntries(
+export async function readSecureDirectory(
   projectRoot: string,
   path: string,
   maximumEntries: number,
+  options: SecureDirectoryOptions = {},
 ) {
   const segments = path.split('/');
   let directoryPath = projectRoot;
   const projectFacts = await lstat(projectRoot, { bigint: true });
+  const projectIdentity = secureFileIdentity(projectFacts);
+  if (
+    options.expectedProjectIdentity !== undefined &&
+    !sameSecureFileIdentity(projectIdentity, options.expectedProjectIdentity)
+  ) {
+    throw new Error('The selected project-root identity changed before a directory was read.');
+  }
   const { mounts: linuxMounts, rootMountId } = await linuxMountContext(projectRoot);
+  let directoryIdentity = secureFileIdentity(projectFacts);
   for (const segment of segments) {
     const aliases = await matchingDirectoryEntries(directoryPath, segment);
     if (aliases.length !== 1 || aliases[0] !== segment) {
@@ -358,17 +498,64 @@ export async function readSecureDirectoryEntries(
     if (facts.isSymbolicLink() || !facts.isDirectory() || facts.dev !== projectFacts.dev) {
       throw new Error('Directory path traverses a linked, mounted, or non-directory entry.');
     }
+    directoryIdentity = secureFileIdentity(facts);
   }
+  const listingFactsBefore = await lstat(directoryPath, { bigint: true });
   const entries = await readdir(directoryPath);
   if (entries.length > maximumEntries) {
     throw new ResourceLimitError('A secure directory exceeds its fixed entry limit.');
   }
-  return entries;
+  const listingFactsAfter = await lstat(directoryPath, { bigint: true });
+  if (
+    !sameSecureFileIdentity(secureFileIdentity(listingFactsBefore), directoryIdentity) ||
+    !sameSecureFileIdentity(secureFileIdentity(listingFactsAfter), directoryIdentity) ||
+    listingFactsAfter.mtimeNs !== listingFactsBefore.mtimeNs ||
+    listingFactsAfter.ctimeNs !== listingFactsBefore.ctimeNs
+  ) {
+    throw new SecureDirectoryChangedError('A secure directory changed while it was listed.');
+  }
+  await assertSecureDirectoryIdentity(projectRoot, projectIdentity);
+  return {
+    entries,
+    identity: directoryIdentity,
+    snapshot: {
+      path: directoryPath,
+      identity: directoryIdentity,
+      mtime: listingFactsAfter.mtimeNs.toString(),
+      ctime: listingFactsAfter.ctimeNs.toString(),
+      entriesByCanonicalName: directoryEntryIndex(entries),
+    } satisfies SecureDirectorySnapshot,
+  };
 }
 
-export async function ensurePrivateDirectoryPath(projectRoot: string, segments: string[]) {
+export async function assertSecureDirectoryIdentity(
+  directoryPath: string,
+  expectedIdentity: SecureFileIdentity,
+) {
+  const facts = await lstat(directoryPath, { bigint: true });
+  if (
+    facts.isSymbolicLink() ||
+    !facts.isDirectory() ||
+    !sameSecureFileIdentity(secureFileIdentity(facts), expectedIdentity)
+  ) {
+    throw new Error('A secure directory identity changed.');
+  }
+}
+
+export async function ensurePrivateDirectoryPath(
+  projectRoot: string,
+  segments: string[],
+  options: SecureDirectoryOptions = {},
+) {
   let currentPath = projectRoot;
   const projectFacts = await lstat(projectRoot, { bigint: true });
+  const projectIdentity = secureFileIdentity(projectFacts);
+  if (
+    options.expectedProjectIdentity !== undefined &&
+    !sameSecureFileIdentity(projectIdentity, options.expectedProjectIdentity)
+  ) {
+    throw new Error('The selected project-root identity changed before a directory was created.');
+  }
   const { mounts: linuxMounts, rootMountId } = await linuxMountContext(projectRoot);
   for (const segment of segments) {
     const existingAliases = await matchingDirectoryEntries(currentPath, segment);
@@ -390,6 +577,7 @@ export async function ensurePrivateDirectoryPath(projectRoot: string, segments: 
       throw new Error('A Breakdown-owned directory path is linked or not a directory.');
     }
   }
+  await assertSecureDirectoryIdentity(projectRoot, projectIdentity);
   return currentPath;
 }
 
@@ -403,16 +591,30 @@ export async function writePrivateFile(path: string, bytes: Uint8Array) {
   }
 }
 
+export interface PrivateFilePublicationOptions {
+  afterDestinationVisible?: () => void | Promise<void>;
+  assertDestinationParent?: () => void | Promise<void>;
+  afterDestinationValidated?: () => void | Promise<void>;
+}
+
 export async function publishPrivateFileNoReplace(
   stagingPath: string,
   destinationPath: string,
-  afterDestinationVisible?: () => void | Promise<void>,
+  options: PrivateFilePublicationOptions = {},
 ) {
   // Hard-link publication is the portable atomic no-replace move available in Node.
   // The final name is complete when it appears; removing the staging alias finishes the move.
+  await options.assertDestinationParent?.();
+  await options.afterDestinationValidated?.();
   await link(stagingPath, destinationPath);
   try {
-    await afterDestinationVisible?.();
+    await options.assertDestinationParent?.();
+  } catch (error) {
+    await unlink(destinationPath);
+    throw error;
+  }
+  try {
+    await options.afterDestinationVisible?.();
   } finally {
     try {
       await unlink(stagingPath);

@@ -10,10 +10,13 @@ import { FIXED_LIMITS } from './fixed-limits.js';
 import { isRunLockRecoveryAlias } from './run-lock-paths.js';
 import {
   assertSupportedFilesystem,
-  readSecureDirectoryEntries,
+  readSecureDirectory,
   readSecureRegularFile,
   readSecureResultFile,
   ResourceLimitError,
+  SecureDirectoryChangedError,
+  type SecureDirectorySnapshot,
+  type SelectedProjectRoot,
   UnsupportedFilesystemError,
 } from './secure-store.js';
 import { isUnicodeScalarString } from './unicode.js';
@@ -35,6 +38,7 @@ const REVERSE_DNS_PATTERN =
 const STEP_FILENAME_PATTERN =
   /^(\d{8}T\d{6}\.\d{3}Z)--([a-z][a-z0-9]*(?:-[a-z0-9]+)*)--a([1-9]\d*)\.md$/;
 const PROBLEM_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+const MAX_STABLE_INSPECTION_PASSES = 4;
 
 export interface InspectRunRequest {
   operation: 'inspect_run';
@@ -147,6 +151,7 @@ interface ParsedStepArtifact {
 }
 
 interface InspectionDependencies {
+  onStepDirectoryListed?: () => void | Promise<void>;
   validateSnapshot(
     bytes: Uint8Array,
     projectRoot: string,
@@ -1599,7 +1604,12 @@ function deriveNodeState(
   return { nodes, selectedByNode };
 }
 
-async function observeLock(projectRoot: string, runId: string): Promise<ObservedRunLock | null> {
+async function observeLock(
+  selectedProjectRoot: SelectedProjectRoot,
+  runId: string,
+): Promise<ObservedRunLock | null> {
+  const projectRoot = selectedProjectRoot.path;
+  const projectRootIdentity = selectedProjectRoot.identity;
   const lockDirectory = '.breakdown/locks/runs';
   const lockFilename = `${runId}.lock`;
   const lockPath = `${lockDirectory}/${lockFilename}`;
@@ -1616,8 +1626,10 @@ async function observeLock(projectRoot: string, runId: string): Promise<Observed
     }
     try {
       const recoveryEntries = (
-        await readSecureDirectoryEntries(projectRoot, lockDirectory, Number.MAX_SAFE_INTEGER)
-      )
+        await readSecureDirectory(projectRoot, lockDirectory, Number.MAX_SAFE_INTEGER, {
+          expectedProjectIdentity: projectRootIdentity,
+        })
+      ).entries
         .filter((entry) => isRunLockRecoveryAlias(lockFilename, entry))
         .sort();
       if (recoveryEntries.length === 0) return null;
@@ -1641,6 +1653,7 @@ async function observeLock(projectRoot: string, runId: string): Promise<Observed
   try {
     const lock = await readSecureRegularFile(projectRoot, relativePath, 65_536, {
       allowPublicationStagingAlias: true,
+      expectedProjectIdentity: projectRootIdentity,
     });
     let lockId: string | null = null;
     try {
@@ -1667,11 +1680,17 @@ async function observeLock(projectRoot: string, runId: string): Promise<Observed
   }
 }
 
-export async function inspectRun(
+export function isCommittedStepArtifactFilename(filename: string) {
+  return STEP_FILENAME_PATTERN.test(filename);
+}
+
+async function inspectRunOnce(
   request: InspectRunRequest,
-  projectRoot: string,
+  selectedProjectRoot: SelectedProjectRoot,
   dependencies: InspectionDependencies,
 ): Promise<OperationResult<InspectRunValue>> {
+  const projectRoot = selectedProjectRoot.path;
+  const projectRootIdentity = selectedProjectRoot.identity;
   if (typeof request.run_id !== 'string' || RUN_ID_PATTERN.exec(request.run_id) === null) {
     return runNotFoundFailure();
   }
@@ -1691,7 +1710,9 @@ export async function inspectRun(
     return ioFailure('Could not select the exact Run.');
   }
   try {
-    await readSecureDirectoryEntries(projectRoot, runPath, Number.MAX_SAFE_INTEGER);
+    await readSecureDirectory(projectRoot, runPath, Number.MAX_SAFE_INTEGER, {
+      expectedProjectIdentity: projectRootIdentity,
+    });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return runNotFoundFailure();
     if (error instanceof ResourceLimitError) return resourceLimitFailure();
@@ -1705,9 +1726,15 @@ export async function inspectRun(
   let manifestBytes: Uint8Array | undefined;
   let snapshotBytes: Uint8Array | undefined;
   let stepEntries: string[] = [];
+  let stepDirectorySnapshot: SecureDirectorySnapshot | undefined;
   try {
     manifestBytes = (
-      await readSecureRegularFile(projectRoot, manifestFile, FIXED_LIMITS.automation_response_bytes)
+      await readSecureRegularFile(
+        projectRoot,
+        manifestFile,
+        FIXED_LIMITS.automation_response_bytes,
+        { expectedProjectIdentity: projectRootIdentity },
+      )
     ).bytes;
   } catch {
     diagnostics.push(
@@ -1716,7 +1743,12 @@ export async function inspectRun(
   }
   try {
     snapshotBytes = (
-      await readSecureRegularFile(projectRoot, snapshotFile, FIXED_LIMITS.workflow_definition_bytes)
+      await readSecureRegularFile(
+        projectRoot,
+        snapshotFile,
+        FIXED_LIMITS.workflow_definition_bytes,
+        { expectedProjectIdentity: projectRootIdentity },
+      )
     ).bytes;
   } catch (error) {
     if (error instanceof ResourceLimitError) return resourceLimitFailure();
@@ -1730,16 +1762,25 @@ export async function inspectRun(
     );
   }
   try {
-    stepEntries = await readSecureDirectoryEntries(
+    const stepDirectory = await readSecureDirectory(
       projectRoot,
       stepsPath,
       FIXED_LIMITS.direct_step_entries_scanned,
+      {
+        expectedProjectIdentity: projectRootIdentity,
+      },
     );
+    stepEntries = stepDirectory.entries;
+    stepDirectorySnapshot = stepDirectory.snapshot;
   } catch (error) {
+    if (error instanceof SecureDirectoryChangedError) throw error;
     if (error instanceof ResourceLimitError) return resourceLimitFailure();
     diagnostics.push(
       diagnostic('layout', stepsPath, '', 'The steps path is missing or not a directory.'),
     );
+  }
+  if (stepDirectorySnapshot !== undefined) {
+    await dependencies.onStepDirectoryListed?.();
   }
 
   let manifest: RunManifest | undefined;
@@ -1827,6 +1868,7 @@ export async function inspectRun(
             projectRoot,
             input.path,
             FIXED_LIMITS.workflow_input_file_bytes,
+            { expectedProjectIdentity: projectRootIdentity },
           )
         ).bytes;
         if (sha256(bytes) !== input.sha256) {
@@ -1853,7 +1895,7 @@ export async function inspectRun(
     }
   }
 
-  const committedMarkdown = stepEntries.filter((entry) => STEP_FILENAME_PATTERN.test(entry)).sort();
+  const committedMarkdown = stepEntries.filter(isCommittedStepArtifactFilename).sort();
   if (committedMarkdown.length > FIXED_LIMITS.step_artifacts_per_run) {
     return resourceLimitFailure();
   }
@@ -1864,9 +1906,13 @@ export async function inspectRun(
     let markdownBytes: Uint8Array;
     try {
       markdownBytes = (
-        await readSecureResultFile(projectRoot, file, FIXED_LIMITS.automation_response_bytes)
+        await readSecureResultFile(projectRoot, file, FIXED_LIMITS.automation_response_bytes, {
+          expectedParentSnapshot: stepDirectorySnapshot,
+          expectedProjectIdentity: projectRootIdentity,
+        })
       ).bytes;
     } catch (error) {
+      if (error instanceof SecureDirectoryChangedError) throw error;
       if (error instanceof ResourceLimitError) return resourceLimitFailure();
       diagnostics.push(
         diagnostic('layout', file, '', 'A committed StepArtifact must be a secure regular file.'),
@@ -1916,7 +1962,10 @@ export async function inspectRun(
     if (hasSidecar) {
       try {
         const jsonBytes = (
-          await readSecureResultFile(projectRoot, sidecarFile, FIXED_LIMITS.candidate_json_bytes)
+          await readSecureResultFile(projectRoot, sidecarFile, FIXED_LIMITS.candidate_json_bytes, {
+            expectedParentSnapshot: stepDirectorySnapshot,
+            expectedProjectIdentity: projectRootIdentity,
+          })
         ).bytes;
         const jsonValue = parseStrictJson(jsonBytes, sidecarFile, diagnostics);
         if (requiresSidecar && jsonValue !== undefined) {
@@ -1935,6 +1984,7 @@ export async function inspectRun(
           };
         }
       } catch (error) {
+        if (error instanceof SecureDirectoryChangedError) throw error;
         if (error instanceof ResourceLimitError) return resourceLimitFailure();
         diagnostics.push(
           diagnostic(
@@ -2009,7 +2059,22 @@ export async function inspectRun(
         selected: selectedByNode.get(artifact.node_id) === artifact,
       })),
       terminal_results: terminalResults,
-      lock: await observeLock(projectRoot, request.run_id),
+      lock: await observeLock(selectedProjectRoot, request.run_id),
     },
   };
+}
+
+export async function inspectRun(
+  request: InspectRunRequest,
+  selectedProjectRoot: SelectedProjectRoot,
+  dependencies: InspectionDependencies,
+): Promise<OperationResult<InspectRunValue>> {
+  for (let inspectionPass = 0; inspectionPass < MAX_STABLE_INSPECTION_PASSES; inspectionPass += 1) {
+    try {
+      return await inspectRunOnce(request, selectedProjectRoot, dependencies);
+    } catch (error) {
+      if (!(error instanceof SecureDirectoryChangedError)) throw error;
+    }
+  }
+  return ioFailure('The Run changed repeatedly while it was being inspected.');
 }

@@ -307,6 +307,7 @@ describe('operate', () => {
       ['after_snapshot_written', false],
       ['after_manifest_written', false],
       ['before_publish', false],
+      ['after_destination_validated', true],
       ['after_publish', true],
     ] as const) {
       const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-run-cancellation-'));
@@ -352,6 +353,7 @@ describe('operate', () => {
       ['after_lock_acquired', false],
       ['after_staging_written', false],
       ['before_commit', true],
+      ['after_destination_validated', true],
       ['after_commit_visible', true],
       ['after_commit', true],
     ] as const) {
@@ -404,6 +406,7 @@ describe('operate', () => {
       ['after_lock_acquired', false],
       ['after_staging_written', false],
       ['before_commit', true],
+      ['after_destination_validated', true],
       ['after_commit_visible', true],
       ['after_commit', true],
     ] as const) {
@@ -761,6 +764,7 @@ describe('operate', () => {
   it('should make process termination before and after a Run commit unambiguous', async () => {
     for (const [boundary, committed] of [
       ['before_publish', false],
+      ['after_destination_validated', false],
       ['after_publish', true],
     ] as const) {
       const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-run-crash-'));
@@ -808,6 +812,7 @@ describe('operate', () => {
   it('should let inspection settle a lost submission response without replay', async () => {
     for (const [boundary, committed] of [
       ['before_commit', false],
+      ['after_destination_validated', false],
       ['after_commit', true],
     ] as const) {
       const { projectRoot, runId } = await createProject(`  - id: execute
@@ -997,6 +1002,7 @@ describe('operate', () => {
       'after_lock_acquired',
       'after_staging_written',
       'before_commit',
+      'after_destination_validated',
       'after_commit_visible',
       'after_commit',
     ] as const;
