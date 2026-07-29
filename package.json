@@ -31,7 +31,9 @@
     "local:docs:check": "node scripts/generate-local-documentation.mjs --check",
     "local:contracts:archive": "node scripts/generate-local-documentation.mjs --archive",
     "local:release:build": "node scripts/build-local-release.mjs",
-    "local:release:inspect": "node scripts/inspect-local-release.mjs"
+    "local:release:inspect": "node scripts/inspect-local-release.mjs",
+    "local:release:qualify": "node scripts/qualify-local-release.mjs",
+    "local:release:index-platform": "node scripts/index-platform-evidence.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

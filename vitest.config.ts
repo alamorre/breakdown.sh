@@ -18,6 +18,8 @@ export default defineConfig({
         'scripts/local-release/contracts-archive.mjs',
         'scripts/local-release/filesystem.mjs',
         'scripts/local-release/package-artifacts.mjs',
+        'scripts/local-release/platform-evidence.mjs',
+        'scripts/local-release/platform-qualification.mjs',
         'scripts/local-release/release-inspection.mjs',
         'scripts/local-release/release-metadata.mjs',
         'scripts/local-release/skills-archive.mjs',

@@ -284,6 +284,7 @@ async function runPublicationChild(
 }
 
 beforeAll(async () => {
+  if (process.env.BREAKDOWN_TEST_CANDIDATE === 'true') return;
   const tscPath = require.resolve('typescript/bin/tsc');
   await execFileAsync(process.execPath, [
     tscPath,

@@ -17,7 +17,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const workspaceRoot =
+  process.env.BREAKDOWN_TEST_REPOSITORY_ROOT ??
+  fileURLToPath(new URL('../../../', import.meta.url));
 const temporaryDirectories: string[] = [];
 let breakdownExecutable: string;
 let installationRoot: string;
@@ -94,6 +96,18 @@ function runBreakdown(
   stdin?: string | Buffer,
   extraEnvironment: NodeJS.ProcessEnv = {},
 ) {
+  if (process.env.BREAKDOWN_TEST_CLI_EXECUTABLE !== undefined) {
+    return run(
+      process.execPath,
+      [breakdownExecutable, ...args],
+      cwd,
+      {
+        NODE_V8_COVERAGE: cliCoverageRoot,
+        ...extraEnvironment,
+      },
+      stdin,
+    );
+  }
   return run(
     breakdownExecutable,
     args,
@@ -106,7 +120,11 @@ function runBreakdown(
   );
 }
 
-function runOperate(projectRoot: string, request: Record<string, unknown>) {
+function runOperate(
+  projectRoot: string,
+  request: Record<string, unknown>,
+  extraEnvironment: NodeJS.ProcessEnv = {},
+) {
   return runBreakdown(
     ['operate', '--project', projectRoot],
     workspaceRoot,
@@ -114,6 +132,7 @@ function runOperate(projectRoot: string, request: Record<string, unknown>) {
       schema_version: 'breakdown.operation-request.v1',
       ...request,
     })}\n`,
+    extraEnvironment,
   );
 }
 
@@ -144,7 +163,17 @@ function runBreakdownAfterSignal(
   signal: NodeJS.Signals,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(breakdownExecutable, ['operate', '--project', projectRoot], {
+    const command =
+      process.env.BREAKDOWN_TEST_CLI_EXECUTABLE === undefined
+        ? breakdownExecutable
+        : process.execPath;
+    const args = [
+      ...(process.env.BREAKDOWN_TEST_CLI_EXECUTABLE === undefined ? [] : [breakdownExecutable]),
+      'operate',
+      '--project',
+      projectRoot,
+    ];
+    const child = spawn(command, args, {
       cwd: workspaceRoot,
       env: {
         ...process.env,
@@ -286,6 +315,20 @@ async function installedCliLineCoverage() {
 }
 
 beforeAll(async () => {
+  const candidateExecutable = process.env.BREAKDOWN_TEST_CLI_EXECUTABLE;
+  const candidateInstallation = process.env.BREAKDOWN_TEST_INSTALLATION_ROOT;
+  if (candidateExecutable !== undefined || candidateInstallation !== undefined) {
+    if (candidateExecutable === undefined || candidateInstallation === undefined) {
+      throw new Error(
+        'Candidate CLI tests require BREAKDOWN_TEST_CLI_EXECUTABLE and BREAKDOWN_TEST_INSTALLATION_ROOT together.',
+      );
+    }
+    installationRoot = candidateInstallation;
+    breakdownExecutable = candidateExecutable;
+    cliCoverageRoot = join(candidateInstallation, 'cli-coverage');
+    await mkdir(cliCoverageRoot, { recursive: true });
+    return;
+  }
   installationRoot = await mkdtemp(join(tmpdir(), 'breakdown-cli-install-'));
   temporaryDirectories.push(installationRoot);
   const tarballRoot = join(installationRoot, 'tarballs');
@@ -1281,22 +1324,77 @@ nodes:
     });
   });
 
-  it('should operate without Git on PATH', async () => {
-    const projectRoot = await createProject();
+  it('should produce the same six-operation trace with and without Git', async () => {
+    async function trace(gitPresent: boolean) {
+      const projectRoot = await createProject(`schema_version: breakdown.workflow.v1
+id: git-independent
+name: Git Independent
+inputs:
+  brief:
+    default: brief.txt
+nodes:
+  - id: investigate
+    name: Investigate
+    prompt: Investigate the brief.
+    inputs:
+      brief:
+        workflow_input: brief
+`);
+      await writeFile(join(projectRoot, 'brief.txt'), 'same input');
+      if (gitPresent) await mkdir(join(projectRoot, '.git'));
+      const environment = gitPresent ? {} : { PATH: dirname(process.execPath) };
+      const call = async (request: Record<string, unknown>) => {
+        const result = await runOperate(projectRoot, request, environment);
+        expectSuccess(result);
+        return JSON.parse(result.stdout) as {
+          data: Record<string, unknown>;
+        };
+      };
 
-    const result = await runBreakdown(
-      ['workflow', 'validate', '--project', projectRoot, '--json'],
-      workspaceRoot,
-      undefined,
-      { PATH: dirname(process.execPath) },
-    );
+      const validated = await call({ operation: 'validate_workflow' });
+      const created = await call({ operation: 'create_run' });
+      const runId = created.data.run_id as string;
+      const initial = await call({ operation: 'inspect_run', run_id: runId });
+      const prepared = await call({
+        operation: 'prepare_work',
+        run_id: runId,
+        mode: { kind: 'resume' },
+        limit: 1,
+      });
+      const packet = (prepared.data.packets as Array<Record<string, unknown>>)[0]!;
+      const input = await call({
+        operation: 'read_work_input',
+        packet,
+        binding: 'brief',
+      });
+      const submitted = await call({
+        operation: 'submit_candidate',
+        packet,
+        candidate: {
+          schema_version: 'breakdown.candidate.v1',
+          submission: packet.submission,
+          status: 'succeeded',
+          executor: { kind: 'program', name: 'Git independence test' },
+          markdown: 'Same Result\n',
+        },
+      });
+      const settled = await call({ operation: 'inspect_run', run_id: runId });
+      const serialized = JSON.stringify(
+        [validated, created, initial, prepared, input, submitted, settled],
+        (key, value) => {
+          if (key === 'identity') return '<filesystem-identity>';
+          if (key === 'context_sha256' || key === 'sha256') return `<${key}>`;
+          return value;
+        },
+      )
+        .replaceAll(runId, '<run-id>')
+        .replace(/\d{4}-?\d{2}-?\d{2}T\d{2}:?\d{2}:?\d{2}\.\d{3}Z/g, '<timestamp>');
+      return JSON.parse(serialized);
+    }
 
-    expectSuccess(result);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      schema_version: 'breakdown.cli-output.v1',
-      operation: 'validate_workflow',
-      ok: true,
-    });
+    const withoutGit = await trace(false);
+    const withGit = await trace(true);
+    expect(withoutGit).toEqual(withGit);
   });
 
   it('should validate a project through the JSON command surface', async () => {

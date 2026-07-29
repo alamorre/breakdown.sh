@@ -16,7 +16,9 @@ in these paths:
 - `scripts/local-release/`
 - `scripts/build-local-release.mjs`
 - `scripts/generate-local-documentation.mjs`
+- `scripts/index-platform-evidence.mjs`
 - `scripts/inspect-local-release.mjs`
+- `scripts/qualify-local-release.mjs`
 - `scripts/standalone-validator.mjs`
 
 It covers original local implementation code, contracts, schemas, catalogs, documentation,

@@ -1,13 +1,14 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { arch, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
 import { buildLocalRelease } from './build-local-release.mjs';
+import { qualifyLocalRelease } from './local-release/platform-qualification.mjs';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = join(import.meta.dirname, '..');
@@ -32,6 +33,7 @@ async function cleanTestWorktree(): Promise<{ parent: string; repository: string
 describe('build-local-release.mjs', () => {
   it('should build and inspect one exact lockstep artifact set', async () => {
     const outputPath = await mkdtemp(join(tmpdir(), 'breakdown-release-candidate-'));
+    const evidencePath = await mkdtemp(join(tmpdir(), 'breakdown-platform-evidence-'));
     const worktree = await cleanTestWorktree();
     try {
       await expect(
@@ -67,12 +69,42 @@ describe('build-local-release.mjs', () => {
         const [, expectedHash, fileName] = match!;
         expect(expectedHash).toBe(sha256(await readFile(join(outputPath, fileName))));
       }
+
+      let qualification;
+      try {
+        qualification = await qualifyLocalRelease({
+          candidateDirectory: outputPath,
+          evidenceDirectory: evidencePath,
+          expectedOs:
+            process.platform === 'linux'
+              ? 'linux-glibc'
+              : process.platform === 'darwin'
+                ? 'macos'
+                : 'windows',
+          expectedArchitecture: arch(),
+          repositoryRoot: worktree.repository,
+        });
+      } catch (error) {
+        const retained = JSON.parse(
+          await readFile(join(evidencePath, 'platform-evidence.json'), 'utf8'),
+        ) as {
+          suites: Array<{ id: string; status: string; failures: number }>;
+        };
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} ${JSON.stringify(retained.suites)}`,
+        );
+      }
+      expect(qualification).toMatchObject({
+        schema_version: 'breakdown.platform-qualification-evidence.v1',
+        status: 'passed',
+      });
     } finally {
       await rm(outputPath, { recursive: true });
+      await rm(evidencePath, { recursive: true });
       await execFileAsync('git', ['worktree', 'remove', '--force', worktree.repository], {
         cwd: repositoryRoot,
       });
       await rm(worktree.parent, { recursive: true });
     }
-  }, 60_000);
+  }, 180_000);
 });

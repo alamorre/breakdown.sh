@@ -1,0 +1,158 @@
+name: Breakdown Local platform qualification
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'breakdown-local-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-candidate:
+    name: Build the exact candidate once
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the candidate source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install exact Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and inspect the candidate
+        run: pnpm local:release:build --output "${{ runner.temp }}/breakdown-candidate"
+
+      - name: Retain the immutable candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-local-candidate
+          path: ${{ runner.temp }}/breakdown-candidate
+          if-no-files-found: error
+          retention-days: 90
+
+  qualify:
+    name: Qualify ${{ matrix.os }} ${{ matrix.architecture }}
+    needs: build-candidate
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux-glibc
+            architecture: x64
+            runner: ubuntu-24.04
+          - os: linux-glibc
+            architecture: arm64
+            runner: ubuntu-24.04-arm
+          - os: macos
+            architecture: x64
+            runner: macos-15-intel
+          - os: macos
+            architecture: arm64
+            runner: macos-15
+          - os: windows
+            architecture: x64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out the qualification harness
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install exact Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install locked harness dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the exact candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: breakdown-local-candidate
+          path: ${{ runner.temp }}/breakdown-candidate
+
+      - name: Run the complete applicable candidate suite
+        env:
+          BREAKDOWN_QUALIFICATION_RUNNER_LABEL: ${{ matrix.runner }}
+        run: pnpm local:release:qualify --candidate "${{ runner.temp }}/breakdown-candidate" --evidence "${{ runner.temp }}/platform-evidence" --expected-os "${{ matrix.os }}" --expected-architecture "${{ matrix.architecture }}"
+
+      - name: Retain row evidence even when qualification fails
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-platform-evidence-${{ matrix.os }}-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/platform-evidence
+          if-no-files-found: error
+          retention-days: 90
+
+  index-evidence:
+    name: Index the immutable platform evidence
+    if: ${{ always() && needs.build-candidate.result == 'success' }}
+    needs:
+      - build-candidate
+      - qualify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the evidence indexer
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install exact Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install locked indexer dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the exact candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: breakdown-local-candidate
+          path: ${{ runner.temp }}/breakdown-candidate
+
+      - name: Download every retained platform row
+        uses: actions/download-artifact@v8
+        with:
+          pattern: breakdown-platform-evidence-*
+          path: ${{ runner.temp }}/platform-evidence
+
+      - name: Verify and index all five immutable rows
+        run: pnpm local:release:index-platform --candidate "${{ runner.temp }}/breakdown-candidate" --evidence-root "${{ runner.temp }}/platform-evidence" --output "${{ runner.temp }}/breakdown-platform-evidence-index.json"
+
+      - name: Retain the release-gate index
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-platform-evidence-index
+          path: ${{ runner.temp }}/breakdown-platform-evidence-index.json
+          if-no-files-found: error
+          retention-days: 90

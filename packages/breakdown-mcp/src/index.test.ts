@@ -9,11 +9,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url));
-const executablePath = fileURLToPath(new URL('../dist/index.js', import.meta.url));
-const cliExecutablePath = fileURLToPath(
-  new URL('../../breakdown-cli/dist/index.js', import.meta.url),
-);
+const workspaceRoot =
+  process.env.BREAKDOWN_TEST_REPOSITORY_ROOT ?? fileURLToPath(new URL('../../..', import.meta.url));
+const executablePath =
+  process.env.BREAKDOWN_TEST_MCP_EXECUTABLE ??
+  fileURLToPath(new URL('../dist/index.js', import.meta.url));
+const cliExecutablePath =
+  process.env.BREAKDOWN_TEST_CLI_EXECUTABLE ??
+  fileURLToPath(new URL('../../breakdown-cli/dist/index.js', import.meta.url));
 const children = new Set<ChildProcessWithoutNullStreams>();
 const temporaryDirectories = new Set<string>();
 const mcpProtocolFixtures = JSON.parse(
