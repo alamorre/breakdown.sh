@@ -55,6 +55,41 @@
       "id": "SKILL-008",
       "requirement": "Issue #160: non-setup skills reject mixed release sets before main work",
       "oracle": "Fast preflight checks the activating skill release, Node 24, exact CLI version, automation schema, explicit root, and optional MCP version without mutating the selected project."
+    },
+    {
+      "id": "SKILL-009",
+      "requirement": "Issue #161: complete exactly the five-skill canonical byte-identical pack",
+      "oracle": "The canonical root contains setup-breakdown, author-breakdown, critique-breakdown, run-breakdown, and summarize-breakdown-run only; every payload byte matches the embedded manifest and every skill independently carries complete license and notice material."
+    },
+    {
+      "id": "SKILL-010",
+      "requirement": "Issue #161: gate new Run creation on complete safe execution disclosure and approval",
+      "oracle": "Execution uses only versioned automation envelopes and creates a new Run only after presenting the exact root, validated Workflow Definition, complete Input path selection, Run Authority, concurrency, provider/privacy disclosure, and isolation mode."
+    },
+    {
+      "id": "SKILL-011",
+      "requirement": "Issue #161: resume one exact Run with bounded isolated Work Packet execution",
+      "oracle": "Existing work requires a user-supplied exact Run ID and follows inspect, prepare, per-binding read, execute, and submit without human-output scraping; fresh isolated sessions are preferred for at most three packets and sequential fallback discloses reduced isolation."
+    },
+    {
+      "id": "SKILL-012",
+      "requirement": "Issue #161: serialize submissions and stop automatic progress after non-success",
+      "oracle": "Every independent packet in a prepared batch settles before serialized submission; any non-success or submission failure causes exact re-inspection and stops progress without hidden retry."
+    },
+    {
+      "id": "SKILL-013",
+      "requirement": "Issue #161: require separate exact approval for refresh and lock recovery",
+      "oracle": "Refresh approval names one exact Run and complete node; lock recovery separately names the exact observed lock ID and confirms the prior writer stopped, and neither approval can authorize the other."
+    },
+    {
+      "id": "SKILL-014",
+      "requirement": "Issue #161: summarize only validated Selected Terminal Results without durable state",
+      "oracle": "Summary requires an exact Run ID, inspects before reading, verifies only terminal_results descriptors, distinguishes stale and non-success metadata, re-inspects before presenting, and writes no durable summary."
+    },
+    {
+      "id": "SKILL-015",
+      "requirement": "Issue #161: preserve model neutrality and outcome parity without migration behavior",
+      "oracle": "No migration skill ships; model/provider facts remain conversational rather than durable, and the portable guidance specifies outcome invariants without depending on vendor UI, prose, or host-specific frontmatter."
     }
   ]
 }

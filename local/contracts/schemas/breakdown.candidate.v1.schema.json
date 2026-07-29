@@ -117,9 +117,6 @@
         },
         "version": {
           "$ref": "#/$defs/nonempty"
-        },
-        "model": {
-          "$ref": "#/$defs/nonempty"
         }
       }
     },

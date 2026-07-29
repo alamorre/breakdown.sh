@@ -15,7 +15,13 @@ const SETUP_SKILL_ROOT = resolve(dirname(SCRIPT_PATH), '..');
 const DEFAULT_SKILLS_ROOT = dirname(SETUP_SKILL_ROOT);
 const MANIFEST_PATH = join(SETUP_SKILL_ROOT, 'assets', 'skill-pack-manifest.json');
 const FIXTURE_PATH = join(SETUP_SKILL_ROOT, 'assets', 'preflight-project', 'breakdown.yaml');
-const EXPECTED_SKILL_NAMES = ['setup-breakdown', 'author-breakdown', 'critique-breakdown'];
+const EXPECTED_SKILL_NAMES = [
+  'setup-breakdown',
+  'author-breakdown',
+  'critique-breakdown',
+  'run-breakdown',
+  'summarize-breakdown-run',
+];
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const PROCESS_TIMEOUT_MS = 10_000;

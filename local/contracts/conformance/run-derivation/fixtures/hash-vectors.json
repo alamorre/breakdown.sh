@@ -189,7 +189,7 @@
       "literal_vector": "node-definition-workflow-input-baseline"
     },
     {
-      "factor": "executor-model",
+      "factor": "executor-metadata",
       "literal_vector": "node-definition-workflow-input-baseline"
     },
     {

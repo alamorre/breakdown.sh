@@ -132,6 +132,11 @@ describe('submit_candidate', () => {
         },
       ];
       properties: {
+        executor: {
+          additionalProperties: boolean;
+          required: string[];
+          properties: Record<string, unknown>;
+        };
         json: Record<string, never>;
         problem: { $ref: string };
         status: { enum: string[] };
@@ -161,6 +166,10 @@ describe('submit_candidate', () => {
         },
       ],
       properties: {
+        executor: {
+          additionalProperties: false,
+          required: ['kind', 'name'],
+        },
         json: {},
         problem: { $ref: '#/$defs/problem' },
         status: { enum: ['succeeded', 'failed', 'blocked', 'cancelled'] },
@@ -180,6 +189,49 @@ describe('submit_candidate', () => {
         },
       },
     });
+    expect(Object.keys(schema.properties.executor.properties)).toEqual([
+      'kind',
+      'name',
+      'version',
+    ]);
+  });
+
+  it('rejects model and provider identity from durable Candidate Outcome metadata', async () => {
+    for (const field of ['model', 'provider'] as const) {
+      const { project, runId } = await createProject(`
+schema_version: breakdown.workflow.v1
+id: model-neutral-${field}
+name: Model Neutral ${field}
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+`);
+      const packet = await prepare(project, runId);
+      const candidate = successfulCandidate(packet) as SuccessfulCandidateOutcome & {
+        executor: SuccessfulCandidateOutcome['executor'] & Record<typeof field, string>;
+      };
+      candidate.executor[field] = `example-${field}`;
+
+      const submitted = await operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate,
+        },
+        { projectRoot: project },
+      );
+
+      expect(submitted).toMatchObject({
+        ok: false,
+        failure: {
+          kind: 'invalid',
+          code: 'invalid_candidate',
+          diagnostics: [{ path: `/executor/${field}` }],
+        },
+      });
+      expect(await readdir(join(project, 'outputs', runId, 'steps'))).toEqual([]);
+    }
   });
 
   it('publishes an authoritative successful Markdown Result and advances the Run', async () => {
@@ -212,7 +264,6 @@ nodes:
             kind: 'agent',
             name: 'Codex',
             version: '1.2.3',
-            model: 'example-model',
           },
           markdown: '# Result\n\nExact candidate bytes.\n',
         },
@@ -278,7 +329,7 @@ nodes:
     );
     expect(committedMarkdown).toContain(`"context_sha256": "${packet.context_sha256}"`);
     expect(committedMarkdown).toContain(
-      '"executor": {\n    "kind": "agent",\n    "name": "Codex",\n    "version": "1.2.3",\n    "model": "example-model"\n  }',
+      '"executor": {\n    "kind": "agent",\n    "name": "Codex",\n    "version": "1.2.3"\n  }',
     );
     expect(committedMarkdown).toMatch(/---\n# Result\n\nExact candidate bytes\.\n$/);
   });

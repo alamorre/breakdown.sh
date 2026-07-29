@@ -10,7 +10,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const skillsRoot = join(workspaceRoot, 'local', 'skills');
 const releaseVersion = '1.0.0-beta.1';
-const skillNames = ['setup-breakdown', 'author-breakdown', 'critique-breakdown'] as const;
+const skillNames = [
+  'setup-breakdown',
+  'author-breakdown',
+  'critique-breakdown',
+  'run-breakdown',
+  'summarize-breakdown-run',
+] as const;
 const temporaryDirectories: string[] = [];
 
 interface ProcessResult {
@@ -124,6 +130,13 @@ afterAll(async () => {
 
 describe('canonical portable skill artifacts', () => {
   it('uses only the strict common frontmatter profile and complete independent notices', async () => {
+    expect(
+      (await readdir(skillsRoot, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort(),
+    ).toEqual([...skillNames].sort());
+
     for (const skillName of skillNames) {
       const skillRoot = join(skillsRoot, skillName);
       const fields = parseFrontmatter(await readFile(join(skillRoot, 'SKILL.md'), 'utf8'));
@@ -156,7 +169,7 @@ describe('canonical portable skill artifacts', () => {
         path.startsWith('scripts/'),
       ),
     ).toBe(true);
-    for (const skillName of ['author-breakdown', 'critique-breakdown'] as const) {
+    for (const skillName of skillNames.filter((name) => name !== 'setup-breakdown')) {
       expect(
         (await listFiles(join(skillsRoot, skillName))).some((path) => path.startsWith('scripts/')),
       ).toBe(false);
@@ -211,6 +224,67 @@ describe('canonical portable skill artifacts', () => {
         stderr: '',
       });
     }
+  });
+
+  it('pins the complete five-skill pack in every host installation command', async () => {
+    const installation = await readFile(
+      join(skillsRoot, 'setup-breakdown', 'references', 'installation.md'),
+      'utf8',
+    );
+    const commands = installation
+      .split('\n')
+      .filter((line) => line.startsWith('npx --yes skills@'));
+    expect(commands).toHaveLength(6);
+    for (const command of commands) {
+      for (const skillName of skillNames) {
+        expect(command).toContain(`--skill ${skillName}`);
+      }
+    }
+    expect(installation).toContain('five named skill directories');
+  });
+
+  it('defines guided execution and exact-Run summary behavior over versioned values', async () => {
+    const runSkill = await readFile(join(skillsRoot, 'run-breakdown', 'SKILL.md'), 'utf8');
+    const executionProtocol = await readFile(
+      join(skillsRoot, 'run-breakdown', 'references', 'execution-protocol.md'),
+      'utf8',
+    );
+    const summarySkill = await readFile(
+      join(skillsRoot, 'summarize-breakdown-run', 'SKILL.md'),
+      'utf8',
+    );
+    const summaryProtocol = await readFile(
+      join(skillsRoot, 'summarize-breakdown-run', 'references', 'summary-protocol.md'),
+      'utf8',
+    );
+
+    expect(runSkill).toContain('breakdown operate --project <absolute-root>');
+    expect(runSkill).toContain('breakdown.operation-request.v1');
+    expect(runSkill).toContain('breakdown.cli-output.v1');
+    expect(runSkill).toContain('exact Run ID');
+    expect(runSkill).toContain('Run Authority');
+    expect(runSkill).toContain('fresh isolated');
+    expect(runSkill).toContain('three');
+    expect(runSkill).toContain('serialize');
+    expect(runSkill).toContain('non-success');
+    expect(runSkill).toContain('separate exact approval');
+    expect(executionProtocol).toContain('validate_workflow');
+    expect(executionProtocol).toContain('create_run');
+    expect(executionProtocol).toContain('inspect_run');
+    expect(executionProtocol).toContain('prepare_work');
+    expect(executionProtocol).toContain('read_work_input');
+    expect(executionProtocol).toContain('submit_candidate');
+    expect(executionProtocol).toContain('lock_recovery');
+
+    expect(summarySkill).toContain('exact Run ID');
+    expect(summarySkill).toContain('terminal_results');
+    expect(summarySkill).toContain('Re-inspect');
+    expect(summarySkill).toContain('no durable');
+    expect(summaryProtocol).toContain('Selected Terminal Results');
+    expect(summaryProtocol).toContain('stale');
+    expect(summaryProtocol).toContain('failed');
+    expect(summaryProtocol).toContain('blocked');
+    expect(summaryProtocol).toContain('cancelled');
   });
 });
 
@@ -282,34 +356,36 @@ describe('setup preflight executable', () => {
     );
   });
 
-  it('performs a read-only fast preflight for non-setup skills', async () => {
-    const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-skill-fast-'));
-    temporaryDirectories.push(projectRoot);
-    const before = await readdir(projectRoot);
-    const result = await runPreflight(skillsRoot, projectRoot, [
-      '--mode',
-      'fast',
-      '--skill',
-      'author-breakdown',
-    ]);
-    expect(result.status).toBe(0);
-    const report = JSON.parse(result.stdout) as {
-      classification: string | null;
-      outcome: string;
-      checks: Array<{ id: string; status: string }>;
-    };
-    expect(report.outcome).toBe('ready');
-    expect(report.classification).toBeNull();
-    expect(report.checks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'skill_release', status: 'pass' }),
-        expect.objectContaining({ id: 'node_version', status: 'pass' }),
-        expect.objectContaining({ id: 'cli_version', status: 'pass' }),
-        expect.objectContaining({ id: 'automation_schema', status: 'pass' }),
-      ]),
-    );
-    expect(report.checks.map((check) => check.id)).not.toContain('host_capability');
-    expect(report.checks.map((check) => check.id)).not.toContain('disposable_fixture');
-    expect(await readdir(projectRoot)).toEqual(before);
+  it('performs a read-only fast preflight for every non-setup skill', async () => {
+    for (const skillName of skillNames.filter((name) => name !== 'setup-breakdown')) {
+      const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-skill-fast-'));
+      temporaryDirectories.push(projectRoot);
+      const before = await readdir(projectRoot);
+      const result = await runPreflight(skillsRoot, projectRoot, [
+        '--mode',
+        'fast',
+        '--skill',
+        skillName,
+      ]);
+      expect(result.status, `${skillName}\n${result.stdout}\n${result.stderr}`).toBe(0);
+      const report = JSON.parse(result.stdout) as {
+        classification: string | null;
+        outcome: string;
+        checks: Array<{ id: string; status: string }>;
+      };
+      expect(report.outcome).toBe('ready');
+      expect(report.classification).toBeNull();
+      expect(report.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'skill_release', status: 'pass' }),
+          expect.objectContaining({ id: 'node_version', status: 'pass' }),
+          expect.objectContaining({ id: 'cli_version', status: 'pass' }),
+          expect.objectContaining({ id: 'automation_schema', status: 'pass' }),
+        ]),
+      );
+      expect(report.checks.map((check) => check.id)).not.toContain('host_capability');
+      expect(report.checks.map((check) => check.id)).not.toContain('disposable_fixture');
+      expect(await readdir(projectRoot)).toEqual(before);
+    }
   });
 });

@@ -85,6 +85,12 @@
       "id": "PUB-014",
       "requirement": "Issue #156: make lock recovery race-safe across processes",
       "oracle": "Concurrent and terminated recovery processes preserve the current identity-specific claim, elect one submission winner, and leave one contiguous attempt."
+    },
+    {
+      "id": "PUB-015",
+      "requirement": "Issue #161: keep model and provider identity out of durable Candidate Outcome contracts",
+      "oracle": "Candidate validation rejects model, provider, and every other unknown Executor field before publication; the accepted durable Executor shape contains only kind, name, and optional host version.",
+      "evidence": "packages/breakdown-core/src/submit-candidate.test.ts"
     }
   ]
 }

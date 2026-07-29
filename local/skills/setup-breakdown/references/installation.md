@@ -41,25 +41,25 @@ discovery to select the destination.
 
 ```text
 # Codex
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --agent codex --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent codex --copy --yes
 
 # Claude Code
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --agent claude-code --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent claude-code --copy --yes
 
 # Gemini CLI
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --agent gemini-cli --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent gemini-cli --copy --yes
 
 # GitHub Copilot CLI
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --agent github-copilot --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent github-copilot --copy --yes
 
 # Cursor
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --agent cursor --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent cursor --copy --yes
 
 # OpenCode
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --agent opencode --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent opencode --copy --yes
 ```
 
-These commands select an immutable Breakdown release tag, three named skill directories, the exact
+These commands select an immutable Breakdown release tag, five named skill directories, the exact
 host adapter, and copy semantics. Do not omit `--copy` or replace either version with a tag such as
 `latest`.
 

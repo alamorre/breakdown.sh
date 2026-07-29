@@ -52,7 +52,6 @@ export interface CandidateExecutor {
   kind: 'agent' | 'human' | 'program';
   name: string;
   version?: string;
-  model?: string;
 }
 
 export interface CandidateProblem {
@@ -609,7 +608,7 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
     diagnostics.push(diagnostic('/executor', 'executor must be a mapping.'));
   } else {
     const requiredExecutorFields = ['kind', 'name'];
-    const allowedExecutorFields = new Set([...requiredExecutorFields, 'version', 'model']);
+    const allowedExecutorFields = new Set([...requiredExecutorFields, 'version']);
     for (const field of Object.keys(executor)) {
       if (!allowedExecutorFields.has(field)) {
         diagnostics.push(diagnostic(`/executor/${field}`, `Unknown executor field: ${field}.`));
@@ -623,7 +622,7 @@ function validateCandidate(value: unknown): OperationResult<ValidatedCandidate> 
     if (!['agent', 'human', 'program'].includes(String(executor.kind))) {
       diagnostics.push(diagnostic('/executor/kind', 'executor kind is invalid.'));
     }
-    for (const field of ['name', 'version', 'model'] as const) {
+    for (const field of ['name', 'version'] as const) {
       const fieldValue = executor[field];
       if (
         (field === 'name' || fieldValue !== undefined) &&
@@ -815,7 +814,6 @@ function artifactBytes(
       kind: candidate.executor.kind,
       name: candidate.executor.name,
       ...(candidate.executor.version === undefined ? {} : { version: candidate.executor.version }),
-      ...(candidate.executor.model === undefined ? {} : { model: candidate.executor.model }),
     },
     ...(candidate.problem === undefined ? {} : { problem: candidate.problem }),
   };

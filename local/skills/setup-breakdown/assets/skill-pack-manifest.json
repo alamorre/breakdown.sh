@@ -40,7 +40,7 @@
         },
         {
           "path": "references/installation.md",
-          "sha256": "c7eac6e4284b452d2f9339e93b19044c8a6730e6ab5fd670870824196914a012"
+          "sha256": "5c998e12a08827c15e889701585e9fc57d226f846b0e7345a33064749a4b5ed2"
         },
         {
           "path": "references/opencode.md",
@@ -48,7 +48,7 @@
         },
         {
           "path": "scripts/preflight.mjs",
-          "sha256": "64243afeeed09faedc20f3ed1502485ede34f9b014e3826289d68f6eb9e3dce7"
+          "sha256": "d29756bab3888c5de275a4c482a7f41735505b83aced66d8f1abd93f0063a2e7"
         },
         {
           "path": "SKILL.md",
@@ -123,6 +123,56 @@
         {
           "path": "THIRD_PARTY_NOTICES.md",
           "sha256": "fd8da14f17c3395f5ac6afed7722ec4be4fbaa5314ddb0b5db20e1a2a3ba1cd6"
+        }
+      ]
+    },
+    {
+      "name": "run-breakdown",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "997f3e302036089331434cad1e91afe6d9e7fcb05d85f8d3c5cb66acaa21e3c2"
+        },
+        {
+          "path": "references/execution-protocol.md",
+          "sha256": "cd05fb375985d7d9da304e29bc86af974a7d1af2d248573188b10c989a14e45c"
+        },
+        {
+          "path": "SKILL.md",
+          "sha256": "43762bcbbd5adea09521536c9665c710ec8001cb5b144cb8771c1ede5cac5d09"
+        },
+        {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "sha256": "756ded5d5dbe405afb746637fa7a0847a65938c86ccda0242129191b91e89e79"
+        }
+      ]
+    },
+    {
+      "name": "summarize-breakdown-run",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "path": "NOTICE",
+          "sha256": "997f3e302036089331434cad1e91afe6d9e7fcb05d85f8d3c5cb66acaa21e3c2"
+        },
+        {
+          "path": "references/summary-protocol.md",
+          "sha256": "a748994177c78bfee55b20cb830972ff42fde96b0801c298f0cb01c453c5f396"
+        },
+        {
+          "path": "SKILL.md",
+          "sha256": "48255f15daf56f53f1c71d8ea57ec1b4fcf697e973e7fe845946b8e60634e0c2"
+        },
+        {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "sha256": "14d0382970a45fa21ce098a0bf2271269c0f32b5d76794a1b9e0d9342b4c128b"
         }
       ]
     }

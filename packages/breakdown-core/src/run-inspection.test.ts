@@ -241,8 +241,18 @@ describe('inspect_run', () => {
       'problem',
       'extensions',
     ]);
+    const executorSchema = stepArtifactSchema.properties.executor as {
+      additionalProperties: boolean;
+      required: string[];
+      properties: Record<string, unknown>;
+    };
+    expect(executorSchema).toMatchObject({
+      additionalProperties: false,
+      required: ['kind', 'name'],
+    });
+    expect(Object.keys(executorSchema.properties)).toEqual(['kind', 'name', 'version']);
     expect(inspectionMatrix.rows.map((row) => row.id)).toEqual(
-      Array.from({ length: 12 }, (_, index) => `INS-${String(index + 1).padStart(3, '0')}`),
+      Array.from({ length: 13 }, (_, index) => `INS-${String(index + 1).padStart(3, '0')}`),
     );
     expect(inspectionScenarios).toMatchObject({
       schema_version: 'breakdown.run-inspection-fixtures.v1',
@@ -330,7 +340,7 @@ describe('inspect_run', () => {
       'author-order-position',
       'workflow-input-default-after-resolution',
       'timestamps',
-      'executor-model',
+      'executor-metadata',
       'status-problem-outcome',
       'executing-attempt',
       'candidate-result',
@@ -807,7 +817,7 @@ nodes:
       step
         .replace(
           '"name": "inspection-fixture"',
-          '"name": "changed-executor",\n    "version": "2",\n    "model": "opaque-model"',
+          '"name": "changed-executor",\n    "version": "2"',
         )
         .replace('\n}\n---', ',\n  "extensions": {"com.example.audit":{"ignored":true}}\n}\n---'),
       'utf8',
@@ -816,6 +826,49 @@ nodes:
     expect(
       await currentContext(baselineRun.projectRoot, baselineRun.created.run_id, 'execute'),
     ).toBe(baseline);
+  });
+
+  it('should reject model identity in durable StepArtifact executor metadata', async () => {
+    const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
+id: model-neutral-history
+name: Model Neutral History
+nodes:
+  - id: execute
+    name: Execute
+    prompt: Execute.
+`);
+    const contextSha256 = await currentContext(projectRoot, created.run_id, 'execute');
+    const stepPath = await writeStep(projectRoot, created.run_id, {
+      nodeId: 'execute',
+      attempt: 1,
+      status: 'succeeded',
+      contextSha256,
+      settledAt: '2026-07-24T20:01:00.000Z',
+      body: 'Result',
+    });
+    const step = await readFile(join(projectRoot, stepPath), 'utf8');
+    await writeFile(
+      join(projectRoot, stepPath),
+      step.replace(
+        '"name": "inspection-fixture"',
+        '"name": "inspection-fixture",\n    "model": "durable-model"',
+      ),
+      'utf8',
+    );
+
+    expect(await inspect(projectRoot, created.run_id)).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'invalid',
+        code: 'invalid_run',
+        diagnostics: [
+          expect.objectContaining({
+            file: stepPath,
+            path: '/executor/model',
+          }),
+        ],
+      },
+    });
   });
 
   it('should include exact predecessor Result identity, paths, and raw hashes in Node Context', async () => {

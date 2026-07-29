@@ -75,6 +75,11 @@
       "id": "INS-012",
       "requirement": "Issue #147: expose no scheduling state for invalid history",
       "oracle": "Invalid inspection returns only structured failure diagnostics and no authoritative node state."
+    },
+    {
+      "id": "INS-013",
+      "requirement": "Issue #161: keep model and provider identity out of durable StepArtifact contracts",
+      "oracle": "Inspection rejects model, provider, and every other unknown Executor field; durable Executor metadata is limited to kind, name, and optional host version."
     }
   ]
 }

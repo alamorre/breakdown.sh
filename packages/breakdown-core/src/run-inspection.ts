@@ -1082,7 +1082,7 @@ function validateStepArtifact(
   } else {
     checkFields(
       record.executor,
-      ['kind', 'name', 'version', 'model'],
+      ['kind', 'name', 'version'],
       ['kind', 'name'],
       file,
       '/executor',
@@ -1091,7 +1091,7 @@ function validateStepArtifact(
     if (!['agent', 'human', 'program'].includes(String(record.executor.kind))) {
       diagnostics.push(diagnostic('schema', file, '/executor/kind', 'executor kind is invalid.'));
     }
-    for (const field of ['name', 'version', 'model'] as const) {
+    for (const field of ['name', 'version'] as const) {
       if (
         (field === 'name' || record.executor[field] !== undefined) &&
         (typeof record.executor[field] !== 'string' || record.executor[field].length === 0)
