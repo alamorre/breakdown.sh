@@ -1,0 +1,33 @@
+schema_version: breakdown.workflow.v1
+id: compare-evidence
+name: Compare independent evidence
+inputs:
+  source:
+    description: Source material to assess from independent perspectives.
+nodes:
+  - id: factual-analysis
+    name: Factual analysis
+    inputs:
+      source:
+        workflow_input: source
+    prompt: |
+      Analyze the supplied source for its central factual claims. Cite the parts
+      that support each finding and state uncertainty or missing evidence.
+  - id: risk-analysis
+    name: Risk analysis
+    inputs:
+      source:
+        workflow_input: source
+    prompt: |
+      Analyze the supplied source for material risks and unsupported assumptions.
+      Cite the parts that support each finding and state uncertainty.
+  - id: synthesis
+    name: Synthesis
+    inputs:
+      facts:
+        node: factual-analysis
+      risks:
+        node: risk-analysis
+    prompt: |
+      Reconcile the factual and risk analyses into one decision-ready answer.
+      Preserve disagreements and uncertainty rather than forcing consensus.

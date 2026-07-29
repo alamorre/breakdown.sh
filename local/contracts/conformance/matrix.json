@@ -32,6 +32,10 @@
     {
       "group": "PKG",
       "path": "package/matrix.json"
+    },
+    {
+      "group": "SKILL",
+      "path": "skills/matrix.json"
     }
   ]
 }

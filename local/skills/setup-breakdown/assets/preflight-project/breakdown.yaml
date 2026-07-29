@@ -1,0 +1,7 @@
+schema_version: breakdown.workflow.v1
+id: setup-preflight
+name: Setup preflight
+nodes:
+  - id: verify
+    name: Verify
+    prompt: Confirm that the disposable Workflow Definition validates.

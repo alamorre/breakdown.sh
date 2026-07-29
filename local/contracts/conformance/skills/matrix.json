@@ -1,0 +1,60 @@
+{
+  "schema_version": "breakdown.conformance-matrix.v1",
+  "defaults": {
+    "prerequisites": "Build the exact matching core, CLI, and optional MCP workspace packages and inspect the canonical local/skills tree.",
+    "action": "Run the skill artifact and preflight integration tests against a disposable local project.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "skills",
+      "host": "skills-compatible",
+      "protocol": "breakdown.skill-preflight.v1"
+    },
+    "gate": "release-blocking",
+    "evidence": "src/lib/local-skills.test.ts"
+  },
+  "rows": [
+    {
+      "id": "SKILL-001",
+      "requirement": "Issue #160: canonical setup, authoring, and critique skills use the strict common Agent Skills profile",
+      "oracle": "Each directory/name matches and SKILL.md contains only name, description, license, compatibility, and inert string metadata with exact 1.0.0-beta.1 release identity."
+    },
+    {
+      "id": "SKILL-002",
+      "requirement": "Issue #160: every independently copied skill includes complete legal material",
+      "oracle": "Each canonical directory includes a complete Apache-2.0 LICENSE, artifact NOTICE, and artifact-specific THIRD_PARTY_NOTICES.md."
+    },
+    {
+      "id": "SKILL-003",
+      "requirement": "Issue #160: only setup contains a script and full preflight verifies the complete guided installation",
+      "oracle": "Full preflight detects payload tampering and verifies exact skill/CLI/MCP SemVer, Node 24, automation schema, host capability, local filesystem, and a validator-accepted disposable fixture that leaves no project entry."
+    },
+    {
+      "id": "SKILL-004",
+      "requirement": "Issue #160: setup preserves approval and evidence boundaries",
+      "oracle": "Setup asks before every installation, configuration, or probe mutation; full preflight labels a host Supported only on an exact retained passing evidence row, otherwise passing capabilities report Compatible, mixed releases report repair_required without a host classification, and mandatory capability failure reports Unsupported."
+    },
+    {
+      "id": "SKILL-005",
+      "requirement": "Issue #160: authoring uses a research-backed minimum-sufficient DAG and confirmation gate",
+      "oracle": "Authoring discovers project facts, starts from Terminal Results, splits only at meaningful Result handoffs, preserves independent branches, shows the complete proposal or diff, and writes only confirmed Workflow Definition content."
+    },
+    {
+      "id": "SKILL-006",
+      "requirement": "Issue #160: authoring delegates correctness and creates no execution artifacts",
+      "oracle": "All three bundled examples pass the exact CLI validator; authoring routes deterministic meaning to the core and forbids Runs, outputs, Results, and StepArtifacts."
+    },
+    {
+      "id": "SKILL-007",
+      "requirement": "Issue #160: critique validates first and remains read-only",
+      "oracle": "Critique stops on ordered deterministic diagnostics and, only when valid, covers Terminal Results, cohesion, handoffs, dependencies, parallelism, synthesis/revision, duplication/context, evidence/uncertainty/completion, Data Contracts, and authority confusion without writing."
+    },
+    {
+      "id": "SKILL-008",
+      "requirement": "Issue #160: non-setup skills reject mixed release sets before main work",
+      "oracle": "Fast preflight checks the activating skill release, Node 24, exact CLI version, automation schema, explicit root, and optional MCP version without mutating the selected project."
+    }
+  ]
+}

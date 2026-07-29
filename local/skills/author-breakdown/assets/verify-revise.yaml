@@ -1,0 +1,43 @@
+schema_version: breakdown.workflow.v1
+id: verify-and-revise
+name: Verify and revise
+inputs:
+  brief:
+    description: The problem statement and acceptance criteria.
+nodes:
+  - id: draft
+    name: Draft
+    inputs:
+      brief:
+        workflow_input: brief
+    prompt: |
+      Produce a complete draft that addresses every criterion in the supplied
+      brief. Identify evidence and material uncertainty.
+  - id: independent-check
+    name: Independent check
+    inputs:
+      brief:
+        workflow_input: brief
+    prompt: |
+      Derive an independent checklist and evidence standard from the supplied
+      brief. Do not assume access to a draft.
+  - id: critique
+    name: Critique
+    inputs:
+      draft:
+        node: draft
+      criteria:
+        node: independent-check
+    prompt: |
+      Test the draft against the independently derived criteria. Report concrete
+      defects, evidence gaps, and uncertainty before proposing changes.
+  - id: revision
+    name: Revision
+    inputs:
+      draft:
+        node: draft
+      critique:
+        node: critique
+    prompt: |
+      Produce the final revised answer. Address each critique finding explicitly,
+      preserve unresolved uncertainty, and do not claim unsupported completion.
