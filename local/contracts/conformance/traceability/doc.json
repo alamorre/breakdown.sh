@@ -1,0 +1,93 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "DOC",
+  "defaults": {
+    "setup": "Inspect the exact-version authored corpus, generated material, archive candidate, release manifest, and indexed evidence as applicable.",
+    "action": "Run the corpus integrity, reproducibility, authority-layer, manifest, link, and release-gate checks against exact bytes.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "artifact",
+      "host": "none",
+      "protocol": "contracts-v1"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "src/lib/local-contracts.test.ts"
+  },
+  "rows": [
+    {
+      "id": "DOC-001",
+      "requirements": ["REQ-DOC-001"],
+      "oracle": "Every Markdown artifact labels one of the four layers and its exact full version with no ambiguous authority."
+    },
+    {
+      "id": "DOC-002",
+      "requirements": ["REQ-DOC-002"],
+      "oracle": "Authority scan finds every normative semantic only in authored contracts and no implementation/test/guidance claim as normative."
+    },
+    {
+      "id": "DOC-003",
+      "requirements": ["REQ-DOC-003"],
+      "oracle": "All stable requirement IDs are unique, fully traced, and delegate shapes/enumerations to the correct machine authority."
+    },
+    {
+      "id": "DOC-004",
+      "requirements": ["REQ-DOC-004"],
+      "oracle": "The index has exactly 13 settled groups and every effective row has setup, action, oracle/type, applicability, gate, and evidence."
+    },
+    {
+      "id": "DOC-005",
+      "requirements": ["REQ-DOC-005"],
+      "oracle_type": "byte",
+      "oracle": "Frozen outputs compare with reviewed literal bytes; structural/effect/human rows occur only at their settled observable seams."
+    },
+    {
+      "id": "DOC-006",
+      "requirements": ["REQ-DOC-006"],
+      "oracle_type": "effect",
+      "oracle": "Dispatcher rows run from the packaged core on real projects and internal controls are limited to deterministic publication faults."
+    },
+    {
+      "id": "DOC-007",
+      "requirements": ["REQ-DOC-007"],
+      "oracle_type": "effect",
+      "oracle": "Process/guided/release rows operate on actual installed or once-built candidate bytes at their named seams."
+    },
+    {
+      "id": "DOC-008",
+      "requirements": ["REQ-DOC-008"],
+      "oracle": "All corpus assets report exact lockstep version and every reference resolves offline without branch, discovery, source, or network dependency."
+    },
+    {
+      "id": "DOC-009",
+      "requirements": ["REQ-DOC-009"],
+      "oracle_type": "byte",
+      "oracle": "Contracts archives contain every required role/license item and each manifest path/media/role/hash matches exact bytes."
+    },
+    {
+      "id": "DOC-010",
+      "requirements": ["REQ-DOC-010"],
+      "oracle_type": "byte",
+      "oracle": "Regeneration from named authority digests reproduces CLI/MCP/package/support/llms reference byte-for-byte."
+    },
+    {
+      "id": "DOC-011",
+      "requirements": ["REQ-DOC-011"],
+      "oracle_type": "human",
+      "oracle": "Guidance order and disclosures match the requirement, keeps specs one click away, and presents MCP only after CLI baseline."
+    },
+    {
+      "id": "DOC-012",
+      "requirements": ["REQ-DOC-012"],
+      "oracle": "Every inventory/channel/support claim derives from the exact manifest and passing immutable evidence; llms files remain indexes."
+    },
+    {
+      "id": "DOC-013",
+      "requirements": ["REQ-DOC-013"],
+      "oracle": "Stable gate fails for any incomplete applicable row; prerelease metadata carries no false conformance or host claim."
+    }
+  ]
+}

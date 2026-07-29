@@ -1,0 +1,56 @@
+{
+  "schema_version": "breakdown.operations-catalog.v1",
+  "release_version": "1.0.0-beta.1",
+  "operations": [
+    "validate_workflow",
+    "create_run",
+    "inspect_run",
+    "prepare_work",
+    "read_work_input",
+    "submit_candidate"
+  ],
+  "schemas": {
+    "request": "breakdown.operation-request.v1",
+    "value": "breakdown.operation-value.v1",
+    "work_packet": "breakdown.work-packet.v1",
+    "work_packet_batch": "breakdown.work-packet-batch.v1",
+    "candidate": "breakdown.candidate.v1"
+  },
+  "failure_kinds": [
+    "invalid",
+    "conflict",
+    "unsupported",
+    "cancelled",
+    "resource_limit",
+    "io",
+    "internal"
+  ],
+  "failure_codes": {
+    "invalid": [
+      "invalid_candidate",
+      "invalid_operation_request",
+      "invalid_prepare_work",
+      "invalid_run",
+      "invalid_work_input",
+      "invalid_workflow",
+      "invalid_workflow_input",
+      "project_root_required",
+      "run_complete",
+      "run_not_found"
+    ],
+    "conflict": [
+      "attempt_advanced",
+      "lock_recovery_mismatch",
+      "no_longer_runnable",
+      "refresh_target_not_complete",
+      "run_id_collision",
+      "run_locked",
+      "stale_context"
+    ],
+    "unsupported": ["unsupported_filesystem", "unsupported_operation", "unsupported_version"],
+    "cancelled": ["cancelled"],
+    "resource_limit": ["limit_exceeded"],
+    "io": ["io_error"],
+    "internal": ["internal_error"]
+  }
+}

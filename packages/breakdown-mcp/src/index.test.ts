@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { watch } from 'node:fs';
-import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,27 @@ const cliExecutablePath = fileURLToPath(
 );
 const children = new Set<ChildProcessWithoutNullStreams>();
 const temporaryDirectories = new Set<string>();
+const mcpProtocolFixtures = JSON.parse(
+  await readFile(
+    join(
+      workspaceRoot,
+      'local',
+      'contracts',
+      'conformance',
+      'mcp',
+      'fixtures',
+      'protocol-cases.json',
+    ),
+    'utf8',
+  ),
+) as {
+  byte_oracles: Array<{
+    id: string;
+    stdin_utf8: string;
+    stdout_utf8: string;
+    stderr_utf8: string;
+  }>;
+};
 
 interface RpcResponse {
   jsonrpc: '2.0';
@@ -180,6 +201,32 @@ async function runCli(projectRoot: string, request: Record<string, unknown>) {
   return { status, stdout, stderr };
 }
 
+function runRawMcp(stdin: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [executablePath], {
+      cwd: workspaceRoot,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    children.add(child);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.once('error', reject);
+    child.once('exit', () => {
+      children.delete(child);
+      resolve({ stdout, stderr });
+    });
+    child.stdin.end(stdin);
+  });
+}
+
 afterEach(async () => {
   await Promise.all(
     [...children].map(async (child) => {
@@ -197,6 +244,16 @@ afterEach(async () => {
 });
 
 describe('breakdown-mcp stdio process', () => {
+  it.each(mcpProtocolFixtures.byte_oracles)(
+    'should match the public $id JSON-RPC byte oracle',
+    async (fixture) => {
+      expect(await runRawMcp(fixture.stdin_utf8)).toEqual({
+        stdout: fixture.stdout_utf8,
+        stderr: fixture.stderr_utf8,
+      });
+    },
+  );
+
   it.each(['2025-06-18', '2025-11-25'])(
     'advertises the static local tool surface with MCP %s',
     async (protocolVersion) => {

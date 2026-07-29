@@ -1,0 +1,87 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "CLI",
+  "defaults": {
+    "setup": "Install the exact core and CLI candidate tarballs into an otherwise empty temporary package and create the indexed real project.",
+    "action": "Invoke the installed breakdown executable with exact argv, stdin, environment, and signal fixtures.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "cli",
+      "host": "none",
+      "protocol": "breakdown.cli-output.v1"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-cli/src/index.test.ts"
+  },
+  "rows": [
+    {
+      "id": "CLI-001",
+      "requirements": ["REQ-CLI-001"],
+      "oracle": "Only the three cataloged human commands plus help and exact package version are accepted."
+    },
+    {
+      "id": "CLI-002",
+      "requirements": ["REQ-CLI-002"],
+      "oracle": "Missing/empty project is usage failure; a relative argument resolves from invocation cwd and no ambient root is selected."
+    },
+    {
+      "id": "CLI-003",
+      "requirements": ["REQ-CLI-003"],
+      "oracle": "Create always returns a new Run, inspect requires exact ID, and every forbidden human command is a usage failure."
+    },
+    {
+      "id": "CLI-004",
+      "requirements": ["REQ-CLI-004"],
+      "oracle": "Operate accepts one strict bounded request document and emits one schema-valid output document."
+    },
+    {
+      "id": "CLI-005",
+      "requirements": ["REQ-CLI-005"],
+      "oracle": "Human command values/failures/effects equal the matching dispatcher operation and contain no adapter-owned core behavior."
+    },
+    {
+      "id": "CLI-006",
+      "requirements": ["REQ-CLI-006"],
+      "oracle_type": "byte",
+      "oracle": "Machine success/failure stdout is exactly one reviewed compact JSON line and stderr is empty; human streams follow their exact channels."
+    },
+    {
+      "id": "CLI-007",
+      "requirements": ["REQ-CLI-007"],
+      "oracle_type": "byte",
+      "oracle": "Control fixtures are escaped within the stderr bound; color appears only on TTY and disappears for any NO_COLOR value."
+    },
+    {
+      "id": "CLI-008",
+      "requirements": ["REQ-CLI-008"],
+      "oracle": "Every success, usage, and failure kind exits with its exact cataloged integer, including success for valid incomplete inspection."
+    },
+    {
+      "id": "CLI-009",
+      "requirements": ["REQ-CLI-009"],
+      "oracle": "Decoded base64 bytes and ordered operation data equal the core values byte-for-byte and require no prose parsing."
+    },
+    {
+      "id": "CLI-010",
+      "requirements": ["REQ-CLI-010"],
+      "oracle_type": "effect",
+      "oracle": "SIGINT/SIGTERM cause no pre-commit record and exactly one complete record after the publication critical section."
+    },
+    {
+      "id": "CLI-011",
+      "requirements": ["REQ-CLI-011"],
+      "oracle_type": "effect",
+      "oracle": "The installed tarball executable passes identical traces with no Git executable/repository and no workspace import."
+    },
+    {
+      "id": "CLI-012",
+      "requirements": ["REQ-CLI-012"],
+      "fixture": "conformance/cli/fixtures/process-cases.json",
+      "oracle": "The public process corpus covers every command, request variant, stream, boundary, byte field, control, exit, signal, and ambient-root case."
+    }
+  ]
+}

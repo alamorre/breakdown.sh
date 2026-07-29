@@ -1,0 +1,94 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "SEC",
+  "defaults": {
+    "setup": "Construct the indexed attack or boundary case on a real temporary local filesystem with sentinel ambient authority and content.",
+    "action": "Invoke the affected public operation through the packaged core dispatcher and observe returned data, filesystem effects, and process/network sentinels.",
+    "oracle_type": "effect",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "native-local",
+      "transport": "in-process-and-subprocess",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/security-boundary.test.ts"
+  },
+  "rows": [
+    {
+      "id": "SEC-001",
+      "requirements": ["REQ-SEC-001"],
+      "oracle": "Missing/inferred roots fail before project data; only the explicit canonical selected root authorizes access."
+    },
+    {
+      "id": "SEC-002",
+      "requirements": ["REQ-SEC-002"],
+      "oracle": "Every linked, redirected, mounted, hard-linked, case-aliased, or Unicode-aliased descendant is rejected before disclosure or commit."
+    },
+    {
+      "id": "SEC-003",
+      "requirements": ["REQ-SEC-003"],
+      "oracle": "Only exact regular Workflow Inputs read successfully; replacement, digest change, special files, and sibling discovery fail closed."
+    },
+    {
+      "id": "SEC-004",
+      "requirements": ["REQ-SEC-004"],
+      "oracle": "Filesystem snapshots show changes only at contracted Run and private .breakdown locations derived from validated identities."
+    },
+    {
+      "id": "SEC-005",
+      "requirements": ["REQ-SEC-005"],
+      "oracle": "Created POSIX paths are 0700/0600, equivalent account ACLs apply elsewhere, and existing Input permissions remain unchanged."
+    },
+    {
+      "id": "SEC-006",
+      "requirements": ["REQ-SEC-006"],
+      "oracle": "Native reliable local filesystems pass; detectable NFS, SMB/CIFS, remote mounts, and synchronized indirection fail unsupported_filesystem."
+    },
+    {
+      "id": "SEC-007",
+      "requirements": ["REQ-SEC-007"],
+      "oracle": "Execution, import, hook, install, Git, network, model, agent, adjacent-instruction, and project-command sentinels remain untouched."
+    },
+    {
+      "id": "SEC-008",
+      "requirements": ["REQ-SEC-008"],
+      "oracle": "Ambient credential sentinels appear in no value, record, log, extension, or child process; only explicitly read Input bytes are disclosed."
+    },
+    {
+      "id": "SEC-009",
+      "requirements": ["REQ-SEC-009"],
+      "oracle": "Human controls and active content are escaped within bounds while machine data stays structured and grants no effect."
+    },
+    {
+      "id": "SEC-010",
+      "requirements": ["REQ-SEC-010"],
+      "oracle": "Every cataloged limit applies identically and limit exhaustion returns limit_exceeded without truncation or partial state."
+    },
+    {
+      "id": "SEC-011",
+      "requirements": ["REQ-SEC-011"],
+      "oracle": "Hostile project content remains inside data fields and cannot alter policy, paths, tools, approvals, authority, or publication."
+    },
+    {
+      "id": "SEC-012",
+      "requirements": ["REQ-SEC-012"],
+      "oracle": "Process/network/Git sentinels prove Breakdown adds no ambient effect, while public guidance distinguishes Executor privacy."
+    },
+    {
+      "id": "SEC-013",
+      "requirements": ["REQ-SEC-013"],
+      "fixture": "conformance/security/fixtures/attacks.json",
+      "oracle": "The literal attack catalog covers every named path, link, alias, race, special-file, permission, hostile-content, and ambient-effect family."
+    },
+    {
+      "id": "SEC-014",
+      "requirements": ["REQ-SEC-014"],
+      "fixture": "conformance/boundaries/fixtures/limit-cases.json",
+      "oracle": "Every meaningful resource lists limit−1, limit, and limit+1 cases with exact success/failure and no-partial-commit oracles."
+    }
+  ]
+}

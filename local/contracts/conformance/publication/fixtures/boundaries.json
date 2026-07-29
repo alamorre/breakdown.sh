@@ -1,0 +1,26 @@
+{
+  "schema_version": "breakdown.publication-boundary-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "run_boundaries": [
+    "after_inputs_read",
+    "after_lock_acquired",
+    "after_staging_created",
+    "after_snapshot_written",
+    "after_manifest_written",
+    "before_publish",
+    "after_destination_validated",
+    "after_publish"
+  ],
+  "step_boundaries": [
+    "after_lock_acquired",
+    "after_staging_written",
+    "before_commit",
+    "after_destination_validated",
+    "after_commit_visible",
+    "after_commit"
+  ],
+  "process_termination": [
+    { "position": "before-logical-commit", "oracle": "no authoritative record" },
+    { "position": "after-logical-commit", "oracle": "one complete authoritative record" }
+  ]
+}

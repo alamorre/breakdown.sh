@@ -1,0 +1,53 @@
+{
+  "schema_version": "breakdown.package-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "packages": [
+    {
+      "name": "@breakdown-sh/core",
+      "version": "1.0.0-beta.1",
+      "engine": "^24.0.0",
+      "exports": ["."],
+      "runtime_dependencies": { "yaml": "2.9.0" }
+    },
+    {
+      "name": "@breakdown-sh/cli",
+      "version": "1.0.0-beta.1",
+      "engine": "^24.0.0",
+      "bins": ["breakdown"],
+      "runtime_dependencies": { "@breakdown-sh/core": "1.0.0-beta.1" }
+    },
+    {
+      "name": "@breakdown-sh/mcp",
+      "version": "1.0.0-beta.1",
+      "engine": "^24.0.0",
+      "bins": ["breakdown-mcp"],
+      "runtime_dependencies": {
+        "@breakdown-sh/core": "1.0.0-beta.1",
+        "@modelcontextprotocol/sdk": "1.29.0",
+        "zod": "4.3.6"
+      }
+    }
+  ],
+  "forbidden": [
+    "deep-import",
+    "dependency-cycle",
+    "native-addon",
+    "bundled-node",
+    "browser-build",
+    "install-lifecycle-script",
+    "source-map-with-private-source",
+    "secret",
+    "hosted-private-data"
+  ],
+  "release_artifacts": [
+    "npm-tarballs",
+    "skills-zip",
+    "skills-tar",
+    "contracts-zip",
+    "contracts-tar",
+    "release-manifest",
+    "sha256sums",
+    "sbom",
+    "attestations"
+  ]
+}

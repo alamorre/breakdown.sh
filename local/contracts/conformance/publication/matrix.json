@@ -1,5 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
+  "release_version": "1.0.0-beta.1",
   "defaults": {
     "prerequisites": "Create valid Runs and Work Packets in real temporary projects on a supported local filesystem.",
     "action": "Exercise create_run and submit_candidate through the core dispatcher with deterministic publication controls and real subprocesses.",
@@ -17,77 +18,77 @@
   },
   "rows": [
     {
-      "id": "PUB-001",
+      "id": "CASE-PUB-001",
       "requirement": "Issue #155: inject deterministic clock, entropy, and faults at every Run and StepArtifact publication boundary",
       "oracle": "Every pre-commit fault returns io/io_error without an authoritative record; every post-commit fault leaves one complete inspectable record."
     },
     {
-      "id": "PUB-002",
+      "id": "CASE-PUB-002",
       "requirement": "Issue #155: survive process termination before and after logical commit",
       "oracle": "Killing a real core subprocess before commit exposes no Run or attempt; killing it after commit exposes one complete authoritative record."
     },
     {
-      "id": "PUB-003",
+      "id": "CASE-PUB-003",
       "requirement": "Issue #155: serialize every mutation with one exclusive per-Run writer lock and re-inspection",
       "oracle": "Run creation and submission hold the fixed per-Run lock through publication, and submission re-inspects eligibility before allocating an attempt."
     },
     {
-      "id": "PUB-004",
+      "id": "CASE-PUB-004",
       "requirement": "Issue #155: fail lock contention immediately without stealing",
       "oracle": "A simultaneous contender receives conflict/run_locked while the observed opaque lock remains unchanged."
     },
     {
-      "id": "PUB-005",
+      "id": "CASE-PUB-005",
       "requirement": "Issue #155: elect one winner in at least 100 seeded same-opportunity races",
       "oracle": "Each retained seed yields exactly one attempt-1 winner, one settled conflict, contiguous history, and no overwritten Result."
     },
     {
-      "id": "PUB-006",
+      "id": "CASE-PUB-006",
       "requirement": "Issue #155: preserve independent eligible submissions in at least 100 seeded races",
       "oracle": "Each retained seed safely retries only explicit run_locked contention and finishes with one attempt-1 Result for each independent node."
     },
     {
-      "id": "PUB-007",
+      "id": "CASE-PUB-007",
       "requirement": "Issue #155: make a lost submission response safe to inspect without replay",
       "oracle": "After process termination, inspect_run distinguishes an uncommitted attempt from the exact committed attempt and Result."
     },
     {
-      "id": "PUB-008",
+      "id": "CASE-PUB-008",
       "requirement": "Issue #155: retain race seeds and diagnostic facts on failure",
       "oracle": "Every race assertion reports its seed and the structured success or failure facts from both contenders."
     },
     {
-      "id": "PUB-009",
+      "id": "CASE-PUB-009",
       "requirement": "Issue #156: recover an abandoned writer lock only with explicit confirmation and its exact observed opaque ID",
       "oracle": "Confirmed recovery of the unchanged observed lock permits the pending submission; age and diagnostic process ID provide no recovery authority."
     },
     {
-      "id": "PUB-010",
+      "id": "CASE-PUB-010",
       "requirement": "Issue #156: fail missing, changed, or incorrectly identified lock recovery without blocking read-only operations",
       "oracle": "Every recovery mismatch returns conflict/lock_recovery_mismatch and preserves in-place and replacement lock changes, while inspection and Work Packet preparation remain available."
     },
     {
-      "id": "PUB-011",
+      "id": "CASE-PUB-011",
       "requirement": "Issue #156: propagate trusted invocation cancellation without durable Run cancellation state",
       "oracle": "Cancellation before final publication returns cancelled/cancelled, releases the lock, publishes no StepArtifact, and consumes no attempt."
     },
     {
-      "id": "PUB-012",
+      "id": "CASE-PUB-012",
       "requirement": "Issue #156: defer cancellation after final publication begins through the Markdown commit marker",
       "oracle": "Cancellation at every in-process and subprocess publication boundary is unambiguous: pre-critical boundaries commit nothing and critical/post-commit boundaries leave exactly one inspectable attempt."
     },
     {
-      "id": "PUB-013",
+      "id": "CASE-PUB-013",
       "requirement": "Issue #156: keep explicit cancelled Candidate Outcomes distinct from invocation cancellation",
       "oracle": "A non-aborted submit_candidate call with Candidate status cancelled succeeds and commits one cancelled StepArtifact, while an aborted invocation returns cancelled/cancelled."
     },
     {
-      "id": "PUB-014",
+      "id": "CASE-PUB-014",
       "requirement": "Issue #156: make lock recovery race-safe across processes",
       "oracle": "Concurrent and terminated recovery processes preserve the current identity-specific claim, elect one submission winner, and leave one contiguous attempt."
     },
     {
-      "id": "PUB-015",
+      "id": "CASE-PUB-015",
       "requirement": "Issue #161: keep model and provider identity out of durable Candidate Outcome contracts",
       "oracle": "Candidate validation rejects model, provider, and every other unknown Executor field before publication; the accepted durable Executor shape contains only kind, name, and optional host version.",
       "evidence": "packages/breakdown-core/src/submit-candidate.test.ts"

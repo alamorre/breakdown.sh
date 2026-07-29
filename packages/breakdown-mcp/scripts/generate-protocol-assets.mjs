@@ -1,14 +1,21 @@
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 
 const schemaDirectory = new URL('../../../local/contracts/schemas/', import.meta.url);
+const catalogPath = new URL('../../../local/contracts/catalogs/mcp.v1.json', import.meta.url);
 const outputPath = new URL('../dist/protocol-assets.js', import.meta.url);
 const validatorOutputPath = new URL('../dist/protocol-validators.js', import.meta.url);
+const standalonePostprocessorPath = fileURLToPath(
+  new URL('../../../scripts/standalone-validator.mjs', import.meta.url),
+);
 
 const schemaFiles = {
   operation: 'breakdown.operation-request.v1.schema.json',
+  workflow: 'breakdown.workflow.v1.schema.json',
   workPacket: 'breakdown.work-packet.v1.schema.json',
   candidate: 'breakdown.candidate.v1.schema.json',
 };
@@ -21,31 +28,9 @@ const schemas = Object.fromEntries(
     ]),
   ),
 );
+const mcpCatalog = JSON.parse(await readFile(catalogPath, 'utf8'));
 
-const operationOrder = [
-  'validate_workflow',
-  'create_run',
-  'inspect_run',
-  'prepare_work',
-  'read_work_input',
-  'submit_candidate',
-];
-
-const descriptions = {
-  validate_workflow: 'Validate the project Workflow Definition.',
-  create_run: 'Create a new immutable Run.',
-  inspect_run: 'Inspect one exact Run and its derived state.',
-  prepare_work: 'Prepare deterministic Work Packets without creating a claim.',
-  read_work_input: 'Read one exact Input named by a Work Packet.',
-  submit_candidate: 'Validate and publish one Candidate Outcome.',
-};
-
-const readOnlyOperations = new Set([
-  'validate_workflow',
-  'inspect_run',
-  'prepare_work',
-  'read_work_input',
-]);
+const operationOrder = mcpCatalog.operations.map(({ name }) => name);
 
 function projectVariant(variant) {
   const definitions = structuredClone(schemas.operation.$defs ?? {});
@@ -77,9 +62,11 @@ function projectVariant(variant) {
     delete body.$id;
     delete body.title;
     delete body.$defs;
-    definitions[name] = rewriteInternalReferences(body, prefix);
+    definitions[name] = bundleReferences(rewriteInternalReferences(body, prefix));
     for (const [definitionName, definition] of Object.entries($defs)) {
-      definitions[`${prefix}${definitionName}`] = rewriteInternalReferences(definition, prefix);
+      definitions[`${prefix}${definitionName}`] = bundleReferences(
+        rewriteInternalReferences(definition, prefix),
+      );
     }
   }
 
@@ -95,6 +82,13 @@ function projectVariant(variant) {
       } else if (key === '$ref' && item === 'breakdown.candidate.v1') {
         embed('candidate', schemas.candidate, 'candidate_');
         bundled[key] = '#/$defs/candidate';
+      } else if (
+        key === '$ref' &&
+        typeof item === 'string' &&
+        item.startsWith('breakdown.workflow.v1#/$defs/')
+      ) {
+        embed('workflow', schemas.workflow, 'workflow_');
+        bundled[key] = `#/$defs/workflow_${item.slice('breakdown.workflow.v1#/$defs/'.length)}`;
       } else {
         bundled[key] = bundleReferences(item);
       }
@@ -144,16 +138,19 @@ const tools = operationOrder.map((operation) => {
   if (variant === undefined) {
     throw new Error(`The automation schema is missing the ${operation} operation.`);
   }
-  const readOnly = readOnlyOperations.has(operation);
+  const catalogOperation = mcpCatalog.operations.find(({ name }) => name === operation);
+  if (catalogOperation === undefined) {
+    throw new Error(`The MCP catalog is missing the ${operation} operation.`);
+  }
   return {
     name: operation,
-    description: descriptions[operation],
+    description: catalogOperation.description,
     inputSchema: projectVariant(variant),
     annotations: {
-      readOnlyHint: readOnly,
-      destructiveHint: false,
-      idempotentHint: readOnly,
-      openWorldHint: false,
+      readOnlyHint: catalogOperation.read_only,
+      destructiveHint: catalogOperation.destructive,
+      idempotentHint: catalogOperation.idempotent,
+      openWorldHint: catalogOperation.open_world,
     },
   };
 });
@@ -176,22 +173,15 @@ for (const tool of tools) {
   ] = schemaId;
 }
 
-let validatorOutput = standaloneCode(validator, validatorExports);
-const unicodeLengthImport = 'const func1 = require("ajv/dist/runtime/ucs2length").default;';
-if (!validatorOutput.includes(unicodeLengthImport)) {
-  throw new Error('The generated validator no longer has the expected Unicode-length helper.');
-}
-validatorOutput = validatorOutput.replace(
-  unicodeLengthImport,
-  'const func1 = (value) => Array.from(value).length;',
-);
-if (validatorOutput.includes('require(')) {
-  throw new Error('The generated validator unexpectedly requires a runtime dependency.');
-}
+const validatorOutput = execFileSync(process.execPath, [standalonePostprocessorPath], {
+  input: standaloneCode(validator, validatorExports),
+  encoding: 'utf8',
+  maxBuffer: 16 * 1024 * 1024,
+});
 
 await writeFile(
   outputPath,
-  `// Generated from local/contracts/schemas/breakdown.operation-request.v1.schema.json.\nexport const OPERATION_NAMES = ${JSON.stringify(operationOrder)};\nexport const TOOL_CATALOG = ${JSON.stringify(tools, null, 2)};\n`,
+  `// Generated from local/contracts/schemas/breakdown.operation-request.v1.schema.json and local/contracts/catalogs/mcp.v1.json.\nexport const MCP_RELEASE_VERSION = ${JSON.stringify(mcpCatalog.release_version)};\nexport const MCP_PROTOCOL_VERSIONS = ${JSON.stringify(mcpCatalog.protocol_versions)};\nexport const MCP_PREFERRED_PROTOCOL_VERSION = ${JSON.stringify(mcpCatalog.preferred_protocol_version)};\nexport const MCP_SERVER_INFO = ${JSON.stringify(mcpCatalog.server)};\nexport const OPERATION_NAMES = ${JSON.stringify(operationOrder)};\nexport const TOOL_CATALOG = ${JSON.stringify(tools, null, 2)};\n`,
   'utf8',
 );
 await writeFile(validatorOutputPath, `${validatorOutput}\n`, 'utf8');

@@ -1,0 +1,86 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "MCP",
+  "defaults": {
+    "setup": "Install exact lockstep core, CLI, and MCP candidate tarballs and start breakdown-mcp with no project selected.",
+    "action": "Drive the real stdio JSON-RPC process with the indexed protocol/client fixture and observe frames, values, effects, and lifecycle.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "mcp-stdio",
+      "host": "none",
+      "protocol": "2025-06-18+2025-11-25"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-mcp/src/index.test.ts"
+  },
+  "rows": [
+    {
+      "id": "MCP-001",
+      "requirements": ["REQ-MCP-001"],
+      "oracle": "Packed manifest/bin/engine/version inspection shows a local stdio executable in exact release lockstep."
+    },
+    {
+      "id": "MCP-002",
+      "requirements": ["REQ-MCP-002"],
+      "oracle": "Initialize and tools/list return exact cataloged identity, supported protocols, and six-tool operation order."
+    },
+    {
+      "id": "MCP-003",
+      "requirements": ["REQ-MCP-003"],
+      "oracle": "Every tool has the exact read-only/idempotent/destructive/open-world annotation tuple from the catalog."
+    },
+    {
+      "id": "MCP-004",
+      "requirements": ["REQ-MCP-004"],
+      "oracle": "Capability discovery and requests prove every cataloged forbidden capability absent."
+    },
+    {
+      "id": "MCP-005",
+      "requirements": ["REQ-MCP-005"],
+      "oracle": "Each tool schema is the strict projected operation variant with required version/root and no additional properties."
+    },
+    {
+      "id": "MCP-006",
+      "requirements": ["REQ-MCP-006"],
+      "oracle": "Startup touches no project; missing, relative, URI, cwd, environment, workspace, repository, and Roots-derived selections fail."
+    },
+    {
+      "id": "MCP-007",
+      "requirements": ["REQ-MCP-007"],
+      "oracle_type": "byte",
+      "oracle": "Structured content equals the one compact text block exactly and preserves core data/failure with correct isError."
+    },
+    {
+      "id": "MCP-008",
+      "requirements": ["REQ-MCP-008"],
+      "oracle": "Malformed protocol requests produce JSON-RPC errors while expected operation failures stay successful tool-call envelopes."
+    },
+    {
+      "id": "MCP-009",
+      "requirements": ["REQ-MCP-009"],
+      "oracle_type": "effect",
+      "oracle": "Cancellation/closure aborts core work, sends no cancelled response, and preserves exact commit-or-no-commit inspection recovery."
+    },
+    {
+      "id": "MCP-010",
+      "requirements": ["REQ-MCP-010"],
+      "oracle_type": "byte",
+      "oracle": "Stdout contains only one JSON-RPC frame per line, stderr stays sanitized/bounded, and EOF/signals leave no daemon."
+    },
+    {
+      "id": "MCP-011",
+      "requirements": ["REQ-MCP-011"],
+      "fixture": "conformance/mcp/fixtures/protocol-cases.json",
+      "oracle": "Both protocols, Inspector, wrapper and independent client, schemas, forbidden surfaces, errors, cancellation, and lifecycle cases pass."
+    },
+    {
+      "id": "MCP-012",
+      "requirements": ["REQ-MCP-012"],
+      "oracle": "MCP-only and mixed CLI/MCP shared traces preserve exact values, failures, ordering, limits, and Run bytes."
+    }
+  ]
+}

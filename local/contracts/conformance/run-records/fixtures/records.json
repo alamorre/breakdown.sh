@@ -1,0 +1,435 @@
+{
+  "schema_version": "breakdown.run-record-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "byte_oracles": {
+    "workflow_snapshot": {
+      "bytes_base64": "c2NoZW1hX3ZlcnNpb246IGJyZWFrZG93bi53b3JrZmxvdy52MQppZDogbGl0ZXJhbC1ydW4KbmFtZTogTGl0ZXJhbCBSdW4Kbm9kZXM6CiAgLSBpZDogcmVzdWx0CiAgICBuYW1lOiBSZXN1bHQKICAgIHByb21wdDogUHJvZHVjZSB0aGUgbGl0ZXJhbCBSZXN1bHQuCg==",
+      "sha256": "67b1a4ebe76c7af2241e53149a98c425512ae637fb53a35ef09a0b41946ee2e0"
+    },
+    "node_context": {
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"result\",\"inputs\":{},\"name\":\"Result\",\"prompt\":\"Produce the literal Result.\"},\"resolved_inputs\":{},\"run_id\":\"20260724T200000.000Z--literal-run--aaaaaaaaaaaa\"}",
+      "sha256": "bd52225c8233c707a18ad56084b82dc6bf55070512492e5e0b34237ea28be797"
+    },
+    "run_manifest_utf8": "---\nschema_version: breakdown.run.v1\nrun_id: 20260724T200000.000Z--literal-run--aaaaaaaaaaaa\ncreated_at: 2026-07-24T20:00:00.000Z\nworkflow:\n  id: literal-run\n  snapshot: breakdown.yaml\n  sha256: 67b1a4ebe76c7af2241e53149a98c425512ae637fb53a35ef09a0b41946ee2e0\ninputs: {}\nproducer:\n  name: breakdown\n  version: 1.0.0-beta.1\n---\n",
+    "succeeded_step_utf8": "---\nschema_version: breakdown.step-artifact.v1\nrun_id: 20260724T200000.000Z--literal-run--aaaaaaaaaaaa\nnode_id: result\nattempt: 1\nstatus: succeeded\nstarted_at: 2026-07-24T20:01:00.000Z\nsettled_at: 2026-07-24T20:02:00.000Z\ncontext_sha256: bd52225c8233c707a18ad56084b82dc6bf55070512492e5e0b34237ea28be797\ninputs: {}\nexecutor:\n  kind: program\n  name: literal-fixture\n  version: 1.0.0\n---\n",
+    "failed_step_utf8": "---\nschema_version: breakdown.step-artifact.v1\nrun_id: 20260724T200000.000Z--literal-run--aaaaaaaaaaaa\nnode_id: result\nattempt: 2\nstatus: failed\nstarted_at: 2026-07-24T20:03:00.000Z\nsettled_at: 2026-07-24T20:04:00.000Z\ncontext_sha256: bd52225c8233c707a18ad56084b82dc6bf55070512492e5e0b34237ea28be797\ninputs: {}\nexecutor:\n  kind: program\n  name: literal-fixture\nproblem:\n  code: executor_failed\n  message: Executor reported failure.\n---\nExecutor reported a problem.",
+    "blocked_step_utf8": "---\nschema_version: breakdown.step-artifact.v1\nrun_id: 20260724T200000.000Z--literal-run--aaaaaaaaaaaa\nnode_id: result\nattempt: 3\nstatus: blocked\nstarted_at: 2026-07-24T20:05:00.000Z\nsettled_at: 2026-07-24T20:06:00.000Z\ncontext_sha256: bd52225c8233c707a18ad56084b82dc6bf55070512492e5e0b34237ea28be797\ninputs: {}\nexecutor:\n  kind: human\n  name: literal-reviewer\nproblem:\n  code: missing_authority\n  message: Required Run Authority was not granted.\n---\nRequired authority was unavailable.",
+    "cancelled_step_utf8": "---\nschema_version: breakdown.step-artifact.v1\nrun_id: 20260724T200000.000Z--literal-run--aaaaaaaaaaaa\nnode_id: result\nattempt: 4\nstatus: cancelled\nstarted_at: 2026-07-24T20:07:00.000Z\nsettled_at: 2026-07-24T20:08:00.000Z\ncontext_sha256: bd52225c8233c707a18ad56084b82dc6bf55070512492e5e0b34237ea28be797\ninputs: {}\nexecutor:\n  kind: agent\n  name: literal-agent\nproblem:\n  code: user_cancelled\n  message: The user cancelled execution.\n---\nExecution was cancelled.",
+    "compact_contracted_json_utf8": "{\"finding\":\"ok\"}",
+    "compact_contracted_json_sha256": "5524d0caa09ac91359cbdd257548035b027aa0f87a06922a9ba1ea159d625ebf"
+  },
+  "literal_records": {
+    "empty_result_bytes_base64": "",
+    "compact_json_bytes_base64": "eyJmaW5kaW5nIjoib2sifQ==",
+    "non_success_body_bytes_base64": "RXhlY3V0b3IgcmVwb3J0ZWQgYSBwcm9ibGVtLg=="
+  },
+  "case_defaults": {
+    "project": "Materialize byte_oracles.workflow_snapshot as outputs/$RUN_ID/breakdown.yaml, byte_oracles.run_manifest_utf8 as outputs/$RUN_ID/run.md, and an empty outputs/$RUN_ID/steps directory.",
+    "action": {
+      "schema_version": "breakdown.operation-request.v1",
+      "operation": "inspect_run",
+      "run_id": "20260724T200000.000Z--literal-run--aaaaaaaaaaaa"
+    }
+  },
+  "run_manifest_forms": [
+    {
+      "id": "no-input",
+      "setup": { "run_manifest_source": "byte_oracles.run_manifest_utf8" },
+      "oracle": { "ok": true, "inputs": {}, "exact_bytes_equal": "byte_oracles.run_manifest_utf8" }
+    },
+    {
+      "id": "default-input",
+      "setup": {
+        "workflow_input": {
+          "id": "alpha",
+          "default": "inputs/default.txt",
+          "bytes_base64": "ZGVmYXVsdAo="
+        },
+        "create_run_inputs": {}
+      },
+      "oracle": {
+        "ok": true,
+        "manifest_input": {
+          "id": "alpha",
+          "path": "inputs/default.txt",
+          "sha256": "01666ec060466c14b9fa06c613fbac449163f2a2017558fe16526209ab78c6b0"
+        }
+      }
+    },
+    {
+      "id": "override-input",
+      "setup": {
+        "workflow_input": { "id": "alpha", "default": "inputs/default.txt" },
+        "file": { "path": "inputs/override.txt", "bytes_base64": "b3ZlcnJpZGUK" },
+        "create_run_inputs": { "alpha": "inputs/override.txt" }
+      },
+      "oracle": {
+        "ok": true,
+        "manifest_input": {
+          "id": "alpha",
+          "path": "inputs/override.txt",
+          "sha256": "46e0313ca59003e4def743b25cd1ed4a1276f99782e5cbf8bfa849ff4cf171db"
+        }
+      }
+    },
+    {
+      "id": "identifier-ordered-inputs",
+      "setup": {
+        "workflow_input_ids_in_authored_order": ["zeta", "alpha"],
+        "create_run_inputs": { "zeta": "z.txt", "alpha": "a.txt" }
+      },
+      "oracle": { "ok": true, "manifest_input_key_order": ["alpha", "zeta"] }
+    },
+    {
+      "id": "producer",
+      "setup": { "create_run": true },
+      "oracle": { "ok": true, "producer": { "name": "breakdown", "version": "1.0.0-beta.1" } }
+    },
+    {
+      "id": "extensions",
+      "setup": { "workflow_extensions": { "example.test": { "ticket": 162 } } },
+      "oracle": { "ok": true, "manifest_extensions": { "example.test": { "ticket": 162 } } }
+    }
+  ],
+  "step_artifact_forms": [
+    {
+      "id": "succeeded-empty-markdown",
+      "setup": { "candidate": { "status": "succeeded", "markdown_bytes_base64": "" } },
+      "oracle": {
+        "ok": true,
+        "status": "succeeded",
+        "selected_markdown_bytes_base64": "",
+        "json_sidecar": null
+      }
+    },
+    {
+      "id": "succeeded-markdown",
+      "setup": { "candidate": { "status": "succeeded", "markdown_bytes_base64": "UmVzdWx0Lgo=" } },
+      "oracle": {
+        "ok": true,
+        "status": "succeeded",
+        "selected_markdown_bytes_base64": "UmVzdWx0Lgo=",
+        "json_sidecar": null
+      }
+    },
+    {
+      "id": "succeeded-contracted-json-object",
+      "setup": { "data_contract": { "type": "object" }, "candidate_json": { "finding": "ok" } },
+      "oracle": {
+        "ok": true,
+        "json_utf8": "{\"finding\":\"ok\"}",
+        "json_sha256": "5524d0caa09ac91359cbdd257548035b027aa0f87a06922a9ba1ea159d625ebf"
+      }
+    },
+    {
+      "id": "succeeded-contracted-json-array",
+      "setup": { "data_contract": { "type": "array" }, "candidate_json": [1, 2] },
+      "oracle": { "ok": true, "json_utf8": "[1,2]" }
+    },
+    {
+      "id": "succeeded-contracted-json-string",
+      "setup": { "data_contract": { "type": "string" }, "candidate_json": "text" },
+      "oracle": { "ok": true, "json_utf8": "\"text\"" }
+    },
+    {
+      "id": "succeeded-contracted-json-number",
+      "setup": { "data_contract": { "type": "number" }, "candidate_json": 4.5 },
+      "oracle": { "ok": true, "json_utf8": "4.5" }
+    },
+    {
+      "id": "succeeded-contracted-json-boolean",
+      "setup": { "data_contract": { "type": "boolean" }, "candidate_json": true },
+      "oracle": { "ok": true, "json_utf8": "true" }
+    },
+    {
+      "id": "succeeded-contracted-json-null",
+      "setup": { "data_contract": { "type": "null" }, "candidate_json": null },
+      "oracle": { "ok": true, "json_utf8": "null" }
+    },
+    {
+      "id": "failed",
+      "setup": { "record_source": "byte_oracles.failed_step_utf8" },
+      "oracle": { "ok": true, "status": "failed", "selected_result": null, "next_attempt": 3 }
+    },
+    {
+      "id": "blocked",
+      "setup": { "record_source": "byte_oracles.blocked_step_utf8" },
+      "oracle": { "ok": true, "status": "blocked", "selected_result": null, "next_attempt": 4 }
+    },
+    {
+      "id": "cancelled",
+      "setup": { "record_source": "byte_oracles.cancelled_step_utf8" },
+      "oracle": { "ok": true, "status": "cancelled", "selected_result": null, "next_attempt": 5 }
+    },
+    {
+      "id": "workflow-input-reference",
+      "setup": {
+        "workflow_input": {
+          "id": "source",
+          "path": "source.bin",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "artifact_input": {
+          "workflow_input": {
+            "id": "source",
+            "path": "source.bin",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      "oracle": { "ok": true }
+    },
+    {
+      "id": "predecessor-markdown-reference",
+      "setup": {
+        "artifact_input": {
+          "result": {
+            "node_id": "root",
+            "attempt": 1,
+            "markdown": {
+              "path": "outputs/$RUN_ID/steps/root-a1.md",
+              "sha256": "b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77"
+            },
+            "json": null
+          }
+        }
+      },
+      "oracle": { "ok": true }
+    },
+    {
+      "id": "predecessor-markdown-json-reference",
+      "setup": {
+        "artifact_input": {
+          "result": {
+            "node_id": "root",
+            "attempt": 1,
+            "markdown": {
+              "path": "outputs/$RUN_ID/steps/root-a1.md",
+              "sha256": "b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77"
+            },
+            "json": {
+              "path": "outputs/$RUN_ID/steps/root-a1.json",
+              "sha256": "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"
+            }
+          }
+        }
+      },
+      "oracle": { "ok": true }
+    },
+    {
+      "id": "executor-agent",
+      "setup": { "executor": { "kind": "agent", "name": "fixture-agent" } },
+      "oracle": { "ok": true, "executor": { "kind": "agent", "name": "fixture-agent" } }
+    },
+    {
+      "id": "executor-human",
+      "setup": { "executor": { "kind": "human", "name": "fixture-human" } },
+      "oracle": { "ok": true, "executor": { "kind": "human", "name": "fixture-human" } }
+    },
+    {
+      "id": "executor-program",
+      "setup": { "executor": { "kind": "program", "name": "fixture-program" } },
+      "oracle": { "ok": true, "executor": { "kind": "program", "name": "fixture-program" } }
+    },
+    {
+      "id": "executor-version",
+      "setup": { "executor": { "kind": "program", "name": "fixture-program", "version": "2.3.4" } },
+      "oracle": {
+        "ok": true,
+        "executor": { "kind": "program", "name": "fixture-program", "version": "2.3.4" }
+      }
+    },
+    {
+      "id": "extensions",
+      "setup": { "extensions": { "example.test": { "case": "step" } } },
+      "oracle": { "ok": true, "extensions": { "example.test": { "case": "step" } } }
+    }
+  ],
+  "corruptions": [
+    {
+      "id": "run-manifest",
+      "setup": {
+        "replace_utf8": {
+          "path": "outputs/$RUN_ID/run.md",
+          "from": "workflow:",
+          "to": "workflow: ["
+        }
+      },
+      "oracle": { "code": "parse", "file": "outputs/$RUN_ID/run.md" }
+    },
+    {
+      "id": "workflow-snapshot",
+      "setup": {
+        "append_utf8": { "path": "outputs/$RUN_ID/breakdown.yaml", "value": "# changed\n" }
+      },
+      "oracle": { "code": "integrity", "path": "/workflow/sha256" }
+    },
+    {
+      "id": "workflow-input",
+      "setup": { "replace_bytes": { "path": "source.bin", "bytes_base64": "Y2hhbmdlZA==" } },
+      "oracle": { "code": "integrity", "path": "/inputs/source/sha256" }
+    },
+    {
+      "id": "step-frontmatter",
+      "setup": {
+        "replace_utf8": {
+          "path": "outputs/$RUN_ID/steps/$STEP.md",
+          "from": "schema_version:",
+          "to": "schema_version: ["
+        }
+      },
+      "oracle": { "code": "parse", "file": "outputs/$RUN_ID/steps/$STEP.md" }
+    },
+    {
+      "id": "step-filename",
+      "setup": {
+        "rename": {
+          "from": "outputs/$RUN_ID/steps/$STEP.md",
+          "to": "outputs/$RUN_ID/steps/invalid.md"
+        }
+      },
+      "oracle": { "code": "layout", "file": "outputs/$RUN_ID/steps/invalid.md" }
+    },
+    {
+      "id": "step-identity",
+      "setup": { "replace_frontmatter": { "path": "/node_id", "value": "other" } },
+      "oracle": { "code": "reference_mismatch", "path": "/node_id" }
+    },
+    {
+      "id": "step-timestamp",
+      "setup": {
+        "replace_frontmatter": { "path": "/settled_at", "value": "2020-01-01T00:00:00.000Z" }
+      },
+      "oracle": { "code": "reference_mismatch", "path": "/settled_at" }
+    },
+    {
+      "id": "step-context",
+      "setup": {
+        "replace_frontmatter": {
+          "path": "/context_sha256",
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "oracle": { "code": "integrity", "path": "/context_sha256" }
+    },
+    {
+      "id": "step-input-membership",
+      "setup": { "add_frontmatter": { "path": "/inputs/undeclared", "value": {} } },
+      "oracle": { "code": "reference_mismatch", "path": "/inputs/undeclared" }
+    },
+    {
+      "id": "result-reference",
+      "setup": {
+        "replace_frontmatter": { "path": "/inputs/evidence/result/node_id", "value": "other" }
+      },
+      "oracle": { "code": "reference_mismatch", "path": "/inputs/evidence/result/node_id" }
+    },
+    {
+      "id": "result-markdown-hash",
+      "setup": {
+        "replace_frontmatter": {
+          "path": "/inputs/evidence/result/markdown/sha256",
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "oracle": { "code": "integrity", "path": "/inputs/evidence/result/markdown/sha256" }
+    },
+    {
+      "id": "result-json-hash",
+      "setup": {
+        "replace_frontmatter": {
+          "path": "/inputs/evidence/result/json/sha256",
+          "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      },
+      "oracle": { "code": "integrity", "path": "/inputs/evidence/result/json/sha256" }
+    },
+    {
+      "id": "data-contract",
+      "setup": {
+        "replace_bytes": { "path": "outputs/$RUN_ID/steps/$STEP.json", "bytes_base64": "W10=" }
+      },
+      "oracle": { "code": "data_contract", "file": "outputs/$RUN_ID/steps/$STEP.json" }
+    },
+    {
+      "id": "missing-pair",
+      "setup": { "remove": "outputs/$RUN_ID/steps/$STEP.json" },
+      "oracle": { "code": "missing_reference", "file": "outputs/$RUN_ID/steps/$STEP.json" }
+    },
+    {
+      "id": "unexpected-pair",
+      "setup": {
+        "write_file": { "path": "outputs/$RUN_ID/steps/$STEP.json", "bytes_base64": "bnVsbA==" }
+      },
+      "oracle": { "code": "status_invariant", "file": "outputs/$RUN_ID/steps/$STEP.json" }
+    },
+    {
+      "id": "attempt-gap",
+      "setup": { "committed_attempts": [1, 3] },
+      "oracle": { "code": "duplicate_attempt", "path": "/attempt" }
+    },
+    {
+      "id": "duplicate-attempt",
+      "setup": {
+        "committed_attempts": [
+          { "attempt": 1, "settled_at": "2026-07-24T20:01:00.000Z" },
+          { "attempt": 1, "settled_at": "2026-07-24T20:02:00.000Z" }
+        ]
+      },
+      "oracle": { "code": "duplicate_attempt", "path": "/attempt" }
+    },
+    {
+      "id": "unsupported-run-version",
+      "setup": {
+        "replace_frontmatter": {
+          "record": "run.md",
+          "path": "/schema_version",
+          "value": "breakdown.run.v999"
+        }
+      },
+      "oracle": { "kind": "unsupported", "failure_code": "unsupported_version" }
+    },
+    {
+      "id": "unsupported-step-version",
+      "setup": {
+        "replace_frontmatter": {
+          "record": "$STEP.md",
+          "path": "/schema_version",
+          "value": "breakdown.step-artifact.v999"
+        }
+      },
+      "oracle": { "kind": "unsupported", "failure_code": "unsupported_version" }
+    }
+  ],
+  "ignored_entries": [
+    {
+      "id": "temporary-entry",
+      "setup": {
+        "write_file": { "path": "outputs/$RUN_ID/steps/.tmp-fixture", "bytes_base64": "aWdub3Jl" }
+      },
+      "oracle": { "ok": true, "attempt_count_delta": 0 }
+    },
+    {
+      "id": "orphan-json",
+      "setup": {
+        "write_file": { "path": "outputs/$RUN_ID/steps/orphan.json", "bytes_base64": "bnVsbA==" }
+      },
+      "oracle": { "ok": true, "attempt_count_delta": 0 }
+    },
+    {
+      "id": "unrelated-markdown",
+      "setup": {
+        "write_file": {
+          "path": "outputs/$RUN_ID/steps/README.md",
+          "bytes_base64": "Tm90IGEgbm9ybWF0aXZlIHJlY29yZC4K"
+        }
+      },
+      "oracle": { "ok": true, "attempt_count_delta": 0 }
+    },
+    {
+      "id": "unrelated-entry",
+      "setup": { "mkdir": "outputs/$RUN_ID/steps/unrelated" },
+      "oracle": { "ok": true, "attempt_count_delta": 0 }
+    }
+  ]
+}

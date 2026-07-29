@@ -1,0 +1,280 @@
+{
+  "schema_version": "breakdown.state-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "defaults": {
+    "action": {
+      "schema_version": "breakdown.operation-request.v1",
+      "operation": "inspect_run",
+      "run_id": "$RUN_ID"
+    },
+    "base_workflow_utf8": "schema_version: breakdown.workflow.v1\nid: state\nname: State\nnodes:\n  - id: root\n    name: Root\n    prompt: Root.\n  - id: child\n    name: Child\n    prompt: Child.\n    inputs:\n      root:\n        node: root\n  - id: independent\n    name: Independent\n    prompt: Independent.\n"
+  },
+  "scenarios": [
+    {
+      "id": "empty-run",
+      "setup": { "committed_steps": [] },
+      "oracle": {
+        "ok": true,
+        "run": "incomplete",
+        "nodes": [
+          { "id": "root", "state": "runnable", "next_attempt": 1 },
+          { "id": "child", "state": "blocked", "next_attempt": 1 },
+          { "id": "independent", "state": "runnable", "next_attempt": 1 }
+        ]
+      }
+    },
+    {
+      "id": "all-selected",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded" },
+          { "node": "child", "attempt": 1, "status": "succeeded" },
+          { "node": "independent", "attempt": 1, "status": "succeeded" }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "run": "complete",
+        "nodes": [
+          { "id": "root", "state": "complete" },
+          { "id": "child", "state": "complete" },
+          { "id": "independent", "state": "complete" }
+        ],
+        "terminal_results": ["child", "independent"]
+      }
+    },
+    {
+      "id": "predecessor-missing",
+      "setup": {
+        "committed_steps": [{ "node": "independent", "attempt": 1, "status": "succeeded" }]
+      },
+      "oracle": {
+        "ok": true,
+        "run": "incomplete",
+        "nodes": [
+          { "id": "root", "state": "runnable" },
+          { "id": "child", "state": "blocked" },
+          { "id": "independent", "state": "complete" }
+        ]
+      }
+    },
+    {
+      "id": "greatest-matching-attempt",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded", "context": "current" },
+          { "node": "root", "attempt": 2, "status": "failed", "context": "current" },
+          { "node": "root", "attempt": 3, "status": "succeeded", "context": "current" }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "selected_result": { "node": "root", "attempt": 3 },
+        "next_attempt": 4
+      }
+    },
+    {
+      "id": "later-non-success",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded", "context": "current" },
+          { "node": "root", "attempt": 2, "status": "failed", "context": "current" }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "selected_result": { "node": "root", "attempt": 1 },
+        "state": "complete",
+        "next_attempt": 3
+      }
+    },
+    {
+      "id": "stale-success",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded", "context": "old" }
+        ],
+        "current_context": "new"
+      },
+      "oracle": {
+        "ok": true,
+        "node": {
+          "id": "root",
+          "state": "runnable",
+          "stale": true,
+          "selected_result": { "attempt": 1 },
+          "next_attempt": 2
+        }
+      }
+    },
+    {
+      "id": "successful-refresh",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded" },
+          { "node": "child", "attempt": 1, "status": "succeeded" },
+          { "node": "root", "attempt": 2, "status": "succeeded", "refresh_base": { "attempt": 1 } }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "nodes": [
+          { "id": "root", "state": "complete", "selected_attempt": 2 },
+          { "id": "child", "state": "runnable", "stale": true, "selected_attempt": 1 }
+        ]
+      }
+    },
+    {
+      "id": "equal-byte-refresh",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded", "markdown_utf8": "same\n" },
+          { "node": "child", "attempt": 1, "status": "succeeded" },
+          {
+            "node": "root",
+            "attempt": 2,
+            "status": "succeeded",
+            "markdown_utf8": "same\n",
+            "refresh_base": { "attempt": 1 }
+          }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "node": { "id": "child", "state": "runnable", "stale": true },
+        "reason": "Selected Result identity changed even though result bytes did not."
+      }
+    },
+    {
+      "id": "failed-refresh",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded" },
+          { "node": "root", "attempt": 2, "status": "failed", "refresh_base": { "attempt": 1 } }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "node": { "id": "root", "state": "complete", "selected_attempt": 1, "next_attempt": 3 }
+      }
+    },
+    {
+      "id": "exact-resume",
+      "setup": {
+        "copy_run_tree": true,
+        "preserve_bytes": true,
+        "change_absolute_root_mtime_inode_and_git_state": true
+      },
+      "oracle": { "ok": true, "portable_state_equal": true, "selected_result_reused": true }
+    },
+    {
+      "id": "independent-failure",
+      "setup": { "committed_steps": [{ "node": "root", "attempt": 1, "status": "failed" }] },
+      "oracle": {
+        "ok": true,
+        "nodes": [
+          { "id": "root", "state": "runnable", "next_attempt": 2 },
+          { "id": "child", "state": "blocked" },
+          { "id": "independent", "state": "runnable", "next_attempt": 1 }
+        ]
+      }
+    },
+    {
+      "id": "live-definition-edit",
+      "setup": {
+        "after_run_creation_replace_live_breakdown_yaml_utf8": "schema_version: breakdown.workflow.v1\nid: future\nname: Future\nnodes: []\n"
+      },
+      "oracle": { "ok": true, "existing_run_workflow_id": "state", "live_definition_read": false }
+    },
+    {
+      "id": "workflow-input-edit",
+      "workflow_patch": "Declare source.txt and bind it to root.",
+      "setup": {
+        "created_input_bytes_base64": "YmVmb3JlCg==",
+        "after_run_creation_input_bytes_base64": "YWZ0ZXIK"
+      },
+      "oracle": {
+        "ok": false,
+        "failure": {
+          "kind": "invalid",
+          "code": "invalid_run",
+          "diagnostic": { "code": "integrity", "path": "/inputs/source/sha256" }
+        }
+      }
+    },
+    {
+      "id": "artifact-edit",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "succeeded", "markdown_utf8": "before\n" }
+        ],
+        "after_commit_markdown_utf8": "after\n"
+      },
+      "oracle": {
+        "ok": false,
+        "failure": {
+          "kind": "invalid",
+          "code": "invalid_run",
+          "diagnostic": { "code": "integrity", "path": "/inputs" }
+        }
+      }
+    },
+    {
+      "id": "unchanged-copy",
+      "setup": {
+        "copy_run_tree": true,
+        "preserve_bytes": true,
+        "destination": "$OTHER_LOCAL_ROOT"
+      },
+      "oracle": { "ok": true, "portable_state_equal": true }
+    },
+    {
+      "id": "divergent-copy-collision",
+      "setup": {
+        "copy_run_tree": true,
+        "destination": "$OTHER_LOCAL_ROOT",
+        "then_change_same_run_artifact_bytes": true
+      },
+      "oracle": {
+        "ok": false,
+        "failure": { "kind": "invalid", "code": "invalid_run" },
+        "cross_copy_merge_attempted": false
+      }
+    },
+    {
+      "id": "terminal-results",
+      "setup": {
+        "terminal_nodes": ["child", "independent"],
+        "committed_steps": [
+          { "node": "child", "attempt": 1, "status": "succeeded", "markdown_utf8": "" },
+          {
+            "node": "independent",
+            "attempt": 1,
+            "status": "succeeded",
+            "markdown_utf8": "Result.\n"
+          }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "terminal_results": [
+          { "node": "child", "attempt": 1, "markdown_bytes_base64": "" },
+          { "node": "independent", "attempt": 1, "markdown_bytes_base64": "UmVzdWx0Lgo=" }
+        ]
+      }
+    },
+    {
+      "id": "next-attempt-after-non-success",
+      "setup": {
+        "committed_steps": [
+          { "node": "root", "attempt": 1, "status": "failed" },
+          { "node": "root", "attempt": 2, "status": "cancelled" }
+        ]
+      },
+      "oracle": {
+        "ok": true,
+        "node": { "id": "root", "state": "runnable", "selected_result": null, "next_attempt": 3 }
+      }
+    }
+  ]
+}

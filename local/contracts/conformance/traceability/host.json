@@ -1,0 +1,66 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "HOST",
+  "defaults": {
+    "setup": "Install the exact candidate packages and skill archive into the named real Agent Host/version/OS/transport row.",
+    "action": "Run the complete guided journey and score retained visible interaction/action evidence with the public human rubric.",
+    "oracle_type": "human",
+    "applicability": {
+      "os": "qualified-row",
+      "architecture": "qualified-row",
+      "filesystem": "native-local",
+      "transport": "cli-or-mcp",
+      "host": "real-agent-host",
+      "protocol": "guided-product"
+    },
+    "gate": "stable-release",
+    "retained_evidence": "local/contracts/conformance/hosts/fixtures/human-rubric.json"
+  },
+  "rows": [
+    {
+      "id": "HOST-001",
+      "requirements": ["REQ-HOST-001"],
+      "oracle_type": "effect",
+      "oracle": "Canonical bytes install unchanged at each cataloged common directory and only shallow host adapters differ."
+    },
+    {
+      "id": "HOST-002",
+      "requirements": ["REQ-HOST-002"],
+      "oracle_type": "byte",
+      "oracle": "Every generated host instruction reproduces from setup references and no second authored installation authority exists."
+    },
+    {
+      "id": "HOST-003",
+      "requirements": ["REQ-HOST-003"],
+      "oracle": "Each Supported claim resolves to one exact passing evidence identity; unqualified capable and bare/unprovisioned surfaces classify correctly."
+    },
+    {
+      "id": "HOST-004",
+      "requirements": ["REQ-HOST-004"],
+      "oracle": "Indexed passing rows cover guided CLI on Linux, macOS, and Windows plus at least two model/provider families."
+    },
+    {
+      "id": "HOST-005",
+      "requirements": ["REQ-HOST-005"],
+      "fixture": "conformance/hosts/fixtures/guided-journey.json",
+      "oracle": "Retained evidence completes every named journey stage with exact candidate bytes and hostile content cannot grant authority."
+    },
+    {
+      "id": "HOST-006",
+      "requirements": ["REQ-HOST-006"],
+      "fixture": "conformance/hosts/fixtures/human-rubric.json",
+      "oracle": "Every required rubric dimension receives an evidence-linked score."
+    },
+    {
+      "id": "HOST-007",
+      "requirements": ["REQ-HOST-007"],
+      "oracle": "Passing rows have no zero, score at least 80%, and receive full safety/truth/artifact/summary scores before support claims."
+    },
+    {
+      "id": "HOST-008",
+      "requirements": ["REQ-HOST-008"],
+      "oracle": "Qualification records outcome parity without asserting identical UI, wording, approvals, latency, prose, quality, cost, or privacy."
+    }
+  ]
+}

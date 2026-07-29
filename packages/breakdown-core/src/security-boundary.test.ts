@@ -88,18 +88,9 @@ afterEach(async () => {
 
 describe('local authority, privacy, and filesystem boundary', () => {
   it('publishes the security and privacy conformance rows', () => {
-    expect(securityMatrix.rows.map((row) => row.id)).toEqual([
-      'SEC-001',
-      'SEC-002',
-      'SEC-003',
-      'SEC-004',
-      'SEC-005',
-      'SEC-006',
-      'SEC-007',
-      'SEC-008',
-      'SEC-009',
-      'SEC-010',
-    ]);
+    expect(securityMatrix.rows.map((row) => row.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `CASE-SEC-${String(index + 1).padStart(3, '0')}`),
+    );
   });
 
   it('selects the explicit project root before processing every operation payload', async () => {

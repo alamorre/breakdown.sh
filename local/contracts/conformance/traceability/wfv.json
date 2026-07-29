@@ -1,0 +1,108 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "WFV",
+  "defaults": {
+    "setup": "Place the referenced literal Workflow Definition fixture at <temporary-project>/breakdown.yaml on a supported local filesystem.",
+    "action": "Call validate_workflow through the packaged core dispatcher with the temporary project as the explicit root.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/index.test.ts"
+  },
+  "rows": [
+    {
+      "id": "WFV-001",
+      "requirements": ["REQ-WFV-001"],
+      "oracle": "Only project-root breakdown.yaml is read; the parsed value identifies breakdown.workflow.v1 and contains no Run fields."
+    },
+    {
+      "id": "WFV-002",
+      "requirements": ["REQ-WFV-002"],
+      "oracle": "Every accepted and forbidden YAML/UTF-8 form returns the literal success or ordered diagnostic oracle in the Workflow corpus."
+    },
+    {
+      "id": "WFV-003",
+      "requirements": ["REQ-WFV-003"],
+      "oracle": "Required root fields are accepted and every unknown or missing root field yields the expected schema diagnostic."
+    },
+    {
+      "id": "WFV-004",
+      "requirements": ["REQ-WFV-004"],
+      "oracle": "Identifier boundary and uniqueness cases return exact acceptance or stable schema diagnostics."
+    },
+    {
+      "id": "WFV-005",
+      "requirements": ["REQ-WFV-005"],
+      "oracle": "Trim and Unicode-scalar length boundaries accept at limit and reject empty, untrimmed, invalid-scalar, and over-limit values."
+    },
+    {
+      "id": "WFV-006",
+      "requirements": ["REQ-WFV-006"],
+      "oracle": "The one Node Definition shape is accepted and every forbidden or unknown execution field is rejected."
+    },
+    {
+      "id": "WFV-007",
+      "requirements": ["REQ-WFV-007"],
+      "oracle": "Exactly-one-source Input Bindings derive dataflow; alternate edge, port, transform, and literal shapes are rejected."
+    },
+    {
+      "id": "WFV-008",
+      "requirements": ["REQ-WFV-008"],
+      "oracle": "Forward references pass; duplicate sources, self/missing references, and cycles produce their exact deterministic diagnostics."
+    },
+    {
+      "id": "WFV-009",
+      "requirements": ["REQ-WFV-009"],
+      "oracle": "Unused Workflow Inputs fail while no-input, multi-root, disconnected, isolated, and multi-terminal definitions pass."
+    },
+    {
+      "id": "WFV-010",
+      "requirements": ["REQ-WFV-010"],
+      "oracle": "Equivalent eligible nodes preserve authored tie order and every returned map is identifier-ordered."
+    },
+    {
+      "id": "WFV-011",
+      "requirements": ["REQ-WFV-011"],
+      "oracle": "Optional defaults and descriptions pass; unsupported Input value and reference forms fail with no coercion."
+    },
+    {
+      "id": "WFV-012",
+      "requirements": ["REQ-WFV-012"],
+      "oracle": "Every forbidden path form fails invalid_path while exact portable relative paths preserve case and Unicode."
+    },
+    {
+      "id": "WFV-013",
+      "requirements": ["REQ-WFV-013"],
+      "oracle": "Every allowed Data Contract keyword and JSON root passes; every excluded keyword or invalid combination fails deterministically."
+    },
+    {
+      "id": "WFV-014",
+      "requirements": ["REQ-WFV-014"],
+      "oracle": "Valid reverse-DNS object extensions round-trip; invalid locations, keys, and non-object values fail without changing execution state."
+    },
+    {
+      "id": "WFV-015",
+      "requirements": ["REQ-WFV-015"],
+      "oracle": "All independently discoverable errors are returned in path/code order with only the eight normative categories."
+    },
+    {
+      "id": "WFV-016",
+      "requirements": ["REQ-WFV-016"],
+      "oracle": "Runtime validation and every accepted public Workflow value conform to the published closed-world Workflow schema and dialect."
+    },
+    {
+      "id": "WFV-017",
+      "requirements": ["REQ-WFV-017"],
+      "fixture": "conformance/workflow-validation/fixtures/maximal-valid.yaml",
+      "oracle": "The indexed public fixtures cover every named valid family, failure family, fixed boundary, and deterministic diagnostic."
+    }
+  ]
+}

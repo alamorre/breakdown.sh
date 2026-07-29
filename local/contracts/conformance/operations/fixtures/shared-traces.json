@@ -1,0 +1,591 @@
+{
+  "schema_version": "breakdown.shared-operation-traces.v1",
+  "release_version": "1.0.0-beta.1",
+  "sequences": ["core-only", "cli-only", "mcp-only", "cli-to-mcp", "mcp-to-cli"],
+  "comparison": [
+    "decoded-values",
+    "failure-kind-code-diagnostics",
+    "ordering",
+    "limits",
+    "disk-effects"
+  ],
+  "controls": {
+    "now": ["2026-07-24T20:00:00.000Z", "2026-07-24T20:01:00.000Z", "2026-07-24T20:02:00.000Z"],
+    "entropy_base64": "AAAAAAAAAAA=",
+    "tokens": {
+      "$PROJECT": "the absolute temporary project root",
+      "$RUN_ID": "the exact run_id returned by create_run",
+      "$PACKET": "the exact sole resume Work Packet returned by prepare_work",
+      "$PACKET.submission": "the exact submission object inside $PACKET",
+      "$REFRESH_PACKET": "the exact refresh Work Packet returned after preparing gather with mode {\"kind\":\"refresh\",\"node_id\":\"gather\"}",
+      "$REFRESH_PACKET.submission": "the exact submission object inside $REFRESH_PACKET",
+      "$STALE_PACKET": "the exact Work Packet prepared before the predecessor refresh",
+      "$STALE_PACKET.submission": "the exact submission object inside $STALE_PACKET"
+    }
+  },
+  "projects": {
+    "no-input": {
+      "breakdown.yaml_utf8": "schema_version: breakdown.workflow.v1\nid: shared-no-input\nname: Shared No Input\nnodes:\n  - id: execute\n    name: Execute\n    prompt: Produce the result.\n",
+      "files": {}
+    },
+    "workflow-input": {
+      "breakdown.yaml_utf8": "schema_version: breakdown.workflow.v1\nid: shared-input\nname: Shared Input\ninputs:\n  source:\n    default: source.txt\nnodes:\n  - id: execute\n    name: Execute\n    prompt: Use the source.\n    inputs:\n      source:\n        workflow_input: source\n",
+      "files": {
+        "source.txt": {
+          "bytes_base64": "c291cmNlCg==",
+          "sha256": "b8bb034f9b63bd0254fbc7c157cae746c75853f4643d6cea844dc48ddb57f522"
+        }
+      }
+    },
+    "predecessor-json": {
+      "breakdown.yaml_utf8": "schema_version: breakdown.workflow.v1\nid: shared-predecessor\nname: Shared Predecessor\nnodes:\n  - id: gather\n    name: Gather\n    prompt: Gather.\n    data_contract:\n      type: object\n  - id: consume\n    name: Consume\n    prompt: Consume.\n    inputs:\n      evidence:\n        node: gather\n",
+      "files": {}
+    }
+  },
+  "trace_defaults": {
+    "setup": [
+      {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "validate_workflow"
+        }
+      },
+      {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "create_run"
+        },
+        "capture": { "run_id": "$RUN_ID" }
+      },
+      {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "prepare_work",
+          "run_id": "$RUN_ID",
+          "mode": { "kind": "resume" }
+        },
+        "capture": { "sole_packet": "$PACKET" }
+      }
+    ],
+    "substitution_order": "Resolve whole-value tokens after each captured operation result; never perform text substitution inside JSON strings.",
+    "oracle": "Compare each decoded operation value or failure and the complete before/after project tree to the case oracle."
+  },
+  "traces": [
+    {
+      "id": "no-input-success",
+      "project": "no-input",
+      "steps": [
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "validate_workflow"
+          },
+          "oracle": { "ok": true, "workflow_id": "shared-no-input" },
+          "effects": { "created_paths": [] }
+        },
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "create_run"
+          },
+          "oracle": { "ok": true, "run_id": "$RUN_ID" },
+          "effects": {
+            "created_paths": [
+              "outputs/$RUN_ID/run.md",
+              "outputs/$RUN_ID/breakdown.yaml",
+              "outputs/$RUN_ID/steps"
+            ]
+          }
+        },
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "inspect_run",
+            "run_id": "$RUN_ID"
+          },
+          "oracle": {
+            "ok": true,
+            "status": "incomplete",
+            "nodes": [{ "node_id": "execute", "state": "runnable", "next_attempt": 1 }]
+          },
+          "effects": { "created_paths": [] }
+        },
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "prepare_work",
+            "run_id": "$RUN_ID",
+            "mode": { "kind": "resume" }
+          },
+          "oracle": { "ok": true, "packet_node_ids": ["execute"] },
+          "effects": { "created_paths": [] }
+        },
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "submit_candidate",
+            "packet": "$PACKET",
+            "candidate": {
+              "schema_version": "breakdown.candidate.v1",
+              "submission": "$PACKET.submission",
+              "status": "succeeded",
+              "executor": { "kind": "program", "name": "shared-trace" },
+              "markdown": "Done.\n"
+            }
+          },
+          "oracle": { "ok": true, "node_id": "execute", "attempt": 1, "status": "succeeded" },
+          "effects": {
+            "created_globs": ["outputs/$RUN_ID/steps/*--execute--a1.md"],
+            "created_json_sidecars": 0
+          }
+        }
+      ],
+      "final_oracle": { "run_status": "complete", "terminal_nodes": ["execute"], "step_count": 1 },
+      "effects": {
+        "visible_run_count": 1,
+        "committed_markdown_steps": 1,
+        "committed_json_sidecars": 0
+      }
+    },
+    {
+      "id": "workflow-input-success",
+      "project": "workflow-input",
+      "steps": [
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "create_run"
+          },
+          "oracle": { "ok": true, "input_paths": { "source": "source.txt" } }
+        },
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "prepare_work",
+            "run_id": "$RUN_ID",
+            "mode": { "kind": "resume" }
+          },
+          "oracle": { "ok": true, "packet_input_ids": ["source"] }
+        },
+        {
+          "request": {
+            "schema_version": "breakdown.operation-request.v1",
+            "operation": "read_work_input",
+            "packet": "$PACKET",
+            "binding": "source"
+          },
+          "oracle": {
+            "ok": true,
+            "bytes_base64": "c291cmNlCg==",
+            "sha256": "b8bb034f9b63bd0254fbc7c157cae746c75853f4643d6cea844dc48ddb57f522"
+          },
+          "effects": { "created_paths": [] }
+        }
+      ],
+      "final_oracle": {
+        "input_reads": [
+          {
+            "input_id": "source",
+            "sha256": "b8bb034f9b63bd0254fbc7c157cae746c75853f4643d6cea844dc48ddb57f522"
+          }
+        ]
+      },
+      "effects": { "visible_run_count": 1, "source_file_changed": false }
+    },
+    {
+      "id": "predecessor-markdown-success",
+      "project": "predecessor-json",
+      "setup": {
+        "selected_predecessor": {
+          "node_id": "gather",
+          "attempt": 1,
+          "markdown_utf8": "Evidence.\n",
+          "json": null
+        }
+      },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "read_work_input",
+          "packet": "$PACKET",
+          "binding": "evidence"
+        }
+      },
+      "oracle": {
+        "ok": true,
+        "bytes_base64": "RXZpZGVuY2UuCg==",
+        "source": "predecessor_markdown"
+      },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "contracted-json-success",
+      "project": "predecessor-json",
+      "setup": {
+        "selected_predecessor": {
+          "node_id": "gather",
+          "attempt": 1,
+          "markdown_utf8": "Evidence.\n",
+          "json_utf8": "{\"finding\":\"ok\"}"
+        }
+      },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "read_work_input",
+          "packet": "$PACKET",
+          "binding": "evidence"
+        }
+      },
+      "oracle": {
+        "ok": true,
+        "markdown_bytes_base64": "RXZpZGVuY2UuCg==",
+        "json_bytes_base64": "eyJmaW5kaW5nIjoib2sifQ=="
+      },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "failed-candidate",
+      "project": "no-input",
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "submit_candidate",
+          "packet": "$PACKET",
+          "candidate": {
+            "schema_version": "breakdown.candidate.v1",
+            "submission": "$PACKET.submission",
+            "status": "failed",
+            "executor": { "kind": "program", "name": "shared-trace" },
+            "problem": { "code": "executor_failed", "message": "Executor failed." },
+            "markdown": "Failure details."
+          }
+        }
+      },
+      "oracle": {
+        "ok": true,
+        "attempt": 1,
+        "status": "failed",
+        "next_attempt": 2,
+        "run_status": "incomplete"
+      },
+      "effects": { "committed_markdown_steps": 1, "committed_json_sidecars": 0 }
+    },
+    {
+      "id": "blocked-candidate",
+      "project": "no-input",
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "submit_candidate",
+          "packet": "$PACKET",
+          "candidate": {
+            "schema_version": "breakdown.candidate.v1",
+            "submission": "$PACKET.submission",
+            "status": "blocked",
+            "executor": { "kind": "program", "name": "shared-trace" },
+            "problem": { "code": "missing_authority", "message": "Authority unavailable." },
+            "markdown": "Blocked."
+          }
+        }
+      },
+      "oracle": {
+        "ok": true,
+        "attempt": 1,
+        "status": "blocked",
+        "next_attempt": 2,
+        "run_status": "incomplete"
+      },
+      "effects": { "committed_markdown_steps": 1, "committed_json_sidecars": 0 }
+    },
+    {
+      "id": "cancelled-candidate",
+      "project": "no-input",
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "submit_candidate",
+          "packet": "$PACKET",
+          "candidate": {
+            "schema_version": "breakdown.candidate.v1",
+            "submission": "$PACKET.submission",
+            "status": "cancelled",
+            "executor": { "kind": "program", "name": "shared-trace" },
+            "problem": { "code": "user_cancelled", "message": "Cancelled." },
+            "markdown": "Cancelled."
+          }
+        }
+      },
+      "oracle": {
+        "ok": true,
+        "attempt": 1,
+        "status": "cancelled",
+        "next_attempt": 2,
+        "run_status": "incomplete"
+      },
+      "effects": { "committed_markdown_steps": 1, "committed_json_sidecars": 0 }
+    },
+    {
+      "id": "refresh-success",
+      "project": "predecessor-json",
+      "setup": {
+        "selected_attempts": [
+          { "node_id": "gather", "attempt": 1 },
+          { "node_id": "consume", "attempt": 1 }
+        ]
+      },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "submit_candidate",
+          "packet": "$REFRESH_PACKET",
+          "candidate": {
+            "schema_version": "breakdown.candidate.v1",
+            "submission": "$REFRESH_PACKET.submission",
+            "status": "succeeded",
+            "executor": { "kind": "program", "name": "shared-trace" },
+            "markdown": "Refreshed.\n"
+          }
+        }
+      },
+      "oracle": {
+        "ok": true,
+        "selected_attempt": 2,
+        "descendant": { "node_id": "consume", "state": "runnable", "stale": true }
+      },
+      "effects": { "committed_markdown_steps": 3 }
+    },
+    {
+      "id": "stale-context-conflict",
+      "project": "predecessor-json",
+      "setup": { "packet_prepared_before_predecessor_refresh": true },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "submit_candidate",
+          "packet": "$STALE_PACKET",
+          "candidate": {
+            "schema_version": "breakdown.candidate.v1",
+            "submission": "$STALE_PACKET.submission",
+            "status": "succeeded",
+            "executor": { "kind": "program", "name": "shared-trace" },
+            "markdown": "Stale.\n"
+          }
+        }
+      },
+      "oracle": { "ok": false, "failure": { "kind": "conflict", "code": "stale_context" } },
+      "effects": { "new_step_count": 0 }
+    },
+    {
+      "id": "run-lock-conflict",
+      "project": "no-input",
+      "setup": {
+        "lock_utf8": "{\"schema_version\":\"breakdown.run-lock.v1\",\"lock_id\":\"locked-by-fixture\"}"
+      },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "submit_candidate",
+          "packet": "$PACKET",
+          "candidate": {
+            "schema_version": "breakdown.candidate.v1",
+            "submission": "$PACKET.submission",
+            "status": "succeeded",
+            "executor": { "kind": "program", "name": "shared-trace" },
+            "markdown": "Locked.\n"
+          }
+        }
+      },
+      "oracle": { "ok": false, "failure": { "kind": "conflict", "code": "run_locked" } },
+      "effects": { "lock_unchanged": true, "new_step_count": 0 }
+    },
+    {
+      "id": "invalid-workflow",
+      "project": "no-input",
+      "setup": { "replace_breakdown_yaml_utf8": "schema_version: unknown\n" },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "validate_workflow"
+        }
+      },
+      "oracle": {
+        "ok": false,
+        "failure": {
+          "kind": "unsupported",
+          "code": "unsupported_version",
+          "diagnostic_order": ["file", "path", "code"]
+        }
+      },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "invalid-run",
+      "project": "no-input",
+      "setup": {
+        "after_create_replace": { "path": "outputs/$RUN_ID/breakdown.yaml", "utf8": "corrupt\n" }
+      },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "inspect_run",
+          "run_id": "$RUN_ID"
+        }
+      },
+      "oracle": {
+        "ok": false,
+        "failure": {
+          "kind": "invalid",
+          "code": "invalid_run",
+          "diagnostic_order": ["file", "path", "code"]
+        }
+      },
+      "effects": { "run_bytes_repaired": false }
+    },
+    {
+      "id": "resource-limit",
+      "project": "workflow-input",
+      "setup": { "replace_file": "source.txt", "byte_length": 16777217, "fill_byte_hex": "61" },
+      "action": {
+        "request": {
+          "schema_version": "breakdown.operation-request.v1",
+          "operation": "create_run"
+        }
+      },
+      "oracle": { "ok": false, "failure": { "kind": "resource_limit", "code": "limit_exceeded" } },
+      "effects": { "visible_new_run_count": 0, "input_truncated": false }
+    }
+  ],
+  "sequence_runs": [
+    {
+      "id": "core-only",
+      "adapters": ["core", "core"],
+      "trace_ids": [
+        "no-input-success",
+        "workflow-input-success",
+        "predecessor-markdown-success",
+        "contracted-json-success",
+        "failed-candidate",
+        "blocked-candidate",
+        "cancelled-candidate",
+        "refresh-success",
+        "stale-context-conflict",
+        "run-lock-conflict",
+        "invalid-workflow",
+        "invalid-run",
+        "resource-limit"
+      ],
+      "oracle": {
+        "decoded_values_equal": true,
+        "failures_equal": true,
+        "ordering_equal": true,
+        "limits_equal": true,
+        "disk_effects_equal": true
+      }
+    },
+    {
+      "id": "cli-only",
+      "adapters": ["cli", "cli"],
+      "trace_ids": [
+        "no-input-success",
+        "workflow-input-success",
+        "predecessor-markdown-success",
+        "contracted-json-success",
+        "failed-candidate",
+        "blocked-candidate",
+        "cancelled-candidate",
+        "refresh-success",
+        "stale-context-conflict",
+        "run-lock-conflict",
+        "invalid-workflow",
+        "invalid-run",
+        "resource-limit"
+      ],
+      "oracle": {
+        "decoded_values_equal": true,
+        "failures_equal": true,
+        "ordering_equal": true,
+        "limits_equal": true,
+        "disk_effects_equal": true
+      }
+    },
+    {
+      "id": "mcp-only",
+      "adapters": ["mcp", "mcp"],
+      "trace_ids": [
+        "no-input-success",
+        "workflow-input-success",
+        "predecessor-markdown-success",
+        "contracted-json-success",
+        "failed-candidate",
+        "blocked-candidate",
+        "cancelled-candidate",
+        "refresh-success",
+        "stale-context-conflict",
+        "run-lock-conflict",
+        "invalid-workflow",
+        "invalid-run",
+        "resource-limit"
+      ],
+      "oracle": {
+        "decoded_values_equal": true,
+        "failures_equal": true,
+        "ordering_equal": true,
+        "limits_equal": true,
+        "disk_effects_equal": true
+      }
+    },
+    {
+      "id": "cli-to-mcp",
+      "adapters": ["cli", "mcp"],
+      "trace_ids": [
+        "no-input-success",
+        "workflow-input-success",
+        "predecessor-markdown-success",
+        "contracted-json-success",
+        "failed-candidate",
+        "blocked-candidate",
+        "cancelled-candidate",
+        "refresh-success",
+        "stale-context-conflict",
+        "run-lock-conflict",
+        "invalid-workflow",
+        "invalid-run",
+        "resource-limit"
+      ],
+      "oracle": {
+        "decoded_values_equal": true,
+        "failures_equal": true,
+        "ordering_equal": true,
+        "limits_equal": true,
+        "disk_effects_equal": true
+      }
+    },
+    {
+      "id": "mcp-to-cli",
+      "adapters": ["mcp", "cli"],
+      "trace_ids": [
+        "no-input-success",
+        "workflow-input-success",
+        "predecessor-markdown-success",
+        "contracted-json-success",
+        "failed-candidate",
+        "blocked-candidate",
+        "cancelled-candidate",
+        "refresh-success",
+        "stale-context-conflict",
+        "run-lock-conflict",
+        "invalid-workflow",
+        "invalid-run",
+        "resource-limit"
+      ],
+      "oracle": {
+        "decoded_values_equal": true,
+        "failures_equal": true,
+        "ordering_equal": true,
+        "limits_equal": true,
+        "disk_effects_equal": true
+      }
+    }
+  ]
+}

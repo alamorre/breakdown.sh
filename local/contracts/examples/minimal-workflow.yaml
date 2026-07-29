@@ -1,0 +1,7 @@
+schema_version: breakdown.workflow.v1
+id: minimal-example
+name: Minimal example
+nodes:
+  - id: answer
+    name: Answer
+    prompt: Answer the question.

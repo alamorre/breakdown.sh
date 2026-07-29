@@ -1,0 +1,39 @@
+{
+  "schema_version": "breakdown.limit-case-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "oracle": {
+    "below": "accepted without truncation",
+    "at": "accepted without truncation",
+    "above": "resource_limit/limit_exceeded with no partial durable record"
+  },
+  "limits": [
+    { "name": "workflow_definition_bytes", "value": 1048576, "cases": [1048575, 1048576, 1048577] },
+    { "name": "nodes_per_workflow", "value": 256, "cases": [255, 256, 257] },
+    { "name": "workflow_inputs_per_workflow", "value": 128, "cases": [127, 128, 129] },
+    { "name": "input_bindings_per_node", "value": 64, "cases": [63, 64, 65] },
+    { "name": "node_prompt_bytes", "value": 102400, "cases": [102399, 102400, 102401] },
+    { "name": "yaml_json_nesting_depth", "value": 64, "cases": [63, 64, 65] },
+    { "name": "data_contract_schema_nodes", "value": 4096, "cases": [4095, 4096, 4097] },
+    { "name": "project_relative_path_bytes", "value": 1024, "cases": [1023, 1024, 1025] },
+    { "name": "workflow_input_file_bytes", "value": 8388608, "cases": [8388607, 8388608, 8388609] },
+    {
+      "name": "aggregate_workflow_input_bytes_per_run",
+      "value": 67108864,
+      "cases": [67108863, 67108864, 67108865]
+    },
+    { "name": "candidate_markdown_bytes", "value": 524288, "cases": [524287, 524288, 524289] },
+    { "name": "candidate_json_bytes", "value": 524288, "cases": [524287, 524288, 524289] },
+    { "name": "work_packet_bytes", "value": 786432, "cases": [786431, 786432, 786433] },
+    { "name": "automation_request_bytes", "value": 2097152, "cases": [2097151, 2097152, 2097153] },
+    {
+      "name": "automation_response_bytes",
+      "value": 12582912,
+      "cases": [12582911, 12582912, 12582913]
+    },
+    { "name": "step_artifacts_per_run", "value": 10000, "cases": [9999, 10000, 10001] },
+    { "name": "attempts_per_node", "value": 1000, "cases": [999, 1000, 1001] },
+    { "name": "direct_step_entries_scanned", "value": 25000, "cases": [24999, 25000, 25001] },
+    { "name": "diagnostics_returned", "value": 1000, "cases": [999, 1000, 1001] },
+    { "name": "prepared_work_packets", "value": 3, "cases": [2, 3, 4] }
+  ]
+}

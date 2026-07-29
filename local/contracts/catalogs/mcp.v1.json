@@ -1,0 +1,80 @@
+{
+  "schema_version": "breakdown.mcp-catalog.v1",
+  "release_version": "1.0.0-beta.1",
+  "protocol_versions": ["2025-06-18", "2025-11-25"],
+  "preferred_protocol_version": "2025-11-25",
+  "server": {
+    "name": "@breakdown-sh/mcp",
+    "title": "Breakdown Local",
+    "version": "1.0.0-beta.1"
+  },
+  "transport": "stdio",
+  "input_schema": "breakdown.operation-request.v1",
+  "output_schema": "breakdown.mcp-output.v1",
+  "operations": [
+    {
+      "name": "validate_workflow",
+      "description": "Validate the project Workflow Definition.",
+      "read_only": true,
+      "idempotent": true,
+      "destructive": false,
+      "open_world": false
+    },
+    {
+      "name": "create_run",
+      "description": "Create a new immutable Run.",
+      "read_only": false,
+      "idempotent": false,
+      "destructive": false,
+      "open_world": false
+    },
+    {
+      "name": "inspect_run",
+      "description": "Inspect one exact Run and its derived state.",
+      "read_only": true,
+      "idempotent": true,
+      "destructive": false,
+      "open_world": false
+    },
+    {
+      "name": "prepare_work",
+      "description": "Prepare deterministic Work Packets without creating a claim.",
+      "read_only": true,
+      "idempotent": true,
+      "destructive": false,
+      "open_world": false
+    },
+    {
+      "name": "read_work_input",
+      "description": "Read one exact Input named by a Work Packet.",
+      "read_only": true,
+      "idempotent": true,
+      "destructive": false,
+      "open_world": false
+    },
+    {
+      "name": "submit_candidate",
+      "description": "Validate and publish one Candidate Outcome.",
+      "read_only": false,
+      "idempotent": false,
+      "destructive": false,
+      "open_world": false
+    }
+  ],
+  "forbidden_capabilities": [
+    "resources",
+    "prompts",
+    "tasks",
+    "progress",
+    "logging",
+    "sampling",
+    "elicitation",
+    "completion",
+    "roots",
+    "dynamic_tools",
+    "http",
+    "daemon",
+    "auth",
+    "hosted_fallback"
+  ]
+}

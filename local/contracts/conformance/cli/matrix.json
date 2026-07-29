@@ -1,5 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
+  "release_version": "1.0.0-beta.1",
   "defaults": {
     "prerequisites": "Build @breakdown-sh/core and @breakdown-sh/cli, pack both, and install their tarballs with the exact YAML dependency in an otherwise empty temporary package.",
     "action": "Invoke the installed breakdown executable against a real temporary project.",
@@ -17,92 +18,92 @@
   },
   "rows": [
     {
-      "id": "CLI-001",
+      "id": "CASE-CLI-001",
       "requirement": "Issue #143: expose breakdown workflow validate --project PATH --json",
       "oracle": "Exit 0; stdout is one compact breakdown.cli-output.v1 success document plus LF; stderr is empty."
     },
     {
-      "id": "CLI-002",
+      "id": "CASE-CLI-002",
       "requirement": "Issue #143: expose concise human validation output",
       "oracle": "Exit 0; stdout identifies breakdown.yaml and the Node Definition count; stderr is empty."
     },
     {
-      "id": "CLI-003",
+      "id": "CASE-CLI-003",
       "requirement": "Issue #143: preserve structured core validation failures",
       "oracle": "Exit 3; stdout is one compact failure document with invalid_workflow and ordered diagnostics; stderr is empty."
     },
     {
-      "id": "CLI-004",
+      "id": "CASE-CLI-004",
       "requirement": "Issue #143: require an explicit non-empty project root",
       "oracle": "Missing or empty --project exits 2 with usage on stderr and no stdout."
     },
     {
-      "id": "CLI-005",
+      "id": "CASE-CLI-005",
       "requirement": "Issues #143, #146, and #147: expose only delivered human commands",
       "oracle": "A command outside workflow validate, run create, and exact run inspect exits 2 with usage on stderr and no stdout."
     },
     {
-      "id": "CLI-006",
+      "id": "CASE-CLI-006",
       "requirement": "Issue #146: expose breakdown run create --project PATH [--input ID=PATH]... --json",
       "oracle": "Exit 0; stdout is one compact breakdown.cli-output.v1 create_run success document plus LF; stderr is empty; the complete Run is visible on disk."
     },
     {
-      "id": "CLI-007",
+      "id": "CASE-CLI-007",
       "requirement": "Issue #146: reject duplicate or malformed --input overrides as CLI usage errors",
       "oracle": "Exit 2; stderr contains usage; stdout is empty; no Run is published."
     },
     {
-      "id": "CLI-008",
+      "id": "CASE-CLI-008",
       "requirement": "Issue #147: expose breakdown run inspect --project PATH --run RUN_ID --json",
       "oracle": "Exit 0; stdout is one compact breakdown.cli-output.v1 inspect_run success document plus LF; stderr is empty."
     },
     {
-      "id": "CLI-009",
+      "id": "CASE-CLI-009",
       "requirement": "Issue #147: require one exact non-empty --run argument for inspection",
       "oracle": "Missing, empty, or duplicate --run exits 2 with usage on stderr and no stdout; no Run is inferred."
     },
     {
-      "id": "CLI-010",
+      "id": "CASE-CLI-010",
       "requirement": "Issue #158: expose exactly the canonical human commands plus help and version metadata",
       "oracle": "The three cataloged human commands, --help, and --version succeed as specified; prepare, retry, refresh, finalize, cancel, unlock, Git, publication, and Executor commands are usage failures."
     },
     {
-      "id": "CLI-011",
+      "id": "CASE-CLI-011",
       "requirement": "Issue #158: expose all six core operations through breakdown operate --project PATH",
       "oracle": "Each breakdown.operation-request.v1 variant reaches the packaged core and returns the matching operation value and authoritative disk effects without adapter-side core behavior."
     },
     {
-      "id": "CLI-012",
+      "id": "CASE-CLI-012",
       "requirement": "Issue #158: require one strict bounded UTF-8 automation request",
       "oracle": "Malformed JSON, invalid UTF-8, missing or unknown fields, wrong variant shapes, unsupported versions, and requests above 2 MiB produce the cataloged structured failure and no partial mutation."
     },
     {
-      "id": "CLI-013",
+      "id": "CASE-CLI-013",
       "requirement": "Issue #158: emit the exact machine stream contract",
       "oracle": "Machine success and expected failure write exactly one compact breakdown.cli-output.v1 JSON document plus LF to stdout, keep stderr empty, and remain within the 12 MiB response limit."
     },
     {
-      "id": "CLI-014",
+      "id": "CASE-CLI-014",
       "requirement": "Issue #158: preserve byte fields and deterministic operation values",
       "oracle": "Workflow Input bytes and complete predecessor Result bytes use the cataloged base64 fields; decoded values, ordered arrays/maps, diagnostics, and disk effects match the core operation result."
     },
     {
-      "id": "CLI-015",
+      "id": "CASE-CLI-015",
       "requirement": "Issue #158: implement the cataloged human stream presentation",
       "oracle": "Human successes use stdout; failures and diagnostics use bounded stderr; terminal controls and active terminal content are escaped; color appears only on a TTY and NO_COLOR disables it."
     },
     {
-      "id": "CLI-016",
+      "id": "CASE-CLI-016",
       "requirement": "Issue #158: preserve the public failure-kind and exit-code catalog",
       "oracle": "Success and usage plus invalid, conflict, unsupported, cancelled, resource_limit, io, and internal outcomes use the exact cataloged exit codes without message-text control flow."
     },
     {
-      "id": "CLI-017",
+      "id": "CASE-CLI-017",
       "requirement": "Issue #158: translate process signals to invocation cancellation",
       "oracle": "SIGINT and SIGTERM abort the trusted core invocation; pre-commit cancellation publishes nothing, while the core publication critical section retains its settled commit semantics."
     },
     {
-      "id": "CLI-018",
+      "id": "CASE-CLI-018",
       "requirement": "Issue #158: remain independent of Git and inferred project context",
       "oracle": "The installed executable succeeds with no Git executable on PATH and never selects a project, Workflow Definition, or Run from cwd, environment, repository, timestamps, or directory order."
     }

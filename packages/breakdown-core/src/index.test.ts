@@ -423,17 +423,12 @@ describe('operate', () => {
     ]) {
       expect(runManifestMachineSchema.properties).not.toHaveProperty(mutableField);
     }
-    expect(runCreationMatrix.rows.map((row) => row.id)).toEqual([
-      'RUN-001',
-      'RUN-002',
-      'RUN-003',
-      'RUN-004',
-      'RUN-005',
-      'RUN-006',
-      'RUN-007',
-      'RUN-008',
-      'RUN-009',
-    ]);
+    expect(runCreationMatrix.rows.map((row) => row.id)).toEqual(
+      Array.from(
+        { length: 9 },
+        (_, index) => `CASE-RUN-CREATE-${String(index + 1).padStart(3, '0')}`,
+      ),
+    );
   });
 
   it.each([1_048_575, 1_048_576])(

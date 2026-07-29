@@ -1,5 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
+  "release_version": "1.0.0-beta.1",
   "defaults": {
     "prerequisites": "Place the fixture bytes at <temporary-project>/breakdown.yaml.",
     "action": "Call validate_workflow through the core dispatcher with the temporary project as the explicit trusted project root.",
@@ -17,7 +18,7 @@
   },
   "rows": [
     {
-      "id": "WFV-001",
+      "id": "CASE-WFV-001",
       "requirement": "Issue #143: accept a minimal breakdown.workflow.v1 Workflow Definition",
       "fixture": "fixtures/minimal-valid.yaml",
       "oracle": {
@@ -25,7 +26,7 @@
       }
     },
     {
-      "id": "WFV-002",
+      "id": "CASE-WFV-002",
       "requirement": "Issue #143: reject invalid YAML deterministically",
       "fixture": "fixtures/invalid-syntax.yaml",
       "oracle": {
@@ -41,7 +42,7 @@
       }
     },
     {
-      "id": "WFV-003",
+      "id": "CASE-WFV-003",
       "requirement": "Issue #143: require exactly one YAML document",
       "fixture": "fixtures/multiple-documents.yaml",
       "oracle": {
@@ -57,7 +58,7 @@
       }
     },
     {
-      "id": "WFV-004",
+      "id": "CASE-WFV-004",
       "requirement": "Issue #143: require a mapping-root document",
       "fixture": "fixtures/sequence-root.yaml",
       "oracle": {
@@ -73,7 +74,7 @@
       }
     },
     {
-      "id": "WFV-005",
+      "id": "CASE-WFV-005",
       "requirement": "Issue #143: reject YAML version directives other than 1.2",
       "fixture": "fixtures/yaml-1.1.yaml",
       "oracle": {
@@ -89,7 +90,7 @@
       }
     },
     {
-      "id": "WFV-006",
+      "id": "CASE-WFV-006",
       "requirement": "Issue #143: accept an explicit YAML 1.2 directive",
       "fixture": "fixtures/yaml-1.2.yaml",
       "oracle": {
@@ -97,7 +98,7 @@
       }
     },
     {
-      "id": "WFV-007",
+      "id": "CASE-WFV-007",
       "requirement": "Issue #143: require every root field and order diagnostics by path then code",
       "fixture": "fixtures/missing-root-fields.yaml",
       "oracle": {
@@ -125,7 +126,7 @@
       }
     },
     {
-      "id": "WFV-008",
+      "id": "CASE-WFV-008",
       "requirement": "Issue #143: reject unsupported Workflow Definition schema identifiers",
       "fixture": "fixtures/unsupported-schema-version.yaml",
       "oracle": {
@@ -141,7 +142,7 @@
       }
     },
     {
-      "id": "WFV-009",
+      "id": "CASE-WFV-009",
       "requirement": "Issue #143: reject unknown root fields",
       "fixture": "fixtures/unknown-root-field.yaml",
       "oracle": {
@@ -157,7 +158,7 @@
       }
     },
     {
-      "id": "WFV-010",
+      "id": "CASE-WFV-010",
       "requirement": "Issue #143: require a non-empty nodes array",
       "fixture": "fixtures/empty-nodes.yaml",
       "oracle": {
@@ -173,7 +174,7 @@
       }
     },
     {
-      "id": "WFV-011",
+      "id": "CASE-WFV-011",
       "requirement": "Issue #143: reject scalar coercion",
       "fixture": "fixtures/no-coercion.yaml",
       "oracle": {
@@ -189,7 +190,7 @@
       }
     },
     {
-      "id": "WFV-012",
+      "id": "CASE-WFV-012",
       "requirement": "Issue #143: reject null used as omission",
       "fixture": "fixtures/null-required-field.yaml",
       "oracle": {
@@ -205,7 +206,7 @@
       }
     },
     {
-      "id": "WFV-013",
+      "id": "CASE-WFV-013",
       "requirement": "Issue #143: enforce basic Node Definition invariants and unknown-field rejection",
       "fixture": "fixtures/invalid-nodes.yaml",
       "oracle": {
@@ -249,7 +250,7 @@
       }
     },
     {
-      "id": "WFV-014",
+      "id": "CASE-WFV-014",
       "requirement": "Issue #143: reject duplicate mapping keys",
       "fixture": "fixtures/duplicate-keys.yaml",
       "oracle": {
@@ -265,7 +266,7 @@
       }
     },
     {
-      "id": "WFV-015",
+      "id": "CASE-WFV-015",
       "requirement": "Issue #143: reject YAML anchors",
       "fixture": "fixtures/anchor.yaml",
       "oracle": {
@@ -281,7 +282,7 @@
       }
     },
     {
-      "id": "WFV-016",
+      "id": "CASE-WFV-016",
       "requirement": "Issue #143: reject YAML aliases",
       "fixture": "fixtures/alias.yaml",
       "oracle": {
@@ -297,7 +298,7 @@
       }
     },
     {
-      "id": "WFV-017",
+      "id": "CASE-WFV-017",
       "requirement": "Issue #143: reject YAML merge keys",
       "fixture": "fixtures/merge-key.yaml",
       "oracle": {
@@ -313,7 +314,7 @@
       }
     },
     {
-      "id": "WFV-018",
+      "id": "CASE-WFV-018",
       "requirement": "Issue #143: reject custom YAML tags",
       "fixture": "fixtures/custom-tag.yaml",
       "oracle": {
@@ -329,7 +330,7 @@
       }
     },
     {
-      "id": "WFV-019",
+      "id": "CASE-WFV-019",
       "requirement": "Issue #143: reject positive and negative infinity",
       "fixture": "fixtures/non-finite-infinity.yaml",
       "oracle": {
@@ -345,7 +346,7 @@
       }
     },
     {
-      "id": "WFV-020",
+      "id": "CASE-WFV-020",
       "requirement": "Issue #143: reject NaN",
       "fixture": "fixtures/non-finite-nan.yaml",
       "oracle": {
@@ -361,7 +362,7 @@
       }
     },
     {
-      "id": "WFV-021",
+      "id": "CASE-WFV-021",
       "requirement": "Issue #143: reject invalid YAML directives",
       "fixture": "fixtures/invalid-yaml-directive.yaml",
       "oracle": {
@@ -377,7 +378,7 @@
       }
     },
     {
-      "id": "WFV-022",
+      "id": "CASE-WFV-022",
       "requirement": "Issue #143: reject a YAML version directive newer than 1.2",
       "fixture": "fixtures/yaml-1.3.yaml",
       "oracle": {
@@ -393,7 +394,7 @@
       }
     },
     {
-      "id": "WFV-023",
+      "id": "CASE-WFV-023",
       "requirement": "Issue #143: reject bytes that are not valid UTF-8",
       "fixture": "fixtures/invalid-utf8.base64",
       "encoding": "base64",
@@ -410,7 +411,7 @@
       }
     },
     {
-      "id": "WFV-024",
+      "id": "CASE-WFV-024",
       "requirement": "Issue #143: reject custom YAML tag directives even when no tagged value uses them",
       "fixture": "fixtures/custom-tag-directive.yaml",
       "oracle": {
@@ -426,7 +427,7 @@
       }
     },
     {
-      "id": "WFV-025",
+      "id": "CASE-WFV-025",
       "requirement": "Issue #143: treat project content as data and never execute it",
       "fixture": "fixtures/hostile-project-content.yaml",
       "oracle": {
@@ -437,7 +438,7 @@
       }
     },
     {
-      "id": "WFV-026",
+      "id": "CASE-WFV-026",
       "requirement": "Issue #143: reject a YAML tag directive that overrides the standard tag handle",
       "fixture": "fixtures/standard-tag-override.yaml",
       "oracle": {
@@ -453,7 +454,7 @@
       }
     },
     {
-      "id": "WFV-027",
+      "id": "CASE-WFV-027",
       "requirement": "Issue #143: reject null schema_version as a schema error rather than an unsupported family",
       "fixture": "fixtures/null-schema-version.yaml",
       "oracle": {
@@ -469,7 +470,7 @@
       }
     },
     {
-      "id": "WFV-028",
+      "id": "CASE-WFV-028",
       "requirement": "Issue #144: accept derived DAG shapes and preserve authored node order while ordering identifier maps",
       "fixture": "fixtures/derived-dag-valid.yaml",
       "oracle": {
@@ -559,7 +560,7 @@
       }
     },
     {
-      "id": "WFV-029",
+      "id": "CASE-WFV-029",
       "requirement": "Issue #144: enforce exact identifiers, authored fields, metadata, prompts, and Input Binding source shapes",
       "fixture": "fixtures/invalid-authored-contracts.yaml",
       "oracle": {
@@ -655,7 +656,7 @@
       }
     },
     {
-      "id": "WFV-030",
+      "id": "CASE-WFV-030",
       "requirement": "Issue #144: reject non-portable Workflow Input default paths lexically",
       "fixture": "fixtures/invalid-default-paths.yaml",
       "oracle": {
@@ -719,7 +720,7 @@
       }
     },
     {
-      "id": "WFV-031",
+      "id": "CASE-WFV-031",
       "requirement": "Issue #144: aggregate stable missing-reference, duplicate-source, unused-input, self-reference, and cycle diagnostics",
       "fixture": "fixtures/invalid-derived-dag.yaml",
       "oracle": {
@@ -771,7 +772,7 @@
       }
     },
     {
-      "id": "WFV-032",
+      "id": "CASE-WFV-032",
       "requirement": "Issue #144: require unique Workflow Input identifiers",
       "fixture": "fixtures/duplicate-workflow-input-id.yaml",
       "oracle": {
@@ -787,7 +788,7 @@
       }
     },
     {
-      "id": "WFV-033",
+      "id": "CASE-WFV-033",
       "requirement": "Issue #144: require unique local Input Binding identifiers",
       "fixture": "fixtures/duplicate-input-binding-id.yaml",
       "oracle": {
@@ -803,7 +804,7 @@
       }
     },
     {
-      "id": "WFV-034",
+      "id": "CASE-WFV-034",
       "requirement": "Issue #144: reject non-string identifier keys before YAML-to-JavaScript coercion",
       "fixture": "fixtures/non-string-identifier-keys.yaml",
       "oracle": {
@@ -823,7 +824,7 @@
       }
     },
     {
-      "id": "WFV-035",
+      "id": "CASE-WFV-035",
       "requirement": "Issue #145: accept and preserve a maximal definition with a portable Data Contract and inert extensions",
       "fixture": "fixtures/maximal-valid.yaml",
       "oracle": {
@@ -831,7 +832,7 @@
       }
     },
     {
-      "id": "WFV-036",
+      "id": "CASE-WFV-036",
       "requirement": "Issue #145: accept Data Contracts for every possible JSON instance root type",
       "fixture": "fixtures/data-contract-roots-valid.yaml",
       "oracle": {
@@ -839,7 +840,7 @@
       }
     },
     {
-      "id": "WFV-037",
+      "id": "CASE-WFV-037",
       "requirement": "Issue #145: reject unsupported Data Contract features and invalid allowed-keyword shapes",
       "fixture": "fixtures/invalid-data-contracts.yaml",
       "oracle": {
@@ -1007,7 +1008,7 @@
       }
     },
     {
-      "id": "WFV-038",
+      "id": "CASE-WFV-038",
       "requirement": "Issue #145: require reverse-DNS extension namespaces and JSON-object values",
       "fixture": "fixtures/invalid-extensions.yaml",
       "oracle": {
@@ -1039,7 +1040,7 @@
       }
     },
     {
-      "id": "WFV-039",
+      "id": "CASE-WFV-039",
       "requirement": "Issue #145: require string keys throughout JSON-compatible Data Contracts and extensions",
       "fixture": "fixtures/non-string-json-keys.yaml",
       "oracle": {
@@ -1063,7 +1064,7 @@
       }
     },
     {
-      "id": "WFV-040",
+      "id": "CASE-WFV-040",
       "requirement": "Issue #145: enforce every fixed Workflow Definition limit at limit-minus-one, limit, and limit-plus-one without truncation",
       "generated_cases": [
         {

@@ -1,0 +1,24 @@
+{
+  "schema_version": "breakdown.guided-host-rubric.v1",
+  "release_version": "1.0.0-beta.1",
+  "scale": { "minimum": 0, "maximum": 4 },
+  "dimensions": [
+    "comprehension",
+    "minimum-sufficient-decomposition",
+    "dependency-correctness",
+    "proposal-approval-clarity",
+    "valid-authoring",
+    "critique-usefulness-read-only",
+    "execution-recovery-clarity",
+    "terminal-result-usefulness",
+    "summary-fidelity",
+    "host-native-usability"
+  ],
+  "full_mark_required": [
+    "authority-approval-safety",
+    "core-truthfulness",
+    "valid-artifacts",
+    "summary-fidelity"
+  ],
+  "pass": { "minimum_percent": 80, "no_zero": true }
+}

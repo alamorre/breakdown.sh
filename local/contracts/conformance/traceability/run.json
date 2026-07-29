@@ -1,0 +1,116 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "RUN",
+  "defaults": {
+    "setup": "Create or materialize the referenced literal Run fixture beneath a real temporary project root.",
+    "action": "Call create_run, inspect_run, or submit_candidate at the row's public dispatcher seam and inspect exact returned values and files.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/index.test.ts; packages/breakdown-core/src/run-inspection.test.ts; packages/breakdown-core/src/submit-candidate.test.ts"
+  },
+  "rows": [
+    {
+      "id": "RUN-001",
+      "requirements": ["REQ-RUN-001"],
+      "oracle": "One create publishes immutable run.md, exact breakdown.yaml, and steps/ beneath one new Run ID; later live edits leave them unchanged."
+    },
+    {
+      "id": "RUN-002",
+      "requirements": ["REQ-RUN-002"],
+      "oracle": "Injected UTC time and cryptographic entropy produce the exact run-id literal and invalid identities fail contextual inspection."
+    },
+    {
+      "id": "RUN-003",
+      "requirements": ["REQ-RUN-003"],
+      "oracle": "Attempts begin at one, remain contiguous across statuses/contexts, and gaps, duplicates, and leading-zero identities invalidate inspection."
+    },
+    {
+      "id": "RUN-004",
+      "requirements": ["REQ-RUN-004"],
+      "oracle": "Valid stems bind exact node, attempt, and settled time; filename, mtime, and directory-order changes never alter identity or selection."
+    },
+    {
+      "id": "RUN-005",
+      "requirements": ["REQ-RUN-005"],
+      "oracle": "The literal Run Manifest matches its schema and exact bytes; every mutable or unknown field is rejected."
+    },
+    {
+      "id": "RUN-006",
+      "requirements": ["REQ-RUN-006"],
+      "oracle": "Every literal StepArtifact frontmatter satisfies its schema and contextual invariants; status/problem mismatches invalidate the Run."
+    },
+    {
+      "id": "RUN-007",
+      "requirements": ["REQ-RUN-007"],
+      "oracle": "Exactly four statuses commit as history and no transient or derived state is accepted as a StepArtifact status."
+    },
+    {
+      "id": "RUN-008",
+      "requirements": ["REQ-RUN-008"],
+      "oracle": "Accepted Executor metadata has only kind, name, and optional version; model/provider/credential and other unknown fields fail."
+    },
+    {
+      "id": "RUN-009",
+      "requirements": ["REQ-RUN-009"],
+      "oracle": "Workflow and predecessor references match exact declarations, same-Run successful identity, paths, pairing, and raw digests."
+    },
+    {
+      "id": "RUN-010",
+      "requirements": ["REQ-RUN-010"],
+      "oracle": "Succeeded Markdown, including zero bytes, is selected whole; non-success bodies never become Inputs and no content is inserted."
+    },
+    {
+      "id": "RUN-011",
+      "requirements": ["REQ-RUN-011"],
+      "oracle_type": "byte",
+      "oracle": "Contracted JSON publishes the reviewed compact RFC 8785 literal with no LF; missing, extra, or invalid sidecars fail exactly."
+    },
+    {
+      "id": "RUN-012",
+      "requirements": ["REQ-RUN-012"],
+      "oracle_type": "byte",
+      "oracle": "Literal LF/no-BOM frontmatter records pass and BOM, CRLF, missing-byte-zero frontmatter, and normalization attempts fail."
+    },
+    {
+      "id": "RUN-013",
+      "requirements": ["REQ-RUN-013"],
+      "oracle": "Current families pass, mixed or unknown families fail unsupported_version, and inspection performs no migration write."
+    },
+    {
+      "id": "RUN-014",
+      "requirements": ["REQ-RUN-014"],
+      "oracle": "Each indexed layout, identity, timestamp, digest, binding, pairing, status, and Data Contract corruption invalidates the Run."
+    },
+    {
+      "id": "RUN-015",
+      "requirements": ["REQ-RUN-015"],
+      "oracle": "All discoverable Run errors use only the named categories and sort by file, path, then code."
+    },
+    {
+      "id": "RUN-016",
+      "requirements": ["REQ-RUN-016"],
+      "oracle": "Temporary, orphan JSON, and unrelated entries are ignored while every normative Markdown commit marker is validated."
+    },
+    {
+      "id": "RUN-017",
+      "requirements": ["REQ-RUN-017"],
+      "oracle": "Every accepted Run Manifest and StepArtifact conforms to the published closed-world schemas without implementation-only fields."
+    },
+    {
+      "id": "RUN-018",
+      "requirements": ["REQ-RUN-018"],
+      "fixture": "conformance/run-records/fixtures/records.json",
+      "oracle_type": "byte",
+      "oracle": "The public literal record catalog contains every named valid record form and corruption/ignored-entry scenario with exact bytes."
+    }
+  ]
+}

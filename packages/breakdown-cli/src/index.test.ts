@@ -22,6 +22,30 @@ const temporaryDirectories: string[] = [];
 let breakdownExecutable: string;
 let installationRoot: string;
 let cliCoverageRoot: string;
+const cliProcessFixtures = JSON.parse(
+  await readFile(
+    join(
+      workspaceRoot,
+      'local',
+      'contracts',
+      'conformance',
+      'cli',
+      'fixtures',
+      'process-cases.json',
+    ),
+    'utf8',
+  ),
+) as {
+  byte_oracles: Array<{
+    id: string;
+    argv: string[];
+    stdin_bytes_base64?: string;
+    stdin_utf8?: string;
+    exit_code: number;
+    stdout_utf8: string;
+    stderr_utf8: string;
+  }>;
+};
 
 interface ProcessResult {
   status: number | null;
@@ -321,6 +345,24 @@ afterAll(async () => {
 });
 
 describe('breakdown', () => {
+  it.each(cliProcessFixtures.byte_oracles)(
+    'should match the public $id process byte oracle',
+    async (fixture) => {
+      const stdin =
+        fixture.stdin_utf8 ??
+        (fixture.stdin_bytes_base64 === undefined
+          ? undefined
+          : Buffer.from(fixture.stdin_bytes_base64, 'base64'));
+      const result = await runBreakdown(fixture.argv, workspaceRoot, stdin);
+
+      expect(result).toEqual({
+        status: fixture.exit_code,
+        stdout: fixture.stdout_utf8,
+        stderr: fixture.stderr_utf8,
+      });
+    },
+  );
+
   it('should validate a project through the automation process contract', async () => {
     const projectRoot = await createProject();
 
@@ -1717,6 +1759,36 @@ nodes: []
         'utf8',
       ),
     ) as Record<string, unknown>;
+    const workflowSchema = JSON.parse(
+      await readFile(
+        join(workspaceRoot, 'local', 'contracts', 'schemas', 'breakdown.workflow.v1.schema.json'),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
+    const workPacketBatchSchema = JSON.parse(
+      await readFile(
+        join(
+          workspaceRoot,
+          'local',
+          'contracts',
+          'schemas',
+          'breakdown.work-packet-batch.v1.schema.json',
+        ),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
+    const operationValueSchema = JSON.parse(
+      await readFile(
+        join(
+          workspaceRoot,
+          'local',
+          'contracts',
+          'schemas',
+          'breakdown.operation-value.v1.schema.json',
+        ),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
 
     expect(catalog).toMatchObject({
       schema_version: 'breakdown.cli-catalog.v1',
@@ -1753,6 +1825,9 @@ nodes: []
     });
     schemaValidator.addSchema(workPacketSchema);
     schemaValidator.addSchema(candidateSchema);
+    schemaValidator.addSchema(workflowSchema);
+    schemaValidator.addSchema(workPacketBatchSchema);
+    schemaValidator.addSchema(operationValueSchema);
     const validateRequest = schemaValidator.compile(requestSchema);
     const validateOutput = schemaValidator.compile(outputSchema);
 

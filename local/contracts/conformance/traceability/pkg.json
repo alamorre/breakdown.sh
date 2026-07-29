@@ -1,0 +1,111 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "PKG",
+  "defaults": {
+    "setup": "Build the once-created exact candidate and inspect its npm tarballs, skills/contracts archives, manifest, checksums, SBOM, licenses, and dependency graph.",
+    "action": "Run package and architecture gates against extracted candidate bytes without workspace imports.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "package-and-archive",
+      "host": "none",
+      "protocol": "npm+release-archive"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-cli/src/index.test.ts; packages/breakdown-mcp/src/index.test.ts; local/contracts/conformance/package/fixtures/artifact-expectations.json"
+  },
+  "rows": [
+    {
+      "id": "PKG-001",
+      "requirements": ["REQ-PKG-001"],
+      "oracle": "Tarballs expose exact root exports/bins, dependency direction, and no deep-import or third-party core compatibility claim."
+    },
+    {
+      "id": "PKG-002",
+      "requirements": ["REQ-PKG-002"],
+      "oracle_type": "byte",
+      "oracle": "Candidate inventory contains exact-version package tarballs, skills/contracts zip+tar, release manifest, SHA256SUMS, and SBOM."
+    },
+    {
+      "id": "PKG-003",
+      "requirements": ["REQ-PKG-003"],
+      "oracle": "All packages enforce Node ^24.0.0 ESM and every platform artifact contains no native addon, bundled runtime, browser, or install build."
+    },
+    {
+      "id": "PKG-004",
+      "requirements": ["REQ-PKG-004"],
+      "oracle_type": "effect",
+      "oracle": "Installed exact-version CLI operates an ordinary directory with none of the forbidden project metadata or services."
+    },
+    {
+      "id": "PKG-005",
+      "requirements": ["REQ-PKG-005"],
+      "oracle": "CLI/MCP tarballs contain shrinkwraps and explicit files, no lifecycle install scripts, and exact allowed dependency graphs."
+    },
+    {
+      "id": "PKG-006",
+      "requirements": ["REQ-PKG-006"],
+      "oracle_type": "human",
+      "oracle": "Pinned installer and checksummed fallback copy immutable bytes only after approval and setup never bootstraps itself."
+    },
+    {
+      "id": "PKG-007",
+      "requirements": ["REQ-PKG-007"],
+      "oracle": "Every package, skill, contract, doc, evidence item, and manifest reports one exact full release version."
+    },
+    {
+      "id": "PKG-008",
+      "requirements": ["REQ-PKG-008"],
+      "oracle": "Version-policy fixtures classify patch, minor, and major changes exactly and reject incompatible contract drift on lower releases."
+    },
+    {
+      "id": "PKG-009",
+      "requirements": ["REQ-PKG-009"],
+      "oracle": "Compatibility gates inspect prior disk families and current/prior protocol families with the required migration and notice boundaries."
+    },
+    {
+      "id": "PKG-010",
+      "requirements": ["REQ-PKG-010"],
+      "oracle_type": "effect",
+      "oracle": "Stable/prerelease channels and release flags match policy while every public install reference pins exact SemVer."
+    },
+    {
+      "id": "PKG-011",
+      "requirements": ["REQ-PKG-011"],
+      "oracle_type": "effect",
+      "oracle": "Signed protected tag, clean once-built artifacts, immutable release, attestations, OIDC provenance, signatures, and checksums verify."
+    },
+    {
+      "id": "PKG-012",
+      "requirements": ["REQ-PKG-012"],
+      "oracle": "License-map inspection includes only local corpus paths and explicitly excludes hosted root/assets, brand, user content, and third-party works."
+    },
+    {
+      "id": "PKG-013",
+      "requirements": ["REQ-PKG-013"],
+      "oracle_type": "byte",
+      "oracle": "Every independent artifact contains its exact complete license/notices and copied-license inventory based on final bytes."
+    },
+    {
+      "id": "PKG-014",
+      "requirements": ["REQ-PKG-014"],
+      "oracle_type": "human",
+      "oracle": "Human gate records DCO, CLA policy, AI provenance review, authority/scope control, audits, scans, and final inventory approval."
+    },
+    {
+      "id": "PKG-015",
+      "requirements": ["REQ-PKG-015"],
+      "fixture": "conformance/package/fixtures/artifact-expectations.json",
+      "oracle": "Actual tarballs/archives satisfy every indexed version, dependency, engine, export, byte, license, secret, SBOM, checksum, and attestation check."
+    },
+    {
+      "id": "PKG-016",
+      "requirements": ["REQ-PKG-016"],
+      "oracle_type": "effect",
+      "oracle": "Every maintained tuple runs the applicable suite against exact candidate digests and retains the full platform identity and corpus revision."
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "SKILL",
+  "defaults": {
+    "setup": "Install the exact canonical skill payload and lockstep package candidate into the indexed disposable project/host fixture.",
+    "action": "Run artifact checks, setup preflight, or the named guided skill journey while recording visible actions and filesystem effects.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "skills+cli",
+      "host": "skills-compatible",
+      "protocol": "breakdown.skill-preflight.v1"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "src/lib/local-skills.test.ts"
+  },
+  "rows": [
+    {
+      "id": "SKILL-001",
+      "requirements": ["REQ-SKILL-001"],
+      "oracle_type": "byte",
+      "oracle": "The root contains exactly five canonical directories and every installed payload byte matches the literal manifest."
+    },
+    {
+      "id": "SKILL-002",
+      "requirements": ["REQ-SKILL-002"],
+      "oracle": "Every SKILL.md uses only common-profile frontmatter and no forbidden vendor or execution field."
+    },
+    {
+      "id": "SKILL-003",
+      "requirements": ["REQ-SKILL-003"],
+      "oracle_type": "byte",
+      "oracle": "Every independent directory contains complete literal license/notices and only one-level referenced assets."
+    },
+    {
+      "id": "SKILL-004",
+      "requirements": ["REQ-SKILL-004"],
+      "oracle_type": "effect",
+      "oracle": "Only setup executes a script; preflight detects tampering/mismatch/capability/filesystem failures and asks before every mutation."
+    },
+    {
+      "id": "SKILL-005",
+      "requirements": ["REQ-SKILL-005"],
+      "oracle_type": "human",
+      "oracle": "The rubric observes project discovery, minimum-sufficient Result handoffs, full proposal/diff, confirmation, valid definition, and no Run."
+    },
+    {
+      "id": "SKILL-006",
+      "requirements": ["REQ-SKILL-006"],
+      "oracle_type": "human",
+      "oracle": "Invalid critique stops at exact diagnostics; valid critique covers every named dimension and produces no write."
+    },
+    {
+      "id": "SKILL-007",
+      "requirements": ["REQ-SKILL-007"],
+      "oracle_type": "human",
+      "oracle": "A new Run is created only after the visible exact root/definition/Input/authority/concurrency/provider/isolation approval."
+    },
+    {
+      "id": "SKILL-008",
+      "requirements": ["REQ-SKILL-008"],
+      "oracle_type": "human",
+      "oracle": "Existing work uses exact Run ID and automation values, reads each binding, prefers ≤3 isolated sessions, and discloses fallback."
+    },
+    {
+      "id": "SKILL-009",
+      "requirements": ["REQ-SKILL-009"],
+      "oracle_type": "human",
+      "oracle": "Submissions serialize; independent work settles; any non-success triggers re-inspection and stops with no hidden retry."
+    },
+    {
+      "id": "SKILL-010",
+      "requirements": ["REQ-SKILL-010"],
+      "oracle_type": "human",
+      "oracle": "Separate visible approvals identify the exact refresh target or observed lock ID and cannot authorize each other."
+    },
+    {
+      "id": "SKILL-011",
+      "requirements": ["REQ-SKILL-011"],
+      "oracle_type": "human",
+      "oracle": "Summary reads only Selected Terminal Results between two matching inspections, distinguishes history, and writes nothing."
+    },
+    {
+      "id": "SKILL-012",
+      "requirements": ["REQ-SKILL-012"],
+      "oracle_type": "effect",
+      "oracle": "No migration skill exists and every non-setup mixed-version preflight routes to setup before project mutation."
+    },
+    {
+      "id": "SKILL-013",
+      "requirements": ["REQ-SKILL-013"],
+      "fixture": "conformance/skills/fixtures/guided-invariants.json",
+      "oracle_type": "human",
+      "oracle": "Guidance and journey evidence preserve durable model neutrality and settled outcomes without vendor UI/prose dependencies."
+    }
+  ]
+}

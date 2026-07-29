@@ -1,0 +1,17 @@
+{
+  "schema_version": "breakdown.publication-race-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "families": [
+    {
+      "id": "same-opportunity",
+      "minimum_seed_count_per_platform": 100,
+      "oracle": "one attempt-1 winner, one settled conflict, contiguous history, no overwrite"
+    },
+    {
+      "id": "independent-eligible-submissions",
+      "minimum_seed_count_per_platform": 100,
+      "oracle": "one attempt-1 Result per independent node after only explicit lock-contention retry"
+    }
+  ],
+  "failure_evidence": ["seed", "platform", "operation", "contender-values", "disk-facts"]
+}

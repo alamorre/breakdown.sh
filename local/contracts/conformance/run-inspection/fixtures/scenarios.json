@@ -1,26 +1,46 @@
 {
   "schema_version": "breakdown.run-inspection-fixtures.v1",
-  "statuses": ["succeeded", "failed", "blocked", "cancelled"],
-  "corruptions": [
-    "run-manifest",
-    "workflow-snapshot",
-    "workflow-input",
-    "step-frontmatter",
-    "step-filename",
-    "step-identity",
-    "step-timestamp",
-    "step-context",
-    "step-input-membership",
-    "result-reference",
-    "result-markdown-hash",
-    "result-json-hash",
-    "data-contract",
-    "missing-pair",
-    "unexpected-pair",
-    "attempt-gap",
-    "duplicate-attempt",
-    "unsupported-run-version",
-    "unsupported-step-version"
+  "release_version": "1.0.0-beta.1",
+  "record_fixture": "../../run-records/fixtures/records.json",
+  "statuses": [
+    {
+      "id": "succeeded",
+      "case_ref": "step_artifact_forms/succeeded-markdown",
+      "oracle": { "selected": true }
+    },
+    { "id": "failed", "case_ref": "step_artifact_forms/failed", "oracle": { "selected": false } },
+    { "id": "blocked", "case_ref": "step_artifact_forms/blocked", "oracle": { "selected": false } },
+    {
+      "id": "cancelled",
+      "case_ref": "step_artifact_forms/cancelled",
+      "oracle": { "selected": false }
+    }
   ],
-  "ignored_entries": ["temporary-entry", "orphan-json", "unrelated-markdown", "unrelated-entry"]
+  "corruptions": [
+    { "id": "run-manifest", "case_ref": "corruptions/run-manifest" },
+    { "id": "workflow-snapshot", "case_ref": "corruptions/workflow-snapshot" },
+    { "id": "workflow-input", "case_ref": "corruptions/workflow-input" },
+    { "id": "step-frontmatter", "case_ref": "corruptions/step-frontmatter" },
+    { "id": "step-filename", "case_ref": "corruptions/step-filename" },
+    { "id": "step-identity", "case_ref": "corruptions/step-identity" },
+    { "id": "step-timestamp", "case_ref": "corruptions/step-timestamp" },
+    { "id": "step-context", "case_ref": "corruptions/step-context" },
+    { "id": "step-input-membership", "case_ref": "corruptions/step-input-membership" },
+    { "id": "result-reference", "case_ref": "corruptions/result-reference" },
+    { "id": "result-markdown-hash", "case_ref": "corruptions/result-markdown-hash" },
+    { "id": "result-json-hash", "case_ref": "corruptions/result-json-hash" },
+    { "id": "data-contract", "case_ref": "corruptions/data-contract" },
+    { "id": "missing-pair", "case_ref": "corruptions/missing-pair" },
+    { "id": "unexpected-pair", "case_ref": "corruptions/unexpected-pair" },
+    { "id": "attempt-gap", "case_ref": "corruptions/attempt-gap" },
+    { "id": "duplicate-attempt", "case_ref": "corruptions/duplicate-attempt" },
+    { "id": "unsupported-run-version", "case_ref": "corruptions/unsupported-run-version" },
+    { "id": "unsupported-step-version", "case_ref": "corruptions/unsupported-step-version" }
+  ],
+  "ignored_entries": [
+    { "id": "temporary-entry", "case_ref": "ignored_entries/temporary-entry" },
+    { "id": "orphan-json", "case_ref": "ignored_entries/orphan-json" },
+    { "id": "unrelated-markdown", "case_ref": "ignored_entries/unrelated-markdown" },
+    { "id": "unrelated-entry", "case_ref": "ignored_entries/unrelated-entry" }
+  ]
 }

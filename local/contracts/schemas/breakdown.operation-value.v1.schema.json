@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "breakdown.operation-value.v1",
+  "$comment": "release_version=1.0.0-beta.1",
+  "title": "Breakdown Operation Success Value v1",
+  "oneOf": [
+    { "$ref": "#/$defs/validate_workflow" },
+    { "$ref": "#/$defs/create_run" },
+    { "$ref": "#/$defs/inspect_run" },
+    { "$ref": "breakdown.work-packet-batch.v1" },
+    { "$ref": "#/$defs/read_work_input" },
+    { "$ref": "#/$defs/submit_candidate" }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^\\d{8}T\\d{6}\\.\\d{3}Z--[a-z][a-z0-9]*(?:-[a-z0-9]+)*--[a-z2-7]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resolved_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "result_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "selected_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "attempt", "markdown"],
+      "properties": {
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "markdown": { "$ref": "#/$defs/result_file" },
+        "json": { "$ref": "#/$defs/result_file" }
+      }
+    },
+    "validate_workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definitionPath", "workflow"],
+      "properties": {
+        "definitionPath": { "const": "breakdown.yaml" },
+        "workflow": { "$ref": "breakdown.workflow.v1" }
+      }
+    },
+    "create_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "path", "created_at", "workflow", "inputs", "producer"],
+      "properties": {
+        "run_id": { "$ref": "#/$defs/run_id" },
+        "path": { "type": "string", "minLength": 1 },
+        "created_at": { "$ref": "#/$defs/timestamp" },
+        "workflow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "snapshot", "sha256"],
+          "properties": {
+            "id": { "$ref": "#/$defs/identifier" },
+            "snapshot": { "const": "breakdown.yaml" },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "inputs": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/resolved_input" }
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "inspected_node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "state", "stale", "next_attempt"],
+      "properties": {
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "state": { "enum": ["complete", "runnable", "blocked"] },
+        "stale": { "type": "boolean" },
+        "next_attempt": { "type": "integer", "minimum": 1, "maximum": 1001 },
+        "context_sha256": { "$ref": "#/$defs/sha256" },
+        "selected_result": { "$ref": "#/$defs/selected_result" }
+      }
+    },
+    "inspected_attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "node_id",
+        "attempt",
+        "status",
+        "started_at",
+        "settled_at",
+        "context_sha256",
+        "selected"
+      ],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "status": { "enum": ["succeeded", "failed", "blocked", "cancelled"] },
+        "started_at": { "$ref": "#/$defs/timestamp" },
+        "settled_at": { "$ref": "#/$defs/timestamp" },
+        "context_sha256": { "$ref": "#/$defs/sha256" },
+        "selected": { "type": "boolean" }
+      }
+    },
+    "inspect_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "path",
+        "status",
+        "resumable",
+        "workflow",
+        "inputs",
+        "nodes",
+        "attempts",
+        "terminal_results",
+        "lock"
+      ],
+      "properties": {
+        "run_id": { "$ref": "#/$defs/run_id" },
+        "path": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["incomplete", "complete"] },
+        "resumable": { "const": true },
+        "workflow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "snapshot", "sha256"],
+          "properties": {
+            "id": { "$ref": "#/$defs/identifier" },
+            "snapshot": { "const": "breakdown.yaml" },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "inputs": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/resolved_input" }
+        },
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/inspected_node" } },
+        "attempts": { "type": "array", "items": { "$ref": "#/$defs/inspected_attempt" } },
+        "terminal_results": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/selected_result" }
+        },
+        "lock": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["lock_id", "recovery"],
+              "properties": {
+                "lock_id": { "type": ["string", "null"] },
+                "recovery": {
+                  "const": "Confirm the prior writer stopped, then recover with this exact observed lock ID."
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "read_work_input": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "bytes_base64"],
+          "properties": {
+            "kind": { "const": "workflow_input" },
+            "bytes_base64": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "markdown_bytes_base64", "json_bytes_base64"],
+          "properties": {
+            "kind": { "const": "result" },
+            "markdown_bytes_base64": { "type": "string" },
+            "json_bytes_base64": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "submitted_base": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "node_id",
+        "attempt",
+        "started_at",
+        "settled_at",
+        "context_sha256",
+        "status"
+      ],
+      "properties": {
+        "run_id": { "$ref": "#/$defs/run_id" },
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "started_at": { "$ref": "#/$defs/timestamp" },
+        "settled_at": { "$ref": "#/$defs/timestamp" },
+        "context_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "submit_candidate": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/submitted_base" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "run_id",
+                "node_id",
+                "attempt",
+                "started_at",
+                "settled_at",
+                "context_sha256",
+                "status",
+                "result"
+              ],
+              "properties": {
+                "run_id": { "$ref": "#/$defs/run_id" },
+                "node_id": { "$ref": "#/$defs/identifier" },
+                "attempt": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                "started_at": { "$ref": "#/$defs/timestamp" },
+                "settled_at": { "$ref": "#/$defs/timestamp" },
+                "context_sha256": { "$ref": "#/$defs/sha256" },
+                "status": { "const": "succeeded" },
+                "result": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["markdown", "json"],
+                  "properties": {
+                    "markdown": { "$ref": "#/$defs/result_file" },
+                    "json": {
+                      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/result_file" }]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/submitted_base" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "run_id",
+                "node_id",
+                "attempt",
+                "started_at",
+                "settled_at",
+                "context_sha256",
+                "status",
+                "problem",
+                "result"
+              ],
+              "properties": {
+                "run_id": { "$ref": "#/$defs/run_id" },
+                "node_id": { "$ref": "#/$defs/identifier" },
+                "attempt": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                "started_at": { "$ref": "#/$defs/timestamp" },
+                "settled_at": { "$ref": "#/$defs/timestamp" },
+                "context_sha256": { "$ref": "#/$defs/sha256" },
+                "status": { "enum": ["failed", "blocked", "cancelled"] },
+                "problem": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["code", "message"],
+                  "properties": {
+                    "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+                    "message": { "type": "string", "minLength": 1 }
+                  }
+                },
+                "result": { "type": "null" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

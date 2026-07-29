@@ -1,0 +1,113 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "OPS",
+  "defaults": {
+    "setup": "Install the exact core candidate and materialize the indexed real temporary project and operation request.",
+    "action": "Call operate(request, trustedContext) through the package root and observe the structured value/failure and exact filesystem effects.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "breakdown.operation-request.v1"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/index.test.ts; packages/breakdown-core/src/run-inspection.test.ts; packages/breakdown-core/src/prepare-work.test.ts; packages/breakdown-core/src/submit-candidate.test.ts"
+  },
+  "rows": [
+    {
+      "id": "OPS-001",
+      "requirements": ["REQ-OPS-001"],
+      "oracle": "Packed dependency inspection shows core isolation and only CLI→core and MCP→core package edges."
+    },
+    {
+      "id": "OPS-002",
+      "requirements": ["REQ-OPS-002"],
+      "oracle": "Package exports expose only the root dispatcher contract and architecture checks find no deep imports or cycles."
+    },
+    {
+      "id": "OPS-003",
+      "requirements": ["REQ-OPS-003"],
+      "oracle": "Every operation returns exactly one success/value or structured failure and adapter cross-traces preserve it."
+    },
+    {
+      "id": "OPS-004",
+      "requirements": ["REQ-OPS-004"],
+      "oracle": "Schema/catalog operation variants and order are exact and any other operation fails unsupported_operation."
+    },
+    {
+      "id": "OPS-005",
+      "requirements": ["REQ-OPS-005"],
+      "oracle": "Validation returns exact Workflow or ordered failure while disk snapshots show no durable write."
+    },
+    {
+      "id": "OPS-006",
+      "requirements": ["REQ-OPS-006"],
+      "oracle": "Run creation returns exact identity/input facts and atomically publishes only the complete immutable Run."
+    },
+    {
+      "id": "OPS-007",
+      "requirements": ["REQ-OPS-007"],
+      "oracle": "Exact-ID inspection returns validated state, results, attempts, and lock facts without repair or latest inference."
+    },
+    {
+      "id": "OPS-008",
+      "requirements": ["REQ-OPS-008"],
+      "oracle": "Resume or one-node refresh returns no more than the bounded deterministic packets and creates no durable state."
+    },
+    {
+      "id": "OPS-009",
+      "requirements": ["REQ-OPS-009"],
+      "oracle": "Each binding read returns only its exact whole Workflow Input or Markdown/conditional-JSON Result bytes."
+    },
+    {
+      "id": "OPS-010",
+      "requirements": ["REQ-OPS-010"],
+      "oracle": "Eligible candidate submission publishes exact authoritative metadata and every invalid/stale candidate commits nothing."
+    },
+    {
+      "id": "OPS-011",
+      "requirements": ["REQ-OPS-011"],
+      "oracle": "Every expected failure uses a cataloged kind/code with bounded non-normative text and ordered diagnostics."
+    },
+    {
+      "id": "OPS-012",
+      "requirements": ["REQ-OPS-012"],
+      "oracle": "Every prepared packet conforms to its closed-world schema and contains all required identity, task, policy, Input, Result, and limit facts."
+    },
+    {
+      "id": "OPS-013",
+      "requirements": ["REQ-OPS-013"],
+      "oracle": "Packet/schema inspection finds none of the forbidden content, authority, command, unrelated-context, final-path, or allocated-attempt fields."
+    },
+    {
+      "id": "OPS-014",
+      "requirements": ["REQ-OPS-014"],
+      "oracle": "Candidate schema and contextual validation enforce exact echoed identity, status-specific JSON/problem rules, and no authoritative metadata."
+    },
+    {
+      "id": "OPS-015",
+      "requirements": ["REQ-OPS-015"],
+      "oracle": "Resume limits 1–3 and refresh limit 1 select exact topology/authored-order packets; all other shapes fail."
+    },
+    {
+      "id": "OPS-016",
+      "requirements": ["REQ-OPS-016"],
+      "oracle": "Duplicate preparation changes nothing; serialized submission accepts only still-eligible work and never performs hidden retry."
+    },
+    {
+      "id": "OPS-017",
+      "requirements": ["REQ-OPS-017"],
+      "oracle": "Trusted cancellation obeys publication semantics and core process/network/model/agent duration sentinels remain untouched."
+    },
+    {
+      "id": "OPS-018",
+      "requirements": ["REQ-OPS-018"],
+      "fixture": "conformance/operations/fixtures/shared-traces.json",
+      "oracle": "Every shared six-operation trace has identical decoded values, failures, ordering, limits, and disk effects through each transport sequence."
+    }
+  ]
+}

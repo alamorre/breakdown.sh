@@ -1,5 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
+  "release_version": "1.0.0-beta.1",
   "defaults": {
     "prerequisites": "Place a valid breakdown.workflow.v1 Workflow Definition and its declared Input files in a real temporary local project.",
     "action": "Call create_run through the core dispatcher with the temporary project as the explicit trusted project root.",
@@ -17,47 +18,47 @@
   },
   "rows": [
     {
-      "id": "RUN-001",
+      "id": "CASE-RUN-CREATE-001",
       "requirement": "Issue #146: create a complete immutable Run through create_run",
       "oracle": "One new outputs/<run-id> contains exact run.md and breakdown.yaml bytes plus an empty steps directory."
     },
     {
-      "id": "RUN-002",
+      "id": "CASE-RUN-CREATE-002",
       "requirement": "Issue #146: resolve each Workflow Input from one override or default",
       "oracle": "The Run Manifest contains exactly every declared Input, ordered by identifier, with its selected portable path."
     },
     {
-      "id": "RUN-003",
+      "id": "CASE-RUN-CREATE-003",
       "requirement": "Issue #146: hash exact raw Workflow Definition and Input bytes",
       "oracle": "Frozen SHA-256 byte vectors match the Workflow Snapshot and every resolved Input."
     },
     {
-      "id": "RUN-004",
+      "id": "CASE-RUN-CREATE-004",
       "requirement": "Issue #146: reject missing, unknown, conflicting, or unsafe Input paths",
       "oracle": "Creation fails before publication with structured ordered diagnostics and no visible Run."
     },
     {
-      "id": "RUN-005",
+      "id": "CASE-RUN-CREATE-005",
       "requirement": "Issue #146: reject linked, special, aliased, replaced, or mutated Inputs",
       "oracle": "Secure no-follow reads fail closed and no visible partial Run is published."
     },
     {
-      "id": "RUN-006",
+      "id": "CASE-RUN-CREATE-006",
       "requirement": "Issue #146: enforce per-Input and aggregate Input byte limits without truncation",
       "oracle": "Limit minus one and limit succeed; limit plus one fails resource_limit/limit_exceeded without publication."
     },
     {
-      "id": "RUN-007",
+      "id": "CASE-RUN-CREATE-007",
       "requirement": "Issue #146: publish Run history atomically without replacement",
       "oracle": "Injected faults before directory commit leave no visible Run; a committed Run is complete and final paths are never overwritten."
     },
     {
-      "id": "RUN-008",
+      "id": "CASE-RUN-CREATE-008",
       "requirement": "Issue #146: keep prior Workflow Snapshots immutable when the live definition changes",
       "oracle": "A live edit affects only a later Run; each Run retains its selected exact bytes and digest."
     },
     {
-      "id": "RUN-009",
+      "id": "CASE-RUN-CREATE-009",
       "requirement": "Issue #146: create private Breakdown-owned files and directories",
       "oracle": "On POSIX, new Run directories are 0700 and run.md plus breakdown.yaml are 0600."
     }

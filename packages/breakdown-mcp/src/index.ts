@@ -22,7 +22,14 @@ import {
   unsupportedOperationRequestFailure,
 } from '@breakdown-sh/core';
 
-import { OPERATION_NAMES, TOOL_CATALOG } from './protocol-assets.js';
+import {
+  MCP_PREFERRED_PROTOCOL_VERSION,
+  MCP_PROTOCOL_VERSIONS,
+  MCP_RELEASE_VERSION,
+  MCP_SERVER_INFO,
+  OPERATION_NAMES,
+  TOOL_CATALOG,
+} from './protocol-assets.js';
 import {
   validateCreateRunArguments,
   validateInspectRunArguments,
@@ -34,9 +41,6 @@ import {
 } from './protocol-validators.js';
 import { BreakdownStdioTransport } from './stdio-transport.js';
 
-const RELEASE_VERSION = '1.0.0-beta.1';
-const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-11-25'];
-const PREFERRED_PROTOCOL_VERSION = '2025-11-25';
 type Operation = (typeof OPERATION_NAMES)[number];
 
 const ARGUMENT_VALIDATORS: Record<Operation, ProtocolValidator> = {
@@ -74,7 +78,7 @@ function operationEnvelope(
 ): Record<string, unknown> {
   return normalizeForJson({
     schema_version: 'breakdown.mcp-output.v1',
-    release_version: RELEASE_VERSION,
+    release_version: MCP_RELEASE_VERSION,
     supported_operation_schemas: [OPERATION_REQUEST_SCHEMA_VERSION],
     operation,
     ok: result.ok,
@@ -134,9 +138,7 @@ let initialized = false;
 const activeInvocations = new Set<Promise<void>>();
 const server = new Server(
   {
-    name: '@breakdown-sh/mcp',
-    title: 'Breakdown Local',
-    version: RELEASE_VERSION,
+    ...MCP_SERVER_INFO,
   },
   {
     capabilities: {
@@ -151,15 +153,11 @@ server.setRequestHandler(InitializeRequestSchema, async (request) => {
   }
   initializeSeen = true;
   return {
-    protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(request.params.protocolVersion)
+    protocolVersion: MCP_PROTOCOL_VERSIONS.includes(request.params.protocolVersion)
       ? request.params.protocolVersion
-      : PREFERRED_PROTOCOL_VERSION,
+      : MCP_PREFERRED_PROTOCOL_VERSION,
     capabilities: { tools: {} },
-    serverInfo: {
-      name: '@breakdown-sh/mcp',
-      title: 'Breakdown Local',
-      version: RELEASE_VERSION,
-    },
+    serverInfo: MCP_SERVER_INFO,
   };
 });
 

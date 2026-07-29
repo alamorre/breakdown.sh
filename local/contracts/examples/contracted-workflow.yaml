@@ -1,0 +1,21 @@
+schema_version: breakdown.workflow.v1
+id: contracted-example
+name: Contracted example
+inputs:
+  source:
+    description: Source material to analyze.
+    default: inputs/source.md
+nodes:
+  - id: analyze
+    name: Analyze
+    prompt: Analyze the source and report the finding.
+    inputs:
+      material:
+        workflow_input: source
+    data_contract:
+      type: object
+      additionalProperties: false
+      required: [finding]
+      properties:
+        finding:
+          type: string

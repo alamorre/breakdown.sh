@@ -1,0 +1,311 @@
+{
+  "schema_version": "breakdown.cli-process-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "executable": "breakdown",
+  "substitutions": {
+    "$PROJECT": "absolute path of a fresh project containing examples/minimal-workflow.yaml as breakdown.yaml",
+    "$RUN_ID": "exact run_id returned by run create",
+    "$REQUEST": "the referenced request object serialized as compact UTF-8 JSON plus LF"
+  },
+  "byte_oracles": [
+    {
+      "id": "help",
+      "argv": ["--help"],
+      "stdin_bytes_base64": "",
+      "exit_code": 0,
+      "stdout_utf8": "Usage:\n  breakdown workflow validate --project PATH [--json]\n  breakdown run create --project PATH [--input ID=PATH]... [--json]\n  breakdown run inspect --project PATH --run RUN_ID [--json]\n  breakdown operate --project PATH\n",
+      "stderr_utf8": "",
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "version",
+      "argv": ["--version"],
+      "stdin_bytes_base64": "",
+      "exit_code": 0,
+      "stdout_utf8": "1.0.0-beta.1\n",
+      "stderr_utf8": "",
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "machine-invalid-json",
+      "argv": ["operate", "--project", "/definitely/missing"],
+      "stdin_utf8": "{invalid\n",
+      "exit_code": 3,
+      "stdout_utf8": "{\"schema_version\":\"breakdown.cli-output.v1\",\"operation\":\"unknown\",\"ok\":false,\"error\":{\"kind\":\"invalid\",\"code\":\"invalid_operation_request\",\"message\":\"The automation operation request is invalid.\",\"diagnostics\":[{\"code\":\"parse\",\"path\":\"\",\"message\":\"The automation request is not strict JSON.\"}]}}\n",
+      "stderr_utf8": "",
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "human-missing-project",
+      "argv": ["workflow", "validate"],
+      "stdin_bytes_base64": "",
+      "exit_code": 2,
+      "stdout_utf8": "",
+      "stderr_utf8": "Usage:\n  breakdown workflow validate --project PATH [--json]\n  breakdown run create --project PATH [--input ID=PATH]... [--json]\n  breakdown run inspect --project PATH --run RUN_ID [--json]\n  breakdown operate --project PATH\n",
+      "effects": { "created_paths": [] }
+    }
+  ],
+  "human_commands": [
+    {
+      "id": "workflow-validate",
+      "argv": ["workflow", "validate", "--project", "$PROJECT", "--json"],
+      "stdin_bytes_base64": "",
+      "oracle": {
+        "exit_code": 0,
+        "stdout_schema": "breakdown.cli-output.v1",
+        "operation": "validate_workflow",
+        "ok": true,
+        "stderr_utf8": ""
+      },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "run-create",
+      "argv": ["run", "create", "--project", "$PROJECT", "--json"],
+      "stdin_bytes_base64": "",
+      "oracle": {
+        "exit_code": 0,
+        "stdout_schema": "breakdown.cli-output.v1",
+        "operation": "create_run",
+        "ok": true,
+        "stderr_utf8": ""
+      },
+      "effects": {
+        "created_paths": [
+          "outputs/$RUN_ID/run.md",
+          "outputs/$RUN_ID/breakdown.yaml",
+          "outputs/$RUN_ID/steps"
+        ]
+      }
+    },
+    {
+      "id": "run-inspect-exact",
+      "argv": ["run", "inspect", "--project", "$PROJECT", "--run", "$RUN_ID", "--json"],
+      "stdin_bytes_base64": "",
+      "oracle": {
+        "exit_code": 0,
+        "stdout_schema": "breakdown.cli-output.v1",
+        "operation": "inspect_run",
+        "run_id": "$RUN_ID",
+        "stderr_utf8": ""
+      },
+      "effects": { "created_paths": [] }
+    },
+    { "id": "help", "byte_oracle": "help" },
+    { "id": "version", "byte_oracle": "version" }
+  ],
+  "automation_operations": [
+    {
+      "id": "validate_workflow",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_request": {
+        "schema_version": "breakdown.operation-request.v1",
+        "operation": "validate_workflow"
+      },
+      "oracle": { "exit_code": 0, "operation": "validate_workflow", "ok": true, "stderr_utf8": "" },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "create_run",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_request": {
+        "schema_version": "breakdown.operation-request.v1",
+        "operation": "create_run"
+      },
+      "oracle": { "exit_code": 0, "operation": "create_run", "ok": true, "stderr_utf8": "" },
+      "effects": { "visible_run_count_delta": 1 }
+    },
+    {
+      "id": "inspect_run",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_request": {
+        "schema_version": "breakdown.operation-request.v1",
+        "operation": "inspect_run",
+        "run_id": "$RUN_ID"
+      },
+      "oracle": { "exit_code": 0, "operation": "inspect_run", "ok": true, "stderr_utf8": "" },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "prepare_work",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_request": {
+        "schema_version": "breakdown.operation-request.v1",
+        "operation": "prepare_work",
+        "run_id": "$RUN_ID",
+        "mode": { "kind": "resume" }
+      },
+      "oracle": { "exit_code": 0, "operation": "prepare_work", "ok": true, "stderr_utf8": "" },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "read_work_input",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_request": {
+        "schema_version": "breakdown.operation-request.v1",
+        "operation": "read_work_input",
+        "packet": "$PACKET",
+        "binding": "source"
+      },
+      "oracle": { "exit_code": 0, "operation": "read_work_input", "ok": true, "stderr_utf8": "" },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "submit_candidate",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_request": {
+        "schema_version": "breakdown.operation-request.v1",
+        "operation": "submit_candidate",
+        "packet": "$PACKET",
+        "candidate": {
+          "schema_version": "breakdown.candidate.v1",
+          "submission": "$PACKET.submission",
+          "status": "succeeded",
+          "executor": { "kind": "program", "name": "cli-fixture" },
+          "markdown": "Done.\n"
+        }
+      },
+      "oracle": { "exit_code": 0, "operation": "submit_candidate", "ok": true, "stderr_utf8": "" },
+      "effects": { "committed_markdown_steps": 1 }
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "request-utf8",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "stdin_bytes_base64": "eyJvcGVyYXRpb24iOiL/gCJ9",
+      "oracle": {
+        "exit_code": 3,
+        "kind": "invalid",
+        "code": "invalid_operation_request",
+        "stderr_utf8": ""
+      },
+      "effects": { "created_paths": [] }
+    },
+    {
+      "id": "request-bytes",
+      "argv": ["operate", "--project", "$PROJECT"],
+      "generate_stdin_bytes": [1048575, 1048576, 1048577],
+      "oracle": {
+        "at_or_below_limit": "schema-evaluated-without-truncation",
+        "above_limit": { "exit_code": 7, "kind": "resource_limit", "code": "limit_exceeded" }
+      },
+      "effects": { "partial_records": 0 }
+    },
+    {
+      "id": "response-bytes",
+      "setup": { "operation_result_bytes": [16777215, 16777216, 16777217] },
+      "oracle": {
+        "at_or_below_limit": "one-complete-json-line",
+        "above_limit": { "exit_code": 7, "code": "limit_exceeded" }
+      },
+      "effects": { "truncated_stdout": false }
+    },
+    {
+      "id": "human-stderr-bytes",
+      "setup": { "diagnostic_source_bytes": [65535, 65536, 65537] },
+      "oracle": { "maximum_stderr_bytes": 65536, "terminal_controls_escaped": true },
+      "effects": { "project_content_executed": false }
+    }
+  ],
+  "byte_field_cases": [
+    {
+      "id": "workflow-input-base64",
+      "shared_trace": "workflow-input-success",
+      "oracle": { "field": "data.bytes_base64", "value": "c291cmNlCg==" }
+    },
+    {
+      "id": "result-markdown-base64",
+      "shared_trace": "predecessor-markdown-success",
+      "oracle": { "field": "data.markdown_bytes_base64", "value": "RXZpZGVuY2UuCg==" }
+    },
+    {
+      "id": "result-json-base64",
+      "shared_trace": "contracted-json-success",
+      "oracle": { "field": "data.json_bytes_base64", "value": "eyJmaW5kaW5nIjoib2sifQ==" }
+    }
+  ],
+  "process_cases": [
+    {
+      "id": "exit-codes",
+      "actions": [
+        { "outcome": "success", "expected": 0 },
+        { "outcome": "usage", "expected": 2 },
+        { "outcome": "invalid", "expected": 3 },
+        { "outcome": "conflict", "expected": 4 },
+        { "outcome": "unsupported", "expected": 5 },
+        { "outcome": "cancelled", "expected": 6 },
+        { "outcome": "resource_limit", "expected": 7 },
+        { "outcome": "io", "expected": 8 },
+        { "outcome": "internal", "expected": 70 }
+      ],
+      "effects": { "exit_code_matches_catalog": true }
+    },
+    {
+      "id": "sigint",
+      "action": { "signal": "SIGINT", "phase": "before-publication" },
+      "oracle": { "exit_code": 6, "code": "cancelled" },
+      "effects": { "partial_records": 0 }
+    },
+    {
+      "id": "sigterm",
+      "action": { "signal": "SIGTERM", "phase": "before-publication" },
+      "oracle": { "exit_code": 6, "code": "cancelled" },
+      "effects": { "partial_records": 0 }
+    },
+    {
+      "id": "tty-color",
+      "action": {
+        "argv": ["workflow", "validate", "--project", "$PROJECT"],
+        "tty": true,
+        "environment": { "TERM": "xterm-256color" }
+      },
+      "oracle": { "color_allowed": true, "terminal_controls_from_project": false }
+    },
+    {
+      "id": "no-color",
+      "action": {
+        "argv": ["workflow", "validate", "--project", "$PROJECT"],
+        "tty": true,
+        "environment": { "NO_COLOR": "" }
+      },
+      "oracle": { "ansi_sgr_bytes": 0 }
+    },
+    {
+      "id": "terminal-controls",
+      "setup": { "workflow_name_utf8": "unsafe\u001b[31mname" },
+      "action": { "argv": ["workflow", "validate", "--project", "$PROJECT"] },
+      "oracle": { "stdout_contains": "unsafe\\u001b[31mname", "raw_escape_bytes": 0 }
+    }
+  ],
+  "ambient_cases": [
+    {
+      "id": "no-git",
+      "setup": { "git_directory": false },
+      "action": { "argv": ["workflow", "validate", "--project", "$PROJECT", "--json"] },
+      "oracle": { "exit_code": 0 },
+      "effects": { "git_processes": 0 }
+    },
+    {
+      "id": "no-cwd-discovery",
+      "setup": { "cwd_contains_other_project": true },
+      "action": { "argv": ["workflow", "validate", "--project", "$PROJECT", "--json"] },
+      "oracle": { "selected_project": "$PROJECT" },
+      "effects": { "other_project_reads": 0 }
+    },
+    {
+      "id": "no-environment-discovery",
+      "setup": { "environment": { "BREAKDOWN_PROJECT": "/other" } },
+      "action": { "argv": ["workflow", "validate", "--project", "$PROJECT", "--json"] },
+      "oracle": { "selected_project": "$PROJECT" },
+      "effects": { "other_project_reads": 0 }
+    },
+    {
+      "id": "no-latest-run",
+      "setup": { "run_ids": ["$OLDER_RUN", "$NEWER_RUN"] },
+      "action": { "argv": ["run", "inspect", "--project", "$PROJECT"] },
+      "oracle": { "exit_code": 2, "stderr_byte_oracle": "help" },
+      "effects": { "run_files_read": 0 }
+    }
+  ]
+}

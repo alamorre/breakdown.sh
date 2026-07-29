@@ -1,0 +1,53 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "HASH",
+  "defaults": {
+    "setup": "Load the reviewed literal byte and canonical-preimage vectors without calling the Breakdown implementation to form expectations.",
+    "action": "Exercise the packaged core dispatcher on equivalent real project bytes and compare returned and stored digests to the literals.",
+    "oracle_type": "byte",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "sha-256+rfc-8785"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/run-inspection.test.ts"
+  },
+  "rows": [
+    {
+      "id": "HASH-001",
+      "requirements": ["REQ-HASH-001"],
+      "oracle": "Empty, binary, and text raw bytes match the reviewed lowercase SHA-256 literals from byte zero through EOF."
+    },
+    {
+      "id": "HASH-002",
+      "requirements": ["REQ-HASH-002"],
+      "oracle": "Byte-level definition/JSON changes alter raw digests while root and filesystem metadata changes preserve them."
+    },
+    {
+      "id": "HASH-003",
+      "requirements": ["REQ-HASH-003"],
+      "oracle": "Every reviewed canonical JCS preimage hashes to its literal context_sha256 across operation paths."
+    },
+    {
+      "id": "HASH-004",
+      "requirements": ["REQ-HASH-004"],
+      "oracle": "Changing each included factor independently changes the expected Node Context to the indexed literal vector."
+    },
+    {
+      "id": "HASH-005",
+      "requirements": ["REQ-HASH-005"],
+      "oracle": "Changing each excluded factor independently leaves the baseline Node Context digest unchanged."
+    },
+    {
+      "id": "HASH-006",
+      "requirements": ["REQ-HASH-006"],
+      "fixture": "conformance/hashing/fixtures/hash-vectors.json",
+      "oracle": "The checked-in literal catalog contains every required raw, JCS, normalization, inclusion, and exclusion vector."
+    }
+  ]
+}

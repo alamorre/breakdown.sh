@@ -1,0 +1,34 @@
+{
+  "schema_version": "breakdown.skill-invariant-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "canonical_skills": [
+    "setup-breakdown",
+    "author-breakdown",
+    "critique-breakdown",
+    "run-breakdown",
+    "summarize-breakdown-run"
+  ],
+  "required_outcomes": [
+    "exact-version-preflight",
+    "explicit-root",
+    "proposal-before-write",
+    "read-only-critique",
+    "approval-before-new-run",
+    "exact-run-resume",
+    "bounded-isolated-packets",
+    "serialized-submission",
+    "stop-after-non-success",
+    "separate-refresh-approval",
+    "separate-lock-recovery-approval",
+    "selected-terminal-summary",
+    "no-durable-summary",
+    "model-neutral-durable-state"
+  ],
+  "forbidden_dependencies": [
+    "vendor-frontmatter",
+    "human-output-scraping",
+    "hidden-retry",
+    "migration-skill",
+    "model-provider-durable-field"
+  ]
+}

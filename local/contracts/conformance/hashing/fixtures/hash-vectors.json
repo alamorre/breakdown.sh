@@ -1,0 +1,596 @@
+{
+  "schema_version": "breakdown.hash-vectors.v1",
+  "release_version": "1.0.0-beta.1",
+  "raw_files": [
+    {
+      "id": "empty",
+      "bytes_base64": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "binary",
+      "bytes_base64": "AP+ACg0A",
+      "sha256": "0c1dc7f17be5daf6fb1efcb5e68dde6ddf1910251a057ccdbf97387229629f8c"
+    },
+    {
+      "id": "utf8-bom",
+      "bytes_base64": "77u/dGV4dA==",
+      "sha256": "3f290fb3a24328c76f4d09294c8be46a8c10c4a7ac8a7642782c7152d2761a13"
+    },
+    {
+      "id": "lf",
+      "bytes_base64": "bGluZQo=",
+      "sha256": "c73b73af8851e9e91bc6b4dc12e7dace0a2bfb931c1d0b8b36ef367319f58cd1"
+    },
+    {
+      "id": "crlf",
+      "bytes_base64": "bGluZQ0K",
+      "sha256": "893e89e669b5a4f9e5136d565f51e341a0c5e5531816c9c1a806d90df66a45f4"
+    },
+    {
+      "id": "no-trailing-newline",
+      "bytes_base64": "bGluZQ==",
+      "sha256": "38a9c1e721584da284b90ceea4ed7eb8db15ac4ea86c2c75ec925d5f8799fcf0"
+    },
+    {
+      "id": "workflow-comments-order-a",
+      "bytes_base64": "IyBjb21tZW50CnNjaGVtYV92ZXJzaW9uOiBicmVha2Rvd24ud29ya2Zsb3cudjEKaWQ6IHNlbWFudGljLXBhaXIKbmFtZTogU2VtYW50aWMgUGFpcgpub2RlczoKICAtIGlkOiBleGVjdXRlCiAgICBuYW1lOiBFeGVjdXRlCiAgICBwcm9tcHQ6IEV4ZWN1dGUuCg==",
+      "sha256": "c2d5087afba9b01bfaf6f4179b6f2317507f11cd5feff342bf47013ceac0ba6b"
+    },
+    {
+      "id": "workflow-comments-order-b",
+      "bytes_base64": "bm9kZXM6CiAgLSBwcm9tcHQ6IEV4ZWN1dGUuCiAgICBuYW1lOiBFeGVjdXRlCiAgICBpZDogZXhlY3V0ZQpuYW1lOiBTZW1hbnRpYyBQYWlyCmlkOiBzZW1hbnRpYy1wYWlyCnNjaGVtYV92ZXJzaW9uOiBicmVha2Rvd24ud29ya2Zsb3cudjEgIyBpbmxpbmUK",
+      "sha256": "a2ad20df462a2233001cbf47e9a686b553db6b0573fb7877c2cbf862baa3c381"
+    },
+    {
+      "id": "json-raw-semantic-a",
+      "bytes_base64": "eyJhIjoxLCJiIjpbdHJ1ZSxudWxsXX0=",
+      "sha256": "1cc69c7fa23616ca2ec3ee70d24390a6225c8832db8a4c814c7e0e7f942f8668"
+    },
+    {
+      "id": "json-raw-semantic-b",
+      "bytes_base64": "eyAKICAiYiI6IFsgdHJ1ZSwgbnVsbCBdLAogICJhIjogMQp9Cg==",
+      "sha256": "397f62c8293c6b97ebc0ffd67f742bec5571c6217f8de7586be63b7a40ae10a7"
+    }
+  ],
+  "raw_semantic_pairs": [
+    {
+      "id": "workflow-comments-order",
+      "left": "workflow-comments-order-a",
+      "right": "workflow-comments-order-b",
+      "decoded_semantic_value": {
+        "schema_version": "breakdown.workflow.v1",
+        "id": "semantic-pair",
+        "name": "Semantic Pair",
+        "nodes": [
+          {
+            "id": "execute",
+            "name": "Execute",
+            "prompt": "Execute."
+          }
+        ]
+      },
+      "oracle": "Both YAML documents decode to decoded_semantic_value and their raw SHA-256 values differ."
+    },
+    {
+      "id": "json-whitespace-property-order",
+      "left": "json-raw-semantic-a",
+      "right": "json-raw-semantic-b",
+      "decoded_semantic_value": {
+        "a": 1,
+        "b": [true, null]
+      },
+      "oracle": "Both JSON documents decode to decoded_semantic_value and their raw SHA-256 values differ."
+    }
+  ],
+  "node_contexts": [
+    {
+      "id": "node-definition-workflow-input-baseline",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "a9f283d80d618945dcfa18338aefa799628d8286e8fe419d06a8f3d149056c1a"
+    },
+    {
+      "id": "included-run-id",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200001.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "430b89fe875d5dc655371501bddc6a4e914a3bb14ee3cb3e4b6490e00a2ec941"
+    },
+    {
+      "id": "included-node-id",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"changed\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "61b75ef1d3357bbc47495dc8de026b97b8cec7c505af407f7665cf56ee558cad"
+    },
+    {
+      "id": "included-node-name",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Changed\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "10ee91163390fe03a386d95c3007c101ab69722efdb0434d8aade6ca7f589649"
+    },
+    {
+      "id": "included-node-prompt",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Changed.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "1fcbd0efeb72628d4bb005620e95612736656f03476ba22eabaea47e4a038e67"
+    },
+    {
+      "id": "included-input-bindings",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"evidence\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"evidence\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "f12d1475bc56adbe2f586575d5440de1503e2cd6f97d6cede162d37ef41ff833"
+    },
+    {
+      "id": "included-data-contract",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"number\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "5facdd89068950957fbc1647dd054bfc4008fb3b55e66e8c3e3160e8982c4e37"
+    },
+    {
+      "id": "included-workflow-input-id",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source-two\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source-two\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "a2d86e7189574c983c16dc87adca083892791432ba9341df299a6d9d833cf12f"
+    },
+    {
+      "id": "included-workflow-input-description",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Changed.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "d1395a593d099c4b101fc5dcdad54169c7188216053f4ca4542d47d95cb84263"
+    },
+    {
+      "id": "included-workflow-input-path",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"other.bin\",\"sha256\":\"ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "94030d29ebfcf65fbb03533196bd05fb7d81d6fe8a7e6a77a239944ce3b7420e"
+    },
+    {
+      "id": "included-workflow-input-sha256",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"type\":\"string\"},\"id\":\"execute\",\"inputs\":{\"material\":{\"workflow_input\":\"source\"}},\"name\":\"Execute\",\"prompt\":\"Use source.\"},\"resolved_inputs\":{\"material\":{\"workflow_input\":{\"description\":\"Source material.\",\"id\":\"source\",\"path\":\"selected.bin\",\"sha256\":\"b92d13bbe02db7ca7686a8e7b854de49c7455948c05cf91a47044278395e212e\"}}},\"run_id\":\"20260724T200000.000Z--context-factors--aaaaaaaaaaaa\"}",
+      "sha256": "f62d918a1a91d50c4b7f7f40917ef8eb082d3fe94372e0cc15087d4ae8330b09"
+    },
+    {
+      "id": "included-predecessor-result",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "f15962d5578cee091b0990e6d963438a6487b2a188682ae670cef6cbdf3aa67f"
+    },
+    {
+      "id": "predecessor-baseline",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "f15962d5578cee091b0990e6d963438a6487b2a188682ae670cef6cbdf3aa67f"
+    },
+    {
+      "id": "included-predecessor-node-id",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"collect\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "9dc343ecbb316515b4a4d7c8d2569e999fc4b9acd478238c35d50f8042f16124"
+    },
+    {
+      "id": "included-predecessor-attempt",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":2,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "50454bc08af81bb5777afac9323cdfa96af3f6c02177a2e9d803ee27883440e8"
+    },
+    {
+      "id": "included-predecessor-markdown-path",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a2.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "11b5223f978d50c60f456d11b8fe66f8125e374afb21a0036fae5c4b71b3d967"
+    },
+    {
+      "id": "included-predecessor-markdown-sha256",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "3f7c06b652127a302bcbfb5a1d03fdfc73136fb27aba0355e3f3e84ab0d851e2"
+    },
+    {
+      "id": "included-predecessor-json-path",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a2.json\",\"sha256\":\"015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "5bb9cf98b0e620a5a985b47cf03c1376cc31702f5d926a633407cc3b8681137a"
+    },
+    {
+      "id": "included-predecessor-json-sha256",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.json\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"b1376b6b1df5706b91a7b2621555e2ef368ab26c0dcd6aa379a074768e83fb77\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa\"}",
+      "sha256": "573a346b2982a5fd133dffbe6934878abf5d832877d2f8c11009298237f4b3f2"
+    },
+    {
+      "id": "normalized-absent-node-fields",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"gather\",\"inputs\":{},\"name\":\"Gather\",\"prompt\":\"Gather.\"},\"resolved_inputs\":{},\"run_id\":\"20260724T200000.000Z--null-normalizations--aaaaaaaaaaaa\"}",
+      "sha256": "0a76b5ef70a6da1836996efc3dd041bff8e2f55d8a7b5c6a0d536ad01f62d462"
+    },
+    {
+      "id": "normalized-absent-result-json",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"evidence\":{\"node\":\"gather\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"evidence\":{\"result\":{\"attempt\":1,\"json\":null,\"markdown\":{\"path\":\"outputs/20260724T200000.000Z--null-normalizations--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a1.md\",\"sha256\":\"bc12e28f5d60aa671554944096184bbf744b199e7bcd43695f3754701c3b0682\"},\"node_id\":\"gather\"}}},\"run_id\":\"20260724T200000.000Z--null-normalizations--aaaaaaaaaaaa\"}",
+      "sha256": "574eb6cd7bccdbf4d40c0c985770bddd0465d5f8e8dc9b018d710213d707d4ec"
+    },
+    {
+      "id": "normalized-absent-workflow-input-description",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":null,\"id\":\"consume\",\"inputs\":{\"source\":{\"workflow_input\":\"source\"}},\"name\":\"Consume\",\"prompt\":\"Consume.\"},\"resolved_inputs\":{\"source\":{\"workflow_input\":{\"description\":null,\"id\":\"source\",\"path\":\"source.bin\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}}},\"run_id\":\"20260724T200000.000Z--null-description--aaaaaaaaaaaa\"}",
+      "sha256": "33c1a6253ec1496963ef8e2ac8c44bef36b676747e9b1ac77835b2ba9453e495"
+    },
+    {
+      "id": "rfc-8785-numbers",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"const\":{\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27,9007199254740992]}},\"id\":\"execute\",\"inputs\":{},\"name\":\"Execute\",\"prompt\":\"Execute.\"},\"resolved_inputs\":{},\"run_id\":\"20260724T200000.000Z--jcs-numbers--aaaaaaaaaaaa\"}",
+      "sha256": "f975876d5e0aa6b35e2dd001233ea272e36a172793d9c9c3b6c42afa3ddb89bf"
+    },
+    {
+      "id": "rfc-8785-escaping",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"const\":{\"text\":\"quote=\\\" backslash=\\\\ controls=\\b\\t\\n\\f\\r slash=/\"}},\"id\":\"execute\",\"inputs\":{},\"name\":\"Execute\",\"prompt\":\"Execute.\"},\"resolved_inputs\":{},\"run_id\":\"20260724T200000.000Z--jcs-escaping--aaaaaaaaaaaa\"}",
+      "sha256": "8b2968d01d8289fc351529096bb30e197ddc6486bd473feb74b17739312fd230"
+    },
+    {
+      "id": "rfc-8785-unicode-ordering",
+      "canonical_jcs": "{\"hash_schema\":\"breakdown.node-context.v1\",\"node_definition\":{\"data_contract\":{\"const\":{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"composed\":\"é\",\"decomposed\":\"é\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}},\"id\":\"execute\",\"inputs\":{},\"name\":\"Execute\",\"prompt\":\"Execute.\"},\"resolved_inputs\":{},\"run_id\":\"20260724T200000.000Z--jcs-unicode-order--aaaaaaaaaaaa\"}",
+      "sha256": "97cc14542440261be18dc9799fb898beb1ee88de13eb7796f884541d53c30361"
+    }
+  ],
+  "jcs_rejections": [
+    {
+      "id": "rfc-8785-lone-high-surrogate",
+      "input_json_utf8": "{\"value\":\"\\ud800\"}",
+      "oracle": {
+        "code": "invalid_unicode",
+        "path": "/value"
+      }
+    },
+    {
+      "id": "rfc-8785-lone-low-surrogate",
+      "input_json_utf8": "{\"value\":\"\\udead\"}",
+      "oracle": {
+        "code": "invalid_unicode",
+        "path": "/value"
+      }
+    }
+  ],
+  "context_source_baseline": {
+    "run_id": "20260724T200000.000Z--context-factors--aaaaaaaaaaaa",
+    "node_definition": {
+      "id": "execute",
+      "name": "Execute",
+      "prompt": "Use source.",
+      "inputs": {
+        "material": {
+          "workflow_input": "source"
+        }
+      },
+      "data_contract": {
+        "type": "string"
+      },
+      "extensions": {
+        "example.test": {
+          "mode": "baseline"
+        }
+      }
+    },
+    "resolved_inputs": {
+      "material": {
+        "workflow_input": {
+          "id": "source",
+          "description": "Source material.",
+          "path": "selected.bin",
+          "sha256": "ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73",
+          "resolved_default": "default.txt"
+        }
+      }
+    },
+    "unrelated_nodes": ["other"],
+    "author_order": ["execute", "other"],
+    "attempt": {
+      "number": 1,
+      "started_at": "2026-07-24T20:00:00.000Z",
+      "settled_at": "2026-07-24T20:01:00.000Z",
+      "executor": {
+        "kind": "program",
+        "name": "baseline"
+      },
+      "status": "succeeded",
+      "problem": null,
+      "outcome": "baseline",
+      "candidate_result": "baseline"
+    },
+    "invocation": {
+      "host": "codex",
+      "transport": "cli",
+      "environment": {
+        "LANG": "C"
+      }
+    },
+    "project": {
+      "absolute_root": "/tmp/baseline",
+      "filesystem": {
+        "mtime_ns": 1,
+        "inode": 2,
+        "permissions": "0600"
+      }
+    }
+  },
+  "node_context_projection": {
+    "hash_schema": "breakdown.node-context.v1",
+    "included_source_pointers": [
+      "/run_id",
+      "/node_definition/id",
+      "/node_definition/name",
+      "/node_definition/prompt",
+      "/node_definition/inputs",
+      "/node_definition/data_contract",
+      "/resolved_inputs/material/workflow_input/id",
+      "/resolved_inputs/material/workflow_input/description",
+      "/resolved_inputs/material/workflow_input/path",
+      "/resolved_inputs/material/workflow_input/sha256"
+    ],
+    "excluded_source_pointers": [
+      "/node_definition/extensions",
+      "/unrelated_nodes",
+      "/author_order",
+      "/resolved_inputs/material/workflow_input/resolved_default",
+      "/attempt",
+      "/invocation",
+      "/project"
+    ],
+    "literal_vector": "node-definition-workflow-input-baseline"
+  },
+  "included_context_factors": [
+    {
+      "factor": "run-id",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/run_id",
+        "value": "20260724T200001.000Z--context-factors--aaaaaaaaaaaa"
+      },
+      "mutated_vector": "included-run-id"
+    },
+    {
+      "factor": "node-id",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/node_definition/id", "value": "changed" },
+      "mutated_vector": "included-node-id"
+    },
+    {
+      "factor": "node-name",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/node_definition/name", "value": "Changed" },
+      "mutated_vector": "included-node-name"
+    },
+    {
+      "factor": "node-prompt",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/node_definition/prompt", "value": "Changed." },
+      "mutated_vector": "included-node-prompt"
+    },
+    {
+      "factor": "input-bindings",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": [
+        {
+          "op": "move",
+          "from": "/node_definition/inputs/material",
+          "path": "/node_definition/inputs/evidence"
+        },
+        { "op": "move", "from": "/resolved_inputs/material", "path": "/resolved_inputs/evidence" }
+      ],
+      "mutated_vector": "included-input-bindings"
+    },
+    {
+      "factor": "data-contract",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/node_definition/data_contract/type",
+        "value": "number"
+      },
+      "mutated_vector": "included-data-contract"
+    },
+    {
+      "factor": "workflow-input-id",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": [
+        {
+          "op": "replace",
+          "path": "/node_definition/inputs/material/workflow_input",
+          "value": "source-two"
+        },
+        {
+          "op": "replace",
+          "path": "/resolved_inputs/material/workflow_input/id",
+          "value": "source-two"
+        }
+      ],
+      "mutated_vector": "included-workflow-input-id"
+    },
+    {
+      "factor": "workflow-input-description",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/material/workflow_input/description",
+        "value": "Changed."
+      },
+      "mutated_vector": "included-workflow-input-description"
+    },
+    {
+      "factor": "workflow-input-path",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/material/workflow_input/path",
+        "value": "other.bin"
+      },
+      "mutated_vector": "included-workflow-input-path"
+    },
+    {
+      "factor": "workflow-input-sha256",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/material/workflow_input/sha256",
+        "value": "b92d13bbe02db7ca7686a8e7b854de49c7455948c05cf91a47044278395e212e"
+      },
+      "mutated_vector": "included-workflow-input-sha256"
+    },
+    {
+      "factor": "predecessor-node-id",
+      "baseline_vector": "predecessor-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/evidence/result/node_id",
+        "value": "collect"
+      },
+      "mutated_vector": "included-predecessor-node-id"
+    },
+    {
+      "factor": "predecessor-attempt",
+      "baseline_vector": "predecessor-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/evidence/result/attempt",
+        "value": 2
+      },
+      "mutated_vector": "included-predecessor-attempt"
+    },
+    {
+      "factor": "predecessor-markdown-path",
+      "baseline_vector": "predecessor-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/evidence/result/markdown/path",
+        "value": "outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a2.md"
+      },
+      "mutated_vector": "included-predecessor-markdown-path"
+    },
+    {
+      "factor": "predecessor-markdown-sha256",
+      "baseline_vector": "predecessor-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/evidence/result/markdown/sha256",
+        "value": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "mutated_vector": "included-predecessor-markdown-sha256"
+    },
+    {
+      "factor": "predecessor-json-path",
+      "baseline_vector": "predecessor-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/evidence/result/json/path",
+        "value": "outputs/20260724T200000.000Z--predecessor-vector--aaaaaaaaaaaa/steps/20260724T200100.000Z--gather--a2.json"
+      },
+      "mutated_vector": "included-predecessor-json-path"
+    },
+    {
+      "factor": "predecessor-json-sha256",
+      "baseline_vector": "predecessor-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/evidence/result/json/sha256",
+        "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "mutated_vector": "included-predecessor-json-sha256"
+    }
+  ],
+  "excluded_context_factors": [
+    {
+      "factor": "extensions",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/node_definition/extensions/example.test/mode",
+        "value": "changed"
+      },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "unrelated-nodes",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "add", "path": "/unrelated_nodes/-", "value": "new-node" },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "author-order-position",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/author_order", "value": ["other", "execute"] },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "workflow-input-default-after-resolution",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/resolved_inputs/material/workflow_input/resolved_default",
+        "value": "changed.txt"
+      },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "timestamps",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/attempt/settled_at",
+        "value": "2030-01-01T00:00:00.000Z"
+      },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "executor-metadata",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/attempt/executor/name", "value": "changed" },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "status-problem-outcome",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/attempt/status", "value": "failed" },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "executing-attempt",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/attempt/number", "value": 99 },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "candidate-result",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/attempt/candidate_result", "value": "changed" },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "host-transport-environment",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/invocation",
+        "value": { "host": "claude", "transport": "mcp", "environment": { "LANG": "fr_CA.UTF-8" } }
+      },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "absolute-root",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": { "op": "replace", "path": "/project/absolute_root", "value": "C:\\changed" },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    },
+    {
+      "factor": "filesystem-metadata",
+      "source_fixture": "context_source_baseline",
+      "projection": "node_context_projection",
+      "baseline_vector": "node-definition-workflow-input-baseline",
+      "mutation": {
+        "op": "replace",
+        "path": "/project/filesystem",
+        "value": { "mtime_ns": 999, "inode": 888, "permissions": "0644" }
+      },
+      "expected_vector": "node-definition-workflow-input-baseline"
+    }
+  ]
+}

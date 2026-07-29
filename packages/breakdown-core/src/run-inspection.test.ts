@@ -16,6 +16,10 @@ const derivationConformanceRoot = new URL(
   '../../../local/contracts/conformance/run-derivation/',
   import.meta.url,
 );
+const hashConformanceRoot = new URL(
+  '../../../local/contracts/conformance/hashing/',
+  import.meta.url,
+);
 const inspectionMatrix = JSON.parse(
   await readFile(new URL('matrix.json', inspectionConformanceRoot), 'utf8'),
 ) as { rows: Array<{ id: string; requirement: string; oracle: string }> };
@@ -23,21 +27,27 @@ const inspectionScenarios = JSON.parse(
   await readFile(new URL('fixtures/scenarios.json', inspectionConformanceRoot), 'utf8'),
 ) as {
   schema_version: string;
-  statuses: string[];
-  corruptions: string[];
-  ignored_entries: string[];
+  statuses: Array<{ id: string; case_ref: string }>;
+  corruptions: Array<{ id: string; case_ref: string }>;
+  ignored_entries: Array<{ id: string; case_ref: string }>;
 };
 const derivationMatrix = JSON.parse(
   await readFile(new URL('matrix.json', derivationConformanceRoot), 'utf8'),
 ) as { rows: Array<{ id: string; requirement: string; oracle: string }> };
 const hashVectors = JSON.parse(
-  await readFile(new URL('fixtures/hash-vectors.json', derivationConformanceRoot), 'utf8'),
+  await readFile(new URL('fixtures/hash-vectors.json', hashConformanceRoot), 'utf8'),
 ) as {
   schema_version: string;
   raw_files: Array<{
     id: string;
     bytes_base64: string;
     sha256: string;
+  }>;
+  raw_semantic_pairs: Array<{
+    id: string;
+    left: string;
+    right: string;
+    decoded_semantic_value: unknown;
   }>;
   node_contexts: Array<{
     id: string;
@@ -46,11 +56,15 @@ const hashVectors = JSON.parse(
   }>;
   included_context_factors: Array<{
     factor: string;
-    literal_vector: string;
+    baseline_vector: string;
+    mutated_vector: string;
+    mutation: unknown;
   }>;
   excluded_context_factors: Array<{
     factor: string;
-    literal_vector: string;
+    baseline_vector: string;
+    expected_vector: string;
+    mutation: unknown;
   }>;
 };
 const stepArtifactSchema = JSON.parse(
@@ -70,6 +84,12 @@ const stepArtifactSchema = JSON.parse(
 function nodeContextVector(id: string) {
   const vector = hashVectors.node_contexts.find((candidate) => candidate.id === id);
   if (vector === undefined) throw new Error(`Missing Node Context vector: ${id}`);
+  return vector;
+}
+
+function rawFileVector(id: string) {
+  const vector = hashVectors.raw_files.find((candidate) => candidate.id === id);
+  if (vector === undefined) throw new Error(`Missing raw file vector: ${id}`);
   return vector;
 }
 
@@ -252,39 +272,53 @@ describe('inspect_run', () => {
     });
     expect(Object.keys(executorSchema.properties)).toEqual(['kind', 'name', 'version']);
     expect(inspectionMatrix.rows.map((row) => row.id)).toEqual(
-      Array.from({ length: 13 }, (_, index) => `INS-${String(index + 1).padStart(3, '0')}`),
+      Array.from(
+        { length: 13 },
+        (_, index) => `CASE-RUN-INSPECT-${String(index + 1).padStart(3, '0')}`,
+      ),
     );
-    expect(inspectionScenarios).toMatchObject({
-      schema_version: 'breakdown.run-inspection-fixtures.v1',
-      statuses: ['succeeded', 'failed', 'blocked', 'cancelled'],
-      corruptions: expect.arrayContaining([
-        'run-manifest',
-        'workflow-snapshot',
-        'workflow-input',
-        'step-frontmatter',
-        'step-filename',
-        'step-identity',
-        'step-timestamp',
-        'step-context',
-        'step-input-membership',
-        'result-reference',
-        'result-markdown-hash',
-        'result-json-hash',
-        'data-contract',
-        'missing-pair',
-        'unexpected-pair',
-        'attempt-gap',
-        'duplicate-attempt',
-        'unsupported-run-version',
-        'unsupported-step-version',
-      ]),
-      ignored_entries: ['temporary-entry', 'orphan-json', 'unrelated-markdown', 'unrelated-entry'],
-    });
+    expect(inspectionScenarios.schema_version).toBe('breakdown.run-inspection-fixtures.v1');
+    expect(inspectionScenarios.statuses.map(({ id }) => id)).toEqual([
+      'succeeded',
+      'failed',
+      'blocked',
+      'cancelled',
+    ]);
+    expect(inspectionScenarios.corruptions.map(({ id }) => id)).toEqual([
+      'run-manifest',
+      'workflow-snapshot',
+      'workflow-input',
+      'step-frontmatter',
+      'step-filename',
+      'step-identity',
+      'step-timestamp',
+      'step-context',
+      'step-input-membership',
+      'result-reference',
+      'result-markdown-hash',
+      'result-json-hash',
+      'data-contract',
+      'missing-pair',
+      'unexpected-pair',
+      'attempt-gap',
+      'duplicate-attempt',
+      'unsupported-run-version',
+      'unsupported-step-version',
+    ]);
+    expect(inspectionScenarios.ignored_entries.map(({ id }) => id)).toEqual([
+      'temporary-entry',
+      'orphan-json',
+      'unrelated-markdown',
+      'unrelated-entry',
+    ]);
   });
 
   it('should publish the complete Run derivation conformance catalog', () => {
     expect(derivationMatrix.rows.map((row) => row.id)).toEqual(
-      Array.from({ length: 7 }, (_, index) => `DER-${String(index + 1).padStart(3, '0')}`),
+      Array.from(
+        { length: 7 },
+        (_, index) => `CASE-RUN-DERIVE-${String(index + 1).padStart(3, '0')}`,
+      ),
     );
     expect(hashVectors).toMatchObject({
       schema_version: 'breakdown.hash-vectors.v1',
@@ -295,6 +329,10 @@ describe('inspect_run', () => {
         { id: 'lf' },
         { id: 'crlf' },
         { id: 'no-trailing-newline' },
+        { id: 'workflow-comments-order-a' },
+        { id: 'workflow-comments-order-b' },
+        { id: 'json-raw-semantic-a' },
+        { id: 'json-raw-semantic-b' },
       ],
     });
     expect(hashVectors.node_contexts.map((vector) => vector.id)).toEqual([
@@ -310,10 +348,18 @@ describe('inspect_run', () => {
       'included-workflow-input-path',
       'included-workflow-input-sha256',
       'included-predecessor-result',
+      'predecessor-baseline',
+      'included-predecessor-node-id',
+      'included-predecessor-attempt',
+      'included-predecessor-markdown-path',
+      'included-predecessor-markdown-sha256',
+      'included-predecessor-json-path',
+      'included-predecessor-json-sha256',
       'normalized-absent-node-fields',
       'normalized-absent-result-json',
       'normalized-absent-workflow-input-description',
       'rfc-8785-numbers',
+      'rfc-8785-escaping',
       'rfc-8785-unicode-ordering',
     ]);
     expect(hashVectors.included_context_factors.map(({ factor }) => factor)).toEqual([
@@ -349,11 +395,19 @@ describe('inspect_run', () => {
       'filesystem-metadata',
     ]);
     const vectorIds = new Set(hashVectors.node_contexts.map((vector) => vector.id));
-    for (const factor of [
-      ...hashVectors.included_context_factors,
-      ...hashVectors.excluded_context_factors,
-    ]) {
-      expect(vectorIds.has(factor.literal_vector), factor.factor).toBe(true);
+    for (const factor of hashVectors.included_context_factors) {
+      expect(vectorIds.has(factor.baseline_vector), factor.factor).toBe(true);
+      expect(vectorIds.has(factor.mutated_vector), factor.factor).toBe(true);
+      expect(nodeContextVector(factor.mutated_vector).sha256, factor.factor).not.toBe(
+        nodeContextVector(factor.baseline_vector).sha256,
+      );
+    }
+    for (const factor of hashVectors.excluded_context_factors) {
+      expect(vectorIds.has(factor.baseline_vector), factor.factor).toBe(true);
+      expect(vectorIds.has(factor.expected_vector), factor.factor).toBe(true);
+      expect(nodeContextVector(factor.expected_vector).sha256, factor.factor).toBe(
+        nodeContextVector(factor.baseline_vector).sha256,
+      );
     }
     for (const vector of hashVectors.node_contexts) {
       expect(createHash('sha256').update(vector.canonical_jcs).digest('hex'), vector.id).toBe(
@@ -399,6 +453,51 @@ nodes:
       });
     },
   );
+
+  it('should preserve Workflow semantics while comments and authored order change raw Snapshot hashes', async () => {
+    const pair = hashVectors.raw_semantic_pairs.find(({ id }) => id === 'workflow-comments-order');
+    if (pair === undefined) throw new Error('Missing Workflow comments/order pair.');
+
+    const observedHashes: string[] = [];
+    for (const vectorId of [pair.left, pair.right]) {
+      const vector = rawFileVector(vectorId);
+      const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-workflow-raw-pair-'));
+      temporaryProjects.push(projectRoot);
+      await writeFile(
+        join(projectRoot, 'breakdown.yaml'),
+        Buffer.from(vector.bytes_base64, 'base64'),
+      );
+
+      const validation = await operate({ operation: 'validate_workflow' }, { projectRoot });
+      expect(validation).toEqual({
+        ok: true,
+        value: {
+          definitionPath: 'breakdown.yaml',
+          workflow: pair.decoded_semantic_value,
+        },
+      });
+
+      const created = await operate(
+        { operation: 'create_run' },
+        {
+          projectRoot,
+          testControls: {
+            now: () => new Date('2026-07-24T20:00:00.000Z'),
+            randomBytes: () => Buffer.alloc(8),
+          },
+        },
+      );
+      expect(created).toMatchObject({
+        ok: true,
+        value: { workflow: { sha256: vector.sha256 } },
+      });
+      observedHashes.push(vector.sha256);
+    }
+    expect(observedHashes).toEqual([
+      'c2d5087afba9b01bfaf6f4179b6f2317507f11cd5feff342bf47013ceac0ba6b',
+      'a2ad20df462a2233001cbf47e9a686b553db6b0573fb7877c2cbf862baa3c381',
+    ]);
+  });
 
   it('should inspect one exact newly created Run and derive its initial runnable state', async () => {
     const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
@@ -815,10 +914,7 @@ nodes:
     await writeFile(
       join(baselineRun.projectRoot, stepPath),
       step
-        .replace(
-          '"name": "inspection-fixture"',
-          '"name": "changed-executor",\n    "version": "2"',
-        )
+        .replace('"name": "inspection-fixture"', '"name": "changed-executor",\n    "version": "2"')
         .replace('\n}\n---', ',\n  "extensions": {"com.example.audit":{"ignored":true}}\n}\n---'),
       'utf8',
     );

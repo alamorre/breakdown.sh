@@ -1,0 +1,74 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "PUB",
+  "defaults": {
+    "setup": "Create valid real temporary Runs and inject the indexed deterministic publication boundary, contention, cancellation, or subprocess condition.",
+    "action": "Exercise create_run or submit_candidate through the core dispatcher or real child process, then inspect exact disk state.",
+    "oracle_type": "effect",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "native-local",
+      "transport": "in-process-and-subprocess",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/publication-safety.test.ts"
+  },
+  "rows": [
+    {
+      "id": "PUB-001",
+      "requirements": ["REQ-PUB-001"],
+      "oracle": "Every pre-rename fault exposes no Run; successful no-replace rename exposes one complete flushed Run and never overwrites."
+    },
+    {
+      "id": "PUB-002",
+      "requirements": ["REQ-PUB-002"],
+      "oracle": "JSON becomes visible before Markdown and the Markdown commit marker exposes exactly one complete valid StepArtifact."
+    },
+    {
+      "id": "PUB-003",
+      "requirements": ["REQ-PUB-003"],
+      "oracle": "Every mutation holds the fixed exclusive lock with an opaque identity; diagnostic age/PID never authorizes mutation."
+    },
+    {
+      "id": "PUB-004",
+      "requirements": ["REQ-PUB-004"],
+      "oracle": "Contention fails immediately without changing the lock, read-only operations pass, and only confirmed exact-ID recovery succeeds."
+    },
+    {
+      "id": "PUB-005",
+      "requirements": ["REQ-PUB-005"],
+      "oracle": "Locked re-inspection rejects stale context, advanced attempt, ineligible work, or stale refresh base before allocation."
+    },
+    {
+      "id": "PUB-006",
+      "requirements": ["REQ-PUB-006"],
+      "oracle": "Pre-critical abort commits nothing; post-critical abort leaves one complete attempt; explicit cancelled outcome commits distinct history."
+    },
+    {
+      "id": "PUB-007",
+      "requirements": ["REQ-PUB-007"],
+      "oracle": "Fault controls are unavailable from public operation and package surfaces and production values are unchanged."
+    },
+    {
+      "id": "PUB-008",
+      "requirements": ["REQ-PUB-008"],
+      "fixture": "conformance/publication/fixtures/boundaries.json",
+      "oracle": "Every named Run/Step filesystem boundary and before/after-commit process kill has an unambiguous absent-or-complete oracle."
+    },
+    {
+      "id": "PUB-009",
+      "requirements": ["REQ-PUB-009"],
+      "fixture": "conformance/publication/fixtures/races.json",
+      "oracle": "At least 100 retained seeds per race family elect the specified winners with contiguous history; any flake retains reproduction facts and fails."
+    },
+    {
+      "id": "PUB-010",
+      "requirements": ["REQ-PUB-010"],
+      "oracle": "After response loss, exact inspection distinguishes no commit from the exact committed attempt without a replay."
+    }
+  ]
+}

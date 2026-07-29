@@ -1,5 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
+  "release_version": "1.0.0-beta.1",
   "defaults": {
     "prerequisites": "Create an exact immutable Run and apply the named fixture mutation without using inspection.",
     "action": "Call inspect_run through the core dispatcher with the exact Run ID.",
@@ -17,67 +18,67 @@
   },
   "rows": [
     {
-      "id": "INS-001",
+      "id": "CASE-RUN-INSPECT-001",
       "requirement": "Issue #147: inspect one exact Run ID without latest-Run inference",
       "oracle": "The exact Run is returned; missing or unknown identity fails run_not_found."
     },
     {
-      "id": "INS-002",
+      "id": "CASE-RUN-INSPECT-002",
       "requirement": "Issue #147: validate Run Manifest, Workflow Snapshot, and exact Workflow Inputs",
       "oracle": "Identity, timestamp, membership, path, and raw-digest corruption fail invalid_run."
     },
     {
-      "id": "INS-003",
+      "id": "CASE-RUN-INSPECT-003",
       "requirement": "Issue #147: validate all four settled StepArtifact statuses",
       "oracle": "Succeeded selects a Result; failed, blocked, and cancelled remain committed history without selection."
     },
     {
-      "id": "INS-004",
+      "id": "CASE-RUN-INSPECT-004",
       "requirement": "Issue #147: validate StepArtifact filenames, frontmatter, identities, timestamps, and status invariants",
       "oracle": "Every committed normative Markdown record is strict and contextual; corruption invalidates the Run."
     },
     {
-      "id": "INS-005",
+      "id": "CASE-RUN-INSPECT-005",
       "requirement": "Issue #147: require positive contiguous per-node attempts and detect duplicates",
       "oracle": "Gaps and duplicate identities fail duplicate_attempt; timestamps and directory order do not select Results."
     },
     {
-      "id": "INS-006",
+      "id": "CASE-RUN-INSPECT-006",
       "requirement": "Issue #147: validate exact Input Binding and predecessor Result references",
       "oracle": "Source, same-Run successful identity, paths, pairing, and raw digests must agree."
     },
     {
-      "id": "INS-007",
+      "id": "CASE-RUN-INSPECT-007",
       "requirement": "Issue #147: validate conditional JSON pairing and Data Contracts",
       "oracle": "Contracted success requires valid same-stem JSON; every other artifact forbids it."
     },
     {
-      "id": "INS-008",
+      "id": "CASE-RUN-INSPECT-008",
       "requirement": "Issue #147: ignore temporary, orphan JSON, and unrelated entries",
       "oracle": "Non-committed and non-normative entries consume no attempt and do not affect state."
     },
     {
-      "id": "INS-009",
+      "id": "CASE-RUN-INSPECT-009",
       "requirement": "Issue #147: reject unknown or mixed Run contract families",
       "oracle": "Unknown Run or StepArtifact schema versions fail unsupported/unsupported_version."
     },
     {
-      "id": "INS-010",
+      "id": "CASE-RUN-INSPECT-010",
       "requirement": "Issue #147: recompute Node Context and derive Selected Results and stale state",
       "oracle": "The greatest matching success is selected; a higher refreshed predecessor makes consumers stale."
     },
     {
-      "id": "INS-011",
+      "id": "CASE-RUN-INSPECT-011",
       "requirement": "Issue #147: return stable ordered diagnostics without repair",
       "oracle": "Diagnostics sort by file, RFC 6901 path, and code; inspection performs no writes."
     },
     {
-      "id": "INS-012",
+      "id": "CASE-RUN-INSPECT-012",
       "requirement": "Issue #147: expose no scheduling state for invalid history",
       "oracle": "Invalid inspection returns only structured failure diagnostics and no authoritative node state."
     },
     {
-      "id": "INS-013",
+      "id": "CASE-RUN-INSPECT-013",
       "requirement": "Issue #161: keep model and provider identity out of durable StepArtifact contracts",
       "oracle": "Inspection rejects model, provider, and every other unknown Executor field; durable Executor metadata is limited to kind, name, and optional host version."
     }

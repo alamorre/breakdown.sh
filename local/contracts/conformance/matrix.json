@@ -1,41 +1,19 @@
 {
   "schema_version": "breakdown.conformance-index.v1",
+  "release_version": "1.0.0-beta.1",
   "matrices": [
-    {
-      "group": "WFV",
-      "path": "workflow-validation/matrix.json"
-    },
-    {
-      "group": "RUN",
-      "path": "run-creation/matrix.json"
-    },
-    {
-      "group": "INS",
-      "path": "run-inspection/matrix.json"
-    },
-    {
-      "group": "DER",
-      "path": "run-derivation/matrix.json"
-    },
-    {
-      "group": "PUB",
-      "path": "publication/matrix.json"
-    },
-    {
-      "group": "SEC",
-      "path": "security/matrix.json"
-    },
-    {
-      "group": "CLI",
-      "path": "cli/matrix.json"
-    },
-    {
-      "group": "PKG",
-      "path": "package/matrix.json"
-    },
-    {
-      "group": "SKILL",
-      "path": "skills/matrix.json"
-    }
+    { "group": "WFV", "path": "traceability/wfv.json" },
+    { "group": "RUN", "path": "traceability/run.json" },
+    { "group": "HASH", "path": "traceability/hash.json" },
+    { "group": "STATE", "path": "traceability/state.json" },
+    { "group": "SEC", "path": "traceability/sec.json" },
+    { "group": "PUB", "path": "traceability/pub.json" },
+    { "group": "OPS", "path": "traceability/ops.json" },
+    { "group": "CLI", "path": "traceability/cli.json" },
+    { "group": "MCP", "path": "traceability/mcp.json" },
+    { "group": "SKILL", "path": "traceability/skill.json" },
+    { "group": "HOST", "path": "traceability/host.json" },
+    { "group": "PKG", "path": "traceability/pkg.json" },
+    { "group": "DOC", "path": "traceability/doc.json" }
   ]
 }

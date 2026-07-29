@@ -1,0 +1,27 @@
+schema_version: breakdown.workflow.v1
+id: fan-out-fan-in-example
+name: Fan-out and fan-in example
+inputs:
+  source:
+    default: inputs/source.md
+nodes:
+  - id: evidence
+    name: Gather evidence
+    prompt: Extract the relevant evidence.
+    inputs:
+      source:
+        workflow_input: source
+  - id: risks
+    name: Identify risks
+    prompt: Identify the material risks.
+    inputs:
+      source:
+        workflow_input: source
+  - id: synthesize
+    name: Synthesize
+    prompt: Synthesize the evidence and risks.
+    inputs:
+      evidence:
+        node: evidence
+      risks:
+        node: risks

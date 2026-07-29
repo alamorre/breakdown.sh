@@ -1,11 +1,17 @@
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 
 const schemaDirectory = new URL('../../../local/contracts/schemas/', import.meta.url);
 const outputPath = new URL('../dist/protocol-validator.js', import.meta.url);
+const standalonePostprocessorPath = fileURLToPath(
+  new URL('../../../scripts/standalone-validator.mjs', import.meta.url),
+);
 const schemaNames = [
+  'breakdown.workflow.v1.schema.json',
   'breakdown.work-packet.v1.schema.json',
   'breakdown.candidate.v1.schema.json',
   'breakdown.operation-request.v1.schema.json',
@@ -44,17 +50,13 @@ for (const variant of requestSchema.oneOf) {
   ] = schemaId;
 }
 
-let output = standaloneCode(validator, {
-  validateOperationRequest: 'breakdown.operation-request.v1',
-  ...variantExports,
+const output = execFileSync(process.execPath, [standalonePostprocessorPath], {
+  input: standaloneCode(validator, {
+    validateOperationRequest: 'breakdown.operation-request.v1',
+    ...variantExports,
+  }),
+  encoding: 'utf8',
+  maxBuffer: 16 * 1024 * 1024,
 });
-const unicodeLengthImport = 'const func1 = require("ajv/dist/runtime/ucs2length").default;';
-if (!output.includes(unicodeLengthImport)) {
-  throw new Error('The generated validator no longer has the expected Unicode-length helper.');
-}
-output = output.replace(unicodeLengthImport, 'const func1 = (value) => Array.from(value).length;');
-if (output.includes('require(')) {
-  throw new Error('The generated validator unexpectedly requires a runtime dependency.');
-}
 
 await writeFile(outputPath, `${output}\n`, 'utf8');

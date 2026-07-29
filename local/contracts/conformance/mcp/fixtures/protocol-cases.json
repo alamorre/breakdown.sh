@@ -1,0 +1,334 @@
+{
+  "schema_version": "breakdown.mcp-protocol-fixtures.v1",
+  "release_version": "1.0.0-beta.1",
+  "executable": "breakdown-mcp",
+  "framing": "One compact UTF-8 JSON-RPC message plus LF in each direction.",
+  "byte_oracles": [
+    {
+      "id": "initialize-2025-06-18",
+      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"fixture-client\",\"version\":\"1.0.0\"}}}\n",
+      "stdout_utf8": "{\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"@breakdown-sh/mcp\",\"title\":\"Breakdown Local\",\"version\":\"1.0.0-beta.1\"}},\"jsonrpc\":\"2.0\",\"id\":1}\n",
+      "stdout_sha256": "f52f6281bda6cfb22e5ff0d9e864f88fceba7e3f04a8d0670ce4502dd175312f",
+      "stderr_utf8": "",
+      "effects": { "project_paths_read": 0, "daemon_remains": false }
+    },
+    {
+      "id": "initialize-2025-11-25",
+      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"fixture-client\",\"version\":\"1.0.0\"}}}\n",
+      "stdout_utf8": "{\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"@breakdown-sh/mcp\",\"title\":\"Breakdown Local\",\"version\":\"1.0.0-beta.1\"}},\"jsonrpc\":\"2.0\",\"id\":1}\n",
+      "stdout_sha256": "42b5ddbbe1187eef80f1124b0811cd748c1e82907d7f653089e4ceba1ed9d59c",
+      "stderr_utf8": "",
+      "effects": { "project_paths_read": 0, "daemon_remains": false }
+    },
+    {
+      "id": "json-rpc-parse",
+      "stdin_utf8": "{invalid\n",
+      "stdout_utf8": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"Parse error\"}}\n",
+      "stderr_utf8": "",
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "json-rpc-request",
+      "stdin_utf8": "[]\n",
+      "stdout_utf8": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"Invalid Request\"}}\n",
+      "stderr_utf8": "",
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "json-rpc-method",
+      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"unknown/method\",\"params\":{}}\n",
+      "stdout_utf8": "{\"jsonrpc\":\"2.0\",\"id\":7,\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}\n",
+      "stderr_utf8": "",
+      "effects": { "project_paths_read": 0 }
+    }
+  ],
+  "protocol_versions": [
+    { "id": "2025-06-18", "byte_oracle": "initialize-2025-06-18" },
+    { "id": "2025-11-25", "byte_oracle": "initialize-2025-11-25" }
+  ],
+  "clients": [
+    {
+      "id": "mcp-inspector",
+      "action": { "client": "@modelcontextprotocol/inspector@1.0.0", "method": "tools/list" },
+      "oracle": {
+        "tool_names": [
+          "validate_workflow",
+          "create_run",
+          "inspect_run",
+          "prepare_work",
+          "read_work_input",
+          "submit_candidate"
+        ]
+      },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "sdk-client",
+      "action": {
+        "client": "@modelcontextprotocol/sdk",
+        "transport": "StdioClientTransport",
+        "shared_trace": "no-input-success"
+      },
+      "oracle": { "decoded_values_equal_core": true },
+      "effects": { "disk_effects_equal_core": true }
+    },
+    {
+      "id": "independent-json-rpc-client",
+      "action": {
+        "client": "line-oriented-child-process",
+        "transport": "raw-stdio",
+        "shared_trace": "workflow-input-success"
+      },
+      "oracle": { "decoded_values_equal_core": true, "one_response_per_request": true },
+      "effects": { "disk_effects_equal_core": true }
+    }
+  ],
+  "discovery": [
+    {
+      "id": "server-identity",
+      "action": { "request": "initialize-2025-11-25" },
+      "oracle": {
+        "name": "@breakdown-sh/mcp",
+        "title": "Breakdown Local",
+        "version": "1.0.0-beta.1"
+      },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "tool-order",
+      "action": { "method": "tools/list", "params": {} },
+      "oracle": {
+        "names": [
+          "validate_workflow",
+          "create_run",
+          "inspect_run",
+          "prepare_work",
+          "read_work_input",
+          "submit_candidate"
+        ]
+      },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "annotations",
+      "action": { "method": "tools/list", "params": {} },
+      "oracle": {
+        "read_only": ["validate_workflow", "inspect_run", "prepare_work", "read_work_input"],
+        "non_read_only": ["create_run", "submit_candidate"],
+        "all_destructive": false,
+        "all_open_world": false
+      },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "strict-input-schemas",
+      "action": { "method": "tools/list", "params": {} },
+      "oracle": {
+        "schema_authority": "breakdown.operation-request.v1",
+        "required_added_fields": ["schema_version", "project_root"],
+        "additional_properties": false
+      },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "forbidden-capabilities",
+      "action": {
+        "methods": [
+          "resources/list",
+          "prompts/list",
+          "tasks/list",
+          "logging/setLevel",
+          "sampling/createMessage",
+          "elicitation/create",
+          "completion/complete",
+          "roots/list"
+        ]
+      },
+      "oracle": { "json_rpc_code": -32601, "server_capabilities": ["tools"] },
+      "effects": { "http_listeners": 0, "daemon_remains": false }
+    }
+  ],
+  "root_cases": [
+    {
+      "id": "absolute-native",
+      "tool": "validate_workflow",
+      "arguments": {
+        "schema_version": "breakdown.operation-request.v1",
+        "project_root": "$ABSOLUTE_NATIVE_PROJECT"
+      },
+      "oracle": { "protocol_error": null, "structured_output_schema": "breakdown.mcp-output.v1" },
+      "effects": { "selected_project": "$ABSOLUTE_NATIVE_PROJECT" }
+    },
+    {
+      "id": "missing",
+      "tool": "validate_workflow",
+      "arguments": { "schema_version": "breakdown.operation-request.v1" },
+      "oracle": { "json_rpc_code": -32602, "core_invoked": false },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "relative",
+      "tool": "validate_workflow",
+      "arguments": {
+        "schema_version": "breakdown.operation-request.v1",
+        "project_root": "relative/project"
+      },
+      "oracle": { "json_rpc_code": -32602, "core_invoked": false },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "uri",
+      "tool": "validate_workflow",
+      "arguments": {
+        "schema_version": "breakdown.operation-request.v1",
+        "project_root": "file:///tmp/project"
+      },
+      "oracle": { "json_rpc_code": -32602, "core_invoked": false },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "cwd",
+      "setup": { "cwd": "$OTHER_PROJECT" },
+      "tool": "validate_workflow",
+      "arguments": { "schema_version": "breakdown.operation-request.v1" },
+      "oracle": { "json_rpc_code": -32602 },
+      "effects": { "other_project_reads": 0 }
+    },
+    {
+      "id": "environment",
+      "setup": { "environment": { "BREAKDOWN_PROJECT": "$OTHER_PROJECT" } },
+      "tool": "validate_workflow",
+      "arguments": { "schema_version": "breakdown.operation-request.v1" },
+      "oracle": { "json_rpc_code": -32602 },
+      "effects": { "other_project_reads": 0 }
+    },
+    {
+      "id": "workspace",
+      "setup": { "client_workspace": "$OTHER_PROJECT" },
+      "tool": "validate_workflow",
+      "arguments": { "schema_version": "breakdown.operation-request.v1" },
+      "oracle": { "json_rpc_code": -32602 },
+      "effects": { "other_project_reads": 0 }
+    },
+    {
+      "id": "repository",
+      "setup": { "git_root": "$OTHER_PROJECT" },
+      "tool": "validate_workflow",
+      "arguments": { "schema_version": "breakdown.operation-request.v1" },
+      "oracle": { "json_rpc_code": -32602 },
+      "effects": { "git_processes": 0, "other_project_reads": 0 }
+    },
+    {
+      "id": "mcp-roots",
+      "setup": { "roots_capability": ["file://$OTHER_PROJECT"] },
+      "tool": "validate_workflow",
+      "arguments": { "schema_version": "breakdown.operation-request.v1" },
+      "oracle": { "json_rpc_code": -32602 },
+      "effects": { "roots_requests": 0, "other_project_reads": 0 }
+    }
+  ],
+  "error_cases": [
+    { "id": "json-rpc-parse", "byte_oracle": "json-rpc-parse" },
+    { "id": "json-rpc-request", "byte_oracle": "json-rpc-request" },
+    { "id": "json-rpc-method", "byte_oracle": "json-rpc-method" },
+    {
+      "id": "json-rpc-params",
+      "action": {
+        "method": "tools/call",
+        "params": { "name": "validate_workflow", "arguments": { "extra": true } }
+      },
+      "oracle": { "json_rpc_code": -32602, "core_invoked": false },
+      "effects": { "project_paths_read": 0 }
+    },
+    {
+      "id": "core-expected-failure",
+      "action": {
+        "method": "tools/call",
+        "params": {
+          "name": "inspect_run",
+          "arguments": {
+            "schema_version": "breakdown.operation-request.v1",
+            "project_root": "$PROJECT",
+            "run_id": "20260724T200000.000Z--missing--aaaaaaaaaaaa"
+          }
+        }
+      },
+      "oracle": {
+        "protocol_error": null,
+        "isError": true,
+        "structuredContent": {
+          "schema_version": "breakdown.mcp-output.v1",
+          "operation": "inspect_run",
+          "ok": false,
+          "error": { "kind": "invalid", "code": "run_not_found" }
+        },
+        "text_block_equals_compact_structured_content": true
+      },
+      "effects": { "created_paths": [] }
+    }
+  ],
+  "lifecycle_cases": [
+    {
+      "id": "cancellation",
+      "action": {
+        "send": "notifications/cancelled",
+        "request_id": "$ACTIVE_ID",
+        "phase": "before-publication"
+      },
+      "oracle": { "response_for_cancelled_id": null },
+      "effects": { "partial_records": 0 }
+    },
+    {
+      "id": "connection-close",
+      "action": { "close_stdin": true, "phase": "active-operation" },
+      "oracle": { "process_exits": true, "new_requests_accepted": 0 },
+      "effects": { "partial_records": 0 }
+    },
+    {
+      "id": "eof",
+      "action": { "stdin_bytes_base64": "" },
+      "oracle": { "process_exits": true, "stdout_after_eof": "" },
+      "effects": { "daemon_remains": false }
+    },
+    {
+      "id": "sigint",
+      "action": { "signal": "SIGINT", "phase": "before-publication" },
+      "oracle": { "process_exits": true },
+      "effects": { "partial_records": 0, "daemon_remains": false }
+    },
+    {
+      "id": "sigterm",
+      "action": { "signal": "SIGTERM", "phase": "before-publication" },
+      "oracle": { "process_exits": true },
+      "effects": { "partial_records": 0, "daemon_remains": false }
+    },
+    {
+      "id": "no-daemon",
+      "action": { "complete_request_then_close_stdin": true },
+      "oracle": { "process_exits": true },
+      "effects": { "listening_sockets": 0, "daemon_remains": false }
+    }
+  ],
+  "stream_cases": [
+    {
+      "id": "one-json-rpc-message-per-line",
+      "action": { "write_concatenated_requests": ["initialize-2025-11-25", "tools/list"] },
+      "oracle": { "stdout_lines": 2, "each_line_strict_json": true, "non_json_stdout_bytes": 0 }
+    },
+    {
+      "id": "bounded-sanitized-stderr",
+      "setup": { "project_text": "unsafe\u001b[31mtext" },
+      "action": { "invoke_failure": true },
+      "oracle": { "maximum_stderr_bytes": 65536, "raw_project_control_bytes": 0 }
+    },
+    {
+      "id": "structured-text-envelope-identity",
+      "action": { "shared_trace": "invalid-run" },
+      "oracle": {
+        "structured_content_schema": "breakdown.mcp-output.v1",
+        "text_block_is_exact_compact_json": true,
+        "isError": true
+      }
+    }
+  ]
+}

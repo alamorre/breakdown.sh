@@ -1,5 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
+  "release_version": "1.0.0-beta.1",
   "defaults": {
     "prerequisites": "Create exact immutable Runs and StepArtifacts from the frozen derivation fixtures.",
     "action": "Call inspect_run through the core dispatcher with the exact Run ID.",
@@ -17,37 +18,37 @@
   },
   "rows": [
     {
-      "id": "DER-001",
+      "id": "CASE-RUN-DERIVE-001",
       "requirement": "Issue #148: hash raw files from offset zero through EOF",
       "oracle": "Independent empty, binary, BOM, LF, CRLF, and trailing-newline SHA-256 vectors match as lowercase hexadecimal."
     },
     {
-      "id": "DER-002",
+      "id": "CASE-RUN-DERIVE-002",
       "requirement": "Issue #148: hash the fixed Node Context preimage using RFC 8785",
       "oracle": "Independent number, UTF-16 property ordering, escaping, Unicode, and normalization-sensitive vectors match."
     },
     {
-      "id": "DER-003",
+      "id": "CASE-RUN-DERIVE-003",
       "requirement": "Issue #148: include and exclude exactly the settled Node Context factors",
       "oracle": "Every factor settled in issue #132 is exercised through the public inspection result."
     },
     {
-      "id": "DER-004",
+      "id": "CASE-RUN-DERIVE-004",
       "requirement": "Issue #148: select Results and allocate attempts deterministically",
       "oracle": "The greatest matching successful attempt is selected and the next attempt follows all committed statuses."
     },
     {
-      "id": "DER-005",
+      "id": "CASE-RUN-DERIVE-005",
       "requirement": "Issue #148: derive node and Run state",
       "oracle": "Complete, runnable, blocked, stale, invalid, incomplete, and complete states follow validated history only."
     },
     {
-      "id": "DER-006",
+      "id": "CASE-RUN-DERIVE-006",
       "requirement": "Issue #148: report Terminal Results deterministically",
       "oracle": "Every selected Terminal Result is reported in deterministic topology/order, including an empty Markdown Result."
     },
     {
-      "id": "DER-007",
+      "id": "CASE-RUN-DERIVE-007",
       "requirement": "Issue #148: preserve portable resume while rejecting mutation",
       "oracle": "Input and detectable artifact mutation fail integrity; an unchanged whole-project copy has identical derived state regardless of root or Git metadata."
     }

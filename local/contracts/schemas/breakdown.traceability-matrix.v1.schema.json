@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "breakdown.traceability-matrix.v1",
+  "$comment": "release_version=1.0.0-beta.1",
+  "title": "Breakdown Traceability Matrix v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_version", "group", "defaults", "rows"],
+  "properties": {
+    "schema_version": { "const": "breakdown.traceability-matrix.v1" },
+    "release_version": { "const": "1.0.0-beta.1" },
+    "group": {
+      "enum": [
+        "WFV",
+        "RUN",
+        "HASH",
+        "STATE",
+        "SEC",
+        "PUB",
+        "OPS",
+        "CLI",
+        "MCP",
+        "SKILL",
+        "HOST",
+        "PKG",
+        "DOC"
+      ]
+    },
+    "defaults": { "$ref": "#/$defs/row_metadata" },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/row" }
+    }
+  },
+  "$defs": {
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "architecture", "filesystem", "transport", "host", "protocol"],
+      "properties": {
+        "os": { "type": "string", "minLength": 1 },
+        "architecture": { "type": "string", "minLength": 1 },
+        "filesystem": { "type": "string", "minLength": 1 },
+        "transport": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 },
+        "protocol": { "type": "string", "minLength": 1 }
+      }
+    },
+    "row_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "setup": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "oracle": { "type": "string", "minLength": 1 },
+        "oracle_type": { "enum": ["byte", "structural", "effect", "human"] },
+        "applicability": { "$ref": "#/$defs/applicability" },
+        "gate": { "type": "string", "minLength": 1 },
+        "retained_evidence": { "type": "string", "minLength": 1 },
+        "fixture": { "type": "string", "minLength": 1 }
+      }
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "requirements"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{3}$" },
+        "requirements": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^REQ-[A-Z]+-[0-9]{3}$" }
+        },
+        "setup": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "oracle": { "type": "string", "minLength": 1 },
+        "oracle_type": { "enum": ["byte", "structural", "effect", "human"] },
+        "applicability": { "$ref": "#/$defs/applicability" },
+        "gate": { "type": "string", "minLength": 1 },
+        "retained_evidence": { "type": "string", "minLength": 1 },
+        "fixture": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

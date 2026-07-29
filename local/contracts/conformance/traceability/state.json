@@ -1,0 +1,73 @@
+{
+  "schema_version": "breakdown.traceability-matrix.v1",
+  "release_version": "1.0.0-beta.1",
+  "group": "STATE",
+  "defaults": {
+    "setup": "Materialize the referenced history scenario in one real temporary project without using inspection to derive its expected state.",
+    "action": "Call inspect_run or prepare_work through the packaged core dispatcher for the exact Run ID.",
+    "oracle_type": "structural",
+    "applicability": {
+      "os": "all",
+      "architecture": "all",
+      "filesystem": "local",
+      "transport": "in-process",
+      "host": "none",
+      "protocol": "core"
+    },
+    "gate": "release-blocking",
+    "retained_evidence": "packages/breakdown-core/src/run-inspection.test.ts; packages/breakdown-core/src/prepare-work.test.ts"
+  },
+  "rows": [
+    {
+      "id": "STATE-001",
+      "requirements": ["REQ-STATE-001"],
+      "oracle": "Any normative corruption prevents state and mutation; valid artifacts have recomputed contexts and contracted JSON."
+    },
+    {
+      "id": "STATE-002",
+      "requirements": ["REQ-STATE-002"],
+      "oracle": "The greatest matching successful attempt is selected regardless of filename, time, mtime, directory, or completion order."
+    },
+    {
+      "id": "STATE-003",
+      "requirements": ["REQ-STATE-003"],
+      "oracle": "Complete, runnable, blocked, and stale node literals match the exact predecessor and context conditions."
+    },
+    {
+      "id": "STATE-004",
+      "requirements": ["REQ-STATE-004"],
+      "oracle": "Valid all-complete history is complete, other valid history is incomplete, and invalid history yields no scheduling value or mutation."
+    },
+    {
+      "id": "STATE-005",
+      "requirements": ["REQ-STATE-005"],
+      "oracle": "Resume reuses exact-context success, prepares each opportunity once, continues independent branches, and performs no hidden retry."
+    },
+    {
+      "id": "STATE-006",
+      "requirements": ["REQ-STATE-006"],
+      "oracle": "Successful refresh selects the higher identity and stales consumers even for equal bytes; non-success preserves prior selection."
+    },
+    {
+      "id": "STATE-007",
+      "requirements": ["REQ-STATE-007"],
+      "oracle": "Live edits affect only new Runs; Input/artifact mutation invalidates exact history and no Result crosses a Run ID."
+    },
+    {
+      "id": "STATE-008",
+      "requirements": ["REQ-STATE-008"],
+      "oracle": "An unchanged copy has identical derived state independent of root/Git, while conflicting divergent identity invalidates merge."
+    },
+    {
+      "id": "STATE-009",
+      "requirements": ["REQ-STATE-009"],
+      "oracle": "Inspection returns deterministic nodes, next attempts, attempts, stale/non-success facts, and all Selected Terminal Results without writes."
+    },
+    {
+      "id": "STATE-010",
+      "requirements": ["REQ-STATE-010"],
+      "fixture": "conformance/state/fixtures/scenarios.json",
+      "oracle": "The public state catalog names every required selection, refresh, resume, mutation, copy, state, attempt, and Terminal Result scenario."
+    }
+  ]
+}
