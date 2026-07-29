@@ -29,7 +29,9 @@
     "headless:verify": "node scripts/headless-interface-verify.mjs",
     "local:docs:generate": "node scripts/generate-local-documentation.mjs --write",
     "local:docs:check": "node scripts/generate-local-documentation.mjs --check",
-    "local:contracts:archive": "node scripts/generate-local-documentation.mjs --archive"
+    "local:contracts:archive": "node scripts/generate-local-documentation.mjs --archive",
+    "local:release:build": "node scripts/build-local-release.mjs",
+    "local:release:inspect": "node scripts/inspect-local-release.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

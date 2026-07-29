@@ -1,16 +1,32 @@
 {
   "name": "@breakdown-sh/cli",
   "version": "1.0.0-beta.1",
-  "private": true,
+  "description": "Filesystem-first command-line interface for Breakdown Local.",
+  "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alamorre/breakdown.sh.git",
+    "directory": "packages/breakdown-cli"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "tag": "next"
+  },
   "engines": {
     "node": "^24.0.0"
   },
+  "exports": {},
   "bin": {
     "breakdown": "./dist/index.js"
   },
   "files": [
     "dist",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "npm-shrinkwrap.json",
     "package.json"
   ],
   "scripts": {

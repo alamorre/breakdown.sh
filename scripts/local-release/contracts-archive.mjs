@@ -5,14 +5,14 @@ import { gzipSync } from 'node:zlib';
 import { filesBelow, sha256 } from './filesystem.mjs';
 
 const CONTRACT_CLASSIFICATIONS = {
-  'LICENSE': { media_type: 'text/plain; charset=utf-8', role: 'license' },
-  'NOTICE': { media_type: 'text/plain; charset=utf-8', role: 'notice' },
+  LICENSE: { media_type: 'text/plain; charset=utf-8', role: 'license' },
+  NOTICE: { media_type: 'text/plain; charset=utf-8', role: 'notice' },
   'README.md': { media_type: 'text/markdown; charset=utf-8', role: 'contract-index' },
   'THIRD_PARTY_NOTICES.md': {
     media_type: 'text/markdown; charset=utf-8',
     role: 'third-party-notices',
   },
-  'VERSION': { media_type: 'text/plain; charset=utf-8', role: 'version' },
+  VERSION: { media_type: 'text/plain; charset=utf-8', role: 'version' },
 };
 const DIRECTORY_ROLES = {
   catalogs: 'catalog',
@@ -28,6 +28,30 @@ const EXTENSION_MEDIA_TYPES = {
   '.yaml': 'application/yaml',
 };
 
+export function contractsNotice() {
+  return `Breakdown Local Contracts
+Copyright 2026 Adam Lamorre
+
+This product includes specifications, schemas, catalogs, examples, and conformance material
+developed for Breakdown Local.
+`;
+}
+
+export function contractsThirdPartyNotices(releaseVersion) {
+  return `# Third-Party Notices
+
+Document kind: License and notice material
+
+Document version: ${releaseVersion}
+
+No third-party material is incorporated into the Breakdown Local contracts archive. The archive
+contains original specifications, schemas, catalogs, examples, and synthetic conformance assets.
+
+JSON Schema identifiers and protocol names are compatibility references; no third-party
+implementation, runtime, or library is copied into this archive.
+`;
+}
+
 function classifyContractEntry(path) {
   const exact = CONTRACT_CLASSIFICATIONS[path];
   if (exact !== undefined) return exact;
@@ -42,30 +66,8 @@ function classifyContractEntry(path) {
 export async function buildContractArtifacts({ contractsRoot, skillsRoot, releaseVersion }) {
   const legalFiles = new Map([
     ['LICENSE', await readFile(join(skillsRoot, 'setup-breakdown', 'LICENSE'), 'utf8')],
-    [
-      'NOTICE',
-      `Breakdown Local Contracts
-Copyright 2026 Adam Lamorre
-
-This product includes specifications, schemas, catalogs, examples, and conformance material
-developed for Breakdown Local.
-`,
-    ],
-    [
-      'THIRD_PARTY_NOTICES.md',
-      `# Third-Party Notices
-
-Document kind: License and notice material
-
-Document version: ${releaseVersion}
-
-No third-party material is incorporated into the Breakdown Local contracts archive. The archive
-contains original specifications, schemas, catalogs, examples, and synthetic conformance assets.
-
-JSON Schema identifiers and protocol names are compatibility references; no third-party
-implementation, runtime, or library is copied into this archive.
-`,
-    ],
+    ['NOTICE', contractsNotice()],
+    ['THIRD_PARTY_NOTICES.md', contractsThirdPartyNotices(releaseVersion)],
   ]);
 
   const payload = new Map();
@@ -77,9 +79,7 @@ implementation, runtime, or library is copied into this archive.
   for (const [path, contents] of legalFiles) {
     payload.set(path, Buffer.from(contents));
   }
-  const sortedPayload = new Map(
-    [...payload].sort(([left], [right]) => left.localeCompare(right)),
-  );
+  const sortedPayload = new Map([...payload].sort(([left], [right]) => left.localeCompare(right)));
   const entries = [...sortedPayload].map(([path, bytes]) => ({
     path,
     ...classifyContractEntry(path),
@@ -145,7 +145,7 @@ function tarHeader(path, size) {
   return header;
 }
 
-function buildTarGzip(entries) {
+export function buildTarGzip(entries) {
   const chunks = [];
   for (const [path, bytes] of entries) {
     chunks.push(tarHeader(path, bytes.byteLength), bytes);
@@ -172,7 +172,7 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function buildZip(entries) {
+export function buildZip(entries) {
   const localChunks = [];
   const centralChunks = [];
   let localOffset = 0;
@@ -227,11 +227,7 @@ function buildZip(entries) {
   return Buffer.concat([...localChunks, centralDirectory, end]);
 }
 
-export async function writeContractsArchives({
-  artifacts,
-  outputPath,
-  releaseVersion,
-}) {
+export async function writeContractsArchives({ artifacts, outputPath, releaseVersion }) {
   const archiveRoot = `breakdown-contracts-${releaseVersion}`;
   const entries = [
     [`${archiveRoot}/MANIFEST.json`, artifacts.manifestBytes],
