@@ -26,7 +26,10 @@
     "plugin:release:command": "node scripts/plugin-release-command.mjs",
     "headless:token": "node scripts/create-integration-token.mjs",
     "headless:smoke": "node scripts/headless-external-run-smoke.mjs",
-    "headless:verify": "node scripts/headless-interface-verify.mjs"
+    "headless:verify": "node scripts/headless-interface-verify.mjs",
+    "local:docs:generate": "node scripts/generate-local-documentation.mjs --write",
+    "local:docs:check": "node scripts/generate-local-documentation.mjs --check",
+    "local:contracts:archive": "node scripts/generate-local-documentation.mjs --archive"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

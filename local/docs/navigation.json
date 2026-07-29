@@ -1,0 +1,41 @@
+{
+  "schema_version": "breakdown.documentation-navigation.v1",
+  "release_version": "1.0.0-beta.1",
+  "documents": [
+    {
+      "path": "README.md",
+      "title": "Exact-version documentation index",
+      "kind": "task-oriented-guidance"
+    },
+    {
+      "path": "getting-started.md",
+      "title": "Install, author, validate, run, execute, and summarize",
+      "kind": "task-oriented-guidance"
+    },
+    {
+      "path": "reference/cli.md",
+      "title": "CLI reference",
+      "kind": "generated-reference"
+    },
+    {
+      "path": "reference/automation.md",
+      "title": "Automation reference",
+      "kind": "generated-reference"
+    },
+    {
+      "path": "reference/mcp.md",
+      "title": "Optional local stdio MCP reference",
+      "kind": "generated-reference"
+    },
+    {
+      "path": "reference/packages.md",
+      "title": "Package reference",
+      "kind": "generated-reference"
+    },
+    {
+      "path": "reference/support.md",
+      "title": "Support reference",
+      "kind": "generated-reference"
+    }
+  ]
+}

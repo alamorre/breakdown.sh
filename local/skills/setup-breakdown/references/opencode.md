@@ -1,5 +1,9 @@
 # OpenCode project setup
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Install the unchanged canonical directories under `<project>/.agents/skills/`.
 
 For optional MCP, propose an exact diff to the applicable `opencode.json` or `opencode.jsonc` and

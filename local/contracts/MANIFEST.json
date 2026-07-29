@@ -1,0 +1,777 @@
+{
+  "schema_version": "breakdown.contracts-manifest.v1",
+  "release_version": "1.0.0-beta.1",
+  "manifest_integrity": "Every payload entry is hashed here. MANIFEST.json is authenticated by the outer archive digest recorded in the release manifest and SHA256SUMS.",
+  "entries": [
+    {
+      "path": "catalogs/cli.v1.json",
+      "media_type": "application/json",
+      "role": "catalog",
+      "bytes": 2138,
+      "sha256": "d576acf0d0a8170b8f10bd1da6512f75f54d2509302ccc0a8981a5a9c822432a"
+    },
+    {
+      "path": "catalogs/limits.v1.json",
+      "media_type": "application/json",
+      "role": "catalog",
+      "bytes": 866,
+      "sha256": "01fc09735cb60b5838a29b2a55818da58f38fd1de261af5c0844bb1eef3196c4"
+    },
+    {
+      "path": "catalogs/mcp.v1.json",
+      "media_type": "application/json",
+      "role": "catalog",
+      "bytes": 2013,
+      "sha256": "7522850a19272bbee30d4aad7b4b9602330676ff581a4cbd078c6bff71332180"
+    },
+    {
+      "path": "catalogs/operations.v1.json",
+      "media_type": "application/json",
+      "role": "catalog",
+      "bytes": 1416,
+      "sha256": "451defe178513fc268649ed8037d4af42cb9e9ca0ceb0c566b9ed37b506fc5ac"
+    },
+    {
+      "path": "conformance/boundaries/fixtures/limit-cases.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 2154,
+      "sha256": "15c6b6d99e8745c19a5315c21c54c158af5249971cd6b980c6286cbc40ac81cc"
+    },
+    {
+      "path": "conformance/cli/fixtures/process-cases.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 11100,
+      "sha256": "9c32a03c6dcb2c1b2e3f3e76d45d3bb00f717d78ffd21cbf880f93c3e3b5baf0"
+    },
+    {
+      "path": "conformance/cli/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 6021,
+      "sha256": "f06800f8f8098a5b9127e2fdef4e822f7ea425d7123fd71b21460d2bff011d5c"
+    },
+    {
+      "path": "conformance/hashing/fixtures/hash-vectors.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 34905,
+      "sha256": "9bb380ed40ca11b00996e12c67562ac08ded9bae536990585b014cb7e4556016"
+    },
+    {
+      "path": "conformance/hosts/fixtures/guided-journey.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 574,
+      "sha256": "a4f700fac7d52e936e401113f6983e8d64eb5dbf2db00026daa95a74b617edfa"
+    },
+    {
+      "path": "conformance/hosts/fixtures/human-rubric.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 654,
+      "sha256": "f30a6720ee2a0995f1658964ff4fbb1537671f71438a6cb9319c15c07c6210cc"
+    },
+    {
+      "path": "conformance/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 867,
+      "sha256": "062f75d6cefd6abaea3a1b09dbb6e1f6dce39a0b99f8bcb1e19c0308b1959d0c"
+    },
+    {
+      "path": "conformance/mcp/fixtures/protocol-cases.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 11931,
+      "sha256": "fc91431eafad80e7f6e982e2fb37730389f15324912920a8c0bf63626a0c3e9a"
+    },
+    {
+      "path": "conformance/operations/fixtures/shared-traces.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 18991,
+      "sha256": "0482f86aaa0f2249ba4e68f1f330b24890f3240c6a0774a583acc1d52b69e377"
+    },
+    {
+      "path": "conformance/package/fixtures/artifact-expectations.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 1238,
+      "sha256": "dc892f8f71cdb300bdcb612ce4ae530ddd113c3c00ddea09ecb70f9da2a13dfc"
+    },
+    {
+      "path": "conformance/package/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 1331,
+      "sha256": "0f69e724684e60fd72605511830a131d0d3e21aaaf10069631bad20d7857521a"
+    },
+    {
+      "path": "conformance/publication/fixtures/boundaries.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 742,
+      "sha256": "788bb39596eab942d85d98ebac4670e676cc8e1b6534ce0a977b1ae0ae6fb47c"
+    },
+    {
+      "path": "conformance/publication/fixtures/races.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 608,
+      "sha256": "ad756ffccc81a80f4ae0535853fb90026a55be69c110127529f5447e15d51687"
+    },
+    {
+      "path": "conformance/publication/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 5538,
+      "sha256": "ea6b46178d7e7cf88c6a92cbb5666f4660c8eccacef5f2380bf60213fe972471"
+    },
+    {
+      "path": "conformance/run-creation/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 3025,
+      "sha256": "bc7df4b20002b7b78d122739585005a7d097c2fbb811f17cad03a9b95c8f4e9a"
+    },
+    {
+      "path": "conformance/run-derivation/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 2471,
+      "sha256": "4bbe33897a7a27059d220533852b8b0628aed3d4df4cf04bf726c17157f26f0b"
+    },
+    {
+      "path": "conformance/run-inspection/fixtures/scenarios.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 2485,
+      "sha256": "8066d0a4a58c7818335e69873fd4473db04fb9e3b85a2d7c28519283b12d184a"
+    },
+    {
+      "path": "conformance/run-inspection/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4004,
+      "sha256": "ad63e7a8b50c2d88a360066c500250b1ef0dc191aa27a80a5b14551d9b003e53"
+    },
+    {
+      "path": "conformance/run-records/fixtures/records.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 17199,
+      "sha256": "22becd61c9de7092bac6db5027dcc30d9753250d815096927d97cc645a5de35c"
+    },
+    {
+      "path": "conformance/security/fixtures/attacks.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 9331,
+      "sha256": "43b9dcffb02bb16b0ff2aea0d149e5ac2ca3647f7aab00bdfa3dc7bf9393d4cc"
+    },
+    {
+      "path": "conformance/security/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4450,
+      "sha256": "f3cae34f347eb94fd41d7f6f110707e4a5822e4c8f7b822a328acd40079ed20a"
+    },
+    {
+      "path": "conformance/skills/fixtures/guided-invariants.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 870,
+      "sha256": "9230effa248e3373664a4d0ac02e62124cdfb96902abf8063bcf23d404d50207"
+    },
+    {
+      "path": "conformance/skills/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 6474,
+      "sha256": "3a91b03e886be2bb55d30007c971014a6b3bc678e04acecb71d1c452c0d027b7"
+    },
+    {
+      "path": "conformance/state/fixtures/scenarios.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 8721,
+      "sha256": "2e773a8d171280592fb1ec40e9a7bdbdedb1149dd9667b1093f7cf3ec8907950"
+    },
+    {
+      "path": "conformance/traceability/cli.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 3460,
+      "sha256": "709e4570baab9bd7fc780dcecd48b6299f273426d15d1de18a25d8505ec0551f"
+    },
+    {
+      "path": "conformance/traceability/doc.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 3742,
+      "sha256": "693c092a65a3c65e25680c09baaa66dbb2171b1e1e56ad61650c4dfbc23fcb79"
+    },
+    {
+      "path": "conformance/traceability/hash.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 2050,
+      "sha256": "c29fc5906bde9717909187ff8e51d929c094a2f9b6bdd0d8d1fa0f56733cbc18"
+    },
+    {
+      "path": "conformance/traceability/host.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 2675,
+      "sha256": "6c6a2d1b3f1fd525a569ad61d0ae23e675d9b7baabb26c8b4a9e402b356cbb78"
+    },
+    {
+      "path": "conformance/traceability/mcp.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 3404,
+      "sha256": "2b66cf7d9efb9072002123161e4b979c5a2115155cc56abceb87f1d2090b84eb"
+    },
+    {
+      "path": "conformance/traceability/ops.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4788,
+      "sha256": "6647db1c7d4f98e3a59910b933c86114eb06dd23c5ee79b728df543820e5800f"
+    },
+    {
+      "path": "conformance/traceability/pkg.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4744,
+      "sha256": "d77be3227af7e17e68e1e705af65ac09985e7e1a2b18369ea7f129e9d5b255f9"
+    },
+    {
+      "path": "conformance/traceability/pub.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 3102,
+      "sha256": "3ecf965a93e7f2edd771e8f10c3db731e18091c8a840ca4f3f14767ded37adb4"
+    },
+    {
+      "path": "conformance/traceability/run.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4894,
+      "sha256": "c12babe76e3a6a430516ec255fab6fa9965d8fa52b8237ea20983ff5853b84a3"
+    },
+    {
+      "path": "conformance/traceability/sec.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4044,
+      "sha256": "605e55f9625896114c40cbc4b25051bc9171afacba0753402f9a7a0357388fa3"
+    },
+    {
+      "path": "conformance/traceability/skill.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4019,
+      "sha256": "b85bec8f70e6dd2d882cd69a3cb872e0a87c0cfd074192db4fccbc2218aa0dec"
+    },
+    {
+      "path": "conformance/traceability/state.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 3075,
+      "sha256": "c0c93a9e58f4929cea97c6c1f0c1068504b7361126e83052192f7b2f705e1022"
+    },
+    {
+      "path": "conformance/traceability/wfv.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 4386,
+      "sha256": "e57d0aa5754130f7c74d955f8699a2e6728b187e6210fe88034beb7f3273805d"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/alias.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 175,
+      "sha256": "7806a828a8dc09db48ed0a924a6c83d038d4fb7923a1ef2d66214b1ae39ea422"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/anchor.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 172,
+      "sha256": "e21cae19b77928410dd5d0fd36635b78e8ae038e75b45279c88519ac333a2f73"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/custom-tag-directive.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 198,
+      "sha256": "b785de1581c386dcc1f8ac5f2efff8e42f8c9e22afbd6e98df40a42aa5fac6b7"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/custom-tag.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 166,
+      "sha256": "5f7e6b80db10dae5e7dfcd4285c1f46546b9ddc8587e8913daabeb2d3628e70c"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/data-contract-roots-valid.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 968,
+      "sha256": "ef4986bd5936cf6c3d9b1ea4c3d52d034f2e3669e847e12bf9c8a258f4241c48"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/derived-dag-valid.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 1320,
+      "sha256": "03ceeae3a8fa9488ebfb9958700f9a50d4b3e0fe4afe3442f750971ac20d0b4c"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/duplicate-input-binding-id.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 364,
+      "sha256": "80cc57288d0ee32ccb5a3878a960dc07c700d22226aea83909ee421320c9a018"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/duplicate-keys.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 171,
+      "sha256": "a83e07c44ee4f32b0c6a539405f37e6e3b78c7f00752a6e9939227e8c2b6b668"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/duplicate-workflow-input-id.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 316,
+      "sha256": "84d020c94d8f8d1f7ba3550dce990fb88e90210bdc0acd9a083809aa9671afed"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/empty-nodes.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 76,
+      "sha256": "551789328214fbe3ac6b006c195f2e521f35f289676066cf0ebd3ae4c08426ec"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/hostile-project-content.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 227,
+      "sha256": "962f05b891f1166457de76d8aa301c702cdd02473791d72a56166c788dc09c4b"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-authored-contracts.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 986,
+      "sha256": "38ccae682e33551e9fcac6c4939603b5ec3d580ffbc94e9868c4ed0b00442fa8"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-data-contracts.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 1472,
+      "sha256": "8c2603b09978cd47c1280104d7360624027d1f3d78c6ec0419d54c3aacc3024e"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-default-paths.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 1343,
+      "sha256": "8538f11a7fe4b3632b1fa9f8cf437b9c667c65363051b047244968a0adb5de2b"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-derived-dag.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 1160,
+      "sha256": "638dab81d568b0a5e8f89727799fdfe6f80e237cd9672c98494d1794b31226b5"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-extensions.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 328,
+      "sha256": "46292445c71acbbb6bd2e0a2bd590907958c1c135fee9eb8ea5eed1b3b3dfc8f"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-nodes.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 400,
+      "sha256": "cfeb64ecaaaadbfc1e01755a8e2738f7f82a1a1a49329005ebcf46e757bd69bd"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-syntax.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 73,
+      "sha256": "a24fa1a83a6240c33eb17bc41aa4ccce8ed97ce88127315b2c7d32a9e721fede"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-utf8.base64",
+      "media_type": "text/plain; charset=us-ascii",
+      "role": "conformance",
+      "bytes": 5,
+      "sha256": "b01d1b5d3f00cbc1567a90c1dda10e6fd366a12b5e53585bee3d470d142030ac"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/invalid-yaml-directive.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 172,
+      "sha256": "1efc65330a58a6b7a0512258856c31e194f201b8125745a38da833c9bc245b05"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/maximal-valid.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 1356,
+      "sha256": "d997d0c914a9d3b8d0b1a1cf57835709ca1fcbd4aeba9a06ae6f785a4f8c1667"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/merge-key.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 172,
+      "sha256": "2f6f5f3d6a81c651bc80529e3f6f7dfb93b0c80e35371d5c3c28e0daa5b49fe0"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/minimal-valid.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 157,
+      "sha256": "50140f5006c219cf6a32689e54b581ad420a780b4ffe3c67418345edc5652785"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/missing-root-fields.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 3,
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/multiple-documents.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 277,
+      "sha256": "192dbb48a7dc698b60004573981e3a34c15eb5c66dfe43facf7094b02d3d33e2"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/no-coercion.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 151,
+      "sha256": "b5eadbe1dd0e5971da98da407d62373c97e28544f77fab33338c9655e872b993"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/non-finite-infinity.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 153,
+      "sha256": "b2d0f42729419d2fd77c37797a3a36db6b61247e7151ee8430ba8c041650ab56"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/non-finite-nan.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 153,
+      "sha256": "7ec91792bc5c4eaf42df2e178c83bd36281652e2964c2ff3ebe618026d7ba816"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/non-string-identifier-keys.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 376,
+      "sha256": "6a2ed04b7000dc89837858fec29d0522d2828a74d9947d8b63b4983ca1be24e6"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/non-string-json-keys.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 365,
+      "sha256": "794329a5d074aae8c25ee702011c683345eaca6f622f4edc773d59d45e7a9a5f"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/null-required-field.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 153,
+      "sha256": "1c60316b508a8342997846e338737644546e434b9f94ddcb3ee37caa4c8b2045"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/null-schema-version.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 140,
+      "sha256": "b0fecdca3c57397135e68105fbe97215c9da24abef90c526811ac38efeb018a8"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/sequence-root.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 41,
+      "sha256": "edf322353a647eff573ca6430c27dfc4c9547d158668d88c7ca5c733c0607653"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/standard-tag-override.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 191,
+      "sha256": "930711470c60467a7be52ada8fc43981025851fe84186a58ccb0f5283b9665cf"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/unknown-root-field.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 178,
+      "sha256": "4390de5233fe1a248a5fe2db900511a7196ee2afc98578f64b30e62c8b304876"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/unsupported-schema-version.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 157,
+      "sha256": "8330affff18b17b6ab3e918de668c2efd15c9589f0808c07a41fbd67e510ec4e"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/yaml-1.1.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 171,
+      "sha256": "6e7bf75c370e6d5764b10ae9069d049df0e77bb3a507b553b6578ad687f0e55d"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/yaml-1.2.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 171,
+      "sha256": "3078ad79008426d8525d7f943d8cdc54e333c7c19f45857422409c1ebfc311ef"
+    },
+    {
+      "path": "conformance/workflow-validation/fixtures/yaml-1.3.yaml",
+      "media_type": "application/yaml",
+      "role": "conformance",
+      "bytes": 171,
+      "sha256": "9f6ac1f507e20803ce43a1641874595b1dd094e3fb101ea7f31d7b28274ce9fe"
+    },
+    {
+      "path": "conformance/workflow-validation/matrix.json",
+      "media_type": "application/json",
+      "role": "conformance",
+      "bytes": 35742,
+      "sha256": "8fbea88d35c48b234e53045aa074a912498d4c6835835ab69646de19b0fc8245"
+    },
+    {
+      "path": "examples/contracted-workflow.yaml",
+      "media_type": "application/yaml",
+      "role": "example",
+      "bytes": 490,
+      "sha256": "1ad1fb99f8645a3820686499243dc0051a0a478bcf984057863a8eae424597ab"
+    },
+    {
+      "path": "examples/fan-out-fan-in.yaml",
+      "media_type": "application/yaml",
+      "role": "example",
+      "bytes": 604,
+      "sha256": "14f17deb34157d15e92af90161ebc0055b905d2d7ce27f38c59b3f7828468ba5"
+    },
+    {
+      "path": "examples/minimal-workflow.yaml",
+      "media_type": "application/yaml",
+      "role": "example",
+      "bytes": 152,
+      "sha256": "692e7fd5d87dd2d3879c6ceb5fa7ebfe4cf58c7641ab79b14346d93a76d05882"
+    },
+    {
+      "path": "LICENSE",
+      "media_type": "text/plain; charset=utf-8",
+      "role": "license",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "NOTICE",
+      "media_type": "text/plain; charset=utf-8",
+      "role": "notice",
+      "bytes": 178,
+      "sha256": "42b61a708e8ce3d89f4a70fcae7990852733d5f3ce53c0d3b47c0a4007540ea1"
+    },
+    {
+      "path": "README.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "contract-index",
+      "bytes": 1379,
+      "sha256": "8daae2ec8afc699f79d504c434027cb958f3faaf8b91d9ad518e93a42318a30a"
+    },
+    {
+      "path": "schemas/breakdown.candidate.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 4758,
+      "sha256": "b4625f3d7c334e5b78ada41364e6927665878cfa5e8bc7d5dec3c196a5fcd13e"
+    },
+    {
+      "path": "schemas/breakdown.cli-output.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 2107,
+      "sha256": "b6335bdb5a6b7262930c14820e98eb1de771918d421c5a16fa2d890e84bb0540"
+    },
+    {
+      "path": "schemas/breakdown.mcp-output.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 2735,
+      "sha256": "251c53bab881c53f3147c17a8e6ae3e664539526fa63bb4db1a05c9ec2c51716"
+    },
+    {
+      "path": "schemas/breakdown.operation-request.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 3897,
+      "sha256": "76df8421ec8cf59d3338cfe3e4fff17375a0a30b45194a01c463cfddaee815e9"
+    },
+    {
+      "path": "schemas/breakdown.operation-value.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 10837,
+      "sha256": "d4f7b58dd1c74ab0b52d118b4a2e382053d155a71a70d9e08cdbcbf01b5bb34f"
+    },
+    {
+      "path": "schemas/breakdown.run.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 2656,
+      "sha256": "6d51e44714f1d0b0cfba79ea5faa6fe83f89e12c750fe19a9ae1580b56d24384"
+    },
+    {
+      "path": "schemas/breakdown.step-artifact.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 4295,
+      "sha256": "b8f992f6dbef230951aca0552ad0aa63fdd5c3cc6d15e63f93ba5ef594d39206"
+    },
+    {
+      "path": "schemas/breakdown.traceability-matrix.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 2962,
+      "sha256": "eac24f7b19987fcd9a74caba2086ee82685688eec7319233e0496bb8590bf1aa"
+    },
+    {
+      "path": "schemas/breakdown.work-packet-batch.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 966,
+      "sha256": "a6dcd60a4cf19b7a35b3b08087510ef3d26b9882e279ba515afdcce0910fb072"
+    },
+    {
+      "path": "schemas/breakdown.work-packet.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 7520,
+      "sha256": "3a5e6cc449258c537fb234105e188ee950176be4b75cc5c12194651aeedcd217"
+    },
+    {
+      "path": "schemas/breakdown.workflow.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 5447,
+      "sha256": "882f783f73dad51597aa7a4ff8be748b1c131c3922f059c1579f76f8f0b4db35"
+    },
+    {
+      "path": "specifications/cli.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 3273,
+      "sha256": "2ffc12ccfe95f9807182c61dc445d2969a78476525714adce7419603a7e94100"
+    },
+    {
+      "path": "specifications/conformance.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 4526,
+      "sha256": "8465bc27f5e2c3719bce405fb24312eb9b63163b921d5edb7061126b9533f6af"
+    },
+    {
+      "path": "specifications/hashing-and-state.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 4883,
+      "sha256": "16a0372e7a05a43f8f7d12285253fa62a2085475a212c0797e524533960cb546"
+    },
+    {
+      "path": "specifications/mcp.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 3553,
+      "sha256": "57a62eda32bb38b0d432da152d42f04af334229bf8e03fc8805b13ffa755b0f7"
+    },
+    {
+      "path": "specifications/operations.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 5334,
+      "sha256": "a150e44954b9667d1b384f8af11f289a901f718b23a0a4274b78b1f5820ac301"
+    },
+    {
+      "path": "specifications/release.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 4910,
+      "sha256": "e88fbdb9c57411ffc176aebf4ded5e0bc50e17436043f5c69b57acceb3a18ae2"
+    },
+    {
+      "path": "specifications/run-records.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 5481,
+      "sha256": "730567007603ffcaa46f25a84ab766862a668e63163757775ad2a415a9c359e0"
+    },
+    {
+      "path": "specifications/security-and-publication.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 7162,
+      "sha256": "b77a2439e7ca1a190e7511aa4b220ed7ae06a7cae83275e624bb6e13548ba709"
+    },
+    {
+      "path": "specifications/skills-and-hosts.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 6166,
+      "sha256": "c208b021b1985e9eab31010d5d622f99b0e1bc7806a1d58aab1a600e8b83192f"
+    },
+    {
+      "path": "specifications/workflow-definition.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "specification",
+      "bytes": 5814,
+      "sha256": "1cd12a6b85f34469ee44e2a3b449f1b73cce907003ef00c07acb1687dfeadf29"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "role": "third-party-notices",
+      "bytes": 446,
+      "sha256": "e9dd97f17a2584d1500938dbaef4080b0417cf0f4a5edd66ff341d678b8c69fe"
+    },
+    {
+      "path": "VERSION",
+      "media_type": "text/plain; charset=utf-8",
+      "role": "version",
+      "bytes": 13,
+      "sha256": "5703a2f830f2a6e2ce9be19e37c5309e39b6566d071f641cf11c5dc2c1c6331d"
+    }
+  ]
+}

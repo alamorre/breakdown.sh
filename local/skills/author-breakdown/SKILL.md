@@ -10,6 +10,10 @@ metadata:
 
 # Author a Workflow Definition
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Create or revise only the human-editable `breakdown.yaml`. Discover facts first, resolve material
 choices with the user, and write only after the complete proposal or diff is confirmed.
 

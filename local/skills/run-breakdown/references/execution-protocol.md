@@ -1,5 +1,9 @@
 # Guided Execution Protocol
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 This reference defines the host-neutral coordinator behavior for Breakdown Local
 `1.0.0-beta.1`. Operation templates use angle-bracket placeholders that must be replaced with the
 exact displayed value before sending one `breakdown.operation-request.v1` document to

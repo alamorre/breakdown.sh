@@ -1,0 +1,21 @@
+{
+  "schema_version": "breakdown.documentation-release-metadata.v1",
+  "release_version": "1.0.0-beta.1",
+  "channel": "prerelease",
+  "immutable_tag": "breakdown-local-v1.0.0-beta.1",
+  "immutable_repository_root": "https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/",
+  "immutable_release_url": "https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0-beta.1",
+  "candidate_inspection": {
+    "state": "workspace-package-manifests",
+    "package_manifests": [
+      "packages/breakdown-core/package.json",
+      "packages/breakdown-cli/package.json",
+      "packages/breakdown-mcp/package.json"
+    ],
+    "immutable_release_manifest": null
+  },
+  "exact_evidence": {
+    "supported_hosts": "local/skills/setup-breakdown/assets/skill-pack-manifest.json",
+    "claim": "No Supported Host claim without a passing indexed immutable evidence row."
+  }
+}

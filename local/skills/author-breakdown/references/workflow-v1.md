@@ -1,5 +1,9 @@
 # Workflow Definition v1 authoring reference
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 The deterministic validator is authoritative. This reference is a concise authoring aid, not a
 replacement parser.
 

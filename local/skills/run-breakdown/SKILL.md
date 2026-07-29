@@ -10,6 +10,10 @@ metadata:
 
 # Run Breakdown
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Guide one exact Run under user-supplied Run Authority. The core determines validity, scheduling,
 selection, attempts, and publication; the Agent Host supplies the Executor.
 

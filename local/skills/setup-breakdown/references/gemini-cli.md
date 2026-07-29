@@ -1,5 +1,9 @@
 # Gemini CLI project setup
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Install the unchanged canonical directories under `<project>/.agents/skills/` and ensure the
 workspace is trusted before expecting skill discovery.
 

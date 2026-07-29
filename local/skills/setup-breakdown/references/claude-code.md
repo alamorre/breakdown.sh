@@ -1,5 +1,9 @@
 # Claude Code project setup
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Install the unchanged canonical directories under `<project>/.claude/skills/`.
 
 Present this optional stdio registration command and ask before running it:

@@ -1,5 +1,9 @@
 # Exact installation and upgrade
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Breakdown Local uses one full-SemVer release train. This skill pack expects `1.0.0-beta.1`.
 
 ## Inspect first

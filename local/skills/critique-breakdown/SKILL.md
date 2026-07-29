@@ -10,6 +10,10 @@ metadata:
 
 # Critique a Workflow Definition
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 This skill is always read-only. It reports findings; applying them belongs to `author-breakdown`
 after separate confirmation.
 

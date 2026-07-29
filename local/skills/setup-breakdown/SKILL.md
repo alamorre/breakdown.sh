@@ -10,6 +10,10 @@ metadata:
 
 # Set up Breakdown Local
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Establish one exact, capability-checked Breakdown Local release without changing the user's project
 until they approve each mutation.
 

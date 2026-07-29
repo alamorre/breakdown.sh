@@ -1,5 +1,9 @@
 # Codex project setup
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Install the unchanged canonical directories under `<project>/.agents/skills/`.
 
 The optional local stdio adapter is user or trusted-project configuration, not project authority.

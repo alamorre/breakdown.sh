@@ -1,5 +1,9 @@
 # Workflow quality and authority rubric
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Apply this rubric only after the exact Workflow Definition passes deterministic validation.
 
 ## Outcomes

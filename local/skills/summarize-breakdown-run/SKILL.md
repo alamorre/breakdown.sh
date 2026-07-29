@@ -10,6 +10,10 @@ metadata:
 
 # Summarize an Exact Run
 
+Document kind: Task-oriented guidance
+
+Document version: 1.0.0-beta.1
+
 Return a conversational view of one inspected Run. A summary is not a Result, StepArtifact, Run
 state, or other durable Breakdown record.
 
