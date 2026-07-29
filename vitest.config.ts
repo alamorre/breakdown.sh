@@ -17,6 +17,7 @@ export default defineConfig({
         'scripts/local-release/command-line.mjs',
         'scripts/local-release/contracts-archive.mjs',
         'scripts/local-release/filesystem.mjs',
+        'scripts/local-release/host-evidence.mjs',
         'scripts/local-release/package-artifacts.mjs',
         'scripts/local-release/platform-evidence.mjs',
         'scripts/local-release/platform-qualification.mjs',

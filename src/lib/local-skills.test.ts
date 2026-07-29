@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { chmod, cp, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { arch, platform, release, tmpdir, version } from 'node:os';
+import { delimiter, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -25,11 +25,15 @@ interface ProcessResult {
   stderr: string;
 }
 
-function run(command: string, args: string[]): Promise<ProcessResult> {
+function run(
+  command: string,
+  args: string[],
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<ProcessResult> {
   return new Promise((resolveResult, reject) => {
     const child = spawn(command, args, {
       cwd: workspaceRoot,
-      env: process.env,
+      env: environment,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -95,21 +99,26 @@ async function runPreflight(
   root: string,
   projectRoot: string,
   extraArgs: string[] = [],
+  environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ProcessResult> {
-  return run(process.execPath, [
-    join(root, 'setup-breakdown', 'scripts', 'preflight.mjs'),
-    '--project',
-    projectRoot,
-    '--host',
-    'test-harness',
-    '--host-version',
-    '1.0.0',
-    '--cli-command',
+  return run(
     process.execPath,
-    '--cli-arg',
-    join(workspaceRoot, 'packages', 'breakdown-cli', 'dist', 'index.js'),
-    ...extraArgs,
-  ]);
+    [
+      join(root, 'setup-breakdown', 'scripts', 'preflight.mjs'),
+      '--project',
+      projectRoot,
+      '--host',
+      'test-harness',
+      '--host-version',
+      '1.0.0',
+      '--cli-command',
+      process.execPath,
+      '--cli-arg',
+      join(workspaceRoot, 'packages', 'breakdown-cli', 'dist', 'index.js'),
+      ...extraArgs,
+    ],
+    environment,
+  );
 }
 
 beforeAll(async () => {
@@ -325,6 +334,363 @@ describe('setup preflight executable', () => {
       ]),
     );
     expect(await readdir(projectRoot)).toEqual(before);
+  });
+
+  it('should call only the exact indexed host/version/OS/transport row Supported', async () => {
+    const copiedRoot = await mkdtemp(join(tmpdir(), 'breakdown-supported-skill-pack-'));
+    const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-supported-project-'));
+    temporaryDirectories.push(copiedRoot, projectRoot);
+    for (const skillName of skillNames) {
+      await cp(join(skillsRoot, skillName), join(copiedRoot, skillName), {
+        recursive: true,
+      });
+    }
+    const candidateDirectory = await mkdtemp(join(tmpdir(), 'breakdown-supported-candidate-'));
+    const fakeGhDirectory = await mkdtemp(join(tmpdir(), 'breakdown-supported-gh-'));
+    temporaryDirectories.push(candidateDirectory, fakeGhDirectory);
+    const artifactDefinitions = [
+      {
+        file: `breakdown-skills-${releaseVersion}.tar.gz`,
+        role: 'skills-archive',
+        bytes: Buffer.from('exact skill archive'),
+      },
+      {
+        file: `breakdown-sh-core-${releaseVersion}.tgz`,
+        role: 'core-library',
+        bytes: Buffer.from('exact core package'),
+      },
+      {
+        file: `breakdown-sh-cli-${releaseVersion}.tgz`,
+        role: 'command-line-interface',
+        bytes: Buffer.from('exact CLI package'),
+      },
+      {
+        file: `breakdown-sh-mcp-${releaseVersion}.tgz`,
+        role: 'mcp-adapter',
+        bytes: Buffer.from('exact MCP package'),
+      },
+    ].map((artifact) => ({
+      ...artifact,
+      sha256: createHash('sha256').update(artifact.bytes).digest('hex'),
+    }));
+    for (const artifact of artifactDefinitions) {
+      await writeFile(join(candidateDirectory, artifact.file), artifact.bytes);
+    }
+    const subjects = artifactDefinitions.map((artifact) => ({
+      name: artifact.file,
+      digest: { sha256: artifact.sha256 },
+    }));
+    const candidateDigest = createHash('sha256')
+      .update(
+        `${subjects
+          .map((subject) => `${subject.digest.sha256}  ${subject.name}`)
+          .sort()
+          .join('\n')}\n`,
+      )
+      .digest('hex');
+    const candidateIdentity = { algorithm: 'SHA-256', content: candidateDigest };
+    const provenanceFile = `breakdown-provenance-inputs-${releaseVersion}.json`;
+    const installedManifestPath = join(
+      copiedRoot,
+      'setup-breakdown',
+      'assets',
+      'skill-pack-manifest.json',
+    );
+    await writeFile(
+      join(candidateDirectory, provenanceFile),
+      `${JSON.stringify({
+        schema_version: 'breakdown.provenance-inputs.v1',
+        release_version: releaseVersion,
+        source: {
+          repository: 'https://github.com/alamorre/breakdown.sh',
+          git_commit: '1'.repeat(40),
+          source_inputs: [
+            {
+              path: 'local/skills/setup-breakdown/assets/skill-pack-manifest.json',
+              sha256: createHash('sha256')
+                .update(await readFile(installedManifestPath))
+                .digest('hex'),
+            },
+          ],
+        },
+        builder: {
+          environment: {
+            candidate_digest: candidateIdentity,
+          },
+        },
+        subjects,
+      })}\n`,
+    );
+    const provenanceSha256 = createHash('sha256')
+      .update(await readFile(join(candidateDirectory, provenanceFile)))
+      .digest('hex');
+    const candidate = {
+      digest: candidateIdentity,
+      provenance_inputs: {
+        file: provenanceFile,
+        sha256: provenanceSha256,
+      },
+      skill_archive: {
+        file: artifactDefinitions[0].file,
+        sha256: artifactDefinitions[0].sha256,
+      },
+      packages: artifactDefinitions.slice(1).map((artifact) => ({
+        file: artifact.file,
+        sha256: artifact.sha256,
+      })),
+    };
+    await writeFile(
+      join(candidateDirectory, `breakdown-release-${releaseVersion}.json`),
+      `${JSON.stringify({
+        schema_version: 'breakdown.release-manifest.v1',
+        release_version: releaseVersion,
+        artifacts: [
+          ...artifactDefinitions.map((artifact) => ({
+            file: artifact.file,
+            role: artifact.role,
+            hashes: { sha256: artifact.sha256 },
+          })),
+          {
+            file: provenanceFile,
+            role: 'provenance-inputs',
+            hashes: { sha256: provenanceSha256 },
+          },
+        ],
+        platform_conformance: {
+          current_build: {
+            candidate_digest: candidate.digest,
+          },
+        },
+      })}\n`,
+    );
+    const operatingSystems = [
+      {
+        family: 'linux',
+        platform: 'linux',
+        name: 'Linux',
+        release: platform() === 'linux' ? release() : '6.8.0',
+        version: platform() === 'linux' ? version() : '#1 SMP',
+        architecture: platform() === 'linux' ? arch() : 'x64',
+      },
+      {
+        family: 'macos',
+        platform: 'darwin',
+        name: 'macOS',
+        release: platform() === 'darwin' ? release() : '25.0.0',
+        version: platform() === 'darwin' ? version() : 'Darwin Kernel Version 25.0.0',
+        architecture: platform() === 'darwin' ? arch() : 'arm64',
+      },
+      {
+        family: 'windows',
+        platform: 'win32',
+        name: 'Windows',
+        release: platform() === 'win32' ? release() : '10.0.26100',
+        version: platform() === 'win32' ? version() : 'Windows 11 Pro',
+        architecture: platform() === 'win32' ? arch() : 'x64',
+      },
+    ];
+    const rows = operatingSystems.map((operatingSystem, index) => ({
+      host: {
+        surface: 'test-harness',
+        version: '1.0.0',
+      },
+      operating_system: operatingSystem,
+      transport: 'cli',
+      breakdown_version: releaseVersion,
+      model: {
+        provider_family: 'provider-a',
+        model_family: index === 0 ? 'model-a' : 'model-b',
+      },
+      candidate,
+      status: 'passed',
+      evidence: {
+        artifact_name: `breakdown-host-evidence-test-${index}`,
+        mechanism: 'github-actions-artifact-v7',
+        workflow_run_id: String(12345 + index),
+        workflow_run_attempt: '1',
+        file_sha256: String(index + 6).repeat(64),
+      },
+    }));
+    const supportedHosts = rows.map((row) => ({
+      surface: row.host.surface,
+      version: row.host.version,
+      os: row.operating_system.platform,
+      os_name: row.operating_system.name,
+      os_release: row.operating_system.release,
+      os_version: row.operating_system.version,
+      architecture: row.operating_system.architecture,
+      transport: row.transport,
+      breakdown_version: row.breakdown_version,
+      status: 'pass',
+      artifact_digests: {
+        candidate: row.candidate.digest,
+        provenance_inputs: row.candidate.provenance_inputs,
+        skill_archive: row.candidate.skill_archive,
+        packages: row.candidate.packages,
+      },
+      evidence: row.evidence,
+    }));
+    const indexPath = join(copiedRoot, 'breakdown-host-evidence-index.json');
+    const hostEvidenceIndex = {
+      schema_version: 'breakdown.guided-host-evidence-index.v1',
+      release_version: releaseVersion,
+      status: 'passed',
+      candidate_digest: candidate.digest,
+      source: {
+        repository: 'https://github.com/alamorre/breakdown.sh',
+        git_commit: '1'.repeat(40),
+      },
+      coverage: {
+        guided_cli_operating_systems: ['linux', 'macos', 'windows'],
+        model_families: ['model-a', 'model-b'],
+        provider_families: ['provider-a'],
+      },
+      rows,
+      supported_hosts: supportedHosts,
+      gate: { satisfied: true },
+    };
+    await writeFile(indexPath, `${JSON.stringify(hostEvidenceIndex, null, 2)}\n`);
+    const attestationBundlePath = join(copiedRoot, 'host-evidence-attestation.json');
+    const ghArgumentsLog = join(copiedRoot, 'gh-arguments.json');
+    await writeFile(attestationBundlePath, '{}\n');
+    const fakeGhSource = `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs';
+writeFileSync(process.env.GH_ARGUMENTS_LOG, JSON.stringify(process.argv.slice(2)));
+if (process.env.GH_ATTESTATION_FAIL === 'true') {
+  process.stderr.write('synthetic attestation rejection\\n');
+  process.exit(1);
+}
+process.stdout.write('[{"verificationResult":{}}]\\n');
+`;
+    await writeFile(join(fakeGhDirectory, 'gh'), fakeGhSource);
+    await writeFile(join(fakeGhDirectory, 'gh.mjs'), fakeGhSource);
+    await writeFile(join(fakeGhDirectory, 'gh.cmd'), '@node "%~dp0gh.mjs" %*\r\n');
+    await chmod(join(fakeGhDirectory, 'gh'), 0o755);
+    const preflightEnvironment = {
+      ...process.env,
+      GH_ARGUMENTS_LOG: ghArgumentsLog,
+      PATH: `${fakeGhDirectory}${delimiter}${process.env.PATH ?? ''}`,
+    };
+    const hostEvidenceArguments = [
+      '--host-evidence-index',
+      indexPath,
+      '--host-evidence-bundle',
+      attestationBundlePath,
+      '--candidate-directory',
+      candidateDirectory,
+    ];
+
+    const supported = await runPreflight(
+      copiedRoot,
+      projectRoot,
+      ['--mode', 'full', ...hostEvidenceArguments],
+      preflightEnvironment,
+    );
+    expect(supported.status, supported.stderr).toBe(0);
+    expect(JSON.parse(supported.stdout)).toMatchObject({
+      classification: 'Supported Host',
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: 'host_evidence_attestation', status: 'pass' }),
+        expect.objectContaining({ id: 'candidate_binding', status: 'pass' }),
+        expect.objectContaining({ id: 'host_evidence_index', status: 'pass' }),
+      ]),
+      host: {
+        os: platform(),
+        os_release: release(),
+        os_version: version(),
+      },
+    });
+    expect(JSON.parse(await readFile(ghArgumentsLog, 'utf8'))).toEqual([
+      'attestation',
+      'verify',
+      indexPath,
+      '--bundle',
+      attestationBundlePath,
+      '--repo',
+      'alamorre/breakdown.sh',
+      '--signer-workflow',
+      'alamorre/breakdown.sh/.github/workflows/local-host-support.yml',
+      '--source-ref',
+      `refs/tags/breakdown-local-v${releaseVersion}`,
+      '--source-digest',
+      '1'.repeat(40),
+      '--format',
+      'json',
+    ]);
+
+    const currentRowIndex = rows.findIndex((row) => row.operating_system.platform === platform());
+    rows[currentRowIndex].operating_system.release = 'different-release';
+    supportedHosts[currentRowIndex].os_release = 'different-release';
+    await writeFile(indexPath, `${JSON.stringify(hostEvidenceIndex, null, 2)}\n`);
+    const compatible = await runPreflight(
+      copiedRoot,
+      projectRoot,
+      ['--mode', 'full', ...hostEvidenceArguments],
+      preflightEnvironment,
+    );
+    expect(compatible.status, compatible.stderr).toBe(0);
+    expect(JSON.parse(compatible.stdout)).toMatchObject({
+      classification: 'Compatible Host',
+    });
+
+    const unauthenticated = await runPreflight(
+      copiedRoot,
+      projectRoot,
+      ['--mode', 'full', ...hostEvidenceArguments],
+      { ...preflightEnvironment, GH_ATTESTATION_FAIL: 'true' },
+    );
+    expect(unauthenticated.status).toBe(3);
+    expect(JSON.parse(unauthenticated.stdout)).toMatchObject({
+      outcome: 'repair_required',
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: 'host_evidence_attestation', status: 'fail' }),
+      ]),
+    });
+
+    supportedHosts[currentRowIndex].os_release = 'hand-edited-release';
+    await writeFile(indexPath, `${JSON.stringify(hostEvidenceIndex, null, 2)}\n`);
+    const invalidIndex = await runPreflight(
+      copiedRoot,
+      projectRoot,
+      ['--mode', 'full', ...hostEvidenceArguments],
+      preflightEnvironment,
+    );
+    expect(invalidIndex.status).toBe(3);
+    expect(JSON.parse(invalidIndex.stdout)).toMatchObject({
+      outcome: 'repair_required',
+      checks: expect.arrayContaining([
+        {
+          id: 'skill_bytes',
+          status: 'pass',
+          detail: 'Canonical payload digests and inventory match.',
+        },
+        {
+          id: 'host_evidence_index',
+          status: 'fail',
+          detail: 'host evidence index is invalid, failing, or mismatched',
+        },
+      ]),
+    });
+
+    supportedHosts[currentRowIndex].os_release = rows[currentRowIndex].operating_system.release;
+    await writeFile(indexPath, `${JSON.stringify(hostEvidenceIndex, null, 2)}\n`);
+    await writeFile(
+      join(candidateDirectory, artifactDefinitions[2].file),
+      'different same-version CLI package',
+    );
+    const mismatchedCandidate = await runPreflight(
+      copiedRoot,
+      projectRoot,
+      ['--mode', 'full', ...hostEvidenceArguments],
+      preflightEnvironment,
+    );
+    expect(mismatchedCandidate.status).toBe(3);
+    expect(JSON.parse(mismatchedCandidate.stdout)).toMatchObject({
+      outcome: 'repair_required',
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: 'candidate_binding', status: 'fail' }),
+      ]),
+    });
   });
 
   it('rejects a modified canonical skill byte', async () => {

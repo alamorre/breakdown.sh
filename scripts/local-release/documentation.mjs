@@ -409,8 +409,8 @@ as \`${String(releaseMetadata.candidate_inspection.immutable_release_manifest)}\
     skillManifest.supported_hosts.length === 0
       ? [['None', 'No passing indexed immutable host evidence is recorded for this prerelease.']]
       : skillManifest.supported_hosts.map((row) => [
-          `${row.host} ${row.host_version} / ${row.os} / ${row.transport}`,
-          row.evidence,
+          `${row.surface} ${row.version} / ${row.os_name} ${row.os_version} (${row.os_release}) / ${row.architecture} / ${row.transport}`,
+          `${row.evidence.artifact_name} / row SHA-256 ${row.evidence.file_sha256}`,
         ]);
   documents.set(
     'reference/support.md',

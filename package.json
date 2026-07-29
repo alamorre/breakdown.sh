@@ -33,7 +33,10 @@
     "local:release:build": "node scripts/build-local-release.mjs",
     "local:release:inspect": "node scripts/inspect-local-release.mjs",
     "local:release:qualify": "node scripts/qualify-local-release.mjs",
-    "local:release:index-platform": "node scripts/index-platform-evidence.mjs"
+    "local:release:index-platform": "node scripts/index-platform-evidence.mjs",
+    "local:release:prepare-host": "node scripts/prepare-host-qualification.mjs",
+    "local:release:qualify-host": "node scripts/qualify-host-evidence.mjs",
+    "local:release:index-hosts": "node scripts/index-host-evidence.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

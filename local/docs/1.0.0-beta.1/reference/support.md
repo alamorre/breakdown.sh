@@ -14,7 +14,7 @@ authoritative. Regenerate this file instead of editing it by hand.
 - `local/contracts/conformance/traceability/host.json` — SHA-256 `6c6a2d1b3f1fd525a569ad61d0ae23e675d9b7baabb26c8b4a9e402b356cbb78`
 - `local/contracts/specifications/skills-and-hosts.md` — SHA-256 `c208b021b1985e9eab31010d5d622f99b0e1bc7806a1d58aab1a600e8b83192f`
 - `local/docs/release-metadata.json` — SHA-256 `d7b0c39659bb90919227fc93d30bb4359fe5ae164533ed71ae336f58c5ae6500`
-- `local/skills/setup-breakdown/assets/skill-pack-manifest.json` — SHA-256 `2bfe3b8965bd282bcca71a7074b95a0431de92ba7e9dfb0e60b7691723b87ca4`
+- `local/skills/setup-breakdown/assets/skill-pack-manifest.json` — SHA-256 `366bce6f60610361b40393863a3e23c8c621258a8301e5ce0294d11e2a0f1f02`
 
 
 ## Supported Host rows

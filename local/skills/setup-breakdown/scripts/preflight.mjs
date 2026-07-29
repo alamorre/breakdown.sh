@@ -3,8 +3,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
-import { arch, platform } from 'node:os';
-import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
+import { arch, platform, release, version } from 'node:os';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RELEASE_VERSION = '1.0.0-beta.1';
@@ -25,8 +25,12 @@ const EXPECTED_SKILL_NAMES = [
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const PROCESS_TIMEOUT_MS = 10_000;
+const ATTESTATION_TIMEOUT_MS = 30_000;
+const HOST_EVIDENCE_REPOSITORY = 'alamorre/breakdown.sh';
+const HOST_EVIDENCE_SIGNER_WORKFLOW =
+  'alamorre/breakdown.sh/.github/workflows/local-host-support.yml';
 const USAGE = `Usage:
-  node preflight.mjs --mode full --project ABSOLUTE_PATH --host SURFACE --host-version VERSION [--cli-command COMMAND] [--cli-arg ARG]... [--mcp-command COMMAND] [--mcp-arg ARG]...
+  node preflight.mjs --mode full --project ABSOLUTE_PATH --host SURFACE --host-version VERSION [--host-evidence-index ABSOLUTE_PATH --host-evidence-bundle ABSOLUTE_PATH --candidate-directory ABSOLUTE_PATH] [--cli-command COMMAND] [--cli-arg ARG]... [--mcp-command COMMAND] [--mcp-arg ARG]...
   node preflight.mjs --mode fast --skill SKILL_NAME --project ABSOLUTE_PATH --host SURFACE --host-version VERSION [--cli-command COMMAND] [--cli-arg ARG]... [--mcp-command COMMAND] [--mcp-arg ARG]...
 `;
 
@@ -38,6 +42,9 @@ function parseArguments(args) {
     project: undefined,
     host: undefined,
     hostVersion: undefined,
+    hostEvidenceIndex: undefined,
+    hostEvidenceBundle: undefined,
+    candidateDirectory: undefined,
     cliCommand: 'breakdown',
     cliArgs: [],
     mcpCommand: undefined,
@@ -49,6 +56,9 @@ function parseArguments(args) {
     ['--project', 'project'],
     ['--host', 'host'],
     ['--host-version', 'hostVersion'],
+    ['--host-evidence-index', 'hostEvidenceIndex'],
+    ['--host-evidence-bundle', 'hostEvidenceBundle'],
+    ['--candidate-directory', 'candidateDirectory'],
     ['--cli-command', 'cliCommand'],
     ['--mcp-command', 'mcpCommand'],
   ]);
@@ -70,6 +80,12 @@ function parseArguments(args) {
     seen.add(flag);
     index += 1;
   }
+  const hostEvidenceInputs = [
+    values.hostEvidenceIndex,
+    values.hostEvidenceBundle,
+    values.candidateDirectory,
+  ];
+  const hostEvidenceInputCount = hostEvidenceInputs.filter((value) => value !== undefined).length;
   if (
     (values.mode !== 'full' && values.mode !== 'fast') ||
     values.project === undefined ||
@@ -79,6 +95,9 @@ function parseArguments(args) {
     !isAbsolute(values.project) ||
     (values.mode === 'fast' && values.skill === undefined) ||
     (values.mode === 'full' && values.skill !== undefined) ||
+    (hostEvidenceInputCount !== 0 && hostEvidenceInputCount !== hostEvidenceInputs.length) ||
+    (hostEvidenceInputCount > 0 &&
+      (values.mode !== 'full' || hostEvidenceInputs.some((value) => !isAbsolute(value)))) ||
     (values.mcpCommand === undefined && values.mcpArgs.length > 0)
   ) {
     return undefined;
@@ -101,6 +120,8 @@ function machineReport({ classification, outcome, host, checks, mode, transport 
       surface: host.host,
       version: host.hostVersion,
       os: platform(),
+      os_release: release(),
+      os_version: version(),
       architecture: arch(),
       transport,
     },
@@ -113,7 +134,7 @@ function writeReport(report, exitCode) {
   process.exitCode = exitCode;
 }
 
-function runProcess(command, args, input) {
+function runProcess(command, args, input, timeoutMs = PROCESS_TIMEOUT_MS) {
   return new Promise((resolveResult) => {
     let child;
     try {
@@ -171,10 +192,64 @@ function runProcess(command, args, input) {
         status: null,
         stdout,
         stderr,
-        error: `process timed out after ${PROCESS_TIMEOUT_MS}ms`,
+        error: `process timed out after ${timeoutMs}ms`,
       });
-    }, PROCESS_TIMEOUT_MS);
+    }, timeoutMs);
   });
+}
+
+async function verifyHostEvidenceAttestation(indexPath, bundlePath) {
+  for (const [path, label] of [
+    [indexPath, 'host evidence index'],
+    [bundlePath, 'host evidence attestation bundle'],
+  ]) {
+    const facts = await lstat(path);
+    if (!facts.isFile()) throw new Error(`${label} is not a regular file`);
+  }
+  const claimedIndex = JSON.parse(await readFile(indexPath, 'utf8'));
+  if (!/^[0-9a-f]{40}$/.test(claimedIndex?.source?.git_commit ?? '')) {
+    throw new Error('host evidence index has no exact source digest');
+  }
+  const result = await runProcess(
+    'gh',
+    [
+      'attestation',
+      'verify',
+      indexPath,
+      '--bundle',
+      bundlePath,
+      '--repo',
+      HOST_EVIDENCE_REPOSITORY,
+      '--signer-workflow',
+      HOST_EVIDENCE_SIGNER_WORKFLOW,
+      '--source-ref',
+      `refs/tags/breakdown-local-v${RELEASE_VERSION}`,
+      '--source-digest',
+      claimedIndex.source.git_commit,
+      '--format',
+      'json',
+    ],
+    undefined,
+    ATTESTATION_TIMEOUT_MS,
+  );
+  let attestations;
+  try {
+    attestations = JSON.parse(result.stdout);
+  } catch {
+    attestations = undefined;
+  }
+  if (
+    result.error !== undefined ||
+    result.status !== 0 ||
+    !Array.isArray(attestations) ||
+    attestations.length === 0
+  ) {
+    throw new Error(
+      result.error ||
+        result.stderr.trim() ||
+        'GitHub could not authenticate the host evidence index attestation',
+    );
+  }
 }
 
 function initializeMcp(command, args) {
@@ -290,12 +365,306 @@ async function readManifest() {
     manifest?.release_version !== RELEASE_VERSION ||
     !Array.isArray(manifest.skills) ||
     !Array.isArray(manifest.supported_hosts) ||
+    manifest.supported_hosts.length !== 0 ||
     manifest.skills.length !== EXPECTED_SKILL_NAMES.length ||
     manifest.skills.some((skill, index) => skill?.name !== EXPECTED_SKILL_NAMES[index])
   ) {
     throw new Error('embedded skill-pack manifest is invalid or mismatched');
   }
   return manifest;
+}
+
+function releaseArtifact(manifest, role, filePattern) {
+  const matches =
+    manifest.artifacts?.filter(
+      (artifact) =>
+        artifact?.role === role &&
+        (filePattern === undefined || filePattern.test(artifact?.file ?? '')),
+    ) ?? [];
+  if (matches.length !== 1) throw new Error(`candidate has no exact ${role} artifact`);
+  return matches[0];
+}
+
+async function verifyCandidateArtifact(candidateDirectory, artifact, label) {
+  if (
+    typeof artifact?.file !== 'string' ||
+    basename(artifact.file) !== artifact.file ||
+    !sha256Digest(artifact.hashes?.sha256)
+  ) {
+    throw new Error(`candidate ${label} inventory is invalid`);
+  }
+  const path = join(candidateDirectory, artifact.file);
+  const facts = await lstat(path);
+  if (!facts.isFile()) throw new Error(`candidate ${label} is not a regular file`);
+  const digest = sha256(await readFile(path));
+  if (digest !== artifact.hashes.sha256) throw new Error(`candidate ${label} digest differs`);
+  return { file: artifact.file, sha256: digest };
+}
+
+async function readCandidateBinding(candidateDirectory) {
+  const directoryFacts = await lstat(candidateDirectory);
+  if (!directoryFacts.isDirectory()) throw new Error('candidate directory is not a directory');
+  const releaseManifestPath = join(candidateDirectory, `breakdown-release-${RELEASE_VERSION}.json`);
+  const releaseManifestFacts = await lstat(releaseManifestPath);
+  if (!releaseManifestFacts.isFile()) {
+    throw new Error('candidate release manifest is not a regular file');
+  }
+  const releaseManifest = JSON.parse(await readFile(releaseManifestPath, 'utf8'));
+  const declaredDigest = releaseManifest.platform_conformance?.current_build?.candidate_digest;
+  if (
+    releaseManifest.schema_version !== 'breakdown.release-manifest.v1' ||
+    releaseManifest.release_version !== RELEASE_VERSION ||
+    declaredDigest?.algorithm !== 'SHA-256' ||
+    !sha256Digest(declaredDigest.content)
+  ) {
+    throw new Error('candidate release manifest is invalid or mismatched');
+  }
+
+  const provenanceArtifact = releaseArtifact(releaseManifest, 'provenance-inputs');
+  await verifyCandidateArtifact(candidateDirectory, provenanceArtifact, 'provenance inputs');
+  const provenance = JSON.parse(
+    await readFile(join(candidateDirectory, provenanceArtifact.file), 'utf8'),
+  );
+  if (
+    provenance.schema_version !== 'breakdown.provenance-inputs.v1' ||
+    provenance.release_version !== RELEASE_VERSION ||
+    !Array.isArray(provenance.subjects) ||
+    provenance.source?.repository !== 'https://github.com/alamorre/breakdown.sh' ||
+    !/^[0-9a-f]{40}$/.test(provenance.source?.git_commit ?? '')
+  ) {
+    throw new Error('candidate provenance inputs are invalid or mismatched');
+  }
+  const subjectNames = new Set();
+  const subjectInventory = [];
+  for (const subject of provenance.subjects) {
+    if (
+      typeof subject?.name !== 'string' ||
+      basename(subject.name) !== subject.name ||
+      subjectNames.has(subject.name) ||
+      !sha256Digest(subject.digest?.sha256)
+    ) {
+      throw new Error('candidate provenance subject inventory is invalid');
+    }
+    subjectNames.add(subject.name);
+    const path = join(candidateDirectory, subject.name);
+    const facts = await lstat(path);
+    if (!facts.isFile())
+      throw new Error(`candidate subject is not a regular file: ${subject.name}`);
+    const digest = sha256(await readFile(path));
+    if (digest !== subject.digest.sha256) {
+      throw new Error(`candidate subject digest differs: ${subject.name}`);
+    }
+    subjectInventory.push(`${digest}  ${subject.name}`);
+  }
+  const computedDigest = sha256(Buffer.from(`${subjectInventory.sort().join('\n')}\n`));
+  if (
+    computedDigest !== declaredDigest.content ||
+    provenance.builder?.environment?.candidate_digest?.content !== computedDigest
+  ) {
+    throw new Error('candidate digest is not derived from its exact primary artifacts');
+  }
+
+  const installedSkillManifestDigest = sha256(await readFile(MANIFEST_PATH));
+  const skillManifestInput = provenance.source?.source_inputs?.find(
+    (input) => input?.path === 'local/skills/setup-breakdown/assets/skill-pack-manifest.json',
+  );
+  if (skillManifestInput?.sha256 !== installedSkillManifestDigest) {
+    throw new Error('installed canonical skills do not match the selected candidate');
+  }
+
+  const skillArchive = await verifyCandidateArtifact(
+    candidateDirectory,
+    releaseArtifact(releaseManifest, 'skills-archive', /\.tar\.gz$/),
+    'skills archive',
+  );
+  const packages = [];
+  for (const role of ['core-library', 'command-line-interface', 'mcp-adapter']) {
+    packages.push(
+      await verifyCandidateArtifact(
+        candidateDirectory,
+        releaseArtifact(releaseManifest, role),
+        `${role} package`,
+      ),
+    );
+  }
+  return {
+    digest: { algorithm: 'SHA-256', content: computedDigest },
+    source: {
+      repository: provenance.source.repository,
+      git_commit: provenance.source.git_commit,
+    },
+    provenanceInputs: {
+      file: provenanceArtifact.file,
+      sha256: provenanceArtifact.hashes.sha256,
+    },
+    skillArchive,
+    packages,
+  };
+}
+
+async function readHostEvidenceIndex(path, candidateBinding) {
+  const facts = await lstat(path);
+  if (!facts.isFile()) throw new Error('host evidence index is not a regular file');
+  const index = JSON.parse(await readFile(path, 'utf8'));
+  const indexedOperatingSystems = ['linux', 'macos', 'windows'].filter((family) =>
+    index.rows?.some((row) => row.transport === 'cli' && row.operating_system?.family === family),
+  );
+  const indexedModelFamilies = [
+    ...new Set((index.rows ?? []).map((row) => row.model?.model_family)),
+  ].sort();
+  const indexedProviderFamilies = [
+    ...new Set((index.rows ?? []).map((row) => row.model?.provider_family)),
+  ].sort();
+  const supportedHosts = (index.rows ?? []).map(supportedHostRow);
+  if (
+    index?.schema_version !== 'breakdown.guided-host-evidence-index.v1' ||
+    index?.release_version !== RELEASE_VERSION ||
+    index?.status !== 'passed' ||
+    index?.gate?.satisfied !== true ||
+    index?.candidate_digest?.algorithm !== 'SHA-256' ||
+    index?.candidate_digest?.content !== candidateBinding.digest.content ||
+    JSON.stringify(index?.source) !== JSON.stringify(candidateBinding.source) ||
+    !Array.isArray(index.rows) ||
+    !Array.isArray(index.supported_hosts) ||
+    index.rows.length !== index.supported_hosts.length ||
+    index.supported_hosts.length < 3 ||
+    index.rows.some((row) => !validIndexedHostRow(row, candidateBinding)) ||
+    index.supported_hosts.some((row) => !validSupportedHostRow(row)) ||
+    JSON.stringify(index.coverage?.guided_cli_operating_systems) !==
+      JSON.stringify(['linux', 'macos', 'windows']) ||
+    !Array.isArray(index.coverage?.model_families) ||
+    !Array.isArray(index.coverage?.provider_families) ||
+    (index.coverage.model_families.length < 2 && index.coverage.provider_families.length < 2) ||
+    JSON.stringify(indexedOperatingSystems) !==
+      JSON.stringify(index.coverage.guided_cli_operating_systems) ||
+    JSON.stringify(indexedModelFamilies) !== JSON.stringify(index.coverage.model_families) ||
+    JSON.stringify(indexedProviderFamilies) !== JSON.stringify(index.coverage.provider_families) ||
+    new Set(index.rows.map(hostRowIdentity)).size !== index.rows.length ||
+    JSON.stringify(index.supported_hosts) !== JSON.stringify(supportedHosts)
+  ) {
+    throw new Error('host evidence index is invalid, failing, or mismatched');
+  }
+  return index.supported_hosts;
+}
+
+function sha256Digest(value) {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+}
+
+function exactArtifact(value) {
+  return typeof value?.file === 'string' && value.file.length > 0 && sha256Digest(value.sha256);
+}
+
+function validIndexedHostRow(row, candidateBinding) {
+  const expectedPlatform = {
+    linux: 'linux',
+    macos: 'darwin',
+    windows: 'win32',
+  }[row?.operating_system?.family];
+  return (
+    typeof row?.host?.surface === 'string' &&
+    row.host.surface.length > 0 &&
+    typeof row.host.version === 'string' &&
+    row.host.version.length > 0 &&
+    ['linux', 'macos', 'windows'].includes(row.operating_system?.family) &&
+    row.operating_system.platform === expectedPlatform &&
+    typeof row.operating_system.name === 'string' &&
+    row.operating_system.name.length > 0 &&
+    typeof row.operating_system.release === 'string' &&
+    row.operating_system.release.length > 0 &&
+    typeof row.operating_system.version === 'string' &&
+    row.operating_system.version.length > 0 &&
+    (row.operating_system.architecture === 'x64' ||
+      row.operating_system.architecture === 'arm64') &&
+    (row.transport === 'cli' || row.transport === 'mcp') &&
+    row.breakdown_version === RELEASE_VERSION &&
+    /^[a-z][a-z0-9-]{0,63}$/.test(row.model?.provider_family ?? '') &&
+    /^[a-z][a-z0-9.-]{0,127}$/.test(row.model?.model_family ?? '') &&
+    row.candidate?.digest?.algorithm === 'SHA-256' &&
+    row.candidate.digest.content === candidateBinding.digest.content &&
+    JSON.stringify(row.candidate.provenance_inputs) ===
+      JSON.stringify(candidateBinding.provenanceInputs) &&
+    JSON.stringify(row.candidate.skill_archive) === JSON.stringify(candidateBinding.skillArchive) &&
+    JSON.stringify(row.candidate.packages) === JSON.stringify(candidateBinding.packages) &&
+    exactArtifact(row.candidate.skill_archive) &&
+    Array.isArray(row.candidate.packages) &&
+    row.candidate.packages.length === 3 &&
+    row.candidate.packages.every(exactArtifact) &&
+    row.status === 'passed' &&
+    row.evidence?.mechanism === 'github-actions-artifact-v7' &&
+    /^[1-9]\d*$/.test(row.evidence.workflow_run_id) &&
+    /^[1-9]\d*$/.test(row.evidence.workflow_run_attempt) &&
+    typeof row.evidence.artifact_name === 'string' &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(row.evidence.artifact_name) &&
+    sha256Digest(row.evidence.file_sha256)
+  );
+}
+
+function hostRowIdentity(row) {
+  return [
+    row.host.surface,
+    row.host.version,
+    row.operating_system.platform,
+    row.operating_system.release,
+    row.operating_system.version,
+    row.operating_system.architecture,
+    row.transport,
+  ].join('\u0000');
+}
+
+function supportedHostRow(row) {
+  return {
+    surface: row.host?.surface,
+    version: row.host?.version,
+    os: row.operating_system?.platform,
+    os_name: row.operating_system?.name,
+    os_release: row.operating_system?.release,
+    os_version: row.operating_system?.version,
+    architecture: row.operating_system?.architecture,
+    transport: row.transport,
+    breakdown_version: row.breakdown_version,
+    status: 'pass',
+    artifact_digests: {
+      candidate: row.candidate?.digest,
+      provenance_inputs: row.candidate?.provenance_inputs,
+      skill_archive: row.candidate?.skill_archive,
+      packages: row.candidate?.packages,
+    },
+    evidence: row.evidence,
+  };
+}
+
+function validSupportedHostRow(row) {
+  return (
+    typeof row?.surface === 'string' &&
+    row.surface.length > 0 &&
+    typeof row?.version === 'string' &&
+    row.version.length > 0 &&
+    ['linux', 'darwin', 'win32'].includes(row.os) &&
+    typeof row.os_name === 'string' &&
+    row.os_name.length > 0 &&
+    typeof row.os_release === 'string' &&
+    row.os_release.length > 0 &&
+    typeof row.os_version === 'string' &&
+    row.os_version.length > 0 &&
+    (row.architecture === 'x64' || row.architecture === 'arm64') &&
+    (row.transport === 'cli' || row.transport === 'mcp') &&
+    row.breakdown_version === RELEASE_VERSION &&
+    row.status === 'pass' &&
+    row.artifact_digests?.candidate?.algorithm === 'SHA-256' &&
+    sha256Digest(row.artifact_digests.candidate.content) &&
+    exactArtifact(row.artifact_digests.provenance_inputs) &&
+    exactArtifact(row.artifact_digests.skill_archive) &&
+    Array.isArray(row.artifact_digests.packages) &&
+    row.artifact_digests.packages.length === 3 &&
+    row.artifact_digests.packages.every(exactArtifact) &&
+    row.evidence?.mechanism === 'github-actions-artifact-v7' &&
+    /^[1-9]\d*$/.test(row.evidence.workflow_run_id) &&
+    /^[1-9]\d*$/.test(row.evidence.workflow_run_attempt) &&
+    typeof row.evidence.artifact_name === 'string' &&
+    row.evidence.artifact_name.length > 0 &&
+    sha256Digest(row.evidence.file_sha256)
+  );
 }
 
 async function verifySkillBytes(manifest) {
@@ -391,14 +760,17 @@ async function invokeAutomation(cli, projectRoot) {
   return envelope;
 }
 
-function matchingSupportedRow(manifest, options, transport) {
-  return manifest.supported_hosts.some(
+function matchingSupportedRow(supportedHosts, options, transport) {
+  return supportedHosts.some(
     (row) =>
       row?.surface === options.host &&
       row?.version === options.hostVersion &&
       row?.os === platform() &&
+      row?.os_release === release() &&
+      row?.os_version === version() &&
       row?.architecture === arch() &&
       row?.transport === transport &&
+      row?.breakdown_version === RELEASE_VERSION &&
       row?.status === 'pass',
   );
 }
@@ -456,6 +828,7 @@ async function main() {
   let repairRequired = false;
   let inconclusive = false;
   let manifest;
+  let supportedHosts = [];
   let selectedRoot;
   const transport = options.mcpCommand === undefined ? 'cli' : 'mcp';
   const cli = {
@@ -499,6 +872,79 @@ async function main() {
       ),
     );
     repairRequired = true;
+  }
+
+  if (options.mode === 'full' && options.hostEvidenceIndex !== undefined) {
+    try {
+      await verifyHostEvidenceAttestation(options.hostEvidenceIndex, options.hostEvidenceBundle);
+      checks.push(
+        resultCheck(
+          'host_evidence_attestation',
+          'pass',
+          'GitHub authenticated the index, signer workflow, repository, and immutable release tag.',
+        ),
+      );
+    } catch (error) {
+      checks.push(
+        resultCheck(
+          'host_evidence_attestation',
+          'fail',
+          error instanceof Error ? error.message : String(error),
+        ),
+      );
+      repairRequired = true;
+    }
+    let candidateBinding;
+    if (!repairRequired) {
+      try {
+        candidateBinding = await readCandidateBinding(options.candidateDirectory);
+        checks.push(
+          resultCheck(
+            'candidate_binding',
+            'pass',
+            'Installed canonical skills and selected candidate artifacts share one exact digest set.',
+          ),
+        );
+      } catch (error) {
+        checks.push(
+          resultCheck(
+            'candidate_binding',
+            'fail',
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+        repairRequired = true;
+      }
+    }
+    if (!repairRequired && candidateBinding !== undefined) {
+      try {
+        supportedHosts = await readHostEvidenceIndex(options.hostEvidenceIndex, candidateBinding);
+        checks.push(
+          resultCheck(
+            'host_evidence_index',
+            'pass',
+            'Exact passing immutable host evidence index matches this candidate release.',
+          ),
+        );
+      } catch (error) {
+        checks.push(
+          resultCheck(
+            'host_evidence_index',
+            'fail',
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+        repairRequired = true;
+      }
+    }
+  } else if (options.mode === 'full') {
+    checks.push(
+      resultCheck(
+        'host_evidence',
+        'not_provided',
+        'No authenticated external host evidence set was selected; classification cannot exceed Compatible Host.',
+      ),
+    );
   }
 
   const nodeVersion = process.versions.node;
@@ -678,7 +1124,7 @@ async function main() {
   } else if (!inconclusive && manifest !== undefined) {
     outcome = 'ready';
     if (options.mode === 'full') {
-      classification = matchingSupportedRow(manifest, options, transport)
+      classification = matchingSupportedRow(supportedHosts, options, transport)
         ? 'Supported Host'
         : 'Compatible Host';
     }

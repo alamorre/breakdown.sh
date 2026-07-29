@@ -44,6 +44,17 @@ until they approve each mutation.
    node <this-skill>/scripts/preflight.mjs --mode full --project <absolute-root> --host <surface> --host-version <version>
    ```
 
+   When the release provides its exact immutable
+   `breakdown-host-evidence-index.json`, its GitHub attestation bundle, and the retained candidate
+   directory, add `--host-evidence-index <absolute-index-path>`,
+   `--host-evidence-bundle <absolute-bundle-path>`, and
+   `--candidate-directory <absolute-candidate-path>`. The index is generated separately from the
+   unchanged candidate release. Preflight uses GitHub CLI attestation verification to bind its
+   digest to this repository, the release tag, and the dedicated signer workflow, then verifies
+   its coverage and derived rows against the installed skill bytes and every primary candidate
+   artifact. Without that authenticated exact set, full preflight cannot classify a host above
+   Compatible Host.
+
    Add `--mcp-command <command>` plus repeatable `--mcp-arg <argument>` only when the user selected
    MCP. Pass command and arguments separately; never interpolate project content into a shell
    string.
@@ -51,7 +62,8 @@ until they approve each mutation.
 5. Read the JSON report by field, not by matching prose. A successful full preflight verifies the
    canonical skill payload, Node 24, exact CLI version, automation schema, selected MCP version,
    guided-host capability, the local filesystem, and the bundled disposable Workflow Definition.
-   The probe removes only the exact temporary directory it created.
+   When selected, it also verifies the external host-evidence index. The probe removes only the
+   exact temporary directory it created.
 6. Report the verifier's classification precisely:
    - **Supported Host**: the exact host surface, host version, OS, architecture, and transport match
      retained passing release evidence.
