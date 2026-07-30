@@ -93,12 +93,12 @@ async function writeInBatches(total: number, writer: (index: number) => Promise<
 
 function recordBoundaryPhase(campaign: string, phase: string, startedAt: number) {
   const completedAt = performance.now();
-  console.info(
+  process.stdout.write(
     `${BOUNDARY_TIMING_PREFIX} ${JSON.stringify({
       campaign,
       phase,
       duration_ms: Math.round((completedAt - startedAt) * 10) / 10,
-    })}`,
+    })}\n`,
   );
   return completedAt;
 }
@@ -1008,11 +1008,7 @@ nodes:
         ok: false,
         failure: { kind: 'resource_limit', code: 'limit_exceeded' },
       });
-      phaseStartedAt = recordBoundaryPhase(
-        'step-artifact',
-        'reject-limit-plus-one-publication',
-        phaseStartedAt,
-      );
+      recordBoundaryPhase('step-artifact', 'reject-limit-plus-one-publication', phaseStartedAt);
       expect(await readdir(stepsPath)).toHaveLength(FIXED_LIMITS.step_artifacts_per_run);
       recordBoundaryPhase('step-artifact', 'total', campaignStartedAt);
     },
