@@ -39,6 +39,7 @@ const securityMatrix = JSON.parse(
   ),
 ) as { rows: Array<{ id: string }> };
 const REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS = 180_000;
+const STEP_ARTIFACT_BOUNDARY_TIMEOUT_MS = 240_000;
 
 async function temporaryDirectory(prefix = 'breakdown-security-') {
   const path = await mkdtemp(join(tmpdir(), prefix));
@@ -86,6 +87,71 @@ async function writeInBatches(total: number, writer: (index: number) => Promise<
     const count = Math.min(250, total - start);
     await Promise.all(Array.from({ length: count }, (_, index) => writer(start + index)));
   }
+}
+
+async function createStepArtifactBoundaryRun(
+  workflowId: string,
+  nodes: Array<{ id: string; name: string; prompt: string }>,
+) {
+  const projectRoot = await temporaryDirectory();
+  await writeFile(
+    join(projectRoot, 'breakdown.yaml'),
+    JSON.stringify({
+      schema_version: 'breakdown.workflow.v1',
+      id: workflowId,
+      name: 'StepArtifact Boundaries',
+      nodes,
+    }),
+  );
+  const created = await operate(
+    { operation: 'create_run' },
+    {
+      projectRoot,
+      testControls: {
+        now: () => new Date('2026-07-27T00:00:00.000Z'),
+        randomBytes: () => Buffer.alloc(8),
+      },
+    },
+  );
+  if (!created.ok) throw new Error(created.failure.code);
+  const initial = await operate(
+    { operation: 'inspect_run', run_id: created.value.run_id },
+    { projectRoot },
+  );
+  if (!initial.ok) throw new Error(initial.failure.code);
+  const contexts = new Map(initial.value.nodes.map((node) => [node.node_id, node.context_sha256]));
+  const stepsPath = join(projectRoot, created.value.path, 'steps');
+  let ordinal = 0;
+  const writeArtifact = async (nodeId: string, attempt: number) => {
+    ordinal += 1;
+    const contextSha256 = contexts.get(nodeId);
+    if (contextSha256 === undefined) throw new Error(`Missing context for ${nodeId}.`);
+    const settledAt = new Date(Date.UTC(2026, 6, 27) + ordinal * 2).toISOString();
+    const startedAt = new Date(new Date(settledAt).getTime() - 1).toISOString();
+    const filename = `${settledAt.replaceAll('-', '').replaceAll(':', '')}--${nodeId}--a${attempt}.md`;
+    await writeFile(
+      join(stepsPath, filename),
+      `---\n${JSON.stringify({
+        schema_version: 'breakdown.step-artifact.v1',
+        run_id: created.value.run_id,
+        node_id: nodeId,
+        attempt,
+        status: 'failed',
+        started_at: startedAt,
+        settled_at: settledAt,
+        context_sha256: contextSha256,
+        inputs: {},
+        executor: { kind: 'program', name: 'security-boundary-test' },
+        problem: { code: 'boundary_fixture', message: 'Boundary fixture.' },
+      })}\n---\n`,
+      { mode: 0o600 },
+    );
+    return filename;
+  };
+  const inspect = () =>
+    operate({ operation: 'inspect_run', run_id: created.value.run_id }, { projectRoot });
+
+  return { created: created.value, inspect, projectRoot, stepsPath, writeArtifact };
 }
 
 afterEach(async () => {
@@ -800,86 +866,13 @@ nodes:
   });
 
   it(
-    'enforces attempt and StepArtifact count boundaries on a real filesystem',
+    'enforces the attempt boundary on an independent real filesystem fixture',
     { timeout: REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS },
     async () => {
-      const projectRoot = await temporaryDirectory();
-      const nodes = [
-        { id: 'publish', name: 'Publish', prompt: 'Exercise the publication boundary.' },
-        { id: 'exhausted', name: 'Exhausted', prompt: 'Exercise the attempt boundary.' },
-        ...Array.from({ length: 10 }, (_, index) => ({
-          id: `filler-${index}`,
-          name: `Filler ${index}`,
-          prompt: `Exercise artifact counting for filler ${index}.`,
-        })),
-      ];
-      await writeFile(
-        join(projectRoot, 'breakdown.yaml'),
-        JSON.stringify({
-          schema_version: 'breakdown.workflow.v1',
-          id: 'artifact-limits',
-          name: 'Artifact Limits',
-          nodes,
-        }),
-      );
-      const created = await operate(
-        { operation: 'create_run' },
-        {
-          projectRoot,
-          testControls: {
-            now: () => new Date('2026-07-27T00:00:00.000Z'),
-            randomBytes: () => Buffer.alloc(8),
-          },
-        },
-      );
-      if (!created.ok) throw new Error(created.failure.code);
-      const initial = await operate(
-        { operation: 'inspect_run', run_id: created.value.run_id },
-        { projectRoot },
-      );
-      if (!initial.ok) throw new Error(initial.failure.code);
-      const contexts = new Map(
-        initial.value.nodes.map((node) => [node.node_id, node.context_sha256]),
-      );
-      const initiallyPrepared = await operate(
-        { operation: 'prepare_work', run_id: created.value.run_id },
-        { projectRoot },
-      );
-      if (!initiallyPrepared.ok) throw new Error(initiallyPrepared.failure.code);
-      const publishPacket = initiallyPrepared.value.packets.find(
-        (packet) => packet.node.id === 'publish',
-      );
-      if (publishPacket === undefined) throw new Error('Missing publication-boundary packet.');
-      const stepsPath = join(projectRoot, created.value.path, 'steps');
-      let ordinal = 0;
-      const writeArtifact = async (nodeId: string, attempt: number) => {
-        ordinal += 1;
-        const contextSha256 = contexts.get(nodeId);
-        if (contextSha256 === undefined) throw new Error(`Missing context for ${nodeId}.`);
-        const settledAt = new Date(Date.UTC(2026, 6, 27) + ordinal * 2).toISOString();
-        const startedAt = new Date(new Date(settledAt).getTime() - 1).toISOString();
-        const filename = `${settledAt.replaceAll('-', '').replaceAll(':', '')}--${nodeId}--a${attempt}.md`;
-        await writeFile(
-          join(stepsPath, filename),
-          `---\n${JSON.stringify({
-            schema_version: 'breakdown.step-artifact.v1',
-            run_id: created.value.run_id,
-            node_id: nodeId,
-            attempt,
-            status: 'failed',
-            started_at: startedAt,
-            settled_at: settledAt,
-            context_sha256: contextSha256,
-            inputs: {},
-            executor: { kind: 'program', name: 'security-boundary-test' },
-            problem: { code: 'boundary_fixture', message: 'Boundary fixture.' },
-          })}\n---\n`,
-          { mode: 0o600 },
-        );
-        return filename;
-      };
-      const inspect = () =>
-        operate({ operation: 'inspect_run', run_id: created.value.run_id }, { projectRoot });
+      const { created, inspect, projectRoot, stepsPath, writeArtifact } =
+        await createStepArtifactBoundaryRun('attempt-limit', [
+          { id: 'exhausted', name: 'Exhausted', prompt: 'Exercise the attempt boundary.' },
+        ]);
 
       await writeInBatches(FIXED_LIMITS.attempts_per_node - 1, (index) =>
         writeArtifact('exhausted', index + 1),
@@ -894,7 +887,7 @@ nodes:
         next_attempt: 1_000,
       });
       const atAttemptLimit = await operate(
-        { operation: 'prepare_work', run_id: created.value.run_id },
+        { operation: 'prepare_work', run_id: created.run_id },
         { projectRoot },
       );
       if (!atAttemptLimit.ok) throw new Error(atAttemptLimit.failure.code);
@@ -914,7 +907,7 @@ nodes:
         next_attempt: 1_001,
       });
       await expect(
-        operate({ operation: 'prepare_work', run_id: created.value.run_id }, { projectRoot }),
+        operate({ operation: 'prepare_work', run_id: created.run_id }, { projectRoot }),
       ).resolves.toMatchObject({
         ok: false,
         failure: { kind: 'resource_limit', code: 'limit_exceeded' },
@@ -933,15 +926,39 @@ nodes:
         failure: { kind: 'resource_limit', code: 'limit_exceeded' },
       });
       expect(await readdir(stepsPath)).toHaveLength(FIXED_LIMITS.attempts_per_node);
+    },
+  );
 
-      const remainingAtArtifactMinusOne =
-        FIXED_LIMITS.step_artifacts_per_run - FIXED_LIMITS.attempts_per_node - 1;
-      await writeInBatches(remainingAtArtifactMinusOne, (index) =>
+  it(
+    'enforces the StepArtifact count boundary on an independent real filesystem fixture',
+    { timeout: STEP_ARTIFACT_BOUNDARY_TIMEOUT_MS },
+    async () => {
+      const fillerNodes = Array.from({ length: 10 }, (_, index) => ({
+        id: `filler-${index}`,
+        name: `Filler ${index}`,
+        prompt: `Exercise artifact counting for filler ${index}.`,
+      }));
+      const { created, inspect, projectRoot, stepsPath, writeArtifact } =
+        await createStepArtifactBoundaryRun('artifact-limit', [
+          { id: 'publish', name: 'Publish', prompt: 'Exercise the publication boundary.' },
+          ...fillerNodes,
+        ]);
+      const initiallyPrepared = await operate(
+        { operation: 'prepare_work', run_id: created.run_id },
+        { projectRoot },
+      );
+      if (!initiallyPrepared.ok) throw new Error(initiallyPrepared.failure.code);
+      const publishPacket = initiallyPrepared.value.packets.find(
+        (packet) => packet.node.id === 'publish',
+      );
+      if (publishPacket === undefined) throw new Error('Missing publication-boundary packet.');
+
+      await writeInBatches(FIXED_LIMITS.step_artifacts_per_run - 1, (index) =>
         writeArtifact(`filler-${index % 10}`, Math.floor(index / 10) + 1),
       );
       await expect(inspect()).resolves.toMatchObject({ ok: true });
 
-      await writeArtifact('filler-9', 900);
+      await writeArtifact('filler-9', FIXED_LIMITS.attempts_per_node);
       await expect(inspect()).resolves.toMatchObject({ ok: true });
 
       await expect(
