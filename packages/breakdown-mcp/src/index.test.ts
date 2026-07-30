@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { watch } from 'node:fs';
 import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -179,6 +179,98 @@ function startServer() {
     stderr: () => stderr,
     messages: () => [...messages],
   };
+}
+
+function waitForPathRemoval(path: string, label: string) {
+  return new Promise<void>((resolve, reject) => {
+    const expectedName = basename(path);
+    let settled = false;
+    let checking = false;
+    const watcher = watch(dirname(path), (_event, filename) => {
+      if (filename === null || filename === expectedName) void check();
+    });
+    watcher.once('error', (error) => finish(error));
+    const timeout = setTimeout(
+      () => finish(new Error(`Timed out waiting for ${label} removal.`)),
+      2_000,
+    );
+
+    function finish(error?: Error) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      watcher.close();
+      if (error === undefined) resolve();
+      else reject(error);
+    }
+
+    async function check() {
+      if (settled || checking) return;
+      checking = true;
+      try {
+        await access(path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') finish();
+        else finish(error instanceof Error ? error : new Error(`Could not inspect ${label}.`));
+      } finally {
+        checking = false;
+        if (!settled) setImmediate(() => void check());
+      }
+    }
+
+    void check();
+  });
+}
+
+function waitForDirectoryEntry(
+  directory: string,
+  matches: (entry: string) => boolean,
+  label: string,
+) {
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    let checking = false;
+    const watcher = watch(directory, () => void check());
+    watcher.once('error', (error) => finish(undefined, error));
+    const timeout = setTimeout(
+      () => finish(undefined, new Error(`Timed out waiting for ${label}.`)),
+      2_000,
+    );
+
+    function finish(path?: string, error?: Error) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      watcher.close();
+      if (error !== undefined) reject(error);
+      else resolve(path!);
+    }
+
+    async function check() {
+      if (settled || checking) return;
+      checking = true;
+      try {
+        const entry = (await readdir(directory)).find(matches);
+        if (entry !== undefined) {
+          const path = join(directory, entry);
+          await access(path);
+          finish(path);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          finish(
+            undefined,
+            error instanceof Error ? error : new Error(`Could not inspect ${label}.`),
+          );
+        }
+      } finally {
+        checking = false;
+        if (!settled) setImmediate(() => void check());
+      }
+    }
+
+    void check();
+  });
 }
 
 async function runCli(projectRoot: string, request: Record<string, unknown>) {
@@ -929,14 +1021,14 @@ nodes:
     expect(server.stderr()).toBe('');
   });
 
-  it('suppresses a cancelled submission response after deferred commit completes', async () => {
-    const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-mcp-deferred-'));
+  it('suppresses a cancelled submission response and removes pre-commit staging', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-mcp-staged-cancel-'));
     temporaryDirectories.add(projectRoot);
     await writeFile(
       join(projectRoot, 'breakdown.yaml'),
       `schema_version: breakdown.workflow.v1
-id: deferred-cancellation
-name: Deferred cancellation
+id: staged-cancellation
+name: Staged cancellation
 nodes:
   - id: investigate
     name: Investigate
@@ -950,7 +1042,7 @@ nodes:
       protocolVersion: '2025-11-25',
       capabilities: {},
       clientInfo: {
-        name: 'deferred-cancellation-client',
+        name: 'staged-cancellation-client',
         version: '1.0.0',
       },
     });
@@ -981,13 +1073,13 @@ nodes:
     });
     const packet = (prepared.data.packets as Array<Record<string, unknown>>)[0]!;
 
-    let watcher: ReturnType<typeof watch>;
-    const commitVisible = new Promise<void>((resolve) => {
-      watcher = watch(join(projectRoot, 'outputs', runId, 'steps'), (_event, filename) => {
-        if (typeof filename !== 'string' || !filename.endsWith('--investigate--a1.md')) return;
-        resolve();
-      });
-    });
+    const stepsPath = join(projectRoot, 'outputs', runId, 'steps');
+    const lockPath = join(projectRoot, '.breakdown', 'locks', 'runs', `${runId}.lock`);
+    const stagingVisible = waitForDirectoryEntry(
+      stepsPath,
+      (entry) => /^\.submit-[0-9a-f]{16}\.md\.tmp$/.test(entry),
+      'live submission staging',
+    );
     const submitting = server.beginRequest('tools/call', {
       name: 'submit_candidate',
       arguments: {
@@ -1000,7 +1092,7 @@ nodes:
           status: 'succeeded',
           executor: {
             kind: 'program',
-            name: 'Deferred cancellation test',
+            name: 'Staged cancellation test',
           },
           markdown: `${'x'.repeat(400_000)}\n`,
         },
@@ -1014,37 +1106,39 @@ nodes:
       () => undefined,
     );
 
-    await Promise.race([
-      commitVisible,
-      new Promise<never>((_resolve, reject) =>
-        setTimeout(() => reject(new Error('The StepArtifact commit was not observed.')), 2_000),
-      ),
-    ]);
-    watcher!.close();
+    const stagingPath = await stagingVisible;
+    await access(lockPath);
+    const stagingRemoved = waitForPathRemoval(stagingPath, 'submission staging file');
+    const lockRemoved = waitForPathRemoval(lockPath, 'Run writer lock');
     server.notify('notifications/cancelled', {
       requestId: submitting.id,
-      reason: 'The client timed out after publication began.',
+      reason: 'The client cancelled after pre-commit staging became visible.',
     });
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await Promise.all([stagingRemoved, lockRemoved]);
 
-    expect(responseReceived).toBe(false);
-    expect(server.messages().some((message) => message.id === submitting.id)).toBe(false);
     const inspected = await call('inspect_run', { run_id: runId });
     expect(inspected).toMatchObject({
       ok: true,
       data: {
         run_id: runId,
-        status: 'complete',
-        attempts: [
+        status: 'incomplete',
+        lock: null,
+        attempts: [],
+        nodes: [
           {
             node_id: 'investigate',
-            attempt: 1,
-            status: 'succeeded',
+            state: 'runnable',
+            next_attempt: 1,
           },
         ],
       },
     });
+    expect(await readdir(stepsPath)).toEqual([]);
+    expect(responseReceived).toBe(false);
+    expect(server.messages().some((message) => message.id === submitting.id)).toBe(false);
 
+    // Core publication-safety tests own deterministic after-commit deferral;
+    // this process test owns adapter suppression for observable pre-commit cancellation.
     await server.close();
     expect(server.stderr()).toBe('');
   });
