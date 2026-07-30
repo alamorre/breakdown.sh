@@ -20,8 +20,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const workspaceRoot =
   process.env.BREAKDOWN_TEST_REPOSITORY_ROOT ??
   fileURLToPath(new URL('../../../', import.meta.url));
+const signalReadinessPreload = new URL(
+  '../test-fixtures/signal-readiness-preload.mjs',
+  import.meta.url,
+).href;
 const temporaryDirectories: string[] = [];
 let breakdownExecutable: string;
+let installedCliEntrypoint: string;
 let installationRoot: string;
 let cliCoverageRoot: string;
 const cliProcessFixtures = JSON.parse(
@@ -51,6 +56,7 @@ const cliProcessFixtures = JSON.parse(
 
 interface ProcessResult {
   status: number | null;
+  signalCode?: NodeJS.Signals | null;
   stdout: string;
   stderr: string;
 }
@@ -163,24 +169,24 @@ function runBreakdownAfterSignal(
   signal: NodeJS.Signals,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const command =
-      process.env.BREAKDOWN_TEST_CLI_EXECUTABLE === undefined
-        ? breakdownExecutable
-        : process.execPath;
     const args = [
-      ...(process.env.BREAKDOWN_TEST_CLI_EXECUTABLE === undefined ? [] : [breakdownExecutable]),
+      '--import',
+      signalReadinessPreload,
+      installedCliEntrypoint,
       'operate',
       '--project',
       projectRoot,
     ];
-    const child = spawn(command, args, {
+    const child = spawn(process.execPath, args, {
       cwd: workspaceRoot,
       env: {
         ...process.env,
+        ...(process.platform === 'win32' ? { BREAKDOWN_TEST_WINDOWS_SIGNAL: signal } : {}),
         NODE_V8_COVERAGE: cliCoverageRoot,
       },
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
     });
+    const readiness = child.stdio[3];
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8');
@@ -195,20 +201,24 @@ function runBreakdownAfterSignal(
       // An implementation without signal handling may close stdin before the test writes.
     });
     child.once('error', reject);
-    child.once('close', (status) => {
-      resolve({ status, stdout, stderr });
+    child.once('close', (status, terminationSignal) => {
+      resolve({ status, signalCode: terminationSignal, stdout, stderr });
     });
-    setTimeout(() => {
-      child.kill(signal);
-      setTimeout(() => {
-        child.stdin.end(
-          JSON.stringify({
-            schema_version: 'breakdown.operation-request.v1',
-            ...request,
-          }),
-        );
-      }, 10);
-    }, 100);
+    if (readiness === null || readiness === undefined) {
+      reject(new Error('The CLI readiness pipe was not created.'));
+      child.kill();
+      return;
+    }
+    readiness.once('error', reject);
+    readiness.once('data', () => {
+      if (process.platform !== 'win32') child.kill(signal);
+      child.stdin.end(
+        JSON.stringify({
+          schema_version: 'breakdown.operation-request.v1',
+          ...request,
+        }),
+      );
+    });
   });
 }
 
@@ -325,6 +335,7 @@ beforeAll(async () => {
     }
     installationRoot = candidateInstallation;
     breakdownExecutable = candidateExecutable;
+    installedCliEntrypoint = candidateExecutable;
     cliCoverageRoot = join(candidateInstallation, 'cli-coverage');
     await mkdir(cliCoverageRoot, { recursive: true });
     return;
@@ -376,6 +387,14 @@ beforeAll(async () => {
     'node_modules',
     '.bin',
     process.platform === 'win32' ? 'breakdown.cmd' : 'breakdown',
+  );
+  installedCliEntrypoint = join(
+    installationRoot,
+    'node_modules',
+    '@breakdown-sh',
+    'cli',
+    'dist',
+    'index.js',
   );
 });
 
@@ -1196,8 +1215,9 @@ nodes:
         signal,
       );
 
-      expect(result, signal).toEqual({
+      expect(result, `${signal}: ${JSON.stringify(result)}`).toEqual({
         status: 6,
+        signalCode: null,
         stdout: `${JSON.stringify({
           schema_version: 'breakdown.cli-output.v1',
           operation: 'validate_workflow',
