@@ -53,10 +53,6 @@ export function runPackageArtifactCommand(
   });
 }
 
-async function run(command, args, options = {}) {
-  return runPackageArtifactCommand(command, args, options);
-}
-
 export function packageNameFromLockPath(path) {
   const marker = 'node_modules/';
   const index = path.lastIndexOf(marker);
@@ -194,7 +190,7 @@ async function generateShrinkwrap({ coreTarballPath, packageManifest, stagePath 
     dependencies: lockDependencies,
   };
   await writeFile(join(stagePath, 'package.json'), `${JSON.stringify(lockManifest, null, 2)}\n`);
-  await run(
+  await runPackageArtifactCommand(
     'npm',
     [
       'install',
@@ -226,7 +222,7 @@ async function generateShrinkwrap({ coreTarballPath, packageManifest, stagePath 
 }
 
 async function packStage({ artifactName, outputPath, stagePath }) {
-  const { stdout } = await run(
+  const { stdout } = await runPackageArtifactCommand(
     'npm',
     ['pack', '.', '--json', '--ignore-scripts', '--pack-destination', outputPath],
     { cwd: stagePath },
@@ -267,7 +263,9 @@ export async function buildPackageArtifacts({ outputPath, releaseVersion, reposi
       force: true,
       recursive: true,
     });
-    await run('pnpm', ['--filter', definition.name, 'build'], { cwd: repositoryRoot });
+    await runPackageArtifactCommand('pnpm', ['--filter', definition.name, 'build'], {
+      cwd: repositoryRoot,
+    });
   }
 
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'breakdown-package-candidate-'));
