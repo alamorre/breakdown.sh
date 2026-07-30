@@ -10,6 +10,7 @@ import {
   GUIDED_HOST_RUBRIC_DIMENSIONS,
   HOST_OUTCOME_PARITY_EXCLUSIONS,
   HOST_REVIEW_ATTESTATION,
+  bindHostEvidenceSubmission,
   indexHostEvidence,
   qualifyHostEvidence,
   writeHostQualificationTemplate,
@@ -296,6 +297,57 @@ describe('authenticated host support workflow', () => {
   });
 });
 
+describe('authenticated host evidence capture workflow', () => {
+  it('should ingest one raw row and retain a current-run-bound qualified row only', async () => {
+    const workflow = await readFile(
+      join(repositoryRoot, '.github', 'workflows', 'local-host-evidence-capture.yml'),
+      'utf8',
+    );
+    const requiredSnippets = [
+      'raw_row_path:',
+      'permissions:\n  actions: read\n  contents: read',
+      "github.ref == 'refs/heads/main'",
+      'runs-on: [self-hosted, breakdown-host-evidence-ingress]',
+      'actions/upload-artifact@v7',
+      'raw_artifact_id: ${{ steps.upload-raw-row.outputs.artifact-id }}',
+      'artifact-ids: 8774500090',
+      'sha256:0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904',
+      'f772a5482bd1de65c1d79e557993183e7508a7e07839879975b69833d0d51efc',
+      'artifact-ids: ${{ needs.ingest.outputs.raw_artifact_id }}',
+      'BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: breakdown-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}',
+      'pnpm local:release:bind-host',
+      'pnpm local:release:qualify-host',
+      'path: ${{ runner.temp }}/qualified-host-row',
+      'retention-days: 90',
+    ];
+    const forbiddenSnippets = [
+      'attestations: write',
+      'contents: write',
+      'id-token: write',
+      'local:release:index-hosts',
+      'actions/attest',
+      'always()',
+      'npm publish',
+      'release tag',
+      'windows',
+    ];
+
+    expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
+    expect(forbiddenSnippets.filter((snippet) => workflow.toLowerCase().includes(snippet))).toEqual(
+      [],
+    );
+    expect(workflow.match(/actions\/upload-artifact@v7/g)).toHaveLength(2);
+    expect(workflow.indexOf('pnpm local:release:qualify-host')).toBeLessThan(
+      workflow.lastIndexOf('actions/upload-artifact@v7'),
+    );
+    const ingressJob = workflow.slice(
+      workflow.indexOf('  ingest:'),
+      workflow.indexOf('  finalize:'),
+    );
+    expect(ingressJob).not.toContain('actions/checkout');
+  });
+});
+
 describe('qualifyHostEvidence', () => {
   it('should bind a complete passing real-host journey to the exact candidate artifacts', async () => {
     const candidate = await candidateFixture();
@@ -381,6 +433,32 @@ describe('qualifyHostEvidence', () => {
       'has no exact human-review identity, time, and attestation',
     ],
     [
+      'a prohibited outcome-parity claim',
+      (submission: Awaited<ReturnType<typeof submissionFixture>>['submission']) => {
+        submission.outcome_parity.disclaimed_dimensions =
+          submission.outcome_parity.disclaimed_dimensions.slice(0, -1);
+      },
+      'makes a prohibited host-parity claim',
+    ],
+    [
+      'a rubric result below 80 percent',
+      (submission: Awaited<ReturnType<typeof submissionFixture>>['submission']) => {
+        for (const score of submission.rubric.scores) {
+          if (
+            ![
+              'authority-approval-safety',
+              'core-truthfulness',
+              'valid-artifacts',
+              'summary-fidelity',
+            ].includes(score.dimension)
+          ) {
+            score.score = 1;
+          }
+        }
+      },
+      'is below 80 percent',
+    ],
+    [
       'one generic action record reused for multiple journey stages',
       (submission: Awaited<ReturnType<typeof submissionFixture>>['submission']) => {
         submission.journey.stages[2]!.action_evidence =
@@ -410,6 +488,19 @@ describe('qualifyHostEvidence', () => {
     );
   });
 
+  it('should reject candidate artifact bytes that do not match the retained candidate manifest', async () => {
+    const candidate = await candidateFixture();
+    const row = await submissionFixture({ root: candidate.root });
+    await writeFile(
+      join(candidate.candidateDirectory, `breakdown-skills-${releaseVersion}.tar.gz`),
+      'changed candidate bytes',
+    );
+
+    await expect(qualifySubmission(candidate, row)).rejects.toThrow(
+      'Candidate skill archive artifact breakdown-skills-1.0.0.tar.gz does not match its release digest.',
+    );
+  });
+
   it('should reject an immutable-storage identity not issued by the current workflow', async () => {
     const candidate = await candidateFixture();
     const row = await submissionFixture({ root: candidate.root });
@@ -427,6 +518,120 @@ describe('qualifyHostEvidence', () => {
         submissionPath: row.submissionPath,
       }),
     ).rejects.toThrow('bind evidence to the current GitHub Actions run and artifact');
+  });
+});
+
+describe('bindHostEvidenceSubmission', () => {
+  it('should bind only immutable storage identity to the current Actions execution', async () => {
+    const candidate = await candidateFixture();
+    const row = await submissionFixture({ root: candidate.root });
+    const rawSubmission = structuredClone(row.submission);
+    rawSubmission.immutability = {
+      mechanism: 'github-actions-artifact-v7',
+      workflow_run_id: '',
+      workflow_run_attempt: '',
+      artifact_name: '',
+    };
+    await writeJson(row.submissionPath, rawSubmission);
+    const outputDirectory = join(candidate.root, 'bound-row');
+
+    await bindHostEvidenceSubmission({
+      environment: {
+        GITHUB_ACTIONS: 'true',
+        GITHUB_RUN_ID: '7654321',
+        GITHUB_RUN_ATTEMPT: '2',
+        BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
+      },
+      outputDirectory,
+      rawRoot: row.rowRoot,
+    });
+
+    const boundSubmission = JSON.parse(
+      await readFile(join(outputDirectory, 'guided-host-submission.json'), 'utf8'),
+    ) as typeof rawSubmission;
+    expect(boundSubmission).toEqual({
+      ...rawSubmission,
+      immutability: {
+        mechanism: 'github-actions-artifact-v7',
+        workflow_run_id: '7654321',
+        workflow_run_attempt: '2',
+        artifact_name: 'breakdown-host-evidence-7654321-2',
+      },
+    });
+    for (const retained of rawSubmission.retained_evidence) {
+      await expect(readFile(join(outputDirectory, retained.path))).resolves.toEqual(
+        await readFile(join(row.rowRoot, retained.path)),
+      );
+    }
+  });
+
+  it.each([
+    ['mechanism', 'mutable-storage'],
+    ['workflow_run_id', '12345'],
+    ['workflow_run_attempt', '1'],
+    ['artifact_name', 'breakdown-host-evidence-another-run'],
+  ] as const)(
+    'should reject a pre-existing conflicting %s instead of replacing it',
+    async (field, conflictingValue) => {
+      const candidate = await candidateFixture();
+      const row = await submissionFixture({ root: candidate.root });
+      const environment = {
+        GITHUB_ACTIONS: 'true',
+        GITHUB_RUN_ID: '7654321',
+        GITHUB_RUN_ATTEMPT: '2',
+        BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
+      };
+      row.submission.immutability = {
+        mechanism: 'github-actions-artifact-v7',
+        workflow_run_id: environment.GITHUB_RUN_ID,
+        workflow_run_attempt: environment.GITHUB_RUN_ATTEMPT,
+        artifact_name: environment.BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME,
+        [field]: conflictingValue,
+      };
+      await writeJson(row.submissionPath, row.submission);
+
+      await expect(
+        bindHostEvidenceSubmission({
+          environment,
+          outputDirectory: join(candidate.root, 'rejected-row'),
+          rawRoot: row.rowRoot,
+        }),
+      ).rejects.toThrow(
+        `Host submission immutability field ${field} conflicts with the current GitHub Actions execution.`,
+      );
+    },
+  );
+
+  it('should reject missing or multiple raw guided-host submissions', async () => {
+    const candidate = await candidateFixture();
+    const row = await submissionFixture({ root: candidate.root });
+    const environment = {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_RUN_ID: '7654321',
+      GITHUB_RUN_ATTEMPT: '2',
+      BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
+    };
+    const emptyRoot = join(candidate.root, 'empty-raw-root');
+    await mkdir(emptyRoot);
+
+    await expect(
+      bindHostEvidenceSubmission({
+        environment,
+        outputDirectory: join(candidate.root, 'missing-output'),
+        rawRoot: emptyRoot,
+      }),
+    ).rejects.toThrow('Expected exactly one raw guided host submission, found 0.');
+
+    const duplicateRoot = join(row.rowRoot, 'duplicate');
+    await mkdir(duplicateRoot);
+    await writeJson(join(duplicateRoot, 'guided-host-submission.json'), row.submission);
+    await expect(
+      bindHostEvidenceSubmission({
+        environment,
+        outputDirectory: join(candidate.root, 'duplicate-output'),
+        rawRoot: row.rowRoot,
+      }),
+    ).rejects.toThrow('Expected exactly one raw guided host submission, found 2.');
   });
 });
 
@@ -485,6 +690,7 @@ describe('writeHostQualificationTemplate', () => {
     expect(guide).toContain('real Agent Host');
     expect(guide).toContain('Do not mark a stage passed');
     expect(guide).toContain('human reviewer');
+    expect(guide).toContain('local-host-evidence-capture.yml');
     expect(guide).toContain('local:release:qualify-host');
   });
 });

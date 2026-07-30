@@ -35,6 +35,7 @@
     "local:release:qualify": "node scripts/qualify-local-release.mjs",
     "local:release:index-platform": "node scripts/index-platform-evidence.mjs",
     "local:release:prepare-host": "node scripts/prepare-host-qualification.mjs",
+    "local:release:bind-host": "node scripts/bind-host-evidence.mjs",
     "local:release:qualify-host": "node scripts/qualify-host-evidence.mjs",
     "local:release:index-hosts": "node scripts/index-host-evidence.mjs",
     "local:release:create-approval": "node scripts/create-release-approval.mjs",

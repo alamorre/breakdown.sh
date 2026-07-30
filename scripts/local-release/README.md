@@ -55,6 +55,114 @@ Before approval, independently inspect:
 - package, security, documentation, traceability, platform, and real-host gates;
 - the generated Supported Host JSON and Markdown, ensuring no unindexed row is claimed.
 
+## Capture one completed guided-host row
+
+`local-host-evidence-capture.yml` is the authenticated ingress and finalization boundary for one
+completed real-host journey. It does not conduct a journey, supply approvals, score a rubric,
+index host rows, attest support, or publish anything. The raw row never enters source control.
+
+The retained candidate for these journeys is fixed:
+
+- qualification run `30580700387`, attempt 1;
+- candidate artifact ID `8774500090`, named `breakdown-local-candidate`;
+- Actions artifact digest
+  `sha256:0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904`;
+- candidate content digest
+  `f772a5482bd1de65c1d79e557993183e7508a7e07839879975b69833d0d51efc`;
+- source commit `45bf368ebfcd21c09f98020d757332cf69eac170`;
+- artifact expiry `2026-10-28T20:47:31Z`.
+
+Before the artifact expires, an authenticated repository operator can download it by immutable ID
+and generate a candidate-bound kit:
+
+```sh
+candidate_dir=/absolute/path/to/breakdown-local-candidate
+kit_dir=/absolute/path/to/guided-host-kit
+mkdir -m 700 "$candidate_dir"
+gh api repos/alamorre/breakdown.sh/actions/artifacts/8774500090/zip > candidate.zip
+printf '%s  %s\n' \
+  0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904 \
+  candidate.zip |
+  shasum -a 256 --check
+unzip -q candidate.zip -d "$candidate_dir"
+rm candidate.zip
+pnpm local:release:prepare-host --candidate "$candidate_dir" --output "$kit_dir"
+```
+
+Copy `guided-host-submission.template.json` to
+`guided-host-submission.json` in a new private row directory. Complete all 13 stages in one real
+Agent Host against those exact candidate artifacts. Put every declared retained interaction,
+action, artifact, rubric, hostile-content, and parity file directly beside the submission and
+record its SHA-256 in `retained_evidence`. The row directory must contain exactly one
+`guided-host-submission.json`; leave its run ID, run attempt, and final artifact name empty. The
+mechanism remains `github-actions-artifact-v7`.
+
+A human—not an agent or workflow—must personally give the required journey approvals, review the
+retained files, score every rubric dimension, and complete the reviewer identity, UTC time, and
+exact attestation. An agent may prepare files and run deterministic checks, but it must not
+generate scores, impersonate the reviewer, or mark observed behavior as passed.
+
+GitHub has no documented CLI or REST endpoint for uploading a local directory as an Actions
+artifact outside a runner job. Ingress therefore uses a one-job, ephemeral self-hosted runner on
+the trusted machine holding the private row. The job runs only the workflow from `main`, executes
+no checkout or repository script, and uploads the selected directory with
+`actions/upload-artifact@v7`. Register the current verified GitHub Actions runner package shown
+under **Settings → Actions → Runners → New self-hosted runner**, then configure it:
+
+```sh
+registration_token="$(
+  gh api --method POST \
+    repos/alamorre/breakdown.sh/actions/runners/registration-token \
+    --jq .token
+)"
+./config.sh \
+  --url https://github.com/alamorre/breakdown.sh \
+  --token "$registration_token" \
+  --name breakdown-host-evidence-ingress \
+  --labels breakdown-host-evidence-ingress \
+  --ephemeral \
+  --unattended
+unset registration_token
+./run.sh
+```
+
+Keep this runner offline except for the intended capture, and place the raw row outside the runner
+installation and work directories. In another terminal, dispatch the trusted workflow from
+`main`:
+
+```sh
+row_dir=/absolute/path/to/one-completed-private-row
+capture_run_url="$(
+  gh workflow run local-host-evidence-capture.yml \
+    --ref main \
+    --raw-field raw_row_path="$row_dir"
+)"
+capture_run_id="${capture_run_url##*/}"
+gh run watch "$capture_run_id" --exit-status
+gh api "repos/alamorre/breakdown.sh/actions/runs/$capture_run_id/artifacts" \
+  --jq '.artifacts[] | {id, name, digest, expires_at}'
+```
+
+The ingress job creates one seven-day raw artifact. A separate GitHub-hosted job downloads that
+exact same-run artifact and candidate `8774500090`, rejects missing or multiple submissions,
+rejects changed retained bytes and conflicting storage identity, and copies only the declared row
+files. It binds:
+
+- `mechanism: github-actions-artifact-v7`;
+- the current `GITHUB_RUN_ID`;
+- the current `GITHUB_RUN_ATTEMPT`;
+- `breakdown-host-evidence-<run-id>-<run-attempt>`.
+
+It then runs `pnpm local:release:qualify-host` and, only after qualification succeeds, uploads the
+complete 90-day `breakdown-host-evidence-<run-id>-<run-attempt>` row. Preserve that final artifact
+ID for `local-host-support.yml`. The seven-day raw artifact is not a qualified row.
+
+Do not dispatch `local-host-support.yml` during capture. A captured row creates no Supported Host
+claim. Linux and macOS CLI rows spanning at least two model/provider families must all be
+human-reviewed, captured, later indexed from a signed release tag, and attested before generated
+support material can name any exact row Supported. Windows remains Unsupported for Breakdown
+Local 1.0.
+
 ## Sign and protect the source tag
 
 After the candidate and platform index exist, download the candidate and record:

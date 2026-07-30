@@ -1,0 +1,157 @@
+name: Breakdown Local guided-host evidence capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      raw_row_path:
+        description: Absolute path to one completed raw guided-host row on the ingress runner
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  ingest:
+    name: Ingest one completed raw guided-host row
+    if: ${{ github.repository == 'alamorre/breakdown.sh' && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, breakdown-host-evidence-ingress]
+    timeout-minutes: 10
+    outputs:
+      raw_artifact_id: ${{ steps.upload-raw-row.outputs.artifact-id }}
+    steps:
+      - name: Validate the operator-selected row directory
+        env:
+          RAW_ROW_PATH: ${{ inputs.raw_row_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RAW_ROW_PATH" != /* || "$RAW_ROW_PATH" == *$'\n'* || "$RAW_ROW_PATH" == *$'\r'* ]]; then
+            echo "raw_row_path must be one absolute path without control characters." >&2
+            exit 1
+          fi
+          if [[ ! -d "$RAW_ROW_PATH" ]]; then
+            echo "raw_row_path is not a directory." >&2
+            exit 1
+          fi
+          raw_row_realpath="$(cd "$RAW_ROW_PATH" && pwd -P)"
+          if [[ "$raw_row_realpath" == / || ! -f "$raw_row_realpath/guided-host-submission.json" ]]; then
+            echo "raw_row_path must directly contain guided-host-submission.json." >&2
+            exit 1
+          fi
+          submission_count="$(find "$raw_row_realpath" -type f -name guided-host-submission.json -print | awk 'END { print NR }')"
+          if [[ "$submission_count" != 1 ]]; then
+            echo "raw_row_path must contain exactly one guided-host-submission.json." >&2
+            exit 1
+          fi
+          {
+            echo "RAW_ROW_REALPATH<<BREAKDOWN_PATH"
+            echo "$raw_row_realpath"
+            echo "BREAKDOWN_PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload the immutable raw row
+        id: upload-raw-row
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-host-evidence-raw-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RAW_ROW_REALPATH }}
+          if-no-files-found: error
+          retention-days: 7
+
+  finalize:
+    name: Bind and qualify the complete retained row
+    needs: ingest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: breakdown-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      CANDIDATE_ARTIFACT_ID: '8774500090'
+      CANDIDATE_ARTIFACT_NAME: breakdown-local-candidate
+      CANDIDATE_ARTIFACT_DIGEST: sha256:0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904
+      CANDIDATE_CONTENT_DIGEST: f772a5482bd1de65c1d79e557993183e7508a7e07839879975b69833d0d51efc
+      CANDIDATE_SOURCE_COMMIT: 45bf368ebfcd21c09f98020d757332cf69eac170
+      CANDIDATE_WORKFLOW_RUN_ID: '30580700387'
+    steps:
+      - name: Check out the host evidence finalizer
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install exact Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install locked finalizer dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify the retained candidate artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT_ID" \
+              --jq '[(.id | tostring), .name, .digest, (.workflow_run.id | tostring), .workflow_run.head_sha, (.expired | tostring)] | @tsv'
+          )"
+          expected="$(
+            printf '%s\t%s\t%s\t%s\t%s\tfalse' \
+              "$CANDIDATE_ARTIFACT_ID" \
+              "$CANDIDATE_ARTIFACT_NAME" \
+              "$CANDIDATE_ARTIFACT_DIGEST" \
+              "$CANDIDATE_WORKFLOW_RUN_ID" \
+              "$CANDIDATE_SOURCE_COMMIT"
+          )"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "The retained candidate artifact identity does not match the qualified candidate." >&2
+            exit 1
+          fi
+
+      - name: Download the exact retained candidate
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: 8774500090
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/breakdown-candidate
+
+      - name: Download the immutable raw row
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.ingest.outputs.raw_artifact_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/raw-host-row
+
+      - name: Bind only the current immutable storage identity
+        run: pnpm local:release:bind-host --raw-root "${{ runner.temp }}/raw-host-row" --output "${{ runner.temp }}/qualified-host-row"
+
+      - name: Qualify the exact candidate and completed submission
+        run: pnpm local:release:qualify-host --candidate "${{ runner.temp }}/breakdown-candidate" --submission "${{ runner.temp }}/qualified-host-row/guided-host-submission.json" --output "${{ runner.temp }}/qualified-host-row/guided-host-evidence.json"
+
+      - name: Confirm the qualified row names the retained candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(
+            node -e "process.stdout.write(JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8')).candidate.digest.content)" \
+              "${{ runner.temp }}/qualified-host-row/guided-host-evidence.json"
+          )"
+          if [[ "$actual" != "$CANDIDATE_CONTENT_DIGEST" ]]; then
+            echo "The qualified row names a different candidate content digest." >&2
+            exit 1
+          fi
+
+      - name: Retain the complete qualified host row
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/qualified-host-row
+          if-no-files-found: error
+          retention-days: 90
