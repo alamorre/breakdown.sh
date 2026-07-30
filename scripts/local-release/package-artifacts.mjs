@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { releaseChannel } from './release-channel.mjs';
+
 const execFileAsync = promisify(execFile);
 
 export const packageArtifactDefinitions = [
@@ -264,6 +266,16 @@ export async function buildPackageArtifacts({ outputPath, releaseVersion, reposi
       const sourceManifest = JSON.parse(await readFile(join(sourcePath, 'package.json'), 'utf8'));
       if (sourceManifest.version !== releaseVersion) {
         throw new Error(`${definition.name} is not on release version ${releaseVersion}.`);
+      }
+      const expectedDistTag = releaseChannel(releaseVersion).npm_dist_tag;
+      if (
+        sourceManifest.publishConfig?.access !== 'public' ||
+        sourceManifest.publishConfig?.provenance !== true ||
+        sourceManifest.publishConfig?.tag !== expectedDistTag
+      ) {
+        throw new Error(
+          `${definition.name} must publish publicly with provenance on npm ${expectedDistTag}.`,
+        );
       }
       const packageManifest = {
         ...sourceManifest,

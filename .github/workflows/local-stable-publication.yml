@@ -1,0 +1,282 @@
+name: Breakdown Local stable publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_artifact_id:
+        description: Immutable artifact ID for the exact once-built candidate
+        required: true
+        type: string
+      platform_index_artifact_id:
+        description: Immutable artifact ID for the passing platform evidence index
+        required: true
+        type: string
+      host_support_artifact_id:
+        description: Immutable artifact ID for the passing host index, support table, and attestation
+        required: true
+        type: string
+      human_approval_base64:
+        description: Base64-encoded candidate-bound breakdown-human-release-approval.json
+        required: true
+        type: string
+      tag_ruleset_id:
+        description: Active repository ruleset ID protecting breakdown-local-v* tags
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  attestations: write
+  contents: write
+  id-token: write
+
+concurrency:
+  group: breakdown-local-stable-publication
+  cancel-in-progress: false
+
+jobs:
+  gate-publish-and-verify:
+    name: Gate, publish, and verify the exact stable release
+    if: ${{ startsWith(github.ref, 'refs/tags/breakdown-local-v') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: breakdown-local-stable
+    steps:
+      - name: Check out the signed release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install exact Node and configure the public npm registry
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.13.0
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Require an npm CLI that supports OIDC trusted publishing
+        run: |
+          node -e "const [major, minor] = process.argv[1].split('.').map(Number); if (major < 11 || (major === 11 && minor < 5)) process.exit(1)" "$(npm --version)"
+
+      - name: Install only the locked release gate
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the exact once-built candidate by artifact ID
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate
+
+      - name: Download the passing platform index by artifact ID
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ inputs.platform_index_artifact_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/platform-index
+
+      - name: Download the passing host support set by artifact ID
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ inputs.host_support_artifact_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/host-support
+
+      - name: Resolve the one exact input of each kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve_one() {
+            local root="$1"
+            local name="$2"
+            mapfile -t matches < <(find "$root" -type f -name "$name" -print)
+            test "${#matches[@]}" -eq 1
+            printf '%s' "${matches[0]}"
+          }
+          printf 'CANDIDATE_DIR=%s\n' "${{ runner.temp }}/candidate" >> "$GITHUB_ENV"
+          printf 'PLATFORM_INDEX=%s\n' "$(resolve_one "${{ runner.temp }}/platform-index" breakdown-platform-evidence-index.json)" >> "$GITHUB_ENV"
+          printf 'HOST_INDEX=%s\n' "$(resolve_one "${{ runner.temp }}/host-support" breakdown-host-evidence-index.json)" >> "$GITHUB_ENV"
+          printf 'HOST_SUPPORT_DIR=%s\n' "$(dirname "$(resolve_one "${{ runner.temp }}/host-support" breakdown-host-evidence-index.attestation.json)")" >> "$GITHUB_ENV"
+          printf 'PUBLICATION_DIR=%s\n' "${{ runner.temp }}/publication" >> "$GITHUB_ENV"
+          printf 'VERIFICATION_DIR=%s\n' "${{ runner.temp }}/post-publication" >> "$GITHUB_ENV"
+          printf 'VERIFICATION_REPORT=%s\n' "${{ runner.temp }}/breakdown-post-publication-inspection.json" >> "$GITHUB_ENV"
+
+      - name: Decode the exact candidate-bound human approval
+        env:
+          HUMAN_APPROVAL_BASE64: ${{ inputs.human_approval_base64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$HUMAN_APPROVAL_BASE64" | base64 --decode > "${{ runner.temp }}/breakdown-human-release-approval.json"
+          jq -e '.schema_version == "breakdown.human-release-approval.v1"' "${{ runner.temp }}/breakdown-human-release-approval.json"
+          printf 'HUMAN_APPROVAL=%s\n' "${{ runner.temp }}/breakdown-human-release-approval.json" >> "$GITHUB_ENV"
+
+      - name: Reinspect the downloaded candidate without rebuilding
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm local:release:inspect --candidate "$CANDIDATE_DIR"
+          mapfile -t manifests < <(find "$CANDIDATE_DIR" -maxdepth 1 -type f -name 'breakdown-release-*.json' -print)
+          test "${#manifests[@]}" -eq 1
+          printf 'CANDIDATE_DIGEST=%s\n' "$(jq -r '.platform_conformance.current_build.candidate_digest.content' "${manifests[0]}")" >> "$GITHUB_ENV"
+          printf 'CANDIDATE_CHECKSUM_INVENTORY_SHA256=%s\n' "$(sha256sum "$CANDIDATE_DIR/SHA256SUMS" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Verify the candidate-bound tag signature and strict protection ruleset
+        env:
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          GH_TOKEN: ${{ github.token }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+          TAG_RULESET_ID: ${{ inputs.tag_ruleset_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
+          test "$(jq -r '.object.type' <<< "$tag_ref")" = tag
+          tag_object_url="$(jq -r '.object.url' <<< "$tag_ref")"
+          gh api "$tag_object_url" > "${{ runner.temp }}/annotated-tag.json"
+          jq -e \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg commit "$GITHUB_SHA" \
+            '.tag == $tag and .object.type == "commit" and .object.sha == $commit and .verification.verified == true and .verification.reason == "valid"' \
+            "${{ runner.temp }}/annotated-tag.json"
+          expected_message="$(printf 'Breakdown Local %s\n\ncandidate-digest-sha256: %s\ncandidate-checksum-inventory-sha256: %s\ncandidate-artifact-id: %s\nplatform-index-artifact-id: %s' \
+            "${GITHUB_REF_NAME#breakdown-local-v}" \
+            "$CANDIDATE_DIGEST" \
+            "$CANDIDATE_CHECKSUM_INVENTORY_SHA256" \
+            "$CANDIDATE_ARTIFACT_ID" \
+            "$PLATFORM_INDEX_ARTIFACT_ID")"
+          test "$(jq -r '.message' "${{ runner.temp }}/annotated-tag.json")" = "$expected_message"
+          gh api "repos/${GITHUB_REPOSITORY}/rulesets/${TAG_RULESET_ID}" > "${{ runner.temp }}/tag-ruleset.json"
+          jq -e \
+            --arg ref "$GITHUB_REF" \
+            '.target == "tag" and
+             .enforcement == "active" and
+             (.conditions.ref_name.include | type) == "array" and
+             (.conditions.ref_name.include | any(. == "~ALL" or . == $ref or . == "refs/tags/breakdown-local-v*")) and
+             (.conditions.ref_name.exclude | type) == "array" and
+             (.conditions.ref_name.exclude | length) == 0 and
+             (.bypass_actors | type) == "array" and
+             (.bypass_actors | length) == 0 and
+             (.rules | type) == "array" and
+             ([.rules[].type] | index("update")) != null and
+             ([.rules[].type] | index("deletion")) != null' \
+            "${{ runner.temp }}/tag-ruleset.json"
+          jq \
+            --arg repository "https://github.com/${GITHUB_REPOSITORY}" \
+            --arg candidate_artifact_id "$CANDIDATE_ARTIFACT_ID" \
+            --arg platform_index_artifact_id "$PLATFORM_INDEX_ARTIFACT_ID" \
+            --slurpfile ruleset "${{ runner.temp }}/tag-ruleset.json" \
+            '{
+              schema_version: "breakdown.signed-tag-evidence.v1",
+              repository: $repository,
+              tag,
+              tag_object_sha: .sha,
+              target: .object,
+              message,
+              artifact_ids: {
+                candidate: $candidate_artifact_id,
+                platform_index: $platform_index_artifact_id
+              },
+              verification: {
+                verified: .verification.verified,
+                reason: .verification.reason
+              },
+              protection: {
+                ruleset_id: $ruleset[0].id,
+                name: $ruleset[0].name,
+                target: $ruleset[0].target,
+                enforcement: $ruleset[0].enforcement,
+                conditions: $ruleset[0].conditions,
+                rules: $ruleset[0].rules,
+                bypass_actors: $ruleset[0].bypass_actors
+              }
+            }' \
+            "${{ runner.temp }}/annotated-tag.json" \
+            > "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
+          jq -e '.verification.verified == true' "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
+
+      - name: Verify the host index Sigstore attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "$HOST_INDEX" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$HOST_SUPPORT_DIR/breakdown-host-evidence-index.attestation.json" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-host-support.yml" \
+            --source-ref "$GITHUB_REF" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+
+      - name: Gate and assemble the complete stable publication
+        run: |
+          mkdir "$PUBLICATION_DIR"
+          pnpm local:release:prepare-publication \
+            --candidate "$CANDIDATE_DIR" \
+            --platform-index "$PLATFORM_INDEX" \
+            --host-index "$HOST_INDEX" \
+            --host-support "$HOST_SUPPORT_DIR" \
+            --approval "$HUMAN_APPROVAL" \
+            --tag-evidence "${{ runner.temp }}/breakdown-signed-tag-evidence.json" \
+            --output "$PUBLICATION_DIR"
+          RELEASE_VERSION="$(jq -r '.release_version' "$PUBLICATION_DIR"/breakdown-publication-manifest-*.json)"
+          printf 'RELEASE_VERSION=%s\n' "$RELEASE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Attest every exact publication asset
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ runner.temp }}/publication/*
+
+      - name: Create the complete GitHub draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$PUBLICATION_DIR"/* \
+            --draft \
+            --latest=false \
+            --notes-file "$PUBLICATION_DIR/breakdown-release-notes-${RELEASE_VERSION}.md" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Breakdown Local ${RELEASE_VERSION}" \
+            --verify-tag
+
+      - name: Publish the exact inspected npm tarballs with OIDC and provenance
+        shell: bash
+        run: |
+          npm publish "$PUBLICATION_DIR/breakdown-sh-core-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
+          npm publish "$PUBLICATION_DIR/breakdown-sh-cli-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
+          npm publish "$PUBLICATION_DIR/breakdown-sh-mcp-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
+
+      - name: Publish the ordinary immutable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "$GITHUB_REF_NAME" \
+            --draft=false \
+            --latest \
+            --prerelease=false \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag
+
+      - name: Verify every public byte and trust record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$VERIFICATION_DIR"
+          pnpm local:release:verify-publication \
+            --publication "$PUBLICATION_DIR" \
+            --repository "$GITHUB_REPOSITORY" \
+            --work "$VERIFICATION_DIR" \
+            --output "$VERIFICATION_REPORT"
+
+      - name: Retain the final post-publication inspection
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-post-publication-inspection-${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/breakdown-post-publication-inspection.json
+          if-no-files-found: error
+          retention-days: 90

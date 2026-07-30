@@ -2,9 +2,6 @@ name: Breakdown Local platform qualification
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'breakdown-local-v*'
 
 permissions:
   contents: read

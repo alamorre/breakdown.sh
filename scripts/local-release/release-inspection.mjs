@@ -15,6 +15,7 @@ import {
   registryTarballUrl,
   thirdPartyNotices,
 } from './package-artifacts.mjs';
+import { releaseChannel } from './release-channel.mjs';
 import { skillsNotice, skillsThirdPartyNotices } from './skills-archive.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -843,8 +844,10 @@ export async function inspectReleaseCandidate({
   const manifestName = `breakdown-release-${releaseVersion}.json`;
   const manifest = parseJson(candidateBytes.get(manifestName), 'release manifest');
   invariant(manifest.release_version === releaseVersion, 'Release manifest is not lockstep.');
-  invariant(manifest.channel?.npm_dist_tag === 'next', 'Prerelease npm channel is not next.');
-  invariant(manifest.channel?.github_prerelease === true, 'GitHub channel is not prerelease.');
+  invariant(
+    JSON.stringify(manifest.channel) === JSON.stringify(releaseChannel(releaseVersion)),
+    'Release manifest has the wrong stable or prerelease channels.',
+  );
   invariant(manifest.license_scope?.license === 'Apache-2.0', 'License scope is not Apache-2.0.');
   for (const phrase of ['hosted', 'branding', 'user-authored', 'third-party']) {
     invariant(
@@ -874,6 +877,15 @@ export async function inspectReleaseCandidate({
       releaseVersion,
     ),
   );
+  const expectedDistTag = releaseChannel(releaseVersion).npm_dist_tag;
+  for (const inspected of inspectedPackages) {
+    invariant(
+      inspected.manifest.publishConfig?.access === 'public' &&
+        inspected.manifest.publishConfig?.provenance === true &&
+        inspected.manifest.publishConfig?.tag === expectedDistTag,
+      `${inspected.manifest.name} has the wrong public provenance or npm channel.`,
+    );
+  }
   inspectPackageArchitecture(inspectedPackages);
   const coreIntegrity = `sha512-${Buffer.from(
     sha512(candidateBytes.get(`breakdown-sh-core-${releaseVersion}.tgz`)),

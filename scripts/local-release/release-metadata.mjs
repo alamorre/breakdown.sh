@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { filesBelow, sha256, sha512 } from './filesystem.mjs';
 import { dependencyGraphRecords, packageNameFromLockPath } from './package-artifacts.mjs';
+import { releaseChannel } from './release-channel.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -27,14 +28,17 @@ const releaseSourceFiles = [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   'scripts/build-local-release.mjs',
+  'scripts/create-release-approval.mjs',
   'scripts/generate-local-documentation.mjs',
   'scripts/index-host-evidence.mjs',
   'scripts/index-platform-evidence.mjs',
   'scripts/inspect-local-release.mjs',
   'scripts/prepare-host-qualification.mjs',
+  'scripts/prepare-local-publication.mjs',
   'scripts/qualify-host-evidence.mjs',
   'scripts/qualify-local-release.mjs',
   'scripts/standalone-validator.mjs',
+  'scripts/verify-local-publication.mjs',
   'packages/breakdown-core/package.json',
   'packages/breakdown-core/tsconfig.build.json',
   'packages/breakdown-core/tsconfig.json',
@@ -440,12 +444,7 @@ export async function writeReleaseManifest({
   const manifest = {
     schema_version: 'breakdown.release-manifest.v1',
     release_version: releaseVersion,
-    channel: {
-      stability: 'prerelease',
-      npm_dist_tag: 'next',
-      github_prerelease: true,
-      immutable_tag: `breakdown-local-v${releaseVersion}`,
-    },
+    channel: releaseChannel(releaseVersion),
     integrity: {
       checksum_inventory: 'SHA256SUMS',
       manifest_file: fileName,
@@ -501,14 +500,17 @@ export async function writeReleaseManifest({
         'local/LICENSE-SCOPE.md',
         'scripts/local-release',
         'scripts/build-local-release.mjs',
+        'scripts/create-release-approval.mjs',
         'scripts/generate-local-documentation.mjs',
         'scripts/index-host-evidence.mjs',
         'scripts/index-platform-evidence.mjs',
         'scripts/inspect-local-release.mjs',
         'scripts/prepare-host-qualification.mjs',
+        'scripts/prepare-local-publication.mjs',
         'scripts/qualify-host-evidence.mjs',
         'scripts/qualify-local-release.mjs',
         'scripts/standalone-validator.mjs',
+        'scripts/verify-local-publication.mjs',
       ],
       excluded: [
         'hosted application root and hosted assets',

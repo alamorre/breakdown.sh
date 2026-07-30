@@ -877,7 +877,7 @@ export async function indexHostEvidence({ candidateDirectory, evidencePaths, out
   return index;
 }
 
-function validatePassingIndex(index) {
+export function validatePassingHostIndex(index) {
   invariant(
     index.schema_version === 'breakdown.guided-host-evidence-index.v1',
     'Host evidence index has the wrong schema.',
@@ -958,7 +958,21 @@ function markdownCell(value) {
   return String(value).replaceAll('|', '\\|').replaceAll('\n', ' ');
 }
 
-function hostSupportMarkdown(index, indexFile, indexDigest) {
+export function generatedHostSupportJson(index, indexFile, indexDigest) {
+  return {
+    schema_version: 'breakdown.generated-host-support.v1',
+    release_version: index.release_version,
+    source_index: {
+      file: indexFile,
+      sha256: indexDigest,
+    },
+    supported_hosts: index.supported_hosts,
+    classifications: index.classifications,
+    outcome_parity: index.outcome_parity,
+  };
+}
+
+export function generatedHostSupportMarkdown(index, indexFile, indexDigest) {
   const rows = index.supported_hosts
     .map((row) => {
       const exactRow = `${row.surface} ${row.version} / ${row.os_name} ${row.os_version} (${row.os_release}) / ${row.architecture} / ${row.transport}`;
@@ -998,20 +1012,10 @@ Qualification assesses outcome parity. It does not claim identical UI, wording, 
 export async function writeHostSupportMaterial({ indexPath, outputDirectory }) {
   const indexBytes = await readFile(indexPath);
   const index = parseJson(indexBytes, 'Host evidence index');
-  validatePassingIndex(index);
+  validatePassingHostIndex(index);
   const indexFile = basename(indexPath);
   const indexDigest = sha256(indexBytes);
-  const support = {
-    schema_version: 'breakdown.generated-host-support.v1',
-    release_version: index.release_version,
-    source_index: {
-      file: indexFile,
-      sha256: indexDigest,
-    },
-    supported_hosts: index.supported_hosts,
-    classifications: index.classifications,
-    outcome_parity: index.outcome_parity,
-  };
+  const support = generatedHostSupportJson(index, indexFile, indexDigest);
   const jsonFile = `breakdown-supported-hosts-${index.release_version}.json`;
   const markdownFile = `breakdown-supported-hosts-${index.release_version}.md`;
   await mkdir(outputDirectory, { recursive: true });
@@ -1024,7 +1028,7 @@ export async function writeHostSupportMaterial({ indexPath, outputDirectory }) {
   });
   await writeFile(
     join(outputDirectory, markdownFile),
-    hostSupportMarkdown(index, indexFile, indexDigest),
+    generatedHostSupportMarkdown(index, indexFile, indexDigest),
     { mode: 0o600 },
   );
   return { jsonFile, markdownFile, support };
