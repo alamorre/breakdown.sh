@@ -42,7 +42,7 @@ jobs:
       - name: Record the native diagnostic environment
         run: |
           node -p "JSON.stringify({ platform: process.platform, architecture: process.arch, node: process.version })"
-          diskutil info "$RUNNER_TEMP"
+          diskutil info /
 
       - name: Run the focused boundary campaign
         run: |
