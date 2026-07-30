@@ -39,6 +39,7 @@ const STEP_FILENAME_PATTERN =
   /^(\d{8}T\d{6}\.\d{3}Z)--([a-z][a-z0-9]*(?:-[a-z0-9]+)*)--a([1-9]\d*)\.md$/;
 const PROBLEM_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_STABLE_INSPECTION_PASSES = 4;
+const MAX_CONCURRENT_STEP_ARTIFACT_READS = 16;
 
 export interface InspectRunRequest {
   operation: 'inspect_run';
@@ -1901,102 +1902,130 @@ async function inspectRunOnce(
   }
   const stepEntrySet = new Set(stepEntries);
   const artifacts: ParsedStepArtifact[] = [];
-  for (const filename of committedMarkdown) {
-    const file = `${stepsPath}/${filename}`;
-    let markdownBytes: Uint8Array;
-    try {
-      markdownBytes = (
-        await readSecureResultFile(projectRoot, file, FIXED_LIMITS.automation_response_bytes, {
-          expectedParentSnapshot: stepDirectorySnapshot,
-          expectedProjectIdentity: projectRootIdentity,
-        })
-      ).bytes;
-    } catch (error) {
-      if (error instanceof SecureDirectoryChangedError) throw error;
-      if (error instanceof ResourceLimitError) return resourceLimitFailure();
-      diagnostics.push(
-        diagnostic('layout', file, '', 'A committed StepArtifact must be a secure regular file.'),
-      );
-      continue;
-    }
-    let record: ParsedMarkdownRecord;
-    try {
-      record = parseMarkdownRecord(markdownBytes, file, diagnostics);
-    } catch (error) {
-      if (error instanceof ResourceLimitError) return resourceLimitFailure();
-      return ioFailure();
-    }
-    if (Buffer.byteLength(record.body) > FIXED_LIMITS.candidate_markdown_bytes) {
-      return resourceLimitFailure();
-    }
-    if (record.value === undefined) continue;
-    const artifact = validateStepArtifact(
-      record.value,
-      markdownBytes,
-      file,
-      filename,
-      request.run_id,
-      snapshot?.workflow,
-      diagnostics,
+  // Secure reads are independent within a stable directory snapshot. Parse each settled
+  // batch in filename order so concurrency cannot change diagnostics or derived history.
+  for (
+    let batchStart = 0;
+    batchStart < committedMarkdown.length;
+    batchStart += MAX_CONCURRENT_STEP_ARTIFACT_READS
+  ) {
+    const batch = committedMarkdown.slice(
+      batchStart,
+      batchStart + MAX_CONCURRENT_STEP_ARTIFACT_READS,
     );
-    if (artifact === undefined) continue;
-
-    const sidecarFilename = `${artifact.stem}.json`;
-    const sidecarFile = `${stepsPath}/${sidecarFilename}`;
-    const hasSidecar = stepEntrySet.has(sidecarFilename);
-    const node = snapshot?.workflow.nodes.find((candidate) => candidate.id === artifact.node_id);
-    const requiresSidecar =
-      node !== undefined && artifact.status === 'succeeded' && node.data_contract !== undefined;
-    if (node !== undefined && requiresSidecar !== hasSidecar) {
-      diagnostics.push(
-        diagnostic(
-          'status_invariant',
-          file,
-          '/status',
-          requiresSidecar
-            ? 'A contracted successful Result requires its same-stem JSON sidecar.'
-            : 'This StepArtifact must not have a JSON sidecar.',
-        ),
-      );
-    }
-    if (hasSidecar) {
-      try {
-        const jsonBytes = (
-          await readSecureResultFile(projectRoot, sidecarFile, FIXED_LIMITS.candidate_json_bytes, {
+    const reads = await Promise.allSettled(
+      batch.map((filename) =>
+        readSecureResultFile(
+          projectRoot,
+          `${stepsPath}/${filename}`,
+          FIXED_LIMITS.automation_response_bytes,
+          {
             expectedParentSnapshot: stepDirectorySnapshot,
             expectedProjectIdentity: projectRootIdentity,
-          })
-        ).bytes;
-        const jsonValue = parseStrictJson(jsonBytes, sidecarFile, diagnostics);
-        if (requiresSidecar && jsonValue !== undefined) {
-          validateDataContractInstance(
-            jsonValue,
-            node?.data_contract,
-            sidecarFile,
-            '',
-            diagnostics,
-          );
-        }
-        if (requiresSidecar) {
-          artifact.json = {
-            path: sidecarFile,
-            sha256: sha256(jsonBytes),
-          };
-        }
-      } catch (error) {
+          },
+        ),
+      ),
+    );
+    for (const [batchIndex, read] of reads.entries()) {
+      const filename = batch[batchIndex];
+      if (filename === undefined) return ioFailure();
+      const file = `${stepsPath}/${filename}`;
+      let markdownBytes: Uint8Array;
+      if (read.status === 'fulfilled') {
+        markdownBytes = read.value.bytes;
+      } else {
+        const error = read.reason;
         if (error instanceof SecureDirectoryChangedError) throw error;
         if (error instanceof ResourceLimitError) return resourceLimitFailure();
         diagnostics.push(
+          diagnostic('layout', file, '', 'A committed StepArtifact must be a secure regular file.'),
+        );
+        continue;
+      }
+      let record: ParsedMarkdownRecord;
+      try {
+        record = parseMarkdownRecord(markdownBytes, file, diagnostics);
+      } catch (error) {
+        if (error instanceof ResourceLimitError) return resourceLimitFailure();
+        return ioFailure();
+      }
+      if (Buffer.byteLength(record.body) > FIXED_LIMITS.candidate_markdown_bytes) {
+        return resourceLimitFailure();
+      }
+      if (record.value === undefined) continue;
+      const artifact = validateStepArtifact(
+        record.value,
+        markdownBytes,
+        file,
+        filename,
+        request.run_id,
+        snapshot?.workflow,
+        diagnostics,
+      );
+      if (artifact === undefined) continue;
+
+      const sidecarFilename = `${artifact.stem}.json`;
+      const sidecarFile = `${stepsPath}/${sidecarFilename}`;
+      const hasSidecar = stepEntrySet.has(sidecarFilename);
+      const node = snapshot?.workflow.nodes.find((candidate) => candidate.id === artifact.node_id);
+      const requiresSidecar =
+        node !== undefined && artifact.status === 'succeeded' && node.data_contract !== undefined;
+      if (node !== undefined && requiresSidecar !== hasSidecar) {
+        diagnostics.push(
           diagnostic(
-            'layout',
-            sidecarFile,
-            '',
-            'A paired Result sidecar must be a secure regular file.',
+            'status_invariant',
+            file,
+            '/status',
+            requiresSidecar
+              ? 'A contracted successful Result requires its same-stem JSON sidecar.'
+              : 'This StepArtifact must not have a JSON sidecar.',
           ),
         );
       }
+      if (hasSidecar) {
+        try {
+          const jsonBytes = (
+            await readSecureResultFile(
+              projectRoot,
+              sidecarFile,
+              FIXED_LIMITS.candidate_json_bytes,
+              {
+                expectedParentSnapshot: stepDirectorySnapshot,
+                expectedProjectIdentity: projectRootIdentity,
+              },
+            )
+          ).bytes;
+          const jsonValue = parseStrictJson(jsonBytes, sidecarFile, diagnostics);
+          if (requiresSidecar && jsonValue !== undefined) {
+            validateDataContractInstance(
+              jsonValue,
+              node?.data_contract,
+              sidecarFile,
+              '',
+              diagnostics,
+            );
+          }
+          if (requiresSidecar) {
+            artifact.json = {
+              path: sidecarFile,
+              sha256: sha256(jsonBytes),
+            };
+          }
+        } catch (error) {
+          if (error instanceof SecureDirectoryChangedError) throw error;
+          if (error instanceof ResourceLimitError) return resourceLimitFailure();
+          diagnostics.push(
+            diagnostic(
+              'layout',
+              sidecarFile,
+              '',
+              'A paired Result sidecar must be a secure regular file.',
+            ),
+          );
+        }
+      }
+      artifacts.push(artifact);
     }
-    artifacts.push(artifact);
   }
   if (manifest !== undefined && snapshot !== undefined) {
     validateArtifactHistory(artifacts, manifest, snapshot.workflow, diagnostics);
