@@ -46,7 +46,7 @@
     {
       "id": "SEC-006",
       "requirements": ["REQ-SEC-006"],
-      "oracle": "Native reliable local filesystems pass; detectable NFS, SMB/CIFS, remote mounts, and synchronized indirection fail unsupported_filesystem."
+      "oracle": "Native reliable local filesystems on maintained platforms pass; Windows, detectable NFS, SMB/CIFS, remote mounts, and synchronized indirection fail unsupported_filesystem."
     },
     {
       "id": "SEC-007",

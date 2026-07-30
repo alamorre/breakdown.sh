@@ -20,7 +20,6 @@ const maintainedPlatformTuples = [
   { os: 'linux-glibc', architecture: 'arm64' },
   { os: 'macos', architecture: 'x64' },
   { os: 'macos', architecture: 'arm64' },
-  { os: 'windows', architecture: 'x64' },
 ];
 
 export const HUMAN_RELEASE_ATTESTATIONS = Object.freeze([

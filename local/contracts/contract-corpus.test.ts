@@ -894,7 +894,7 @@ describe('verifyContractCorpus', () => {
       ambient_cases: Array<{ id: string; setup: unknown; oracle: unknown }>;
     }>(join(contractsRoot, 'conformance', 'security', 'fixtures', 'attacks.json'));
     expect(securityCases.path_cases).toHaveLength(13);
-    expect(securityCases.filesystem_cases).toHaveLength(17);
+    expect(securityCases.filesystem_cases).toHaveLength(18);
     expect(securityCases.ambient_cases).toHaveLength(10);
 
     const recordCases = await readJson<{

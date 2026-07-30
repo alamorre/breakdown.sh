@@ -101,6 +101,27 @@ describe('local authority, privacy, and filesystem boundary', () => {
     );
   });
 
+  it('fails closed on Windows because it is not maintained for 1.0', async () => {
+    const projectRoot = await temporaryDirectory();
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    expect(platformDescriptor).toBeDefined();
+    Object.defineProperty(process, 'platform', { ...platformDescriptor, value: 'win32' });
+
+    try {
+      await expect(
+        operate({ operation: 'validate_workflow' }, { projectRoot }),
+      ).resolves.toMatchObject({
+        ok: false,
+        failure: {
+          kind: 'unsupported',
+          code: 'unsupported_filesystem',
+        },
+      });
+    } finally {
+      Object.defineProperty(process, 'platform', platformDescriptor!);
+    }
+  });
+
   it('selects the explicit project root before processing every operation payload', async () => {
     const container = await temporaryDirectory();
     const missingProjectRoot = join(container, 'missing-project');

@@ -207,6 +207,12 @@
       "id": "detectable-sync-indirection",
       "setup": [{ "op": "project_on_filesystem", "filesystem": "detectable-concurrent-sync" }],
       "oracle": { "kind": "unsupported", "code": "unsupported_filesystem" }
+    },
+    {
+      "id": "unsupported-windows-platform",
+      "applicability": { "os": "windows" },
+      "setup": [{ "op": "project_on_filesystem", "filesystem": "native-local" }],
+      "oracle": { "kind": "unsupported", "code": "unsupported_filesystem" }
     }
   ],
   "ambient_cases": [

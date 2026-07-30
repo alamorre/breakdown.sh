@@ -60,7 +60,6 @@ export const MAINTAINED_PLATFORM_TUPLES = Object.freeze([
   Object.freeze({ os: 'linux-glibc', architecture: 'arm64' }),
   Object.freeze({ os: 'macos', architecture: 'x64' }),
   Object.freeze({ os: 'macos', architecture: 'arm64' }),
-  Object.freeze({ os: 'windows', architecture: 'x64' }),
 ]);
 
 export const MAINTAINED_PLATFORM_RUNNERS = Object.freeze({
@@ -68,7 +67,6 @@ export const MAINTAINED_PLATFORM_RUNNERS = Object.freeze({
   'linux-glibc/arm64': 'ubuntu-24.04-arm',
   'macos/x64': 'macos-15-intel',
   'macos/arm64': 'macos-15',
-  'windows/x64': 'windows-2025',
 });
 
 function invariant(condition, message) {
@@ -245,9 +243,7 @@ async function validateEvidence(evidence, evidencePath, label, releaseVersion, c
       ? 'linux'
       : evidence.tuple?.os === 'macos'
         ? 'darwin'
-        : evidence.tuple?.os === 'windows'
-          ? 'win32'
-          : undefined;
+        : undefined;
   invariant(
     evidence.environment?.os?.platform === expectedPlatform &&
       evidence.environment?.architecture === evidence.tuple?.architecture,

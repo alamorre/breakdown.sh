@@ -124,6 +124,7 @@ describe('Breakdown Local release documentation', () => {
     expect(guide).toContain('Model Neutrality');
     expect(guide).toContain('Git is not required');
     expect(guide).toContain('MCP is optional');
+    expect(guide).toContain('Windows is not a maintained operating system');
     expect(guide).toContain('../contracts/specifications/');
     expect(guide).toContain(
       'https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/',

@@ -50,8 +50,10 @@ rest MUST NOT be implied.
 Correctness is supported only on local filesystems with reliable exclusive
 create, private permissions, flush, and same-filesystem atomic no-replace
 rename. Known NFS, SMB/CIFS, remote mounts, and detectable concurrently
-synchronized directories MUST be rejected. No claim is made for an
-undetectable synchronization layer.
+synchronized directories MUST be rejected. Windows MUST fail closed as
+`unsupported_filesystem` in 1.0 because the required current-user-only ACL and
+native-filesystem guarantees cannot be established within the portable Node
+boundary. No claim is made for an undetectable synchronization layer.
 
 ### REQ-SEC-007
 

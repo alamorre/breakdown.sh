@@ -38,7 +38,7 @@
     {
       "id": "HOST-004",
       "requirements": ["REQ-HOST-004"],
-      "oracle": "Indexed passing rows cover guided CLI on Linux, macOS, and Windows plus at least two model/provider families."
+      "oracle": "Indexed passing rows cover guided CLI on Linux and macOS plus at least two model/provider families, and non-maintained operating systems cannot create Supported Host claims."
     },
     {
       "id": "HOST-005",

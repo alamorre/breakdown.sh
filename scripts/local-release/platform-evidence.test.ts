@@ -27,7 +27,6 @@ function runnerLabel(tuple: (typeof MAINTAINED_PLATFORM_TUPLES)[number]): string
     'linux-glibc/arm64': 'ubuntu-24.04-arm',
     'macos/x64': 'macos-15-intel',
     'macos/arm64': 'macos-15',
-    'windows/x64': 'windows-2025',
   };
   return labels[`${tuple.os}/${tuple.architecture}`]!;
 }
@@ -79,7 +78,7 @@ function evidenceFor(tuple: (typeof MAINTAINED_PLATFORM_TUPLES)[number]) {
     tuple,
     environment: {
       os: {
-        platform: tuple.os === 'macos' ? 'darwin' : tuple.os === 'windows' ? 'win32' : 'linux',
+        platform: tuple.os === 'macos' ? 'darwin' : 'linux',
         release: 'fixture-release',
         version: 'fixture-version',
       },
@@ -212,6 +211,12 @@ afterEach(async () => {
 
 describe('indexPlatformEvidence', () => {
   it('should index exactly one passing immutable row for every maintained platform tuple', async () => {
+    expect(MAINTAINED_PLATFORM_TUPLES).toEqual([
+      { os: 'linux-glibc', architecture: 'x64' },
+      { os: 'linux-glibc', architecture: 'arm64' },
+      { os: 'macos', architecture: 'x64' },
+      { os: 'macos', architecture: 'arm64' },
+    ]);
     const { root, candidateDirectory } = await fixtureRoot();
     const rows = await Promise.all(
       MAINTAINED_PLATFORM_TUPLES.map((tuple) => writeEvidenceRow(root, tuple)),

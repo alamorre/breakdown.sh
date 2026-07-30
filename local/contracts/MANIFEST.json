@@ -168,8 +168,8 @@
       "path": "conformance/security/fixtures/attacks.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 9324,
-      "sha256": "24253c9324bcc47c48499394520cb7b8a66c3b3b746fc33540757da0e9d966fe"
+      "bytes": 9583,
+      "sha256": "3d288fca7ffea387d7f891eaa56e64bd2b9c7fe3a24e6329b009c1418aaca868"
     },
     {
       "path": "conformance/security/matrix.json",
@@ -224,8 +224,8 @@
       "path": "conformance/traceability/host.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 2668,
-      "sha256": "a4a24a2416137efb7136cecf7563c8a1d5a9010a7ae66260a7946cfca4aa721a"
+      "bytes": 2732,
+      "sha256": "b5c2ec39bcc00b6a2b259fc947d7f3cb8a64b0821cb5651e0448970f106920e1"
     },
     {
       "path": "conformance/traceability/mcp.json",
@@ -266,8 +266,8 @@
       "path": "conformance/traceability/sec.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 4037,
-      "sha256": "b409659f54058d2b4495e5ffb1b596b7ad7cca70ca1f1638f67ffecfcbea4037"
+      "bytes": 4070,
+      "sha256": "3f268fc6c68c6fa0ee783d9abc242a6bf8c374d002a28052526fd6c91e63e2de"
     },
     {
       "path": "conformance/traceability/skill.json",
@@ -728,8 +728,8 @@
       "path": "specifications/release.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 4903,
-      "sha256": "acd32d89a534b8fb29a4a0a4c9cceb9a2bc8020b282b8f1ec94325dc9da52c23"
+      "bytes": 4977,
+      "sha256": "0d11d538ccc8dd2e1340d77fb0c69d88c89991d7df9ce7449e6069bb46ccf614"
     },
     {
       "path": "specifications/run-records.md",
@@ -742,15 +742,15 @@
       "path": "specifications/security-and-publication.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 7155,
-      "sha256": "93382b425a7aef0c187ca7418e059f1a88674a4118bed98cfdcd9466ef93b7f2"
+      "bytes": 7348,
+      "sha256": "860fd2c266555651beddeb1c272578b020e2726bccda038bffb6908e2563ac22"
     },
     {
       "path": "specifications/skills-and-hosts.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 6159,
-      "sha256": "63f5e21716ade0f62eb2bdf59409d4c529c07ac3ebc6e14ac5152a0b66f6380c"
+      "bytes": 6259,
+      "sha256": "3eef928c9cbcc680de0e05423aec41140f83c60ee7f6bc79682ae246d9ae5d69"
     },
     {
       "path": "specifications/workflow-definition.md",

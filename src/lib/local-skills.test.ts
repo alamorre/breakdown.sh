@@ -325,6 +325,7 @@ describe('setup preflight executable', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'skill_bytes', status: 'pass' }),
         expect.objectContaining({ id: 'node_version', status: 'pass' }),
+        expect.objectContaining({ id: 'platform', status: 'pass' }),
         expect.objectContaining({ id: 'cli_version', status: 'pass' }),
         expect.objectContaining({ id: 'automation_schema', status: 'pass' }),
         expect.objectContaining({ id: 'mcp_version', status: 'pass' }),
@@ -480,14 +481,6 @@ describe('setup preflight executable', () => {
         version: platform() === 'darwin' ? version() : 'Darwin Kernel Version 25.0.0',
         architecture: platform() === 'darwin' ? arch() : 'arm64',
       },
-      {
-        family: 'windows',
-        platform: 'win32',
-        name: 'Windows',
-        release: platform() === 'win32' ? release() : '10.0.26100',
-        version: platform() === 'win32' ? version() : 'Windows 11 Pro',
-        architecture: platform() === 'win32' ? arch() : 'x64',
-      },
     ];
     const rows = operatingSystems.map((operatingSystem, index) => ({
       host: {
@@ -541,7 +534,7 @@ describe('setup preflight executable', () => {
         git_commit: '1'.repeat(40),
       },
       coverage: {
-        guided_cli_operating_systems: ['linux', 'macos', 'windows'],
+        guided_cli_operating_systems: ['linux', 'macos'],
         model_families: ['model-a', 'model-b'],
         provider_families: ['provider-a'],
       },
@@ -745,6 +738,7 @@ process.stdout.write('[{"verificationResult":{}}]\\n');
         expect.arrayContaining([
           expect.objectContaining({ id: 'skill_release', status: 'pass' }),
           expect.objectContaining({ id: 'node_version', status: 'pass' }),
+          expect.objectContaining({ id: 'platform', status: 'pass' }),
           expect.objectContaining({ id: 'cli_version', status: 'pass' }),
           expect.objectContaining({ id: 'automation_schema', status: 'pass' }),
         ]),
