@@ -15,6 +15,7 @@ import {
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -40,6 +41,7 @@ const securityMatrix = JSON.parse(
 ) as { rows: Array<{ id: string }> };
 const REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS = 180_000;
 const STEP_ARTIFACT_BOUNDARY_TIMEOUT_MS = 240_000;
+const BOUNDARY_TIMING_PREFIX = '[DEBUG-175-PHASE]';
 
 async function temporaryDirectory(prefix = 'breakdown-security-') {
   const path = await mkdtemp(join(tmpdir(), prefix));
@@ -87,6 +89,18 @@ async function writeInBatches(total: number, writer: (index: number) => Promise<
     const count = Math.min(250, total - start);
     await Promise.all(Array.from({ length: count }, (_, index) => writer(start + index)));
   }
+}
+
+function recordBoundaryPhase(campaign: string, phase: string, startedAt: number) {
+  const completedAt = performance.now();
+  console.info(
+    `${BOUNDARY_TIMING_PREFIX} ${JSON.stringify({
+      campaign,
+      phase,
+      duration_ms: Math.round((completedAt - startedAt) * 10) / 10,
+    })}`,
+  );
+  return completedAt;
 }
 
 async function createStepArtifactBoundaryRun(
@@ -155,9 +169,10 @@ async function createStepArtifactBoundaryRun(
 }
 
 afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
-  );
+  const startedAt = performance.now();
+  const paths = temporaryDirectories.splice(0);
+  await Promise.all(paths.map((path) => rm(path, { recursive: true, force: true })));
+  if (paths.length > 0) recordBoundaryPhase('cleanup', `${paths.length}-fixtures`, startedAt);
 });
 
 describe('local authority, privacy, and filesystem boundary', () => {
@@ -933,6 +948,8 @@ nodes:
     'enforces the StepArtifact count boundary on an independent real filesystem fixture',
     { timeout: STEP_ARTIFACT_BOUNDARY_TIMEOUT_MS },
     async () => {
+      const campaignStartedAt = performance.now();
+      let phaseStartedAt = campaignStartedAt;
       const fillerNodes = Array.from({ length: 10 }, (_, index) => ({
         id: `filler-${index}`,
         name: `Filler ${index}`,
@@ -943,6 +960,11 @@ nodes:
           { id: 'publish', name: 'Publish', prompt: 'Exercise the publication boundary.' },
           ...fillerNodes,
         ]);
+      phaseStartedAt = recordBoundaryPhase(
+        'step-artifact',
+        'create-run-and-initial-inspection',
+        phaseStartedAt,
+      );
       const initiallyPrepared = await operate(
         { operation: 'prepare_work', run_id: created.run_id },
         { projectRoot },
@@ -952,14 +974,27 @@ nodes:
         (packet) => packet.node.id === 'publish',
       );
       if (publishPacket === undefined) throw new Error('Missing publication-boundary packet.');
+      phaseStartedAt = recordBoundaryPhase('step-artifact', 'prepare-publication', phaseStartedAt);
 
       await writeInBatches(FIXED_LIMITS.step_artifacts_per_run - 1, (index) =>
         writeArtifact(`filler-${index % 10}`, Math.floor(index / 10) + 1),
       );
+      phaseStartedAt = recordBoundaryPhase(
+        'step-artifact',
+        'create-limit-minus-one-fixture',
+        phaseStartedAt,
+      );
       await expect(inspect()).resolves.toMatchObject({ ok: true });
+      phaseStartedAt = recordBoundaryPhase(
+        'step-artifact',
+        'inspect-limit-minus-one',
+        phaseStartedAt,
+      );
 
       await writeArtifact('filler-9', FIXED_LIMITS.attempts_per_node);
+      phaseStartedAt = recordBoundaryPhase('step-artifact', 'create-limit-fixture', phaseStartedAt);
       await expect(inspect()).resolves.toMatchObject({ ok: true });
+      phaseStartedAt = recordBoundaryPhase('step-artifact', 'inspect-limit', phaseStartedAt);
 
       await expect(
         operate(
@@ -974,7 +1009,13 @@ nodes:
         ok: false,
         failure: { kind: 'resource_limit', code: 'limit_exceeded' },
       });
+      phaseStartedAt = recordBoundaryPhase(
+        'step-artifact',
+        'attempt-limit-plus-one-publication',
+        phaseStartedAt,
+      );
       expect(await readdir(stepsPath)).toHaveLength(FIXED_LIMITS.step_artifacts_per_run);
+      recordBoundaryPhase('step-artifact', 'total', campaignStartedAt);
     },
   );
 

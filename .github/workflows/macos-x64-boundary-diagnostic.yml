@@ -1,0 +1,54 @@
+name: macOS x64 filesystem-boundary diagnostic
+
+on:
+  push:
+    branches:
+      - codex/issue-175-macos-x64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-x64-filesystem-boundary-diagnostic
+  cancel-in-progress: false
+
+env:
+  CI: true
+
+jobs:
+  focused-boundary:
+    name: Focused native macOS x64 boundary diagnostic
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - name: Check out the diagnostic branch
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install exact Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Record the native diagnostic environment
+        run: |
+          node -p "JSON.stringify({ platform: process.platform, architecture: process.arch, node: process.version })"
+          diskutil info "$RUNNER_TEMP"
+
+      - name: Run the focused boundary campaign
+        run: |
+          for iteration in 1; do
+            echo "BOUNDARY_DIAGNOSTIC_ITERATION=$iteration"
+            pnpm --filter @breakdown-sh/core exec vitest run src/security-boundary.test.ts \
+              --testNamePattern='enforces the StepArtifact count boundary' \
+              --reporter=verbose
+          done
