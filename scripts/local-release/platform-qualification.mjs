@@ -269,7 +269,7 @@ async function writeTaskLog(path, task) {
   return report;
 }
 
-async function runVitestLog({ environment, logPath, repositoryRoot, testPaths }) {
+export async function runVitestLog({ environment, logPath, repositoryRoot, testPaths }) {
   const vitestPath = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
   const testFilters = testPaths.map((path) => {
     const filter = relative(repositoryRoot, path);
@@ -297,6 +297,7 @@ async function runVitestLog({ environment, logPath, repositoryRoot, testPaths })
         '--config',
         join(repositoryRoot, 'scripts', 'local-release', 'qualification-vitest.config.mjs'),
         '--reporter=json',
+        '--reporter=default',
         `--outputFile=${logPath}`,
       ],
       {

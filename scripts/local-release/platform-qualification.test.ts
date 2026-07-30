@@ -1,7 +1,9 @@
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+
+import { runVitestLog } from './platform-qualification.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../..');
 
@@ -30,5 +32,45 @@ describe('platform qualification workflow', () => {
     expect(workflow).toContain('actions/upload-artifact@v7');
     expect(workflow).toContain('actions/download-artifact@v8');
     expect(workflow).toMatch(/if: \$\{\{ always\(\) \}\}[\s\S]+platform-evidence/);
+  });
+
+  it('should retain distinct timeout and assertion diagnostics', async () => {
+    const fixtureRoot = await mkdtemp(join(repositoryRoot, '.breakdown-qualification-report-'));
+    try {
+      const testPath = join(fixtureRoot, 'failure-shapes.test.ts');
+      const logPath = join(fixtureRoot, 'qualification-report.json');
+      await writeFile(
+        testPath,
+        `import { expect, it } from 'vitest';
+
+it('times out', async () => {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}, 1);
+
+it('fails an assertion', () => {
+  expect('actual').toBe('expected');
+});
+`,
+      );
+
+      const report = await runVitestLog({
+        environment: {},
+        logPath,
+        repositoryRoot,
+        testPaths: [testPath],
+      });
+      const assertions = report.testResults[0].assertionResults;
+
+      expect(assertions[0].failureMessages[0]).toContain('Error: STACK_TRACE_ERROR');
+      expect(assertions[1].failureMessages[0]).toContain(
+        "AssertionError: expected 'actual' to be 'expected'",
+      );
+      expect(report.qualification_process.stderr).toContain('Error: Test timed out in 1ms.');
+      expect(report.qualification_process.stderr).toContain(
+        "AssertionError: expected 'actual' to be 'expected'",
+      );
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
   });
 });
