@@ -46,9 +46,9 @@ jobs:
 
       - name: Run the focused boundary campaign
         run: |
-          for iteration in 1; do
+          for iteration in 1 2 3 4 5; do
             echo "BOUNDARY_DIAGNOSTIC_ITERATION=$iteration"
             pnpm --filter @breakdown-sh/core exec vitest run src/security-boundary.test.ts \
-              --testNamePattern='enforces the StepArtifact count boundary' \
+              --testNamePattern='enforces the (attempt|StepArtifact count|direct StepArtifact entry scan) boundary' \
               --reporter=verbose
           done

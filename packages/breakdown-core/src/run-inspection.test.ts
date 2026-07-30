@@ -1838,7 +1838,7 @@ nodes:
     });
   });
 
-  it('should order Run diagnostics by file, RFC 6901 path, then code', async () => {
+  it('should preserve Run diagnostic order across secure-read batches', async () => {
     const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
 id: ordered-diagnostics
 name: Ordered Diagnostics
@@ -1847,20 +1847,20 @@ nodes:
     name: Execute
     prompt: Execute.
 `);
-    const laterFile = await writeStep(projectRoot, created.run_id, {
-      nodeId: 'execute',
-      attempt: 2,
-      status: 'failed',
-      contextSha256: '0'.repeat(64),
-      settledAt: '2026-07-24T20:02:00.000Z',
-    });
-    const earlierFile = await writeStep(projectRoot, created.run_id, {
-      nodeId: 'execute',
-      attempt: 1,
-      status: 'failed',
-      contextSha256: '0'.repeat(64),
-      settledAt: '2026-07-24T20:01:00.000Z',
-    });
+    const diagnosticFiles: string[] = [];
+    for (let attempt = 18; attempt >= 1; attempt -= 1) {
+      diagnosticFiles.push(
+        await writeStep(projectRoot, created.run_id, {
+          nodeId: 'execute',
+          attempt,
+          status: 'failed',
+          contextSha256: '0'.repeat(64),
+          settledAt: `2026-07-24T20:${String(attempt).padStart(2, '0')}:00.000Z`,
+        }),
+      );
+    }
+    const earlierFile = diagnosticFiles.at(-1);
+    const laterFile = diagnosticFiles[0];
 
     const result = await inspect(projectRoot, created.run_id);
     if (result.ok) throw new Error('Expected invalid Run.');
@@ -1878,6 +1878,8 @@ nodes:
           left.code.localeCompare(right.code),
       ),
     );
+    expect(earlierFile).toBeDefined();
+    expect(laterFile).toBeDefined();
     expect(order.map((item) => item.file)).toContain(earlierFile);
     expect(order.map((item) => item.file)).toContain(laterFile);
   });
