@@ -35,11 +35,26 @@ const displayNames = {
   '@breakdown-sh/mcp': 'Breakdown Local MCP Adapter',
 };
 
-async function run(command, args, options = {}) {
-  return execFileAsync(command, args, {
+export function runPackageArtifactCommand(
+  command,
+  args,
+  options = {},
+  { comSpec = process.env.ComSpec, execute = execFileAsync, platform = process.platform } = {},
+) {
+  if (command !== 'npm' || platform !== 'win32') {
+    return execute(command, args, {
+      maxBuffer: 20 * 1024 * 1024,
+      ...options,
+    });
+  }
+  return execute(comSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', ...args], {
     maxBuffer: 20 * 1024 * 1024,
     ...options,
   });
+}
+
+async function run(command, args, options = {}) {
+  return runPackageArtifactCommand(command, args, options);
 }
 
 export function packageNameFromLockPath(path) {

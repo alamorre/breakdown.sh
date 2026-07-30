@@ -17,6 +17,7 @@ import {
   readCandidateProvenance,
   readCandidateRelease,
 } from './platform-evidence.mjs';
+import { runPackageArtifactCommand } from './package-artifacts.mjs';
 import { inspectReleaseCandidate, tarGzipEntries } from './release-inspection.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -169,17 +170,9 @@ async function installCandidatePackages({ candidateDirectory, qualificationRoot,
     '--package-lock=false',
     ...tarballs,
   ];
-  const npmCommand =
-    process.platform === 'win32'
-      ? {
-          executable: process.env.ComSpec ?? 'cmd.exe',
-          arguments: ['/d', '/s', '/c', 'npm.cmd', ...npmArguments],
-        }
-      : { executable: 'npm', arguments: npmArguments };
-  return execFileAsync(npmCommand.executable, npmCommand.arguments, {
+  return runPackageArtifactCommand('npm', npmArguments, {
     cwd: qualificationRoot,
     env: { ...process.env, npm_config_engine_strict: 'true' },
-    maxBuffer: 20 * 1024 * 1024,
     windowsHide: true,
   });
 }
