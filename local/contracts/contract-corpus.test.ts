@@ -99,6 +99,17 @@ interface JsonPatchOperation {
   value?: unknown;
 }
 
+function toArchivePath(nativePath: string): string {
+  return nativePath.replaceAll('\\', '/');
+}
+
+it.each([
+  ['specifications\\cli.md', 'specifications/cli.md'],
+  ['specifications/cli.md', 'specifications/cli.md'],
+])('should express the contract-corpus path %s as %s', (nativePath, archivePath) => {
+  expect(toArchivePath(nativePath)).toBe(archivePath);
+});
+
 async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
 }
@@ -317,7 +328,7 @@ describe('verifyContractCorpus', () => {
     const specificationFiles = (await filesBelow(join(contractsRoot, 'specifications'))).filter(
       (path) => extname(path) === '.md',
     );
-    expect(specificationFiles.map((path) => relative(contractsRoot, path))).toEqual([
+    expect(specificationFiles.map((path) => toArchivePath(relative(contractsRoot, path)))).toEqual([
       'specifications/cli.md',
       'specifications/conformance.md',
       'specifications/hashing-and-state.md',
@@ -340,7 +351,7 @@ describe('verifyContractCorpus', () => {
       );
       expect(requirementIds.length, path).toBe(
         expectedRequirementCounts[
-          relative(contractsRoot, path) as keyof typeof expectedRequirementCounts
+          toArchivePath(relative(contractsRoot, path)) as keyof typeof expectedRequirementCounts
         ],
       );
       for (const requirementId of requirementIds) {
@@ -392,11 +403,11 @@ describe('verifyContractCorpus', () => {
         if (reference.startsWith('#')) continue;
         expect(
           reference,
-          `${relative(contractsRoot, path)} must not require a network`,
+          `${toArchivePath(relative(contractsRoot, path))} must not require a network`,
         ).not.toMatch(/^(?:https?:|file:|git:)/);
         expect(
           schemaIds.has(reference.split('#', 1)[0]),
-          `${relative(contractsRoot, path)} -> ${reference}`,
+          `${toArchivePath(relative(contractsRoot, path))} -> ${reference}`,
         ).toBe(true);
       }
     }
@@ -461,7 +472,7 @@ describe('verifyContractCorpus', () => {
 
   it('should publish literal examples and every settled conformance-fixture role', async () => {
     const examples = await filesBelow(join(contractsRoot, 'examples'));
-    expect(examples.map((path) => relative(contractsRoot, path))).toEqual(
+    expect(examples.map((path) => toArchivePath(relative(contractsRoot, path)))).toEqual(
       expect.arrayContaining([
         'examples/contracted-workflow.yaml',
         'examples/fan-out-fan-in.yaml',

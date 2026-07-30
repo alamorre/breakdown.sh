@@ -35,8 +35,19 @@ const displayNames = {
   '@breakdown-sh/mcp': 'Breakdown Local MCP Adapter',
 };
 
-async function run(command, args, options = {}) {
-  return execFileAsync(command, args, {
+export function runPackageArtifactCommand(
+  command,
+  args,
+  options = {},
+  { comSpec = process.env.ComSpec, execute = execFileAsync, platform = process.platform } = {},
+) {
+  if (command !== 'npm' || platform !== 'win32') {
+    return execute(command, args, {
+      maxBuffer: 20 * 1024 * 1024,
+      ...options,
+    });
+  }
+  return execute(comSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', ...args], {
     maxBuffer: 20 * 1024 * 1024,
     ...options,
   });
@@ -179,7 +190,7 @@ async function generateShrinkwrap({ coreTarballPath, packageManifest, stagePath 
     dependencies: lockDependencies,
   };
   await writeFile(join(stagePath, 'package.json'), `${JSON.stringify(lockManifest, null, 2)}\n`);
-  await run(
+  await runPackageArtifactCommand(
     'npm',
     [
       'install',
@@ -211,7 +222,7 @@ async function generateShrinkwrap({ coreTarballPath, packageManifest, stagePath 
 }
 
 async function packStage({ artifactName, outputPath, stagePath }) {
-  const { stdout } = await run(
+  const { stdout } = await runPackageArtifactCommand(
     'npm',
     ['pack', '.', '--json', '--ignore-scripts', '--pack-destination', outputPath],
     { cwd: stagePath },
@@ -252,7 +263,9 @@ export async function buildPackageArtifacts({ outputPath, releaseVersion, reposi
       force: true,
       recursive: true,
     });
-    await run('pnpm', ['--filter', definition.name, 'build'], { cwd: repositoryRoot });
+    await runPackageArtifactCommand('pnpm', ['--filter', definition.name, 'build'], {
+      cwd: repositoryRoot,
+    });
   }
 
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'breakdown-package-candidate-'));

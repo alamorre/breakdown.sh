@@ -38,6 +38,7 @@ const securityMatrix = JSON.parse(
     'utf8',
   ),
 ) as { rows: Array<{ id: string }> };
+const REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS = 180_000;
 
 async function temporaryDirectory(prefix = 'breakdown-security-') {
   const path = await mkdtemp(join(tmpdir(), prefix));
@@ -78,6 +79,13 @@ function successfulCandidate(packet: WorkPacket, markdown: string) {
     executor: { kind: 'program' as const, name: 'security-boundary-test' },
     markdown,
   };
+}
+
+async function writeInBatches(total: number, writer: (index: number) => Promise<unknown>) {
+  for (let start = 0; start < total; start += 250) {
+    const count = Math.min(250, total - start);
+    await Promise.all(Array.from({ length: count }, (_, index) => writer(start + index)));
+  }
 }
 
 afterEach(async () => {
@@ -771,8 +779,8 @@ nodes:
   });
 
   it(
-    'enforces StepArtifact and direct-entry boundaries on a real filesystem',
-    { timeout: 120_000 },
+    'enforces attempt and StepArtifact count boundaries on a real filesystem',
+    { timeout: REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS },
     async () => {
       const projectRoot = await temporaryDirectory();
       const nodes = [
@@ -848,12 +856,6 @@ nodes:
           { mode: 0o600 },
         );
         return filename;
-      };
-      const writeInBatches = async (total: number, writer: (index: number) => Promise<unknown>) => {
-        for (let start = 0; start < total; start += 250) {
-          const count = Math.min(250, total - start);
-          await Promise.all(Array.from({ length: count }, (_, index) => writer(start + index)));
-        }
       };
       const inspect = () =>
         operate({ operation: 'inspect_run', run_id: created.value.run_id }, { projectRoot });
@@ -935,10 +937,31 @@ nodes:
         failure: { kind: 'resource_limit', code: 'limit_exceeded' },
       });
       expect(await readdir(stepsPath)).toHaveLength(FIXED_LIMITS.step_artifacts_per_run);
+    },
+  );
 
-      const unrelatedAtMinusOne =
-        FIXED_LIMITS.direct_step_entries_scanned - FIXED_LIMITS.step_artifacts_per_run - 1;
-      await writeInBatches(unrelatedAtMinusOne, (index) =>
+  it(
+    'enforces the direct StepArtifact entry scan boundary on an independent real filesystem fixture',
+    { timeout: REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS },
+    async () => {
+      const projectRoot = await temporaryDirectory();
+      await writeFile(join(projectRoot, 'breakdown.yaml'), workflow('direct-entry-limit'));
+      const created = await operate(
+        { operation: 'create_run' },
+        {
+          projectRoot,
+          testControls: {
+            now: () => new Date('2026-07-27T00:00:00.000Z'),
+            randomBytes: () => Buffer.alloc(8),
+          },
+        },
+      );
+      if (!created.ok) throw new Error(created.failure.code);
+      const stepsPath = join(projectRoot, created.value.path, 'steps');
+      const inspect = () =>
+        operate({ operation: 'inspect_run', run_id: created.value.run_id }, { projectRoot });
+
+      await writeInBatches(FIXED_LIMITS.direct_step_entries_scanned - 1, (index) =>
         writeFile(join(stepsPath, `unrelated-${String(index).padStart(5, '0')}.tmp`), '', {
           mode: 0o600,
         }),

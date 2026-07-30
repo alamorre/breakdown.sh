@@ -129,7 +129,7 @@ beforeAll(async () => {
       `${packageName}\nstdout:\n${build.stdout}\nstderr:\n${build.stderr}`,
     ).toMatchObject({ status: 0 });
   }
-});
+}, 30_000);
 
 afterAll(async () => {
   await Promise.all(

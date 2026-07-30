@@ -13,6 +13,7 @@ import {
   packageArtifactDefinitions,
   packageNotice,
   registryTarballUrl,
+  runPackageArtifactCommand,
   thirdPartyNotices,
 } from './package-artifacts.mjs';
 import { releaseChannel } from './release-channel.mjs';
@@ -738,7 +739,7 @@ nodes:
     prompt: Produce a Result.
 `,
     );
-    await execFileAsync(
+    await runPackageArtifactCommand(
       'npm',
       [
         'install',
@@ -750,7 +751,7 @@ nodes:
         '--fund=false',
         ...packageFileNames.map((fileName) => join(candidateDirectory, fileName)),
       ],
-      { cwd: toolsRoot, maxBuffer: 20 * 1024 * 1024 },
+      { cwd: toolsRoot },
     );
     const installedFiles = await filesBelow(join(toolsRoot, 'node_modules'));
     invariant(
