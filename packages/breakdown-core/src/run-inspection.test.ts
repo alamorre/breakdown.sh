@@ -3,9 +3,68 @@ import { cp, mkdir, mkdtemp, readFile, rename, rm, utimes, writeFile } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { operate } from './index.js';
+
+const stepArtifactReadProbe = vi.hoisted(() => {
+  let active = 0;
+  let enabled = false;
+  let maximum = 0;
+  let observed = 0;
+  let releaseGate: (() => void) | undefined;
+  let startGate = Promise.resolve();
+
+  return {
+    begin() {
+      active = 0;
+      enabled = true;
+      maximum = 0;
+      observed = 0;
+      startGate = new Promise<void>((resolve) => {
+        releaseGate = resolve;
+      });
+    },
+    async started(path: string) {
+      if (!enabled || !path.includes('/steps/') || !path.endsWith('.md')) return false;
+      active += 1;
+      observed += 1;
+      maximum = Math.max(maximum, active);
+      if (active === 1) {
+        setImmediate(() => releaseGate?.());
+      } else {
+        releaseGate?.();
+        releaseGate = undefined;
+      }
+      await startGate;
+      return true;
+    },
+    settled(wasObserved: boolean) {
+      if (wasObserved) active -= 1;
+    },
+    finish() {
+      enabled = false;
+      releaseGate?.();
+      releaseGate = undefined;
+      return { maximum, observed };
+    },
+  };
+});
+
+vi.mock('./secure-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./secure-store.js')>();
+  return {
+    ...actual,
+    readSecureResultFile: async (...args: Parameters<typeof actual.readSecureResultFile>) => {
+      const wasObserved = await stepArtifactReadProbe.started(args[1]);
+      try {
+        return await actual.readSecureResultFile(...args);
+      } finally {
+        stepArtifactReadProbe.settled(wasObserved);
+      }
+    },
+  };
+});
 
 const temporaryProjects: string[] = [];
 const inspectionConformanceRoot = new URL(
@@ -223,6 +282,7 @@ async function replaceWorkflowSnapshot(
 }
 
 afterEach(async () => {
+  stepArtifactReadProbe.finish();
   await Promise.all(
     temporaryProjects
       .splice(0)
@@ -1838,7 +1898,7 @@ nodes:
     });
   });
 
-  it('should preserve Run diagnostic order across secure-read batches', async () => {
+  it('should bound overlapping StepArtifact reads and preserve Run diagnostic order', async () => {
     const { projectRoot, created } = await createRun(`schema_version: breakdown.workflow.v1
 id: ordered-diagnostics
 name: Ordered Diagnostics
@@ -1862,9 +1922,14 @@ nodes:
     const earlierFile = diagnosticFiles.at(-1);
     const laterFile = diagnosticFiles[0];
 
+    stepArtifactReadProbe.begin();
     const result = await inspect(projectRoot, created.run_id);
+    const readConcurrency = stepArtifactReadProbe.finish();
     if (result.ok) throw new Error('Expected invalid Run.');
 
+    expect(readConcurrency.observed).toBe(18);
+    expect(readConcurrency.maximum).toBeGreaterThan(1);
+    expect(readConcurrency.maximum).toBeLessThanOrEqual(16);
     const order = result.failure.diagnostics.map(({ file, path, code }) => ({
       file,
       path,
