@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "MCP",
   "defaults": {
     "setup": "Install exact lockstep core, CLI, and MCP candidate tarballs and start breakdown-mcp with no project selected.",

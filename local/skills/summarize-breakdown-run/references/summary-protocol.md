@@ -2,9 +2,9 @@
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
-This reference defines read-only summary behavior for Breakdown Local `1.0.0-beta.1`.
+This reference defines read-only summary behavior for Breakdown Local `1.0.0`.
 
 ## Stable inspection
 

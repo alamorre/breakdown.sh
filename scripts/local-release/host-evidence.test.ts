@@ -18,7 +18,7 @@ import {
 import { MAINTAINED_PLATFORM_TUPLES } from './platform-evidence.mjs';
 
 const temporaryDirectories: string[] = [];
-const releaseVersion = '1.0.0-beta.1';
+const releaseVersion = '1.0.0';
 const candidateDigest = 'a'.repeat(64);
 const corpusDigest = 'b'.repeat(64);
 const gitCommit = 'c'.repeat(40);

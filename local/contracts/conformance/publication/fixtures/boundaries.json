@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.publication-boundary-fixtures.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "run_boundaries": [
     "after_inputs_read",
     "after_lock_acquired",

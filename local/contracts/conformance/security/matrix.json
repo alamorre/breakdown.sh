@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "defaults": {
     "prerequisites": "Create hostile fixtures on a real temporary supported local filesystem.",
     "action": "Exercise all six operations through the core dispatcher with one explicit project root.",

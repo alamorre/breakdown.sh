@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "defaults": {
     "prerequisites": "Create valid Runs and Work Packets in real temporary projects on a supported local filesystem.",
     "action": "Exercise create_run and submit_candidate through the core dispatcher with deterministic publication controls and real subprocesses.",

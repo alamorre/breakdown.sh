@@ -6,9 +6,9 @@ This procedure prepares and publishes the first stable Breakdown Local release w
 or replacing any qualified artifact. It is deliberately split between local inspection, explicit
 human approval, a protected GitHub environment, and automated post-publication verification.
 
-The current `1.0.0-beta.1` corpus is not eligible for this workflow. Complete the ordinary
-lockstep version update to a stable full SemVer such as `1.0.0`, regenerate the versioned
-documentation, and build a new candidate once before using this ceremony.
+The checked-in `1.0.0` corpus is the stable source release. Regenerate the versioned documentation
+and build exactly one candidate before using this ceremony; never reuse candidate evidence from a
+different source commit or release version.
 
 ## One-time publisher controls
 

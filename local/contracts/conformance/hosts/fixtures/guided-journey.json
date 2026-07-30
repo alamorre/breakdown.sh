@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.guided-host-journey.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "stages": [
     "install",
     "author",

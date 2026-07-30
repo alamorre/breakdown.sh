@@ -2,17 +2,17 @@
 
 Document kind: Generated reference
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 This reference is non-normative. The named authored contracts, schemas, and catalogs remain
 authoritative. Regenerate this file instead of editing it by hand.
 
 ## Generated from
 
-- `local/contracts/catalogs/cli.v1.json` — SHA-256 `d576acf0d0a8170b8f10bd1da6512f75f54d2509302ccc0a8981a5a9c822432a`
-- `local/contracts/schemas/breakdown.cli-output.v1.schema.json` — SHA-256 `b6335bdb5a6b7262930c14820e98eb1de771918d421c5a16fa2d890e84bb0540`
-- `local/contracts/specifications/cli.md` — SHA-256 `2ffc12ccfe95f9807182c61dc445d2969a78476525714adce7419603a7e94100`
-- `local/docs/release-metadata.json` — SHA-256 `d7b0c39659bb90919227fc93d30bb4359fe5ae164533ed71ae336f58c5ae6500`
+- `local/contracts/catalogs/cli.v1.json` — SHA-256 `016b77716dbbf49423264531bdc7a464438feb1e28cb91aaf2a8cb5ccd9ea7e8`
+- `local/contracts/schemas/breakdown.cli-output.v1.schema.json` — SHA-256 `51503d15c9f3131ce84a63f099f3f55b241551d747b2fee389686dbe59ac37e9`
+- `local/contracts/specifications/cli.md` — SHA-256 `158bd2612633f8e046b62c13aa8ed010e8e215b59f99a8c714e0e98986719f17`
+- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
 
 
 ## Commands

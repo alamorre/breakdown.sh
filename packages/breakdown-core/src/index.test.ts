@@ -1136,7 +1136,7 @@ nodes:
       { operation: 'create_run' },
       {
         projectRoot,
-        producer: { name: '@breakdown-sh/core', version: '1.0.0-beta.1' },
+        producer: { name: '@breakdown-sh/core', version: '1.0.0' },
         testControls: {
           now: () => new Date('2026-07-24T12:34:56.789Z'),
           randomBytes: () => Buffer.alloc(8),
@@ -1158,7 +1158,7 @@ nodes:
           sha256: '50140f5006c219cf6a32689e54b581ad420a780b4ffe3c67418345edc5652785',
         },
         inputs: {},
-        producer: { name: '@breakdown-sh/core', version: '1.0.0-beta.1' },
+        producer: { name: '@breakdown-sh/core', version: '1.0.0' },
       },
     });
     expect(await readFile(join(projectRoot, runPath, 'breakdown.yaml'), 'utf8')).toBe(workflow);
@@ -1174,7 +1174,7 @@ workflow:
 inputs: {}
 producer:
   name: "@breakdown-sh/core"
-  version: "1.0.0-beta.1"
+  version: "1.0.0"
 ---
 `);
     if (process.platform !== 'win32') {
@@ -1495,7 +1495,7 @@ nodes:
       { operation: 'create_run' },
       {
         projectRoot,
-        producer: { name: '', version: '1.0.0-beta.1' },
+        producer: { name: '', version: '1.0.0' },
       },
     );
 

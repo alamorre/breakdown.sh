@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = join(import.meta.dirname, '..', '..');
-const documentationRoot = join(repositoryRoot, 'local', 'docs', '1.0.0-beta.1');
-const releaseVersion = '1.0.0-beta.1';
+const documentationRoot = join(repositoryRoot, 'local', 'docs', '1.0.0');
+const releaseVersion = '1.0.0';
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -126,7 +126,7 @@ describe('Breakdown Local release documentation', () => {
     expect(guide).toContain('MCP is optional');
     expect(guide).toContain('../contracts/specifications/');
     expect(guide).toContain(
-      'https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/',
+      'https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/',
     );
 
     for (const path of markdownPaths.filter((path) => path.startsWith('reference/'))) {
@@ -145,8 +145,8 @@ describe('Breakdown Local release documentation', () => {
     const repositoryIndex = await readFile(join(repositoryRoot, 'llms.txt'), 'utf8');
     expect(versionedIndex.split('\n').length).toBeLessThan(40);
     expect(repositoryIndex.split('\n').length).toBeLessThan(30);
-    expect(versionedIndex).toContain('breakdown-local-v1.0.0-beta.1');
-    expect(repositoryIndex).toContain('breakdown-local-v1.0.0-beta.1');
+    expect(versionedIndex).toContain('breakdown-local-v1.0.0');
+    expect(repositoryIndex).toContain('breakdown-local-v1.0.0');
     expect(repositoryIndex).toContain('Discovery index only');
   });
 

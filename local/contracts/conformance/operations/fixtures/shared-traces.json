@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.shared-operation-traces.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "sequences": ["core-only", "cli-only", "mcp-only", "cli-to-mcp", "mcp-to-cli"],
   "comparison": [
     "decoded-values",

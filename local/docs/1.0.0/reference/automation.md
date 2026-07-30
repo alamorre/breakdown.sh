@@ -2,18 +2,18 @@
 
 Document kind: Generated reference
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 This reference is non-normative. The named authored contracts, schemas, and catalogs remain
 authoritative. Regenerate this file instead of editing it by hand.
 
 ## Generated from
 
-- `local/contracts/catalogs/operations.v1.json` — SHA-256 `451defe178513fc268649ed8037d4af42cb9e9ca0ceb0c566b9ed37b506fc5ac`
-- `local/contracts/schemas/breakdown.operation-request.v1.schema.json` — SHA-256 `76df8421ec8cf59d3338cfe3e4fff17375a0a30b45194a01c463cfddaee815e9`
-- `local/contracts/schemas/breakdown.operation-value.v1.schema.json` — SHA-256 `d4f7b58dd1c74ab0b52d118b4a2e382053d155a71a70d9e08cdbcbf01b5bb34f`
-- `local/contracts/specifications/operations.md` — SHA-256 `a150e44954b9667d1b384f8af11f289a901f718b23a0a4274b78b1f5820ac301`
-- `local/docs/release-metadata.json` — SHA-256 `d7b0c39659bb90919227fc93d30bb4359fe5ae164533ed71ae336f58c5ae6500`
+- `local/contracts/catalogs/operations.v1.json` — SHA-256 `1367d8ddc86e9960b4dc8cd92a1398b706566412618b84784ce1e7e793d1b29c`
+- `local/contracts/schemas/breakdown.operation-request.v1.schema.json` — SHA-256 `d1e0fd4fdbb711d3d1452802ba42ea5e059f6726bdf45447bd5c8bddd2152e3e`
+- `local/contracts/schemas/breakdown.operation-value.v1.schema.json` — SHA-256 `4484e729885785b745db13851484c4a1238f095ec377e43d338e98080dcdc83c`
+- `local/contracts/specifications/operations.md` — SHA-256 `335f9f4c6334b951a6fb92b00ca7598727511e19f9c3ca407fdb0e09c7ce6856`
+- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
 
 
 ## Operations

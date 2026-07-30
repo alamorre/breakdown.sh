@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-index.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "matrices": [
     { "group": "WFV", "path": "traceability/wfv.json" },
     { "group": "RUN", "path": "traceability/run.json" },

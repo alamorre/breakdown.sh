@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "PUB",
   "defaults": {
     "setup": "Create valid real temporary Runs and inject the indexed deterministic publication boundary, contention, cancellation, or subprocess condition.",

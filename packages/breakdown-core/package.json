@@ -1,6 +1,6 @@
 {
   "name": "@breakdown-sh/core",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "description": "Deterministic local workflow contracts and storage for Breakdown Local.",
   "license": "Apache-2.0",
   "type": "module",
@@ -12,7 +12,7 @@
   "publishConfig": {
     "access": "public",
     "provenance": true,
-    "tag": "next"
+    "tag": "latest"
   },
   "engines": {
     "node": "^24.0.0"

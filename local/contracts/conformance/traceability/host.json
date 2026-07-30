@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "HOST",
   "defaults": {
     "setup": "Install the exact candidate packages and skill archive into the named real Agent Host/version/OS/transport row.",

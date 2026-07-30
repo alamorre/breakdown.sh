@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.documentation-navigation.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "documents": [
     {
       "path": "README.md",

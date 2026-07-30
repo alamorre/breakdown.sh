@@ -2,17 +2,17 @@
 
 Document kind: Generated reference
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 This reference is non-normative. The named authored contracts, schemas, and catalogs remain
 authoritative. Regenerate this file instead of editing it by hand.
 
 ## Generated from
 
-- `local/contracts/catalogs/mcp.v1.json` — SHA-256 `7522850a19272bbee30d4aad7b4b9602330676ff581a4cbd078c6bff71332180`
-- `local/contracts/schemas/breakdown.mcp-output.v1.schema.json` — SHA-256 `251c53bab881c53f3147c17a8e6ae3e664539526fa63bb4db1a05c9ec2c51716`
-- `local/contracts/specifications/mcp.md` — SHA-256 `57a62eda32bb38b0d432da152d42f04af334229bf8e03fc8805b13ffa755b0f7`
-- `local/docs/release-metadata.json` — SHA-256 `d7b0c39659bb90919227fc93d30bb4359fe5ae164533ed71ae336f58c5ae6500`
+- `local/contracts/catalogs/mcp.v1.json` — SHA-256 `a872a0f39e7775e951087e322f7182a6780186bd30e8ef93b43d1d94fc3524e3`
+- `local/contracts/schemas/breakdown.mcp-output.v1.schema.json` — SHA-256 `57139ffc12da9c0fd4f940d9c824a4eb2c23fea4948aafa5c2a55a0147052569`
+- `local/contracts/specifications/mcp.md` — SHA-256 `ec837c9b0c7c968e0ae0930b99fff82ceac027cdab0303a7b7cef48f5dffb2f7`
+- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
 
 
 MCP is optional. The canonical CLI remains the baseline and both transports dispatch the same
@@ -20,7 +20,7 @@ operation semantics.
 
 ## Server
 
-- Package: `@breakdown-sh/mcp@1.0.0-beta.1`
+- Package: `@breakdown-sh/mcp@1.0.0`
 - Executable: `breakdown-mcp`
 - Transport: `stdio`
 - Protocol window: `2025-06-18`, `2025-11-25`

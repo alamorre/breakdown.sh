@@ -12,7 +12,7 @@ import { qualifyLocalRelease } from './local-release/platform-qualification.mjs'
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = join(import.meta.dirname, '..');
-const releaseVersion = '1.0.0-beta.1';
+const releaseVersion = '1.0.0';
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');

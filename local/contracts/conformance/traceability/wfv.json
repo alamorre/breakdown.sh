@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "WFV",
   "defaults": {
     "setup": "Place the referenced literal Workflow Definition fixture at <temporary-project>/breakdown.yaml on a supported local filesystem.",

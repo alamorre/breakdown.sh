@@ -2,7 +2,7 @@
 
 Document kind: License and notice material
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 No third-party material is incorporated into this execution skill artifact.
 

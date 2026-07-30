@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.cli-catalog.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "human_commands": [
     "breakdown workflow validate --project PATH [--json]",
     "breakdown run create --project PATH [--input ID=PATH]... [--json]",

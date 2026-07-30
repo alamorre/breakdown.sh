@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.limit-case-fixtures.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "oracle": {
     "below": "accepted without truncation",
     "at": "accepted without truncation",

@@ -2,7 +2,7 @@
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 This exact-version journey is derived from the canonical skills and contracts listed below. Keep
 the [normative specifications](../../contracts/specifications/) one click away when exact behavior
@@ -11,8 +11,8 @@ matters.
 ## 1. Install the exact release
 
 Use the canonical setup skill and its
-[exact installation reference](https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/local/skills/setup-breakdown/references/installation.md).
-It pins Breakdown Local 1.0.0-beta.1, Node 24, the five canonical skills, and the selected
+[exact installation reference](https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills/setup-breakdown/references/installation.md).
+It pins Breakdown Local 1.0.0, Node 24, the five canonical skills, and the selected
 Agent Host adapter. A project needs no package manifest, dependency directory, database, account,
 or Git repository.
 
@@ -62,17 +62,17 @@ distinguishes stale and non-success history, and creates no durable summary reco
 - Unsupported surfaces include hosted storage as a local Run authority, bare model endpoints,
   remote/synchronized filesystems, browser runtimes, alternate runtimes, and any host/version/OS
   row without passing indexed evidence.
-- Immutable version links use [breakdown-local-v1.0.0-beta.1](https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0-beta.1/); mutable branches and
+- Immutable version links use [breakdown-local-v1.0.0](https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/); mutable branches and
   discovery services cannot redefine this release.
 
 ## Source digests
 
-- `local/contracts/specifications/conformance.md` — SHA-256 `8465bc27f5e2c3719bce405fb24312eb9b63163b921d5edb7061126b9533f6af`
-- `local/contracts/specifications/security-and-publication.md` — SHA-256 `b77a2439e7ca1a190e7511aa4b220ed7ae06a7cae83275e624bb6e13548ba709`
-- `local/contracts/specifications/skills-and-hosts.md` — SHA-256 `c208b021b1985e9eab31010d5d622f99b0e1bc7806a1d58aab1a600e8b83192f`
-- `local/docs/navigation.json` — SHA-256 `76ea62a5b1eb9fe6b8eeb9010c3d3248d93f731d03526430ab9bff39b12b1be3`
-- `local/docs/release-metadata.json` — SHA-256 `d7b0c39659bb90919227fc93d30bb4359fe5ae164533ed71ae336f58c5ae6500`
-- `local/skills/author-breakdown/SKILL.md` — SHA-256 `8c88321eff862c14ca49562b4bc0faabcf5b7a5b08b4b05dbb356d83aceeed89`
-- `local/skills/run-breakdown/SKILL.md` — SHA-256 `eb245cf613044920f8bc02fc436aac17b3ed689da2b60c4e99859e4eed6c93dd`
-- `local/skills/setup-breakdown/references/installation.md` — SHA-256 `e57c5f7aac671b76ae6cdb1b7791e2e6d97d5fbe4e7187e4bada01150d62e835`
-- `local/skills/summarize-breakdown-run/SKILL.md` — SHA-256 `33e6803264ea3d12b791449fd6a4f6630868d87e942106ffd203efe9b2ec736b`
+- `local/contracts/specifications/conformance.md` — SHA-256 `d9a4a34a949fef022ff17561990ed8327bd3d3836c7d853bec2141921dc83e35`
+- `local/contracts/specifications/security-and-publication.md` — SHA-256 `93382b425a7aef0c187ca7418e059f1a88674a4118bed98cfdcd9466ef93b7f2`
+- `local/contracts/specifications/skills-and-hosts.md` — SHA-256 `63f5e21716ade0f62eb2bdf59409d4c529c07ac3ebc6e14ac5152a0b66f6380c`
+- `local/docs/navigation.json` — SHA-256 `ee1ed5285b728a0e26339a19221de10f4a61aff45c633dcb4602099c56d82716`
+- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
+- `local/skills/author-breakdown/SKILL.md` — SHA-256 `0f0808f6f3ae4d4b35c105c3d530bc7c3ee981f65c4cc7aa0a069dd4484a236c`
+- `local/skills/run-breakdown/SKILL.md` — SHA-256 `63b65a045e8115b32a58710cdf80bca93443eb19a2f8427fea19dc85bcf26418`
+- `local/skills/setup-breakdown/references/installation.md` — SHA-256 `2b1636cff19452d87de06bf5c732563c682078f82ce83a02547f53c52f865dde`
+- `local/skills/summarize-breakdown-run/SKILL.md` — SHA-256 `c4d747f54f890077a6e856c00281031b1788f788eab4d13845bf50d838ad4ca3`

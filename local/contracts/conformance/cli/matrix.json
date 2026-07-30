@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "defaults": {
     "prerequisites": "Build @breakdown-sh/core and @breakdown-sh/cli, pack both, and install their tarballs with the exact YAML dependency in an otherwise empty temporary package.",
     "action": "Invoke the installed breakdown executable against a real temporary project.",

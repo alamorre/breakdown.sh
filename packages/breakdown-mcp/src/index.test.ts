@@ -279,7 +279,7 @@ describe('breakdown-mcp stdio process', () => {
         serverInfo: {
           name: '@breakdown-sh/mcp',
           title: 'Breakdown Local',
-          version: '1.0.0-beta.1',
+          version: '1.0.0',
         },
       });
 
@@ -472,7 +472,7 @@ nodes:
     const structuredContent = called.result?.structuredContent as Record<string, unknown>;
     expect(structuredContent).toEqual({
       schema_version: 'breakdown.mcp-output.v1',
-      release_version: '1.0.0-beta.1',
+      release_version: '1.0.0',
       supported_operation_schemas: ['breakdown.operation-request.v1'],
       operation: 'validate_workflow',
       ok: true,
@@ -577,7 +577,7 @@ nodes:
       isError: true,
       structuredContent: {
         schema_version: 'breakdown.mcp-output.v1',
-        release_version: '1.0.0-beta.1',
+        release_version: '1.0.0',
         supported_operation_schemas: ['breakdown.operation-request.v1'],
         operation: 'validate_workflow',
         ok: false,
@@ -740,7 +740,7 @@ nodes:
       expect(created.data).toMatchObject({
         producer: {
           name: '@breakdown-sh/core',
-          version: '1.0.0-beta.1',
+          version: '1.0.0',
         },
       });
       const runId = created.data!.run_id as string;
@@ -1251,7 +1251,7 @@ nodes:
     expect(client.getServerVersion()).toEqual({
       name: '@breakdown-sh/mcp',
       title: 'Breakdown Local',
-      version: '1.0.0-beta.1',
+      version: '1.0.0',
     });
     expect(client.getServerCapabilities()).toEqual({
       tools: {},

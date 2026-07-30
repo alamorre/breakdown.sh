@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "OPS",
   "defaults": {
     "setup": "Install the exact core candidate and materialize the indexed real temporary project and operation request.",

@@ -1,8 +1,8 @@
-# Breakdown Local 1.0.0-beta.1
+# Breakdown Local 1.0.0
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 Use this exact-version index to distinguish the four release layers. Mutable repository branches,
 implementation source, tests, and this guidance do not redefine the contracts.
@@ -31,8 +31,8 @@ Generated reference is non-normative and records the exact input digests from wh
 ## Immutable release evidence
 
 The release manifest and passing indexed evidence attached to
-[the immutable breakdown-local-v1.0.0-beta.1 release](https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0-beta.1) are the only authority for exact
-artifact inventory, channels, and Supported Host claims. This prerelease documentation does not
+[the immutable breakdown-local-v1.0.0 release](https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0) are the only authority for exact
+artifact inventory, channels, and Supported Host claims. Checked-in source documentation does not
 turn missing evidence into a conformance or support claim.
 
 ## Discovery

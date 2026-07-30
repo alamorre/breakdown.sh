@@ -2,7 +2,7 @@
 
 Document kind: Authored normative contract
 
-Contract version: 1.0.0-beta.1
+Contract version: 1.0.0
 
 Requirement namespace: `REQ-WFV`
 

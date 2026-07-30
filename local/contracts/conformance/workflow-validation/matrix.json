@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "defaults": {
     "prerequisites": "Place the fixture bytes at <temporary-project>/breakdown.yaml.",
     "action": "Call validate_workflow through the core dispatcher with the temporary project as the explicit trusted project root.",

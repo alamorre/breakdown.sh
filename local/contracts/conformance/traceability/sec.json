@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "SEC",
   "defaults": {
     "setup": "Construct the indexed attack or boundary case on a real temporary local filesystem with sentinel ambient authority and content.",

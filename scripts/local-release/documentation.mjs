@@ -204,7 +204,7 @@ Generated reference is non-normative and records the exact input digests from wh
 
 The release manifest and passing indexed evidence attached to
 [the immutable ${immutableTag} release](${immutableReleaseUrl}) are the only authority for exact
-artifact inventory, channels, and Supported Host claims. This prerelease documentation does not
+artifact inventory, channels, and Supported Host claims. Checked-in source documentation does not
 turn missing evidence into a conformance or support claim.
 
 ## Discovery
@@ -407,7 +407,7 @@ as \`${String(releaseMetadata.candidate_inspection.immutable_release_manifest)}\
 
   const supportRows =
     skillManifest.supported_hosts.length === 0
-      ? [['None', 'No passing indexed immutable host evidence is recorded for this prerelease.']]
+      ? [['None', 'No passing indexed immutable host evidence is recorded for this source tree.']]
       : skillManifest.supported_hosts.map((row) => [
           `${row.surface} ${row.version} / ${row.os_name} ${row.os_version} (${row.os_release}) / ${row.architecture} / ${row.transport}`,
           `${row.evidence.artifact_name} / row SHA-256 ${row.evidence.file_sha256}`,

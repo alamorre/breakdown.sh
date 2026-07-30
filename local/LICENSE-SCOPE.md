@@ -2,7 +2,7 @@
 
 Document kind: License and notice material
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 The Apache License 2.0 grant shipped with Breakdown Local applies only to the original local corpus
 in these paths:

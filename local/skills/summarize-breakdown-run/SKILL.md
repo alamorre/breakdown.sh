@@ -2,17 +2,17 @@
 name: summarize-breakdown-run
 description: Conversationally summarize one exact Breakdown Run from its validated Selected Terminal Results and inspected history without creating a durable summary. Use when the user asks for the outcome, status, gaps, stale work, or non-success history of a specific Run.
 license: Apache-2.0. See LICENSE.
-compatibility: Requires local project access, Node.js 24, and @breakdown-sh/cli 1.0.0-beta.1.
+compatibility: Requires local project access, Node.js 24, and @breakdown-sh/cli 1.0.0.
 metadata:
   breakdown-sh.pack: breakdown-local
-  breakdown-sh.version: '1.0.0-beta.1'
+  breakdown-sh.version: '1.0.0'
 ---
 
 # Summarize an Exact Run
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 Return a conversational view of one inspected Run. A summary is not a Result, StepArtifact, Run
 state, or other durable Breakdown record.

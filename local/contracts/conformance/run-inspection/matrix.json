@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "defaults": {
     "prerequisites": "Create an exact immutable Run and apply the named fixture mutation without using inspection.",
     "action": "Call inspect_run through the core dispatcher with the exact Run ID.",

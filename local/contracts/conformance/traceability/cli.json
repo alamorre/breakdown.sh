@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "group": "CLI",
   "defaults": {
     "setup": "Install the exact core and CLI candidate tarballs into an otherwise empty temporary package and create the indexed real project.",

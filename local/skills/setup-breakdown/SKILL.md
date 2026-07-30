@@ -5,14 +5,14 @@ license: Apache-2.0. See LICENSE.
 compatibility: Requires a local Agent Host with project filesystem and process access; Breakdown Local runs on Node.js 24.
 metadata:
   breakdown-sh.pack: breakdown-local
-  breakdown-sh.version: '1.0.0-beta.1'
+  breakdown-sh.version: '1.0.0'
 ---
 
 # Set up Breakdown Local
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0-beta.1
+Document version: 1.0.0
 
 Establish one exact, capability-checked Breakdown Local release without changing the user's project
 until they approve each mutation.

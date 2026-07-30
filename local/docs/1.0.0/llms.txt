@@ -1,0 +1,12 @@
+# Breakdown Local 1.0.0
+> Discovery index only. Normative contracts and immutable release evidence remain authoritative.
+
+- Install, author, validate, run, execute, and summarize: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/getting-started.md
+- CLI reference: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/reference/cli.md
+- Automation reference: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/reference/automation.md
+- Optional local stdio MCP reference: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/reference/mcp.md
+- Package reference: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/reference/packages.md
+- Support reference: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/reference/support.md
+- Normative contracts: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/contracts/README.md
+- Immutable release evidence: https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0
+- Release metadata input: SHA-256 ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70

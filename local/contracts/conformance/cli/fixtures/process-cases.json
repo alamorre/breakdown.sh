@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.cli-process-fixtures.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "executable": "breakdown",
   "substitutions": {
     "$PROJECT": "absolute path of a fresh project containing examples/minimal-workflow.yaml as breakdown.yaml",
@@ -22,7 +22,7 @@
       "argv": ["--version"],
       "stdin_bytes_base64": "",
       "exit_code": 0,
-      "stdout_utf8": "1.0.0-beta.1\n",
+      "stdout_utf8": "1.0.0\n",
       "stderr_utf8": "",
       "effects": { "created_paths": [] }
     },

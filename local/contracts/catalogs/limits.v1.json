@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.limits.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "limits": {
     "workflow_definition_bytes": 1048576,
     "nodes_per_workflow": 256,

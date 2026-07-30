@@ -370,7 +370,7 @@ function suitesPassed(suites, ids) {
 function compatibilityEvidence(suites) {
   return {
     policy:
-      'Validate the current disk family and every supported current/prior protocol family; inspect any prior stable disk family not exercised by this prerelease.',
+      'Validate the current disk family and every supported current/prior protocol family; inspect any prior stable disk family not exercised by this candidate.',
     disk_families: PLATFORM_QUALIFICATION_POLICY.diskFamilies.map((definition) => ({
       ...definition,
       result: suitesPassed(suites, definition.suites) ? 'validated' : 'failed',

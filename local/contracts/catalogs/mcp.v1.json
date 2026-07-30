@@ -1,12 +1,12 @@
 {
   "schema_version": "breakdown.mcp-catalog.v1",
-  "release_version": "1.0.0-beta.1",
+  "release_version": "1.0.0",
   "protocol_versions": ["2025-06-18", "2025-11-25"],
   "preferred_protocol_version": "2025-11-25",
   "server": {
     "name": "@breakdown-sh/mcp",
     "title": "Breakdown Local",
-    "version": "1.0.0-beta.1"
+    "version": "1.0.0"
   },
   "transport": "stdio",
   "input_schema": "breakdown.operation-request.v1",

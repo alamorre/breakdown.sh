@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 const repositoryRoot = join(import.meta.dirname, '..', '..');
 const contractsRoot = join(repositoryRoot, 'local', 'contracts');
-const releaseVersion = '1.0.0-beta.1';
+const releaseVersion = '1.0.0';
 const expectedGroups = [
   'WFV',
   'RUN',

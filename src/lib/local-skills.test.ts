@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const skillsRoot = join(workspaceRoot, 'local', 'skills');
-const releaseVersion = '1.0.0-beta.1';
+const releaseVersion = '1.0.0';
 const skillNames = [
   'setup-breakdown',
   'author-breakdown',
