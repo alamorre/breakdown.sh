@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
@@ -65,10 +66,9 @@ it('fails an assertion', () => {
       expect(assertions[1].failureMessages[0]).toContain(
         "AssertionError: expected 'actual' to be 'expected'",
       );
-      expect(report.qualification_process.stderr).toContain('Error: Test timed out in 1ms.');
-      expect(report.qualification_process.stderr).toContain(
-        "AssertionError: expected 'actual' to be 'expected'",
-      );
+      const stderr = stripVTControlCharacters(report.qualification_process.stderr);
+      expect(stderr).toContain('Error: Test timed out in 1ms.');
+      expect(stderr).toContain("AssertionError: expected 'actual' to be 'expected'");
     } finally {
       await rm(fixtureRoot, { recursive: true, force: true });
     }
