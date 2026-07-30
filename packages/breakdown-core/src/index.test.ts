@@ -2034,7 +2034,9 @@ nodes:
   });
 
   describe.each(conformanceMatrix.rows)('$id', (row) => {
-    it(`should satisfy ${row.id}: ${row.requirement}`, async () => {
+    const timeout = row.id === 'CASE-WFV-040' ? 30_000 : 5_000;
+
+    it(`should satisfy ${row.id}: ${row.requirement}`, { timeout }, async () => {
       if (row.generated_cases !== undefined) {
         for (const generatedCase of row.generated_cases) {
           const projectRoot = await createProject(

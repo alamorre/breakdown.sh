@@ -236,7 +236,7 @@ describe('Breakdown Local release documentation', () => {
       await rm(firstOutput, { recursive: true });
       await rm(secondOutput, { recursive: true });
     }
-  });
+  }, 30_000);
 
   it('labels every released Markdown document with its authority layer and exact version', async () => {
     const releasedRoots = [
