@@ -9,22 +9,17 @@ import { runVitestLog } from './platform-qualification.mjs';
 const repositoryRoot = join(import.meta.dirname, '../..');
 
 describe('platform qualification workflow', () => {
-  it('should build one candidate and qualify its exact bytes on all five native runners', async () => {
+  it('should build one candidate and qualify its exact bytes on all four native runners', async () => {
     const workflow = await readFile(
       join(repositoryRoot, '.github', 'workflows', 'local-platform-qualification.yml'),
       'utf8',
     );
 
     expect(workflow.match(/pnpm local:release:build/g)).toHaveLength(1);
-    for (const runner of [
-      'ubuntu-24.04',
-      'ubuntu-24.04-arm',
-      'macos-15-intel',
-      'macos-15',
-      'windows-2025',
-    ]) {
+    for (const runner of ['ubuntu-24.04', 'ubuntu-24.04-arm', 'macos-15-intel', 'macos-15']) {
       expect(workflow, runner).toContain(`runner: ${runner}`);
     }
+    expect(workflow).not.toContain('windows-2025');
     expect(workflow).toContain('fail-fast: false');
     expect(workflow).toContain('BREAKDOWN_QUALIFICATION_RUNNER_LABEL: ${{ matrix.runner }}');
     expect(workflow).toContain('pnpm local:release:qualify');

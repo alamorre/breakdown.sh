@@ -123,9 +123,10 @@ or unprovisioned cloud surface is Unsupported.
 ### REQ-HOST-004
 
 Stable qualification MUST include at least one passing guided CLI host row on
-Linux, macOS, and Windows and real-host smoke evidence across at least two
-model/provider families. Passing evidence MUST use the exact candidate skill
-archive and package artifacts.
+Linux and macOS and real-host smoke evidence across at least two model/provider
+families. Passing evidence MUST use the exact candidate skill archive and
+package artifacts. A host running on an operating system outside the
+maintained platform tuples is Unsupported for this release.
 
 ### REQ-HOST-005
 

@@ -226,7 +226,8 @@ Use the canonical setup skill and its
 [exact installation reference](${immutableRepositoryRoot}local/skills/setup-breakdown/references/installation.md).
 It pins Breakdown Local ${releaseVersion}, Node 24, the five canonical skills, and the selected
 Agent Host adapter. A project needs no package manifest, dependency directory, database, account,
-or Git repository.
+or Git repository. This release maintains Linux glibc x64/arm64 and macOS x64/arm64. Windows is
+Unsupported and fails closed before local Run storage is created.
 
 ## 2. Author the Workflow Definition
 
@@ -269,6 +270,8 @@ distinguishes stale and non-success history, and creates no durable summary reco
   equal quality, behavior, cost, latency, or privacy.
 - Git is not required for validation, execution, selection, or resume. Breakdown adds no Git
   behavior; optional user-controlled versioning does not become Run history or locking.
+- Windows is not a maintained operating system for Breakdown Local ${releaseVersion}; it is
+  Unsupported rather than Compatible.
 - Run Authority comes only from the user or Agent Host. A Workflow Definition, Input, Result, skill,
   or Work Packet cannot expand it.
 - Unsupported surfaces include hosted storage as a local Run authority, bare model endpoints,

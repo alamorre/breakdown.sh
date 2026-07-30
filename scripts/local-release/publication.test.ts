@@ -136,7 +136,6 @@ async function publicationFixture() {
         { os: 'linux-glibc', architecture: 'arm64' },
         { os: 'macos', architecture: 'x64' },
         { os: 'macos', architecture: 'arm64' },
-        { os: 'windows', architecture: 'x64' },
       ],
       current_build: {
         corpus_revision: {
@@ -174,7 +173,6 @@ async function publicationFixture() {
     { os: 'linux-glibc', architecture: 'arm64' },
     { os: 'macos', architecture: 'x64' },
     { os: 'macos', architecture: 'arm64' },
-    { os: 'windows', architecture: 'x64' },
   ].map((tuple, index) => ({
     tuple,
     status: 'passed',
@@ -228,7 +226,6 @@ async function publicationFixture() {
   const hostRows = [
     { family: 'linux', platform: 'linux', model: 'claude', provider: 'anthropic' },
     { family: 'macos', platform: 'darwin', model: 'gpt', provider: 'openai' },
-    { family: 'windows', platform: 'win32', model: 'gpt', provider: 'openai' },
   ].map(({ family, platform, model, provider }, index) => ({
     host: { surface: `Agent Host ${index + 1}`, version: '1.2.3' },
     operating_system: {
@@ -288,7 +285,7 @@ async function publicationFixture() {
       git_commit: gitCommit,
     },
     coverage: {
-      guided_cli_operating_systems: ['linux', 'macos', 'windows'],
+      guided_cli_operating_systems: ['linux', 'macos'],
       model_families: ['claude', 'gpt'],
       provider_families: ['anthropic', 'openai'],
     },
@@ -482,7 +479,7 @@ describe('prepareLocalPublication', () => {
       },
       npm_dist_tag: 'latest',
       github_prerelease: false,
-      qualified_platforms: 5,
+      qualified_platforms: 4,
       supported_hosts: fixture.supportedHosts.length,
     });
 

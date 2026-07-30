@@ -2,7 +2,7 @@
 name: setup-breakdown
 description: Set up, verify, repair, upgrade, or configure Breakdown Local and its optional MCP adapter in a local project. Use when the user asks to install Breakdown, check compatibility or versions, fix setup, or configure a supported Agent Host.
 license: Apache-2.0. See LICENSE.
-compatibility: Requires a local Agent Host with project filesystem and process access; Breakdown Local runs on Node.js 24.
+compatibility: Requires Linux or macOS and a local Agent Host with project filesystem, process access, and Node.js 24.
 metadata:
   breakdown-sh.pack: breakdown-local
   breakdown-sh.version: '1.0.0'
@@ -67,8 +67,10 @@ until they approve each mutation.
 6. Report the verifier's classification precisely:
    - **Supported Host**: the exact host surface, host version, OS, architecture, and transport match
      retained passing release evidence.
-   - **Compatible Host**: every capability check passes, but no exact qualified evidence row exists.
-   - **Unsupported**: a mandatory runtime/host capability or filesystem guarantee fails.
+   - **Compatible Host**: every capability check passes on Linux or macOS, but no exact qualified
+     evidence row exists.
+   - **Unsupported**: the operating system is not maintained, or a mandatory runtime/host
+     capability or filesystem guarantee fails.
      Fast preflight never qualifies a host. A mixed release reports `repair_required`, not
      Unsupported. An inconclusive permission or I/O failure is not a permanent compatibility
      classification.
@@ -90,6 +92,8 @@ until they approve each mutation.
 
 - Mixed CLI, MCP, or skill versions: report `repair_required`, stop, and replace the complete
   release set without labelling the host Unsupported.
+- Windows or another non-maintained operating system: report Unsupported and do not create a
+  Workflow Definition, Run, or artifact.
 - Missing Node 24 or process/filesystem capability: report Unsupported with the failed check.
 - Permission denied: report that operation as inconclusive; do not permanently brand the host.
 - Unsupported filesystem: create no Workflow Definition, Run, or artifact and explain that a

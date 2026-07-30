@@ -506,7 +506,7 @@ async function readHostEvidenceIndex(path, candidateBinding) {
   const facts = await lstat(path);
   if (!facts.isFile()) throw new Error('host evidence index is not a regular file');
   const index = JSON.parse(await readFile(path, 'utf8'));
-  const indexedOperatingSystems = ['linux', 'macos', 'windows'].filter((family) =>
+  const indexedOperatingSystems = ['linux', 'macos'].filter((family) =>
     index.rows?.some((row) => row.transport === 'cli' && row.operating_system?.family === family),
   );
   const indexedModelFamilies = [
@@ -527,11 +527,11 @@ async function readHostEvidenceIndex(path, candidateBinding) {
     !Array.isArray(index.rows) ||
     !Array.isArray(index.supported_hosts) ||
     index.rows.length !== index.supported_hosts.length ||
-    index.supported_hosts.length < 3 ||
+    index.supported_hosts.length < 2 ||
     index.rows.some((row) => !validIndexedHostRow(row, candidateBinding)) ||
     index.supported_hosts.some((row) => !validSupportedHostRow(row)) ||
     JSON.stringify(index.coverage?.guided_cli_operating_systems) !==
-      JSON.stringify(['linux', 'macos', 'windows']) ||
+      JSON.stringify(['linux', 'macos']) ||
     !Array.isArray(index.coverage?.model_families) ||
     !Array.isArray(index.coverage?.provider_families) ||
     (index.coverage.model_families.length < 2 && index.coverage.provider_families.length < 2) ||
@@ -559,14 +559,13 @@ function validIndexedHostRow(row, candidateBinding) {
   const expectedPlatform = {
     linux: 'linux',
     macos: 'darwin',
-    windows: 'win32',
   }[row?.operating_system?.family];
   return (
     typeof row?.host?.surface === 'string' &&
     row.host.surface.length > 0 &&
     typeof row.host.version === 'string' &&
     row.host.version.length > 0 &&
-    ['linux', 'macos', 'windows'].includes(row.operating_system?.family) &&
+    ['linux', 'macos'].includes(row.operating_system?.family) &&
     row.operating_system.platform === expectedPlatform &&
     typeof row.operating_system.name === 'string' &&
     row.operating_system.name.length > 0 &&
@@ -640,7 +639,7 @@ function validSupportedHostRow(row) {
     row.surface.length > 0 &&
     typeof row?.version === 'string' &&
     row.version.length > 0 &&
-    ['linux', 'darwin', 'win32'].includes(row.os) &&
+    ['linux', 'darwin'].includes(row.os) &&
     typeof row.os_name === 'string' &&
     row.os_name.length > 0 &&
     typeof row.os_release === 'string' &&
@@ -955,6 +954,20 @@ async function main() {
     unsupported = true;
   }
 
+  const currentPlatform = platform();
+  if (currentPlatform === 'linux' || currentPlatform === 'darwin') {
+    checks.push(resultCheck('platform', 'pass', 'Breakdown Local 1.0 maintains Linux and macOS.'));
+  } else {
+    checks.push(
+      resultCheck(
+        'platform',
+        'fail',
+        `Breakdown Local 1.0 does not maintain ${currentPlatform}; Windows and other operating systems are Unsupported.`,
+      ),
+    );
+    unsupported = true;
+  }
+
   try {
     await checkCliVersion(cli);
     checks.push(resultCheck('cli_version', 'pass', `CLI ${RELEASE_VERSION}.`));
@@ -1087,7 +1100,7 @@ async function main() {
         resultCheck(
           'host_capability',
           'fail',
-          'A mandatory runtime or filesystem capability failed.',
+          'A mandatory runtime, platform, or filesystem capability failed.',
         ),
       );
     } else if (repairRequired || inconclusive) {

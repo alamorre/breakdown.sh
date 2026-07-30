@@ -61,9 +61,6 @@ jobs:
           - os: macos
             architecture: arm64
             runner: macos-15
-          - os: windows
-            architecture: x64
-            runner: windows-2025
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out the qualification harness
@@ -143,7 +140,7 @@ jobs:
           pattern: breakdown-platform-evidence-*
           path: ${{ runner.temp }}/platform-evidence
 
-      - name: Verify and index all five immutable rows
+      - name: Verify and index all four immutable rows
         run: pnpm local:release:index-platform --candidate "${{ runner.temp }}/breakdown-candidate" --evidence-root "${{ runner.temp }}/platform-evidence" --output "${{ runner.temp }}/breakdown-platform-evidence-index.json"
 
       - name: Retain the release-gate index

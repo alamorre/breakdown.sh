@@ -2,7 +2,7 @@
 name: summarize-breakdown-run
 description: Conversationally summarize one exact Breakdown Run from its validated Selected Terminal Results and inspected history without creating a durable summary. Use when the user asks for the outcome, status, gaps, stale work, or non-success history of a specific Run.
 license: Apache-2.0. See LICENSE.
-compatibility: Requires local project access, Node.js 24, and @breakdown-sh/cli 1.0.0.
+compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.0.
 metadata:
   breakdown-sh.pack: breakdown-local
   breakdown-sh.version: '1.0.0'

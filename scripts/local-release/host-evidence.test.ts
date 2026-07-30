@@ -490,7 +490,7 @@ describe('writeHostQualificationTemplate', () => {
 });
 
 describe('indexHostEvidence', () => {
-  it('should support exact passing CLI rows only after Linux, macOS, Windows, and two provider families pass', async () => {
+  it('should support exact passing CLI rows only after Linux, macOS, and two provider families pass', async () => {
     const candidate = await candidateFixture();
     const submissions = [
       await submissionFixture({
@@ -506,13 +506,6 @@ describe('indexHostEvidence', () => {
         hostVersion: '2.1.0',
         os: 'macos',
         providerFamily: 'anthropic',
-      }),
-      await submissionFixture({
-        root: candidate.root,
-        host: 'Codex CLI',
-        hostVersion: '1.2.3',
-        os: 'windows',
-        providerFamily: 'openai',
       }),
     ];
     for (const submission of submissions) {
@@ -531,7 +524,7 @@ describe('indexHostEvidence', () => {
       release_version: releaseVersion,
       status: 'passed',
       coverage: {
-        guided_cli_operating_systems: ['linux', 'macos', 'windows'],
+        guided_cli_operating_systems: ['linux', 'macos'],
         model_families: ['claude-4', 'gpt-5'],
         provider_families: ['anthropic', 'openai'],
       },
@@ -554,15 +547,6 @@ describe('indexHostEvidence', () => {
           breakdown_version: releaseVersion,
           status: 'pass',
         },
-        {
-          surface: 'Codex CLI',
-          version: '1.2.3',
-          os: 'win32',
-          architecture: 'x64',
-          transport: 'cli',
-          breakdown_version: releaseVersion,
-          status: 'pass',
-        },
       ],
       gate: {
         satisfied: true,
@@ -580,10 +564,23 @@ describe('indexHostEvidence', () => {
     }
   });
 
+  it('should reject a Windows row because Windows is not maintained for 1.0', async () => {
+    const candidate = await candidateFixture();
+    const submission = await submissionFixture({
+      root: candidate.root,
+      os: 'windows',
+      providerFamily: 'openai',
+    });
+
+    await expect(qualifySubmission(candidate, submission)).rejects.toThrow(
+      'Host submission has no exact operating-system identity.',
+    );
+  });
+
   it('should reject stable qualification from only one model/provider family', async () => {
     const candidate = await candidateFixture();
     const submissions = await Promise.all(
-      (['linux', 'macos', 'windows'] as const).map((os) =>
+      (['linux', 'macos'] as const).map((os) =>
         submissionFixture({
           root: candidate.root,
           host: os === 'macos' ? 'Claude Code' : 'Codex CLI',
@@ -609,7 +606,7 @@ describe('indexHostEvidence', () => {
   it('should accept two model families supplied by one provider family', async () => {
     const candidate = await candidateFixture();
     const submissions = await Promise.all(
-      (['linux', 'macos', 'windows'] as const).map((os, index) =>
+      (['linux', 'macos'] as const).map((os, index) =>
         submissionFixture({
           root: candidate.root,
           host: os === 'macos' ? 'Claude Code' : 'Codex CLI',
@@ -654,11 +651,6 @@ describe('indexHostEvidence', () => {
         os: 'macos',
         providerFamily: 'anthropic',
       }),
-      await submissionFixture({
-        root: candidate.root,
-        os: 'windows',
-        providerFamily: 'openai',
-      }),
     ];
     for (const submission of submissions) {
       await qualifySubmission(candidate, submission);
@@ -692,13 +684,6 @@ describe('writeHostSupportMaterial', () => {
         hostVersion: '2.1.0',
         os: 'macos',
         providerFamily: 'anthropic',
-      }),
-      await submissionFixture({
-        root: candidate.root,
-        host: 'Codex CLI',
-        hostVersion: '1.2.3',
-        os: 'windows',
-        providerFamily: 'openai',
       }),
     ];
     for (const submission of submissions) {
@@ -746,7 +731,9 @@ describe('writeHostSupportMaterial', () => {
     expect(supportMarkdown).toContain('Claude Code 2.1.0');
     expect(supportMarkdown).toContain(candidateDigest);
     expect(supportMarkdown).toContain('Compatible, not Supported');
-    expect(supportMarkdown).toContain('bare model or unprovisioned cloud surface is Unsupported');
+    expect(supportMarkdown).toContain(
+      'host on a non-maintained operating system, bare model, or unprovisioned cloud surface is Unsupported',
+    );
     expect(supportMarkdown).toContain(
       'does not claim identical UI, wording, approval mechanics, latency, model prose, quality, cost, or provider privacy',
     );

@@ -415,12 +415,11 @@ function validateIdentity(submission) {
     'Host submission has no exact host surface and version.',
   );
   invariant(
-    ['linux', 'macos', 'windows'].includes(submission.operating_system?.family) &&
+    ['linux', 'macos'].includes(submission.operating_system?.family) &&
       submission.operating_system.platform ===
         {
           linux: 'linux',
           macos: 'darwin',
-          windows: 'win32',
         }[submission.operating_system.family] &&
       exactString(submission.operating_system?.name) &&
       exactString(submission.operating_system?.release) &&
@@ -722,7 +721,7 @@ async function validateQualifiedEvidence({
   validateImmutability(evidence.immutability);
 }
 
-const requiredGuidedOperatingSystems = Object.freeze(['linux', 'macos', 'windows']);
+const requiredGuidedOperatingSystems = Object.freeze(['linux', 'macos']);
 
 function rowOrder(left, right) {
   const leftOs = requiredGuidedOperatingSystems.indexOf(left.evidence.operating_system.family);
@@ -827,7 +826,7 @@ export async function indexHostEvidence({ candidateDirectory, evidencePaths, out
   );
   invariant(
     JSON.stringify(guidedCliOperatingSystems) === JSON.stringify(requiredGuidedOperatingSystems),
-    'Guided CLI evidence must include passing Linux, macOS, and Windows rows.',
+    'Guided CLI evidence must include passing Linux and macOS rows.',
   );
   const providerFamilies = [
     ...new Set(rows.map((row) => row.evidence.model.provider_family)),
@@ -861,7 +860,7 @@ export async function indexHostEvidence({ candidateDirectory, evidencePaths, out
       compatible:
         'A capable Agent Host without an exact passing indexed row is Compatible, not Supported.',
       unsupported:
-        'A bare model or unprovisioned cloud surface is Unsupported because it is not an Agent Host.',
+        'A host on a non-maintained operating system, bare model, or unprovisioned cloud surface is Unsupported for this release.',
     },
     outcome_parity: {
       assessed: true,
@@ -919,7 +918,7 @@ export function validatePassingHostIndex(index) {
         (row) =>
           exactString(row.surface) &&
           exactString(row.version) &&
-          ['linux', 'darwin', 'win32'].includes(row.os) &&
+          ['linux', 'darwin'].includes(row.os) &&
           exactString(row.os_release) &&
           exactString(row.os_version) &&
           exactString(row.architecture) &&
@@ -1003,7 +1002,7 @@ Generated only from \`${indexFile}\` (SHA-256 \`${indexDigest}\`). Regenerate th
 | --- | --- | --- |
 ${rows}
 
-Only the exact rows above are Supported. A capable Agent Host without an exact passing indexed row is Compatible, not Supported. A bare model or unprovisioned cloud surface is Unsupported.
+Only the exact rows above are Supported. A capable Agent Host on a maintained operating system without an exact passing indexed row is Compatible, not Supported. A host on a non-maintained operating system, bare model, or unprovisioned cloud surface is Unsupported.
 
 Qualification assesses outcome parity. It does not claim identical UI, wording, approval mechanics, latency, model prose, quality, cost, or provider privacy.
 `;

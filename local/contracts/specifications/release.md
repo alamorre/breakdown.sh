@@ -27,8 +27,9 @@ skills or schemas package MUST NOT be created.
 
 Runtime delivery MUST be TypeScript/ESM portable JavaScript and data on Node
 `^24.0.0`, without native add-ons, a bundled Node runtime, browser build, or
-install-time build. Maintained tuples are Linux glibc x64/arm64, macOS
-x64/arm64, and Windows x64.
+install-time build. Maintained tuples are Linux glibc x64/arm64 and macOS
+x64/arm64. Windows is Unsupported for 1.0 and MUST NOT receive a platform or
+Supported Host claim.
 
 ### REQ-PKG-004
 

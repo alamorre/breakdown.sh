@@ -330,7 +330,6 @@ function platformConformance(environment) {
       { os: 'linux-glibc', architecture: 'arm64' },
       { os: 'macos', architecture: 'x64' },
       { os: 'macos', architecture: 'arm64' },
-      { os: 'windows', architecture: 'x64' },
     ],
     current_build: environment,
     required_suite:

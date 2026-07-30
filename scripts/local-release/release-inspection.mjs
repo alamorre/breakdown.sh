@@ -673,7 +673,6 @@ function inspectPlatformEvidence(manifest, provenance) {
     ['linux-glibc', 'arm64'],
     ['macos', 'x64'],
     ['macos', 'arm64'],
-    ['windows', 'x64'],
   ];
   invariant(
     JSON.stringify(platform.maintained_tuples.map((tuple) => [tuple.os, tuple.architecture])) ===
