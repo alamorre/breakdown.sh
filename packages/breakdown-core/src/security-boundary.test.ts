@@ -40,8 +40,8 @@ const securityMatrix = JSON.parse(
   ),
 ) as { rows: Array<{ id: string }> };
 const REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS = 180_000;
-const STEP_ARTIFACT_BOUNDARY_TIMEOUT_MS = 240_000;
-const BOUNDARY_TIMING_PREFIX = '[DEBUG-175-PHASE]';
+const BOUNDARY_TIMING_PREFIX = '[filesystem-boundary-phase]';
+const FILESYSTEM_FIXTURE_WRITE_CONCURRENCY = 32;
 
 async function temporaryDirectory(prefix = 'breakdown-security-') {
   const path = await mkdtemp(join(tmpdir(), prefix));
@@ -85,8 +85,8 @@ function successfulCandidate(packet: WorkPacket, markdown: string) {
 }
 
 async function writeInBatches(total: number, writer: (index: number) => Promise<unknown>) {
-  for (let start = 0; start < total; start += 250) {
-    const count = Math.min(250, total - start);
+  for (let start = 0; start < total; start += FILESYSTEM_FIXTURE_WRITE_CONCURRENCY) {
+    const count = Math.min(FILESYSTEM_FIXTURE_WRITE_CONCURRENCY, total - start);
     await Promise.all(Array.from({ length: count }, (_, index) => writer(start + index)));
   }
 }
@@ -169,10 +169,9 @@ async function createStepArtifactBoundaryRun(
 }
 
 afterEach(async () => {
-  const startedAt = performance.now();
-  const paths = temporaryDirectories.splice(0);
-  await Promise.all(paths.map((path) => rm(path, { recursive: true, force: true })));
-  if (paths.length > 0) recordBoundaryPhase('cleanup', `${paths.length}-fixtures`, startedAt);
+  await Promise.all(
+    temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 describe('local authority, privacy, and filesystem boundary', () => {
@@ -946,7 +945,7 @@ nodes:
 
   it(
     'enforces the StepArtifact count boundary on an independent real filesystem fixture',
-    { timeout: STEP_ARTIFACT_BOUNDARY_TIMEOUT_MS },
+    { timeout: REAL_FILESYSTEM_BOUNDARY_TIMEOUT_MS },
     async () => {
       const campaignStartedAt = performance.now();
       let phaseStartedAt = campaignStartedAt;
@@ -1011,7 +1010,7 @@ nodes:
       });
       phaseStartedAt = recordBoundaryPhase(
         'step-artifact',
-        'attempt-limit-plus-one-publication',
+        'reject-limit-plus-one-publication',
         phaseStartedAt,
       );
       expect(await readdir(stepsPath)).toHaveLength(FIXED_LIMITS.step_artifacts_per_run);
