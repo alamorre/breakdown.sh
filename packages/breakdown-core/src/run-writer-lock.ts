@@ -4,6 +4,7 @@ import { link, lstat, open, readdir, rename, rm, unlink } from 'node:fs/promises
 import { join } from 'node:path';
 
 import {
+  isRunLockQuarantineAlias,
   isRunLockQuarantineForIdentity,
   runLockQuarantinePath,
   runLockRecoveryIdentity,
@@ -45,7 +46,8 @@ export type LockRecoveryBoundary =
   | 'after_lock_observed'
   | 'after_recovery_alias_linked'
   | 'after_recovery_claimed'
-  | 'after_lock_quarantined';
+  | 'after_lock_quarantined'
+  | 'after_writer_lock_published';
 
 interface RunWriterLockDependencies {
   now(): Date;
@@ -220,6 +222,28 @@ async function restoreQuarantinedLock(quarantinePath: string, lockPath: string):
     // Preserve the moved lock when its original name cannot be restored safely.
     return false;
   }
+}
+
+async function restoreCreatedLockFromQuarantine(
+  directory: string,
+  lockPath: string,
+  lockId: string,
+  digest: string,
+): Promise<void> {
+  const matches: string[] = [];
+  for (const entry of await readdir(directory)) {
+    if (!isRunLockQuarantineAlias(entry)) continue;
+    const quarantinePath = join(directory, entry);
+    try {
+      const observed = await observeLockFile(quarantinePath);
+      if (observed.lockId === lockId && observed.digest === digest) {
+        matches.push(quarantinePath);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  if (matches.length === 1) await restoreQuarantinedLock(matches[0]!, lockPath);
 }
 
 async function observedQuarantines(
@@ -489,6 +513,7 @@ export async function acquireRunWriterLock(
     }),
     'utf8',
   );
+  const digest = createHash('sha256').update(bytes).digest('hex');
 
   try {
     if (await cleanupRecoveryClaimsAndCheckBlocked(directory, path)) {
@@ -499,7 +524,10 @@ export async function acquireRunWriterLock(
       throw new RunLockedError('A Run lock recovery is in progress.');
     }
     await publishPrivateFileNoReplace(stagingPath, path, {
-      afterDestinationVisible: () => syncDirectory(directory),
+      afterDestinationVisible: async () => {
+        await syncDirectory(directory);
+        await dependencies.onLockRecoveryBoundary?.('after_writer_lock_published');
+      },
       assertDestinationParent: () => assertSecureDirectoryIdentity(directory, directoryIdentity),
     });
     if (await cleanupRecoveryClaimsAndCheckBlocked(directory, path)) {
@@ -508,8 +536,15 @@ export async function acquireRunWriterLock(
       throw new RunLockedError('A Run lock recovery is in progress.');
     }
     await syncDirectory(directory);
-    const observed = await observeLockFile(path);
-    if (observed.lockId !== lockId) {
+    let observed: ObservedLock;
+    try {
+      observed = await observeLockFile(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      await restoreCreatedLockFromQuarantine(directory, path, lockId, digest);
+      observed = await observeLockFile(path);
+    }
+    if (observed.lockId !== lockId || observed.digest !== digest) {
       throw new RunLockedError('The created Run lock identity changed.');
     }
     return {

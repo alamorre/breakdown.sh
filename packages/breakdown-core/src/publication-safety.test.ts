@@ -506,6 +506,114 @@ describe('operate', () => {
     });
   });
 
+  it('should preserve a newly published writer lock when a losing recovery quarantines it', async () => {
+    const { projectRoot, runId } = await createProject(`  - id: execute
+    name: Execute
+    prompt: Execute once.`);
+    const packet = (await prepare(projectRoot, runId))[0]!;
+    const staleLockId = '5656565656565656';
+    await writeFile(
+      join(projectRoot, '.breakdown', 'locks', 'runs', `${runId}.lock`),
+      JSON.stringify({
+        lock_id: staleLockId,
+        run_id: runId,
+        created_at: '2000-01-01T00:00:00.000Z',
+        process_id: 1,
+      }),
+      { mode: 0o600 },
+    );
+    const recoveryRequest = (markdown: string) => ({
+      operation: 'submit_candidate' as const,
+      packet,
+      candidate: successfulCandidate(packet, markdown),
+      lock_recovery: {
+        lock_id: staleLockId,
+        confirmed_stopped: true as const,
+      },
+    });
+
+    let announceLosingClaim!: () => void;
+    const losingClaimed = new Promise<void>((resolve) => {
+      announceLosingClaim = resolve;
+    });
+    let releaseLosingClaim!: () => void;
+    const holdLosingClaim = new Promise<void>((resolve) => {
+      releaseLosingClaim = resolve;
+    });
+    let announceReplacementQuarantine!: () => void;
+    const replacementQuarantined = new Promise<void>((resolve) => {
+      announceReplacementQuarantine = resolve;
+    });
+    let releaseReplacementQuarantine!: () => void;
+    const holdReplacementQuarantine = new Promise<void>((resolve) => {
+      releaseReplacementQuarantine = resolve;
+    });
+    const losingRecovery = operate(recoveryRequest('losing recovery'), {
+      projectRoot,
+      testControls: {
+        now: () => new Date(fixedSubmissionTime),
+        randomBytes: (size) => seededBytes(14, size),
+        onLockRecoveryBoundary: async (boundary) => {
+          if (boundary === 'after_recovery_claimed') {
+            announceLosingClaim();
+            await holdLosingClaim;
+          }
+          if (boundary === 'after_lock_quarantined') {
+            announceReplacementQuarantine();
+            await holdReplacementQuarantine;
+          }
+        },
+      },
+    });
+    await losingClaimed;
+
+    let announceWriterLock!: () => void;
+    const writerLockPublished = new Promise<void>((resolve) => {
+      announceWriterLock = resolve;
+    });
+    let releaseWriterLock!: () => void;
+    const holdWriterLock = new Promise<void>((resolve) => {
+      releaseWriterLock = resolve;
+    });
+    const winningRecovery = operate(recoveryRequest('winning recovery'), {
+      projectRoot,
+      testControls: {
+        now: () => new Date(fixedSubmissionTime),
+        randomBytes: (size) => seededBytes(13, size),
+        onLockRecoveryBoundary: async (boundary) => {
+          if (boundary !== 'after_writer_lock_published') return;
+          announceWriterLock();
+          await holdWriterLock;
+        },
+      },
+    });
+    await writerLockPublished;
+    releaseLosingClaim();
+    await replacementQuarantined;
+    releaseWriterLock();
+    const winner = await winningRecovery;
+    releaseReplacementQuarantine();
+    const loser = await losingRecovery;
+
+    expect(winner).toMatchObject({
+      ok: true,
+      value: { node_id: 'execute', attempt: 1 },
+    });
+    expect(loser).toMatchObject({
+      ok: false,
+      failure: { kind: 'conflict', code: 'lock_recovery_mismatch' },
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        lock: null,
+        attempts: [{ node_id: 'execute', attempt: 1, status: 'succeeded' }],
+      },
+    });
+  });
+
   it('should resume exact-lock recovery after process termination', async () => {
     for (const recoveryBoundary of ['after_recovery_claimed', 'after_lock_quarantined'] as const) {
       const { projectRoot, runId } = await createProject(`  - id: execute
