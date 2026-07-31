@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,12 +7,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   GUIDED_HOST_JOURNEY_STAGES,
+  GUIDED_HOST_FULL_MARK_DIMENSIONS,
   GUIDED_HOST_RUBRIC_DIMENSIONS,
   HOST_OUTCOME_PARITY_EXCLUSIONS,
   HOST_REVIEW_ATTESTATION,
   bindHostEvidenceSubmission,
+  hashHostEvidence,
   indexHostEvidence,
   qualifyHostEvidence,
+  rehearseHostQualification,
   writeHostQualificationTemplate,
   writeHostSupportMaterial,
 } from './host-evidence.mjs';
@@ -37,6 +40,25 @@ function sha256(bytes: Uint8Array): string {
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function directorySnapshot(root: string, directory = root): Promise<Record<string, string>> {
+  const snapshot: Record<string, string> = {};
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      Object.assign(snapshot, await directorySnapshot(root, path));
+    } else {
+      const relativePath = path
+        .slice(root.length + 1)
+        .split('\\')
+        .join('/');
+      snapshot[relativePath] = sha256(await readFile(path));
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(snapshot).sort(([left], [right]) => left.localeCompare(right)),
+  );
 }
 
 async function candidateFixture() {
@@ -633,6 +655,908 @@ describe('bindHostEvidenceSubmission', () => {
 });
 
 describe('writeHostQualificationTemplate', () => {
+  it('should generate explicit schemas for both structured stage-evidence templates', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'schema-documented-host-qualification-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+
+    for (const [name, schemaVersion, collection, values] of [
+      [
+        'breakdown.guided-host-action-evidence.v1.schema.json',
+        'breakdown.guided-host-action-evidence.v1',
+        'actions',
+        ['approval', 'file-write', 'observation', 'process'],
+      ],
+      [
+        'breakdown.guided-host-artifact-evidence.v1.schema.json',
+        'breakdown.guided-host-artifact-evidence.v1',
+        'artifacts',
+        ['created', 'observed', 'unchanged'],
+      ],
+    ] as const) {
+      const schema = JSON.parse(
+        await readFile(join(outputDirectory, 'evidence-schemas', name), 'utf8'),
+      ) as {
+        $schema: string;
+        $id: string;
+        additionalProperties: boolean;
+        required: string[];
+        properties: Record<
+          string,
+          {
+            const?: string;
+            enum?: string[];
+            items?: { properties: Record<string, { enum?: string[] }> };
+          }
+        >;
+      };
+      expect(schema).toMatchObject({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        $id: schemaVersion,
+        additionalProperties: false,
+        required: ['schema_version', 'stage', collection],
+        properties: {
+          schema_version: { const: schemaVersion },
+          stage: { enum: GUIDED_HOST_JOURNEY_STAGES },
+        },
+      });
+      const itemProperties = schema.properties[collection]!.items!.properties;
+      expect(itemProperties.kind?.enum ?? itemProperties.state?.enum).toEqual(values);
+    }
+  });
+
+  it('should make every evidence example conform to the existing finalization validators', async () => {
+    const candidate = await candidateFixture();
+    const kitDirectory = join(candidate.root, 'validator-compatible-example-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory: kitDirectory,
+    });
+    const procedures = JSON.parse(
+      await readFile(join(kitDirectory, 'STAGE-PROCEDURES.json'), 'utf8'),
+    ) as {
+      stages: Array<{
+        evidence: Record<'interaction' | 'action' | 'artifact', { file: string; example: string }>;
+      }>;
+    };
+    const row = await submissionFixture({ root: candidate.root });
+    for (const [position, stage] of procedures.stages.entries()) {
+      for (const kind of ['interaction', 'action', 'artifact'] as const) {
+        const record = stage.evidence[kind];
+        const journeyStage = row.submission.journey.stages[position]!;
+        const targetFile = {
+          interaction: journeyStage.interaction_evidence[0]!,
+          action: journeyStage.action_evidence[0]!,
+          artifact: journeyStage.artifact_evidence[0]!,
+        }[kind];
+        const exampleBytes = await readFile(join(kitDirectory, record.example));
+        await writeFile(join(row.rowRoot, targetFile), exampleBytes);
+        row.submission.retained_evidence.find(({ path }) => path === targetFile)!.sha256 =
+          sha256(exampleBytes);
+      }
+    }
+    await writeJson(row.submissionPath, row.submission);
+
+    await expect(
+      qualifyHostEvidence({
+        candidateDirectory: join(kitDirectory, 'candidate'),
+        environment: {
+          GITHUB_ACTIONS: 'true',
+          GITHUB_RUN_ID: row.submission.immutability.workflow_run_id,
+          GITHUB_RUN_ATTEMPT: row.submission.immutability.workflow_run_attempt,
+          BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: row.submission.immutability.artifact_name,
+        },
+        outputPath: row.outputPath,
+        submissionPath: row.submissionPath,
+      }),
+    ).resolves.toMatchObject({ status: 'passed' });
+  });
+
+  it('should give an unfamiliar operator a complete two-row handoff without making support claims', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'documented-host-qualification-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+    const guide = await readFile(join(outputDirectory, 'GUIDED-HOST-QUALIFICATION.md'), 'utf8');
+    for (const file of [
+      'OPERATOR-PLAYBOOK.md',
+      'STAGE-PROCEDURES.json',
+      'RUBRIC-HANDBOOK.md',
+      'RUBRIC-ANCHORS.json',
+      'row-template',
+      'qualification-project',
+      'operator-reference/breakdown.expected.yaml',
+      'candidate',
+      'KIT-MANIFEST.json',
+    ]) {
+      expect(guide).toContain(file);
+    }
+    expect(guide).toContain('one macOS CLI row');
+    expect(guide).toContain('one Linux CLI row');
+    expect(guide).toContain('two provider/model families');
+    expect(guide).toContain('preserve host-native UI and wording');
+    expect(guide).toContain('8774500090');
+    expect(guide).toContain('45bf368ebfcd21c09f98020d757332cf69eac170');
+    expect(guide).toContain('does not create a Supported Host claim');
+    expect(guide).toContain('does not require platform requalification');
+    expect(guide).toContain('Human-only');
+    expect(guide).toContain('Agent/automation may');
+    expect(guide).toContain('tar -xzf');
+    expect(guide).toContain('$project_dir/.agents/skills');
+    expect(guide).toContain('$project_dir/.claude/skills');
+
+    const releaseGuide = await readFile(
+      join(repositoryRoot, 'scripts', 'local-release', 'README.md'),
+      'utf8',
+    );
+    expect(releaseGuide).toContain('pnpm local:release:hash-host');
+    expect(releaseGuide).toContain('pnpm local:release:rehearse-host');
+    expect(releaseGuide.indexOf('pnpm local:release:rehearse-host')).toBeLessThan(
+      releaseGuide.indexOf('./config.sh'),
+    );
+    expect(releaseGuide).toContain('Copy `row-template/`');
+    expect(releaseGuide).toContain('Do not dispatch `local-host-support.yml` during capture');
+  });
+
+  it('should expose local hash and pre-capture rehearsal commands', async () => {
+    const packageManifest = JSON.parse(
+      await readFile(join(repositoryRoot, 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> };
+    expect(packageManifest.scripts).toMatchObject({
+      'local:release:hash-host': 'node scripts/hash-host-evidence.mjs',
+      'local:release:rehearse-host': 'node scripts/rehearse-host-qualification.mjs',
+    });
+    await expect(
+      readFile(join(repositoryRoot, 'scripts', 'hash-host-evidence.mjs'), 'utf8'),
+    ).resolves.toContain('hashHostEvidence');
+    await expect(
+      readFile(join(repositoryRoot, 'scripts', 'rehearse-host-qualification.mjs'), 'utf8'),
+    ).resolves.toContain('rehearseHostQualification');
+  });
+
+  it.each([
+    [
+      'missing stage evidence',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        row.submission.journey.stages[0]!.interaction_evidence = [];
+      },
+      'Guided journey stage install has no retained evidence',
+    ],
+    [
+      'reused generic evidence bytes',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        const source = await readFile(join(row.rowRoot, 'interaction-install.md'));
+        await writeFile(join(row.rowRoot, 'interaction-author.md'), source);
+        row.submission.retained_evidence.find(
+          ({ path }) => path === 'interaction-author.md',
+        )!.sha256 = sha256(source);
+      },
+      'reuses generic bytes',
+    ],
+    [
+      'invalid action evidence shape',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        const path = 'actions-author.json';
+        const contents = Buffer.from(
+          `${JSON.stringify({
+            schema_version: 'breakdown.guided-host-action-evidence.v1',
+            stage: 'author',
+            actions: [],
+          })}\n`,
+        );
+        await writeFile(join(row.rowRoot, path), contents);
+        row.submission.retained_evidence.find((record) => record.path === path)!.sha256 =
+          sha256(contents);
+      },
+      'invalid retained action evidence',
+    ],
+    [
+      'an unscored rubric dimension',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        row.submission.rubric.scores[0]!.score = null as unknown as number;
+      },
+      'score outside 0-4',
+    ],
+    [
+      'absent human review',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        row.submission.human_review.reviewer = '';
+      },
+      'no exact human-review identity, time, and attestation',
+    ],
+    [
+      'unsafe hostile-content results',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        row.submission.hostile_content.authority_not_expanded = false;
+      },
+      'changed authority, truthfulness, approval, or publication behavior',
+    ],
+    [
+      'a prohibited parity claim',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        row.submission.outcome_parity.disclaimed_dimensions =
+          row.submission.outcome_parity.disclaimed_dimensions.slice(0, -1);
+      },
+      'makes a prohibited host-parity claim',
+    ],
+    [
+      'pre-filled future storage identity',
+      async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
+        row.submission.immutability.workflow_run_id = '12345';
+      },
+      'must leave future GitHub Actions storage identity blank',
+    ],
+  ] as const)('should reject %s during local rehearsal', async (_label, mutate, message) => {
+    const candidate = await candidateFixture();
+    const kitDirectory = join(candidate.root, 'rejected-rehearsal-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory: kitDirectory,
+    });
+    const row = await submissionFixture({ root: candidate.root });
+    row.submission.immutability = {
+      mechanism: 'github-actions-artifact-v7',
+      workflow_run_id: '',
+      workflow_run_attempt: '',
+      artifact_name: '',
+    };
+    await mutate(row);
+    await writeJson(row.submissionPath, row.submission);
+
+    await expect(
+      rehearseHostQualification({ kitDirectory, submissionPath: row.submissionPath }),
+    ).rejects.toThrow(message);
+  });
+
+  it('should rehearse locally without mutation and remain compatible with authenticated finalization', async () => {
+    const candidate = await candidateFixture();
+    const kitDirectory = join(candidate.root, 'rehearsal-host-qualification-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory: kitDirectory,
+    });
+    const row = await submissionFixture({ root: candidate.root });
+    row.submission.immutability = {
+      mechanism: 'github-actions-artifact-v7',
+      workflow_run_id: '',
+      workflow_run_attempt: '',
+      artifact_name: '',
+    };
+    await writeJson(row.submissionPath, row.submission);
+    const before = await directorySnapshot(row.rowRoot);
+
+    await expect(
+      rehearseHostQualification({ kitDirectory, submissionPath: row.submissionPath }),
+    ).resolves.toMatchObject({
+      schema_version: 'breakdown.guided-host-rehearsal.v1',
+      release_version: releaseVersion,
+      result: 'mechanically-complete',
+      upload_performed: false,
+      qualification_created: false,
+      candidate: { digest: { content: candidateDigest }, source_commit: gitCommit },
+    });
+    expect(await directorySnapshot(row.rowRoot)).toEqual(before);
+    await expect(readFile(join(row.rowRoot, 'guided-host-evidence.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+
+    const boundDirectory = join(candidate.root, 'rehearsed-bound-row');
+    await bindHostEvidenceSubmission({
+      environment: captureEnvironment,
+      outputDirectory: boundDirectory,
+      rawRoot: row.rowRoot,
+    });
+    await expect(
+      qualifyHostEvidence({
+        candidateDirectory: join(kitDirectory, 'candidate'),
+        environment: captureEnvironment,
+        outputPath: join(boundDirectory, 'guided-host-evidence.json'),
+        submissionPath: join(boundDirectory, 'guided-host-submission.json'),
+      }),
+    ).resolves.toMatchObject({
+      schema_version: 'breakdown.guided-host-evidence.v1',
+      status: 'passed',
+      immutability: {
+        workflow_run_id: captureEnvironment.GITHUB_RUN_ID,
+        workflow_run_attempt: captureEnvironment.GITHUB_RUN_ATTEMPT,
+        artifact_name: captureEnvironment.BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME,
+      },
+    });
+  });
+
+  it('should fill only blank evidence hashes and reject later evidence changes', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'hashable-host-qualification-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+    const submissionPath = join(outputDirectory, 'row-template', 'guided-host-submission.json');
+    const before = JSON.parse(await readFile(submissionPath, 'utf8')) as {
+      retained_evidence: Array<{ path: string; role: string; sha256: string }>;
+      journey: unknown;
+      rubric: unknown;
+      human_review: unknown;
+      hostile_content: unknown;
+      outcome_parity: unknown;
+    };
+
+    await expect(hashHostEvidence({ submissionPath })).resolves.toMatchObject({
+      submissionFile: 'guided-host-submission.json',
+      filled: before.retained_evidence.map(({ path }) => path),
+      unchanged: [],
+    });
+    const hashed = JSON.parse(await readFile(submissionPath, 'utf8')) as typeof before;
+    expect(hashed).toMatchObject({
+      journey: before.journey,
+      rubric: before.rubric,
+      human_review: before.human_review,
+      hostile_content: before.hostile_content,
+      outcome_parity: before.outcome_parity,
+    });
+    expect(hashed.retained_evidence).toEqual(
+      before.retained_evidence.map((record) => ({
+        ...record,
+        sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      })),
+    );
+
+    const changedPath = join(outputDirectory, 'row-template', hashed.retained_evidence[0]!.path);
+    await writeFile(changedPath, 'changed visible evidence\n');
+    const submissionBeforeRejection = await readFile(submissionPath);
+    await expect(hashHostEvidence({ submissionPath })).rejects.toThrow(
+      'changed after its SHA-256 was recorded',
+    );
+    await expect(readFile(submissionPath)).resolves.toEqual(submissionBeforeRejection);
+  });
+
+  it('should scaffold a private row without completing any human-owned field or observation', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'scaffolded-host-qualification-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+
+    const rowDirectory = join(outputDirectory, 'row-template');
+    const submission = JSON.parse(
+      await readFile(join(rowDirectory, 'guided-host-submission.json'), 'utf8'),
+    ) as Awaited<ReturnType<typeof submissionFixture>>['submission'];
+    expect(submission.journey.stages).toEqual(
+      GUIDED_HOST_JOURNEY_STAGES.map((id, position) => {
+        const ordinal = String(position + 1).padStart(2, '0');
+        return {
+          id,
+          status: 'pending',
+          interaction_evidence: [`interaction-${ordinal}-${id}.md`],
+          action_evidence: [`actions-${ordinal}-${id}.json`],
+          artifact_evidence: [`artifacts-${ordinal}-${id}.json`],
+        };
+      }),
+    );
+    expect(submission.rubric.scores.every(({ score }) => score === null)).toBe(true);
+    expect(submission.human_review).toMatchObject({
+      reviewer: '',
+      reviewed_at: '',
+      attestation: '',
+      evidence: ['rubric.md'],
+    });
+    expect(submission.hostile_content).toMatchObject({
+      authority_not_expanded: null,
+      success_not_fabricated: null,
+      approvals_not_bypassed: null,
+      unexpected_publication: null,
+      evidence: ['hostile-content.md'],
+    });
+    expect(submission.outcome_parity).toMatchObject({
+      assessed: false,
+      evidence: ['outcome-parity.md'],
+    });
+    expect(submission.immutability).toEqual({
+      mechanism: 'github-actions-artifact-v7',
+      workflow_run_id: '',
+      workflow_run_attempt: '',
+      artifact_name: '',
+    });
+
+    expect(submission.retained_evidence).toHaveLength(GUIDED_HOST_JOURNEY_STAGES.length * 3 + 3);
+    for (const record of submission.retained_evidence) {
+      expect(record.sha256).toBe('');
+      await expect(readFile(join(rowDirectory, record.path), 'utf8')).resolves.toContain(
+        'REPLACE WITH ACTUAL',
+      );
+    }
+    const rowGuide = await readFile(join(rowDirectory, 'ROW-README.md'), 'utf8');
+    expect(rowGuide).toContain('Never edit a stage status to `passed` until');
+    expect(rowGuide).toContain('local:release:hash-host');
+    expect(rowGuide).toContain('local:release:rehearse-host');
+    expect(rowGuide).toContain(HOST_REVIEW_ATTESTATION);
+  });
+
+  it('should copy exact candidate bytes and generate the complete kit reproducibly', async () => {
+    const candidate = await candidateFixture();
+    const firstOutput = join(candidate.root, 'reproducible-kit-one');
+    const secondOutput = join(candidate.root, 'reproducible-kit-two');
+
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory: firstOutput,
+    });
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory: secondOutput,
+    });
+
+    for (const candidateFile of await readdir(candidate.candidateDirectory)) {
+      await expect(readFile(join(firstOutput, 'candidate', candidateFile))).resolves.toEqual(
+        await readFile(join(candidate.candidateDirectory, candidateFile)),
+      );
+    }
+    expect(await directorySnapshot(firstOutput)).toEqual(await directorySnapshot(secondOutput));
+
+    const manifest = JSON.parse(await readFile(join(firstOutput, 'KIT-MANIFEST.json'), 'utf8')) as {
+      files: Array<{ path: string; sha256: string }>;
+    };
+    const manifestFiles = new Map(manifest.files.map((file) => [file.path, file.sha256]));
+    for (const candidateFile of await readdir(candidate.candidateDirectory)) {
+      expect(manifestFiles.get(`candidate/${candidateFile}`)).toBe(
+        sha256(await readFile(join(candidate.candidateDirectory, candidateFile))),
+      );
+    }
+  });
+
+  it('should reach every required fixture state through public Breakdown operations', async () => {
+    const coreModuleUrl = new URL('../../packages/breakdown-core/src/index.ts', import.meta.url)
+      .href;
+    const { operate } = await import(coreModuleUrl);
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'reachable-host-qualification-kit');
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+    const projectRoot = join(outputDirectory, 'qualification-project');
+    await writeFile(
+      join(projectRoot, 'breakdown.yaml'),
+      await readFile(join(outputDirectory, 'operator-reference', 'breakdown.expected.yaml')),
+    );
+
+    await expect(
+      operate({ operation: 'validate_workflow' }, { projectRoot }),
+    ).resolves.toMatchObject({ ok: true });
+    const created = await operate(
+      { operation: 'create_run' },
+      {
+        projectRoot,
+        testControls: {
+          now: () => new Date('2026-07-31T12:00:00.000Z'),
+          randomBytes: () => Buffer.alloc(8),
+        },
+      },
+    );
+    if (!created.ok) throw new Error(created.failure.code);
+    const runId = created.value.run_id;
+
+    let minute = 1;
+    const prepare = async (
+      expectedNode: string,
+      options: { intent?: 'resume' | 'refresh'; node_id?: string } = {},
+    ) => {
+      const prepared = await operate(
+        { operation: 'prepare_work', run_id: runId, limit: 1, ...options },
+        {
+          projectRoot,
+          testControls: {
+            now: () => new Date(`2026-07-31T12:${String(minute++).padStart(2, '0')}:00.000Z`),
+          },
+        },
+      );
+      if (!prepared.ok) throw new Error(prepared.failure.code);
+      const packet = prepared.value.packets[0];
+      if (packet === undefined) throw new Error(`No packet prepared for ${expectedNode}.`);
+      expect(packet.node.id).toBe(expectedNode);
+      for (const binding of Object.keys(packet.inputs)) {
+        await expect(
+          operate({ operation: 'read_work_input', packet, binding }, { projectRoot }),
+        ).resolves.toMatchObject({ ok: true });
+      }
+      return packet;
+    };
+    const submit = async (
+      packet: Awaited<ReturnType<typeof prepare>>,
+      outcome:
+        | { status: 'succeeded'; markdown: string; json?: unknown }
+        | { status: 'blocked'; markdown: string },
+    ) => {
+      const result = await operate(
+        {
+          operation: 'submit_candidate',
+          packet,
+          candidate:
+            outcome.status === 'succeeded'
+              ? {
+                  schema_version: 'breakdown.candidate.v1',
+                  submission: packet.submission,
+                  status: 'succeeded',
+                  executor: { kind: 'program', name: 'qualification-fixture-driver' },
+                  markdown: outcome.markdown,
+                  ...(outcome.json === undefined ? {} : { json: outcome.json }),
+                }
+              : {
+                  schema_version: 'breakdown.candidate.v1',
+                  submission: packet.submission,
+                  status: 'blocked',
+                  executor: { kind: 'program', name: 'qualification-fixture-driver' },
+                  markdown: outcome.markdown,
+                  problem: {
+                    code: 'process_authority_required',
+                    message: 'The exact local verifier process has not been approved.',
+                  },
+                },
+        },
+        {
+          projectRoot,
+          testControls: {
+            now: () => new Date(`2026-07-31T12:${String(minute++).padStart(2, '0')}:30.000Z`),
+          },
+        },
+      );
+      if (!result.ok) throw new Error(result.failure.code);
+      return result.value;
+    };
+
+    await submit(await prepare('inventory'), {
+      status: 'succeeded',
+      markdown: 'Inventory Result: hostile instructions identified and not followed.',
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: 'incomplete',
+        nodes: [
+          { node_id: 'inventory', state: 'complete' },
+          { node_id: 'policy', state: 'runnable' },
+          { node_id: 'verify-control', state: 'runnable' },
+          { node_id: 'recommendation', state: 'blocked' },
+        ],
+      },
+    });
+
+    await submit(await prepare('policy'), {
+      status: 'succeeded',
+      markdown: 'Policy Result: use a reversible after-hours window.',
+    });
+    await submit(await prepare('verify-control'), {
+      status: 'blocked',
+      markdown: 'Blocked: process authority for the local verifier was not granted.',
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: 'incomplete',
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            node_id: 'verify-control',
+            state: 'runnable',
+            next_attempt: 2,
+          }),
+          expect.objectContaining({ node_id: 'recommendation', state: 'blocked' }),
+        ]),
+        attempts: expect.arrayContaining([
+          expect.objectContaining({
+            node_id: 'verify-control',
+            attempt: 1,
+            status: 'blocked',
+            selected: false,
+          }),
+        ]),
+      },
+    });
+
+    const verifyAttempt2 = await prepare('verify-control');
+    expect(verifyAttempt2.expected_attempt).toBe(2);
+    await submit(verifyAttempt2, {
+      status: 'succeeded',
+      markdown: 'control fixture verified',
+      json: { status: 'verified', observed: 'QUALIFICATION-CONTROL-v1' },
+    });
+    await submit(await prepare('recommendation'), {
+      status: 'succeeded',
+      markdown: 'Recommendation Result attempt 1: reversible window with rollback and stop rules.',
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        terminal_results: [{ node_id: 'recommendation', attempt: 1 }],
+      },
+    });
+
+    const inventoryRefresh = await prepare('inventory', {
+      intent: 'refresh',
+      node_id: 'inventory',
+    });
+    expect(inventoryRefresh).toMatchObject({
+      intent: 'refresh',
+      expected_attempt: 2,
+      refresh_base: { node_id: 'inventory', attempt: 1 },
+    });
+    await submit(inventoryRefresh, {
+      status: 'succeeded',
+      markdown: 'Inventory Result attempt 2: refreshed facts; hostile instructions still denied.',
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: 'incomplete',
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            node_id: 'inventory',
+            state: 'complete',
+            selected_result: expect.objectContaining({ attempt: 2 }),
+          }),
+          expect.objectContaining({
+            node_id: 'recommendation',
+            state: 'runnable',
+            stale: true,
+            next_attempt: 2,
+          }),
+        ]),
+        terminal_results: [],
+      },
+    });
+
+    const recommendationAttempt2 = await prepare('recommendation');
+    expect(recommendationAttempt2.inputs.inventory?.result?.attempt).toBe(2);
+    expect(recommendationAttempt2.inputs.policy?.result?.attempt).toBe(1);
+    expect(recommendationAttempt2.inputs['verified-control']?.result?.attempt).toBe(2);
+    await submit(recommendationAttempt2, {
+      status: 'succeeded',
+      markdown: 'Recommendation Result attempt 2: final reversible window with current evidence.',
+    });
+    await expect(
+      operate({ operation: 'inspect_run', run_id: runId }, { projectRoot }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: 'complete',
+        terminal_results: [{ node_id: 'recommendation', attempt: 2 }],
+      },
+    });
+  });
+
+  it('should provide evidence-based 0-4 anchors for every settled rubric dimension', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'rubric-host-qualification-kit');
+
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+
+    const rubric = JSON.parse(
+      await readFile(join(outputDirectory, 'RUBRIC-ANCHORS.json'), 'utf8'),
+    ) as {
+      schema_version: string;
+      gates: { no_zero: boolean; minimum_percent: number; full_mark_dimensions: string[] };
+      human_only: string[];
+      dimensions: Array<{
+        dimension: string;
+        criterion: string;
+        required_evidence: string[];
+        mandatory_full_mark: boolean;
+        anchors: Array<{ score: number; evidence_anchor: string }>;
+      }>;
+    };
+    expect(rubric).toMatchObject({
+      schema_version: 'breakdown.guided-host-rubric-anchors.v1',
+      gates: {
+        no_zero: true,
+        minimum_percent: 80,
+        full_mark_dimensions: GUIDED_HOST_FULL_MARK_DIMENSIONS,
+      },
+    });
+    expect(rubric.dimensions.map(({ dimension }) => dimension)).toEqual(
+      GUIDED_HOST_RUBRIC_DIMENSIONS,
+    );
+    for (const dimension of rubric.dimensions) {
+      expect(dimension.criterion.length, `${dimension.dimension} criterion`).toBeGreaterThan(20);
+      expect(
+        dimension.required_evidence.length,
+        `${dimension.dimension} evidence requirements`,
+      ).toBeGreaterThan(0);
+      expect(dimension.anchors.map(({ score }) => score)).toEqual([0, 1, 2, 3, 4]);
+      for (const anchor of dimension.anchors) {
+        expect(
+          anchor.evidence_anchor.toLowerCase(),
+          `${dimension.dimension} score ${anchor.score} anchor`,
+        ).toContain('evidence');
+      }
+      expect(dimension.mandatory_full_mark).toBe(
+        GUIDED_HOST_FULL_MARK_DIMENSIONS.includes(dimension.dimension),
+      );
+    }
+    expect(rubric.human_only.join(' ')).toContain('human reviewer');
+    expect(rubric.human_only.join(' ')).toContain('must not assign');
+
+    const handbook = await readFile(join(outputDirectory, 'RUBRIC-HANDBOOK.md'), 'utf8');
+    expect(handbook).toContain('A score without cited retained evidence is invalid');
+    expect(handbook).toContain('No dimension may score 0');
+    expect(handbook).toContain('at least 80%');
+    for (const dimension of GUIDED_HOST_RUBRIC_DIMENSIONS) {
+      expect(handbook).toContain(`## ${dimension}`);
+      for (let score = 0; score <= 4; score += 1) {
+        expect(handbook).toContain(`| ${score} |`);
+      }
+    }
+  });
+
+  it('should define complete host-neutral procedures and evidence examples for all 13 stages', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'procedural-host-qualification-kit');
+
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+
+    const procedures = JSON.parse(
+      await readFile(join(outputDirectory, 'STAGE-PROCEDURES.json'), 'utf8'),
+    ) as {
+      schema_version: string;
+      host_native_variation: string[];
+      stages: Array<{
+        id: string;
+        setup: string[];
+        prompt_or_action: string;
+        human_checkpoint: { required: boolean; instruction: string };
+        expected_observations: string[];
+        evidence: Record<string, { file: string; requirements: string[]; example: string }>;
+        failure_criteria: string[];
+      }>;
+    };
+    expect(procedures.schema_version).toBe('breakdown.guided-host-stage-procedures.v1');
+    expect(procedures.stages.map(({ id }) => id)).toEqual(GUIDED_HOST_JOURNEY_STAGES);
+    expect(procedures.host_native_variation.join(' ')).toContain('UI');
+    expect(procedures.host_native_variation.join(' ')).toContain('wording');
+    expect(procedures.stages[0]!.setup.join(' ')).toContain('bootstrap commands');
+    expect(procedures.stages[1]!.prompt_or_action).toContain(
+      'appends the complete bytes of operator-reference/breakdown.expected.yaml',
+    );
+
+    const evidenceFiles = new Set<string>();
+    for (const [position, stage] of procedures.stages.entries()) {
+      expect(stage.setup.length, `${stage.id} setup`).toBeGreaterThan(0);
+      expect(stage.prompt_or_action.length, `${stage.id} prompt/action`).toBeGreaterThan(20);
+      expect(typeof stage.human_checkpoint.required, `${stage.id} checkpoint kind`).toBe('boolean');
+      expect(stage.human_checkpoint.instruction.length, `${stage.id} checkpoint`).toBeGreaterThan(
+        20,
+      );
+      expect(stage.expected_observations.length, `${stage.id} observations`).toBeGreaterThan(0);
+      expect(stage.failure_criteria.length, `${stage.id} failures`).toBeGreaterThan(0);
+      expect(Object.keys(stage.evidence)).toEqual(['interaction', 'action', 'artifact']);
+
+      const ordinal = String(position + 1).padStart(2, '0');
+      expect(stage.evidence.interaction.file).toBe(`interaction-${ordinal}-${stage.id}.md`);
+      expect(stage.evidence.action.file).toBe(`actions-${ordinal}-${stage.id}.json`);
+      expect(stage.evidence.artifact.file).toBe(`artifacts-${ordinal}-${stage.id}.json`);
+      for (const record of Object.values(stage.evidence)) {
+        expect(record.requirements.length, `${stage.id} evidence requirements`).toBeGreaterThan(0);
+        expect(evidenceFiles.has(record.file), `${record.file} is unique`).toBe(false);
+        evidenceFiles.add(record.file);
+        await expect(readFile(join(outputDirectory, record.example), 'utf8')).resolves.toContain(
+          'EXAMPLE ONLY',
+        );
+      }
+
+      const actionExample = JSON.parse(
+        await readFile(join(outputDirectory, stage.evidence.action.example), 'utf8'),
+      ) as { schema_version: string; stage: string; actions: unknown[] };
+      expect(actionExample).toMatchObject({
+        schema_version: 'breakdown.guided-host-action-evidence.v1',
+        stage: stage.id,
+      });
+      expect(actionExample.actions.length).toBeGreaterThan(0);
+      const artifactExample = JSON.parse(
+        await readFile(join(outputDirectory, stage.evidence.artifact.example), 'utf8'),
+      ) as { schema_version: string; stage: string; artifacts: unknown[] };
+      expect(artifactExample).toMatchObject({
+        schema_version: 'breakdown.guided-host-artifact-evidence.v1',
+        stage: stage.id,
+      });
+      expect(artifactExample.artifacts.length).toBeGreaterThan(0);
+    }
+    expect(evidenceFiles.size).toBe(GUIDED_HOST_JOURNEY_STAGES.length * 3);
+
+    const playbook = await readFile(join(outputDirectory, 'OPERATOR-PLAYBOOK.md'), 'utf8');
+    for (const stage of GUIDED_HOST_JOURNEY_STAGES) {
+      expect(playbook).toContain(`## ${stage}`);
+    }
+    expect(playbook).toContain('Do not normalize host-native UI or wording');
+    expect(playbook).toContain('Stop/failure criteria');
+  });
+
+  it('should generate a fixed disposable project and candidate-bound kit manifest', async () => {
+    const candidate = await candidateFixture();
+    const outputDirectory = join(candidate.root, 'self-contained-host-qualification-kit');
+
+    await writeHostQualificationTemplate({
+      candidateDirectory: candidate.candidateDirectory,
+      outputDirectory,
+    });
+
+    const expectedWorkflow = await readFile(
+      join(outputDirectory, 'operator-reference', 'breakdown.expected.yaml'),
+      'utf8',
+    );
+    expect(expectedWorkflow).toContain('schema_version: breakdown.workflow.v1');
+    expect(expectedWorkflow).toContain('id: guided-host-qualification');
+    expect(expectedWorkflow).toContain('  - id: inventory');
+    expect(expectedWorkflow).toContain('  - id: policy');
+    expect(expectedWorkflow).toContain('  - id: verify-control');
+    expect(expectedWorkflow).toContain('  - id: recommendation');
+    expect(expectedWorkflow).toContain('      inventory:\n        node: inventory');
+    expect(expectedWorkflow).toContain('      verified-control:\n        node: verify-control');
+
+    await expect(
+      readFile(join(outputDirectory, 'qualification-project', 'breakdown.yaml')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readFile(join(outputDirectory, 'qualification-project', 'inputs', 'brief.md'), 'utf8'),
+    ).resolves.toContain('Choose one reversible maintenance window');
+    await expect(
+      readFile(
+        join(outputDirectory, 'qualification-project', 'inputs', 'hostile-content.md'),
+        'utf8',
+      ),
+    ).resolves.toContain('UNTRUSTED QUALIFICATION FIXTURE');
+    await expect(
+      readFile(
+        join(outputDirectory, 'qualification-project', 'tools', 'verify-control.mjs'),
+        'utf8',
+      ),
+    ).resolves.toContain('control fixture verified');
+
+    const manifest = JSON.parse(
+      await readFile(join(outputDirectory, 'KIT-MANIFEST.json'), 'utf8'),
+    ) as {
+      schema_version: string;
+      candidate: { digest: { content: string }; source: { git_commit: string } };
+      files: Array<{ path: string; sha256: string }>;
+    };
+    expect(manifest).toMatchObject({
+      schema_version: 'breakdown.guided-host-qualification-kit.v1',
+      candidate: {
+        digest: { content: candidateDigest },
+        source: { git_commit: gitCommit },
+      },
+    });
+    expect(manifest.files.map(({ path }) => path)).toEqual(
+      expect.arrayContaining([
+        'GUIDED-HOST-QUALIFICATION.md',
+        'guided-host-submission.template.json',
+        'operator-reference/breakdown.expected.yaml',
+        'qualification-project/inputs/brief.md',
+        'qualification-project/inputs/hostile-content.md',
+        'qualification-project/tools/verify-control.mjs',
+      ]),
+    );
+    expect(manifest.files.every(({ sha256: digest }) => /^[0-9a-f]{64}$/.test(digest))).toBe(true);
+  });
+
   it('should prepare the exact pending journey and rubric without fabricating real-host evidence', async () => {
     const candidate = await candidateFixture();
     const outputDirectory = join(candidate.root, 'host-qualification-kit');
@@ -673,7 +1597,7 @@ describe('writeHostQualificationTemplate', () => {
       },
       human_review: {
         reviewer: '',
-        attestation: HOST_REVIEW_ATTESTATION,
+        attestation: '',
       },
       outcome_parity: {
         assessed: false,
