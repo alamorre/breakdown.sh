@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://breakdown.sh/schemas/breakdown.guided-host-participant.v1.schema.json",
+  "$id": "breakdown.guided-host-participant.v1",
+  "$comment": "release_version=1.0.0",
   "title": "Breakdown guided-host participant identity",
   "oneOf": [
     { "$ref": "#/$defs/executionAgent" },
@@ -27,10 +28,32 @@
         "model_family": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,127}$" }
       }
     },
+    "operatingSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "platform", "name", "release", "version", "architecture"],
+      "properties": {
+        "family": { "enum": ["linux", "macos"] },
+        "platform": { "enum": ["linux", "darwin"] },
+        "name": { "type": "string", "minLength": 1 },
+        "release": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "architecture": { "enum": ["arm64", "x64"] }
+      }
+    },
     "agentBase": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "kind", "session_id", "started_at", "completed_at", "host", "model"],
+      "required": [
+        "role",
+        "kind",
+        "session_id",
+        "started_at",
+        "completed_at",
+        "host",
+        "model",
+        "operating_system"
+      ],
       "properties": {
         "role": { "enum": ["execution-agent", "review-agent"] },
         "kind": { "const": "agent" },
@@ -38,7 +61,8 @@
         "started_at": { "type": "string", "format": "date-time" },
         "completed_at": { "type": "string", "format": "date-time" },
         "host": { "$ref": "#/$defs/agentHost" },
-        "model": { "$ref": "#/$defs/model" }
+        "model": { "$ref": "#/$defs/model" },
+        "operating_system": { "$ref": "#/$defs/operatingSystem" }
       }
     },
     "executionAgent": {
@@ -56,14 +80,23 @@
     "automation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "kind", "workflow", "workflow_run_id", "workflow_run_attempt", "observed_at"],
+      "required": [
+        "role",
+        "kind",
+        "workflow",
+        "workflow_run_id",
+        "workflow_run_attempt",
+        "observed_at",
+        "operating_system"
+      ],
       "properties": {
         "role": { "const": "automation" },
         "kind": { "const": "automation" },
         "workflow": { "type": "string", "minLength": 1 },
         "workflow_run_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
         "workflow_run_attempt": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-        "observed_at": { "type": "string", "format": "date-time" }
+        "observed_at": { "type": "string", "format": "date-time" },
+        "operating_system": { "$ref": "#/$defs/operatingSystem" }
       }
     },
     "human": {

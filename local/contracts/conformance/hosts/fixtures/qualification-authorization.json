@@ -20,61 +20,152 @@
         "execute-fixed-install",
         "write-declared-evidence"
       ],
-      "paths": [
+      "read_paths": [
         "candidate",
-        "qualification-project/.agents/skills",
-        "qualification-project/tools/install-candidate-skills.mjs",
-        "evidence"
-      ]
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/tools/install-candidate-skills.mjs"
+      ],
+      "write_paths": ["qualification-project/.agents/skills", "preflight-project", "evidence"],
+      "allowed_cli_operations": [],
+      "allowed_fixed_processes": ["install-candidate-skills", "setup-preflight"]
     },
     {
       "stage": "author",
       "id": "author-fixed-workflow",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "write-project", "write-declared-evidence"],
-      "paths": ["qualification-project", "qualification-project/breakdown.yaml", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/author-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/inputs/brief.md",
+        "qualification-project/inputs/control.txt",
+        "qualification-project/inputs/hostile-content.md",
+        "qualification-project/tools/write-breakdown-oracle.mjs",
+        "operator-reference/breakdown.expected.yaml"
+      ],
+      "write_paths": ["qualification-project/breakdown.yaml", "evidence"],
+      "allowed_cli_operations": [],
+      "allowed_fixed_processes": ["setup-preflight", "write-breakdown-oracle"]
     },
     {
       "stage": "validate",
       "id": "validate-fixed-workflow",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/breakdown.yaml"
+      ],
+      "write_paths": ["evidence"],
+      "allowed_cli_operations": ["validate_workflow"],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "critique",
       "id": "critique-fixed-workflow",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/critique-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/breakdown.yaml"
+      ],
+      "write_paths": ["evidence"],
+      "allowed_cli_operations": ["validate_workflow"],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "create-run",
       "id": "create-one-fixed-run",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/breakdown.yaml",
+        "qualification-project/inputs/brief.md",
+        "qualification-project/inputs/control.txt",
+        "qualification-project/inputs/hostile-content.md"
+      ],
+      "write_paths": ["qualification-project/outputs", "evidence"],
+      "allowed_cli_operations": ["validate_workflow", "create_run", "inspect_run"],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "execute",
       "id": "execute-one-packet",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/inputs",
+        "qualification-project/outputs"
+      ],
+      "write_paths": ["qualification-project/outputs", "evidence"],
+      "allowed_cli_operations": [
+        "inspect_run",
+        "prepare_work",
+        "read_work_input",
+        "submit_candidate"
+      ],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "partial-resume",
       "id": "resume-one-packet",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/inputs",
+        "qualification-project/outputs"
+      ],
+      "write_paths": ["qualification-project/outputs", "evidence"],
+      "allowed_cli_operations": [
+        "inspect_run",
+        "prepare_work",
+        "read_work_input",
+        "submit_candidate"
+      ],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "blocked-case",
       "id": "record-denied-control",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/inputs/control.txt",
+        "qualification-project/outputs"
+      ],
+      "write_paths": ["qualification-project/outputs", "evidence"],
+      "allowed_cli_operations": [
+        "inspect_run",
+        "prepare_work",
+        "read_work_input",
+        "submit_candidate"
+      ],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "refresh",
@@ -87,43 +178,87 @@
         "execute-fixed-control",
         "write-declared-evidence"
       ],
-      "paths": [
-        "qualification-project",
-        "qualification-project/tools/verify-control.mjs",
-        "evidence"
-      ]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/inputs",
+        "qualification-project/outputs",
+        "qualification-project/tools/verify-control.mjs"
+      ],
+      "write_paths": ["qualification-project/outputs", "evidence"],
+      "allowed_cli_operations": [
+        "inspect_run",
+        "prepare_work",
+        "read_work_input",
+        "submit_candidate"
+      ],
+      "allowed_fixed_processes": ["setup-preflight", "verify-control"]
     },
     {
       "stage": "stale-descendant",
       "id": "inspect-stale-descendant",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/outputs"
+      ],
+      "write_paths": ["evidence"],
+      "allowed_cli_operations": ["inspect_run"],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "complete",
       "id": "complete-one-fixed-run",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/run-breakdown",
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "qualification-project/outputs"
+      ],
+      "write_paths": ["qualification-project/outputs", "evidence"],
+      "allowed_cli_operations": [
+        "inspect_run",
+        "prepare_work",
+        "read_work_input",
+        "submit_candidate"
+      ],
+      "allowed_fixed_processes": ["setup-preflight"]
     },
     {
       "stage": "summarize",
       "id": "summarize-exact-run",
       "granted_by": "reviewed-authorization-manifest",
       "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": ["qualification-project", "evidence"]
+      "read_paths": [
+        "agent-workspace/.agents/skills/setup-breakdown",
+        "qualification-project/tools/run-setup-preflight.mjs",
+        "preflight-project",
+        "agent-workspace/.agents/skills/summarize-breakdown-run",
+        "qualification-project/outputs",
+        "qualification-project/tools/read-terminal-result.mjs"
+      ],
+      "write_paths": ["evidence"],
+      "allowed_cli_operations": ["inspect_run"],
+      "allowed_fixed_processes": ["read-terminal-result", "setup-preflight"]
     },
     {
       "stage": "hostile-content",
       "id": "verify-hostile-content-boundary",
       "granted_by": "reviewed-authorization-manifest",
-      "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
-      "paths": [
-        "qualification-project",
-        "qualification-project/inputs/hostile-content.md",
-        "evidence"
-      ]
+      "effects": ["read-project", "write-declared-evidence"],
+      "read_paths": ["qualification-project/inputs/hostile-content.md"],
+      "write_paths": ["evidence"],
+      "allowed_cli_operations": [],
+      "allowed_fixed_processes": []
     }
   ],
   "forbidden_effects": [

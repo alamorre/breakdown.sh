@@ -205,6 +205,27 @@ async function submissionFixture({
   for (const [path, , contents] of retainedFiles) {
     await writeFile(join(rowRoot, path), contents);
   }
+  const operatingSystem = {
+    family: os,
+    platform: os === 'linux' ? 'linux' : os === 'macos' ? 'darwin' : 'win32',
+    name: os === 'linux' ? 'Ubuntu' : os === 'macos' ? 'macOS' : 'Windows',
+    release: os === 'linux' ? '6.11.0-1018-azure' : os === 'macos' ? '24.5.0' : '10.0.26100',
+    version:
+      os === 'linux'
+        ? '#18~24.04.1-Ubuntu SMP'
+        : os === 'macos'
+          ? 'Darwin Kernel Version 24.5.0'
+          : 'Windows 11 Enterprise',
+    architecture: 'x64',
+  };
+  const reviewOperatingSystem = {
+    family: 'linux',
+    platform: 'linux',
+    name: 'Linux',
+    release: '6.11.0-1018-azure',
+    version: '#18~24.04.1-Ubuntu SMP',
+    architecture: 'x64',
+  };
   const submission = {
     schema_version: 'breakdown.guided-host-submission.v2',
     release_version: releaseVersion,
@@ -212,19 +233,7 @@ async function submissionFixture({
       surface: host,
       version: hostVersion,
     },
-    operating_system: {
-      family: os,
-      platform: os === 'linux' ? 'linux' : os === 'macos' ? 'darwin' : 'win32',
-      name: os === 'linux' ? 'Ubuntu' : os === 'macos' ? 'macOS' : 'Windows',
-      release: os === 'linux' ? '6.11.0-1018-azure' : os === 'macos' ? '24.5.0' : '10.0.26100',
-      version:
-        os === 'linux'
-          ? '#18~24.04.1-Ubuntu SMP'
-          : os === 'macos'
-            ? 'Darwin Kernel Version 24.5.0'
-            : 'Windows 11 Enterprise',
-      architecture: 'x64',
-    },
+    operating_system: operatingSystem,
     transport: 'cli',
     model: {
       provider_family: providerFamily,
@@ -242,6 +251,7 @@ async function submissionFixture({
           provider_family: providerFamily,
           model_family: modelFamily ?? (providerFamily === 'openai' ? 'gpt-5' : 'claude-4'),
         },
+        operating_system: operatingSystem,
       },
       review_agent: {
         role: 'review-agent',
@@ -251,6 +261,7 @@ async function submissionFixture({
         completed_at: '2026-07-29T18:00:00.000Z',
         host: { surface: 'GitHub Copilot CLI', version: '1.0.77' },
         model: { provider_family: 'anthropic', model_family: 'claude-sonnet-4.6' },
+        operating_system: reviewOperatingSystem,
       },
       automation: {
         role: 'automation',
@@ -259,6 +270,7 @@ async function submissionFixture({
         workflow_run_id: '12345',
         workflow_run_attempt: '1',
         observed_at: '2026-07-29T18:00:00.000Z',
+        operating_system: reviewOperatingSystem,
       },
     },
     skill_archive_file: `breakdown-skills-${releaseVersion}.tar.gz`,
@@ -375,15 +387,18 @@ describe('authenticated host evidence capture workflow', () => {
       'candidate_artifact_id:',
       'platform_index_artifact_id:',
       'copilot-requests: write',
+      "COPILOT_AUTO_UPDATE: 'false'",
       'runner: ubuntu-24.04',
       'runner: macos-15',
       'model: gpt-5.3-codex',
       'model: claude-sonnet-4.6',
+      'copilot --version',
       'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
       'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
       'pnpm local:release:execute-host',
       'pnpm local:release:review-host',
       'pnpm local:release:qualify-host',
+      '--source-commit "$GITHUB_SHA"',
       'path: ${{ runner.temp }}/qualified-host-row',
       'include-hidden-files: true',
       'retention-days: 90',
@@ -421,19 +436,39 @@ describe('authenticated host evidence capture workflow', () => {
     for (const boundary of [
       '--disable-builtin-mcps',
       '--no-custom-instructions',
+      '--no-auto-update',
       '--deny-tool=url',
       '--disallow-temp-dir',
       'BREAKDOWN_QUALIFICATION_SKILL_SOURCE',
+      'agent-workspaces',
       'install-candidate-skills.mjs',
+      'read-terminal-result.mjs',
+      'run-setup-preflight.mjs',
       'sanitizeHostEvidenceText',
       'deterministicStageObservation',
+      'randomUUID',
+      '--session-id',
+      'projectDelta',
+      'GUIDED_HOST_RUBRIC',
+      'allowed_cli_operations',
+      'write-breakdown-oracle.mjs',
       'readCandidateRelease',
       'distinct fresh sessions',
+      'operating_system',
     ]) {
       expect(harness).toContain(boundary);
     }
     expect(harness).not.toContain('--allow-all');
+    expect(harness).not.toContain('--allow-tool=write');
     expect(harness).not.toContain('--share-gist');
+    expect(harness).not.toContain('function sessionIdentity');
+    expect(harness).not.toContain('COPILOT_SKILLS_DIRS');
+    expect(harness).not.toContain("preflight.mjs')}:*");
+    expect(
+      harness.slice(0, harness.indexOf('export async function reviewAgentHostQualification')),
+    ).not.toContain('--add-dir');
+    expect(harness).toContain("status: 'replace-with-passed-or-failed'");
+    expect(harness).toContain('score: null');
   });
 });
 
@@ -680,12 +715,31 @@ describe('qualification authorization and sanitization', () => {
       schema_version: 'breakdown.guided-host-authorization.v1',
       fixture: 'guided-host-qualification',
     });
+    const exactManifest = manifest as {
+      operations: Array<{ read_paths: string[]; write_paths: string[] }>;
+    };
+    expect(exactManifest.operations[0]).toMatchObject({
+      read_paths: expect.arrayContaining([
+        'qualification-project/tools/run-setup-preflight.mjs',
+        'preflight-project',
+      ]),
+      write_paths: expect.arrayContaining(['preflight-project']),
+    });
     const expanded = structuredClone(manifest) as {
       operations: Array<{ stage: string; effects: string[] }>;
     };
     expanded.operations[0]!.effects.push('publish-package');
     expect(() => validateQualificationAuthorization(expanded)).toThrow(
       'Qualification authorization contains an undeclared effect',
+    );
+
+    const broadened = structuredClone(manifest) as {
+      operations: Array<{ read_paths: string[]; allowed_cli_operations: string[] }>;
+    };
+    broadened.operations[1]!.read_paths = ['qualification-project'];
+    broadened.operations[1]!.allowed_cli_operations.push('submit_candidate');
+    expect(() => validateQualificationAuthorization(broadened)).toThrow(
+      'Qualification authorization differs from the exact reviewed fixture',
     );
   });
 
@@ -710,6 +764,17 @@ describe('qualification authorization and sanitization', () => {
         repository: 'https://github.com/alamorre/breakdown.sh',
         git_commit: gitCommit,
       },
+      rows: MAINTAINED_PLATFORM_TUPLES.map((tuple, index) => ({
+        tuple,
+        status: 'passed',
+        evidence: {
+          artifact_name: `breakdown-platform-${index}`,
+          mechanism: 'github-actions-artifact-v7',
+          workflow_run_id: '12345',
+          workflow_run_attempt: '1',
+          file_sha256: String(index + 1).repeat(64),
+        },
+      })),
       gate: { satisfied: true },
     });
 
@@ -717,6 +782,7 @@ describe('qualification authorization and sanitization', () => {
       verifyHostQualificationPrerequisites({
         candidateDirectory: candidate.candidateDirectory,
         platformIndexPath,
+        sourceCommit: gitCommit,
       }),
     ).resolves.toMatchObject({ source_commit: gitCommit, candidate_digest: candidateDigest });
 
@@ -727,8 +793,21 @@ describe('qualification authorization and sanitization', () => {
       verifyHostQualificationPrerequisites({
         candidateDirectory: candidate.candidateDirectory,
         platformIndexPath,
+        sourceCommit: gitCommit,
       }),
     ).rejects.toThrow('Platform index is not bound to the exact host-qualification candidate');
+
+    const incomplete = JSON.parse(await readFile(platformIndexPath, 'utf8'));
+    incomplete.source.git_commit = gitCommit;
+    incomplete.rows.pop();
+    await writeJson(platformIndexPath, incomplete);
+    await expect(
+      verifyHostQualificationPrerequisites({
+        candidateDirectory: candidate.candidateDirectory,
+        platformIndexPath,
+        sourceCommit: gitCommit,
+      }),
+    ).rejects.toThrow('Platform index does not contain every exact passing maintained row');
   });
 });
 
@@ -962,6 +1041,18 @@ describe('writeHostQualificationTemplate', () => {
         'utf8',
       ),
     ).resolves.toContain('BREAKDOWN_QUALIFICATION_SKILL_SOURCE');
+    await expect(
+      readFile(
+        join(outputDirectory, 'qualification-project', 'tools', 'read-terminal-result.mjs'),
+        'utf8',
+      ),
+    ).resolves.toContain('BREAKDOWN_QUALIFICATION_TERMINAL_SHA256');
+    await expect(
+      readFile(
+        join(outputDirectory, 'qualification-project', 'tools', 'run-setup-preflight.mjs'),
+        'utf8',
+      ),
+    ).resolves.toContain('BREAKDOWN_QUALIFICATION_PREFLIGHT_PROJECT');
     expect(guide).toContain('Linux and macOS rows');
     expect(guide).toContain('two model or provider families');
     expect(guide).toContain('host/model/provider versions');
@@ -1603,7 +1694,12 @@ describe('writeHostQualificationTemplate', () => {
         id: string;
         setup: string[];
         prompt_or_action: string;
-        authorization: { preauthorized: boolean; instruction: string };
+        authorization: {
+          preauthorized: boolean;
+          read_paths: string[];
+          write_paths: string[];
+          instruction: string;
+        };
         expected_observations: string[];
         evidence: Record<string, { file: string; requirements: string[]; example: string }>;
         failure_criteria: string[];
@@ -1628,6 +1724,8 @@ describe('writeHostQualificationTemplate', () => {
       expect(typeof stage.authorization.preauthorized, `${stage.id} authorization kind`).toBe(
         'boolean',
       );
+      expect(stage.authorization.read_paths.length, `${stage.id} read paths`).toBeGreaterThan(0);
+      expect(stage.authorization.write_paths.length, `${stage.id} write paths`).toBeGreaterThan(0);
       expect(stage.authorization.instruction.length, `${stage.id} authorization`).toBeGreaterThan(
         20,
       );
@@ -1737,7 +1835,10 @@ describe('writeHostQualificationTemplate', () => {
         'operator-reference/breakdown.expected.yaml',
         'qualification-project/inputs/brief.md',
         'qualification-project/inputs/hostile-content.md',
+        'qualification-project/tools/read-terminal-result.mjs',
+        'qualification-project/tools/run-setup-preflight.mjs',
         'qualification-project/tools/verify-control.mjs',
+        'qualification-project/tools/write-breakdown-oracle.mjs',
       ]),
     );
     expect(manifest.files.every(({ sha256: digest }) => /^[0-9a-f]{64}$/.test(digest))).toBe(true);

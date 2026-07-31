@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://breakdown.sh/schemas/breakdown.guided-host-evidence.v2.schema.json",
+  "$id": "breakdown.guided-host-evidence.v2",
+  "$comment": "release_version=1.0.0",
   "title": "Breakdown independently agent-reviewed guided-host evidence",
   "type": "object",
   "required": [
@@ -40,20 +41,30 @@
       "properties": {
         "execution_agent": {
           "allOf": [
-            { "$ref": "breakdown.guided-host-participant.v1.schema.json" },
-            { "properties": { "role": { "const": "execution-agent" }, "kind": { "const": "agent" } } }
+            {
+              "$ref": "breakdown.guided-host-participant.v1"
+            },
+            {
+              "properties": { "role": { "const": "execution-agent" }, "kind": { "const": "agent" } }
+            }
           ]
         },
         "review_agent": {
           "allOf": [
-            { "$ref": "breakdown.guided-host-participant.v1.schema.json" },
+            {
+              "$ref": "breakdown.guided-host-participant.v1"
+            },
             { "properties": { "role": { "const": "review-agent" }, "kind": { "const": "agent" } } }
           ]
         },
         "automation": {
           "allOf": [
-            { "$ref": "breakdown.guided-host-participant.v1.schema.json" },
-            { "properties": { "role": { "const": "automation" }, "kind": { "const": "automation" } } }
+            {
+              "$ref": "breakdown.guided-host-participant.v1"
+            },
+            {
+              "properties": { "role": { "const": "automation" }, "kind": { "const": "automation" } }
+            }
           ]
         }
       }

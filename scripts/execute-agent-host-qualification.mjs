@@ -9,7 +9,7 @@ import { requiredArgumentValue } from './local-release/command-line.mjs';
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: execute-agent-host-qualification.mjs --candidate PATH --output PATH --row ID --expected-os OS --model ID --provider ID --copilot-version VERSION';
+    'Usage: execute-agent-host-qualification.mjs --candidate PATH --output PATH --row ID --expected-os OS --model ID --provider ID --copilot-version VERSION --source-commit SHA';
   const result = await executeAgentHostQualification({
     candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
     outputDirectory: resolve(requiredArgumentValue(argv, '--output', usage)),
@@ -18,6 +18,7 @@ export async function main(argv = process.argv) {
     model: requiredArgumentValue(argv, '--model', usage),
     provider: requiredArgumentValue(argv, '--provider', usage),
     copilotVersion: requiredArgumentValue(argv, '--copilot-version', usage),
+    sourceCommit: requiredArgumentValue(argv, '--source-commit', usage),
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

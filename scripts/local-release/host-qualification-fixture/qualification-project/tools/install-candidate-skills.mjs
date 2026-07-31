@@ -32,8 +32,9 @@ if (source === undefined || !source.startsWith('/')) {
 }
 const sourceRoot = resolve(source);
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-if (resolve('.') !== resolve(projectRoot)) {
-  fail('The fixed candidate skill installer must run from the qualification project root.');
+const selectedProject = process.env.BREAKDOWN_QUALIFICATION_PROJECT;
+if (selectedProject === undefined || resolve(selectedProject) !== resolve(projectRoot)) {
+  fail('The fixed candidate skill installer is not bound to the exact qualification project.');
 }
 const destinationRoot = join(projectRoot, '.agents', 'skills');
 const actualSkills = readdirSync(sourceRoot, { withFileTypes: true })

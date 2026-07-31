@@ -9,7 +9,7 @@ import { reviewAgentHostQualification } from './local-release/agent-host-qualifi
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: review-agent-host-qualification.mjs --candidate PATH --execution PATH --output PATH --row ID --model ID --provider ID --copilot-version VERSION';
+    'Usage: review-agent-host-qualification.mjs --candidate PATH --execution PATH --output PATH --row ID --model ID --provider ID --copilot-version VERSION --source-commit SHA';
   const result = await reviewAgentHostQualification({
     candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
     executionDirectory: resolve(requiredArgumentValue(argv, '--execution', usage)),
@@ -18,6 +18,7 @@ export async function main(argv = process.argv) {
     model: requiredArgumentValue(argv, '--model', usage),
     provider: requiredArgumentValue(argv, '--provider', usage),
     copilotVersion: requiredArgumentValue(argv, '--copilot-version', usage),
+    sourceCommit: requiredArgumentValue(argv, '--source-commit', usage),
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

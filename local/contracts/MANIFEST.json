@@ -77,8 +77,8 @@
       "path": "conformance/hosts/fixtures/qualification-authorization.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 4610,
-      "sha256": "f8fd791e81a3a33f5484d44535af603383acf805dbcd3872ea616e473b331eb8"
+      "bytes": 10274,
+      "sha256": "cf0b3ea27c415369dd522391b4ce6afecd5598056d3f006948cb745709ac09c9"
     },
     {
       "path": "conformance/matrix.json",
@@ -637,22 +637,22 @@
       "path": "schemas/breakdown.guided-host-authorization.v1.schema.json",
       "media_type": "application/json",
       "role": "schema",
-      "bytes": 2602,
-      "sha256": "ad7d2e911042e44111ac303c911187ac8fc1ec9c9b5ac9c2366d2392433d064b"
+      "bytes": 3690,
+      "sha256": "137b6cb2c65fee81f8d4e1bf7e2807abd267da8bdb14ed90fb8e0f772a94aa6f"
     },
     {
       "path": "schemas/breakdown.guided-host-evidence.v2.schema.json",
       "media_type": "application/json",
       "role": "schema",
-      "bytes": 2783,
-      "sha256": "d99cb795e2b39a9004febfa17a01f2db9b5d75141e92b42ef6abfc66988f1e46"
+      "bytes": 2875,
+      "sha256": "17af2372a6356cb1ba30321f45f666623cb6bed651553022e4ef920c22e8f1ab"
     },
     {
       "path": "schemas/breakdown.guided-host-participant.v1.schema.json",
       "media_type": "application/json",
       "role": "schema",
-      "bytes": 2959,
-      "sha256": "50feaaf994fb133f620e111592afb36c5da3e019d29a547b9e4b967bca07e395"
+      "bytes": 3802,
+      "sha256": "af7a4185959c0ec44269f43b923f6c045e4fe096d32e580e2fa6b5b705c6079d"
     },
     {
       "path": "schemas/breakdown.mcp-output.v1.schema.json",

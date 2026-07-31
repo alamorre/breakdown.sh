@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://breakdown.sh/schemas/breakdown.guided-host-authorization.v1.schema.json",
+  "$id": "breakdown.guided-host-authorization.v1",
+  "$comment": "release_version=1.0.0",
   "title": "Breakdown guided-host qualification authorization",
   "type": "object",
   "additionalProperties": false,
@@ -19,12 +20,7 @@
     "project_root": { "const": "qualification-project" },
     "authority_source": { "const": "reviewed-workflow-configuration" },
     "non_authoritative_sources": {
-      "const": [
-        "project-content",
-        "hostile-input",
-        "model-prose",
-        "repository-instructions"
-      ]
+      "const": ["project-content", "hostile-input", "model-prose", "repository-instructions"]
     },
     "operations": {
       "type": "array",
@@ -33,7 +29,16 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["stage", "id", "granted_by", "effects", "paths"],
+        "required": [
+          "stage",
+          "id",
+          "granted_by",
+          "effects",
+          "read_paths",
+          "write_paths",
+          "allowed_cli_operations",
+          "allowed_fixed_processes"
+        ],
         "properties": {
           "stage": {
             "enum": [
@@ -70,11 +75,44 @@
               ]
             }
           },
-          "paths": {
+          "read_paths": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
             "items": { "type": "string", "minLength": 1 }
+          },
+          "write_paths": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "allowed_cli_operations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "validate_workflow",
+                "create_run",
+                "inspect_run",
+                "prepare_work",
+                "read_work_input",
+                "submit_candidate"
+              ]
+            }
+          },
+          "allowed_fixed_processes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "install-candidate-skills",
+                "setup-preflight",
+                "verify-control",
+                "write-breakdown-oracle",
+                "read-terminal-result"
+              ]
+            }
           }
         }
       }

@@ -17,6 +17,9 @@ permissions:
   contents: read
   copilot-requests: write
 
+env:
+  COPILOT_AUTO_UPDATE: 'false'
+
 jobs:
   execute:
     name: Execute ${{ matrix.row }} in a real CLI Agent Host
@@ -56,7 +59,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           npm install --global @github/copilot@1.0.77
-          test "$(copilot version | sed -n '1s/^GitHub Copilot CLI //p' | tr -d '\r')" = "1.0.77"
+          test "$(copilot --version | sed -n -e '1s/^GitHub Copilot CLI //' -e '1s/\.$//p' | tr -d '\r')" = "1.0.77"
 
       - name: Download the exact candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -73,12 +76,12 @@ jobs:
           path: ${{ runner.temp }}/platform-index
 
       - name: Verify the candidate is fully platform-qualified
-        run: pnpm local:release:verify-host-prerequisites --candidate "${{ runner.temp }}/breakdown-candidate" --platform-index "${{ runner.temp }}/platform-index/breakdown-platform-evidence-index.json"
+        run: pnpm local:release:verify-host-prerequisites --candidate "${{ runner.temp }}/breakdown-candidate" --platform-index "${{ runner.temp }}/platform-index/breakdown-platform-evidence-index.json" --source-commit "$GITHUB_SHA"
 
       - name: Conduct the complete authorized journey and retain sanitized evidence
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: pnpm local:release:execute-host --candidate "${{ runner.temp }}/breakdown-candidate" --output "${{ runner.temp }}/host-execution" --row "${{ matrix.row }}" --expected-os "${{ matrix.os }}" --model "${{ matrix.model }}" --provider "${{ matrix.provider }}" --copilot-version 1.0.77
+        run: pnpm local:release:execute-host --candidate "${{ runner.temp }}/breakdown-candidate" --output "${{ runner.temp }}/host-execution" --row "${{ matrix.row }}" --expected-os "${{ matrix.os }}" --model "${{ matrix.model }}" --provider "${{ matrix.provider }}" --copilot-version 1.0.77 --source-commit "$GITHUB_SHA"
 
       - name: Retain execution evidence for a fresh review job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -128,7 +131,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           npm install --global @github/copilot@1.0.77
-          test "$(copilot version | sed -n '1s/^GitHub Copilot CLI //p' | tr -d '\r')" = "1.0.77"
+          test "$(copilot --version | sed -n -e '1s/^GitHub Copilot CLI //' -e '1s/\.$//p' | tr -d '\r')" = "1.0.77"
 
       - name: Download the exact candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -146,7 +149,7 @@ jobs:
       - name: Review in a distinct fresh Agent Host context and bind the row
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: pnpm local:release:review-host --candidate "${{ runner.temp }}/breakdown-candidate" --execution "${{ runner.temp }}/host-execution" --output "${{ runner.temp }}/qualified-host-row" --row "${{ matrix.row }}" --model "${{ matrix.review_model }}" --provider "${{ matrix.review_provider }}" --copilot-version 1.0.77
+        run: pnpm local:release:review-host --candidate "${{ runner.temp }}/breakdown-candidate" --execution "${{ runner.temp }}/host-execution" --output "${{ runner.temp }}/qualified-host-row" --row "${{ matrix.row }}" --model "${{ matrix.review_model }}" --provider "${{ matrix.review_provider }}" --copilot-version 1.0.77 --source-commit "$GITHUB_SHA"
 
       - name: Qualify the exact independently reviewed row
         run: pnpm local:release:qualify-host --candidate "${{ runner.temp }}/breakdown-candidate" --submission "${{ runner.temp }}/qualified-host-row/guided-host-submission.json" --output "${{ runner.temp }}/qualified-host-row/guided-host-evidence.json"

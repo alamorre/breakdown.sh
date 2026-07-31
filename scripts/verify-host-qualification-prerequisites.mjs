@@ -9,10 +9,11 @@ import { verifyHostQualificationPrerequisites } from './local-release/host-evide
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: verify-host-qualification-prerequisites.mjs --candidate PATH --platform-index PATH';
+    'Usage: verify-host-qualification-prerequisites.mjs --candidate PATH --platform-index PATH --source-commit SHA';
   const result = await verifyHostQualificationPrerequisites({
     candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
     platformIndexPath: resolve(requiredArgumentValue(argv, '--platform-index', usage)),
+    sourceCommit: requiredArgumentValue(argv, '--source-commit', usage),
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

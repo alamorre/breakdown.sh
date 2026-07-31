@@ -33,8 +33,8 @@ const expectedRowCounts = {
   CLI: 12,
   MCP: 12,
   SKILL: 13,
-  HOST: 8,
-  PKG: 16,
+  HOST: 13,
+  PKG: 17,
   DOC: 13,
 } as const;
 const expectedRequirementCounts = {
@@ -43,10 +43,10 @@ const expectedRequirementCounts = {
   'specifications/hashing-and-state.md': 16,
   'specifications/mcp.md': 12,
   'specifications/operations.md': 18,
-  'specifications/release.md': 16,
+  'specifications/release.md': 17,
   'specifications/run-records.md': 18,
   'specifications/security-and-publication.md': 24,
-  'specifications/skills-and-hosts.md': 21,
+  'specifications/skills-and-hosts.md': 26,
   'specifications/workflow-definition.md': 17,
 } as const;
 const expectedFixtureFileCounts = {
@@ -62,7 +62,7 @@ const expectedFixtureFileCounts = {
   mcp: 1,
   package: 1,
   skills: 1,
-  hosts: 2,
+  hosts: 3,
 } as const;
 
 interface MatrixIndex {
@@ -297,7 +297,11 @@ describe('verifyContractCorpus', () => {
             incompleteRows.push(`${row.id}:${field}`);
           }
         }
-        if (!['byte', 'structural', 'effect', 'human'].includes(effective.oracle_type ?? '')) {
+        if (
+          !['byte', 'structural', 'effect', 'human', 'agent-review'].includes(
+            effective.oracle_type ?? '',
+          )
+        ) {
           incompleteRows.push(`${row.id}:oracle_type`);
         }
         const applicability = effective.applicability ?? {};
@@ -387,6 +391,9 @@ describe('verifyContractCorpus', () => {
     expect([...schemaIds].sort()).toEqual([
       'breakdown.candidate.v1',
       'breakdown.cli-output.v1',
+      'breakdown.guided-host-authorization.v1',
+      'breakdown.guided-host-evidence.v2',
+      'breakdown.guided-host-participant.v1',
       'breakdown.mcp-output.v1',
       'breakdown.operation-request.v1',
       'breakdown.operation-value.v1',
