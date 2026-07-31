@@ -721,7 +721,13 @@ function assertExactMutationAudit(stage, records) {
   );
 }
 
-async function readCommandAudit(path, authorization, stage, runId) {
+function visibleInteractionExcerpt(visibleInteraction) {
+  return visibleInteraction.length <= 12_000
+    ? visibleInteraction
+    : `${visibleInteraction.slice(0, 4_000)}\n[...sanitized middle omitted...]\n${visibleInteraction.slice(-8_000)}`;
+}
+
+async function readCommandAudit(path, authorization, stage, runId, visibleInteraction) {
   let text = '';
   try {
     text = await readFile(path, 'utf8');
@@ -732,6 +738,17 @@ async function readCommandAudit(path, authorization, stage, runId) {
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+  const auditSummary = records.map((record) => ({
+    operation: record.operation,
+    arguments: record.arguments,
+    run_id: record.run_id,
+    request: record.request,
+    response: record.response,
+    exit_status: record.exit_status,
+    input_sha256: record.input_sha256,
+    stdout_sha256: record.stdout_sha256,
+    stderr_sha256: record.stderr_sha256,
+  }));
   invariant(
     records.every(
       (record) =>
@@ -745,7 +762,7 @@ async function readCommandAudit(path, authorization, stage, runId) {
         /^[0-9a-f]{64}$/.test(record.stdout_sha256) &&
         /^[0-9a-f]{64}$/.test(record.stderr_sha256),
     ),
-    `${stage} command audit contains an undeclared or failing operation.`,
+    `${stage} command audit contains an undeclared or failing operation: ${JSON.stringify(auditSummary)}\nSanitized visible interaction:\n${visibleInteractionExcerpt(visibleInteraction)}`,
   );
   const required =
     {
@@ -834,10 +851,6 @@ async function readPreflightAudit(path, stage, authorization, visibleInteraction
     stdout_sha256: record.stdout_sha256,
     stderr_sha256: record.stderr_sha256,
   }));
-  const interactionExcerpt =
-    visibleInteraction.length <= 12_000
-      ? visibleInteraction
-      : `${visibleInteraction.slice(0, 4_000)}\n[...sanitized middle omitted...]\n${visibleInteraction.slice(-8_000)}`;
   invariant(
     expected
       ? records.length === 1 &&
@@ -848,7 +861,7 @@ async function readPreflightAudit(path, stage, authorization, visibleInteraction
           /^[0-9a-f]{64}$/.test(records[0].stdout_sha256) &&
           /^[0-9a-f]{64}$/.test(records[0].stderr_sha256)
       : records.length === 0,
-    `${stage} did not preserve the exact fixed setup preflight boundary: ${JSON.stringify(auditSummary)}\nSanitized visible interaction:\n${interactionExcerpt}`,
+    `${stage} did not preserve the exact fixed setup preflight boundary: ${JSON.stringify(auditSummary)}\nSanitized visible interaction:\n${visibleInteractionExcerpt(visibleInteraction)}`,
   );
   return records;
 }
@@ -1267,6 +1280,7 @@ export async function executeAgentHostQualification({
         stageAuthorization,
         procedure.id,
         runIdAfter,
+        transcript,
       );
       const controlAudit = await readControlAudit(controlAuditPath, procedure.id);
       const authorAudit = await readAuthorAudit(authorAuditPath, procedure.id, oracle);
