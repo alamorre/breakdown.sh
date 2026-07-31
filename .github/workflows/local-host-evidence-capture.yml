@@ -3,6 +3,10 @@ name: Breakdown Local unattended guided-host qualification
 on:
   workflow_dispatch:
     inputs:
+      platform_run_id:
+        description: Workflow run ID that produced the exact candidate and platform index
+        required: true
+        type: string
       candidate_artifact_id:
         description: Immutable artifact ID for the exact platform-qualified candidate
         required: true
@@ -66,6 +70,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/breakdown-candidate
 
       - name: Download the matching passing platform index
@@ -73,6 +78,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.platform_index_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/platform-index
 
       - name: Verify the candidate is fully platform-qualified
@@ -138,6 +144,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/breakdown-candidate
 
       - name: Download only this row's immutable execution evidence

@@ -847,9 +847,11 @@ describe('stable publication workflow', () => {
     );
 
     const requiredSnippets = [
+      'platform_run_id:',
       'candidate_artifact_id:',
       'platform_index_artifact_id:',
       'host_support_artifact_id:',
+      'host_support_run_id:',
       'human_approval_base64:',
       "startsWith(github.ref, 'refs/tags/breakdown-local-v')",
       'environment: breakdown-local-stable',
@@ -861,6 +863,7 @@ describe('stable publication workflow', () => {
       'artifact-ids: ${{ inputs.candidate_artifact_id }}',
       'artifact-ids: ${{ inputs.platform_index_artifact_id }}',
       'artifact-ids: ${{ inputs.host_support_artifact_id }}',
+      'run-id: ${{ inputs.host_support_run_id }}',
       'inputs.human_approval_base64',
       'verification.verified',
       'candidate-checksum-inventory-sha256:',
@@ -887,6 +890,7 @@ describe('stable publication workflow', () => {
       'actions/upload-artifact@v7',
     ];
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
+    expect(workflow.match(/run-id: \$\{\{ inputs\.platform_run_id \}\}/g)).toHaveLength(2);
     const forbiddenSnippets = ['local:release:build', 'NODE_AUTH_TOKEN'];
     expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
 

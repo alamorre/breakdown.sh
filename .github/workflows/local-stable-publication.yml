@@ -3,6 +3,10 @@ name: Breakdown Local stable publication
 on:
   workflow_dispatch:
     inputs:
+      platform_run_id:
+        description: Workflow run ID that produced the exact candidate and platform index
+        required: true
+        type: string
       candidate_artifact_id:
         description: Immutable artifact ID for the exact once-built candidate
         required: true
@@ -13,6 +17,10 @@ on:
         type: string
       host_support_artifact_id:
         description: Immutable artifact ID for the passing host index, support table, and attestation
+        required: true
+        type: string
+      host_support_run_id:
+        description: Workflow run ID that produced the passing host support set
         required: true
         type: string
       human_approval_base64:
@@ -71,6 +79,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/candidate
 
       - name: Download the passing platform index by artifact ID
@@ -78,6 +87,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.platform_index_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/platform-index
 
       - name: Download the passing host support set by artifact ID
@@ -85,6 +95,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.host_support_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.host_support_run_id }}
           path: ${{ runner.temp }}/host-support
 
       - name: Resolve the one exact input of each kind

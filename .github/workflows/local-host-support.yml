@@ -3,6 +3,10 @@ name: Breakdown Local pre-release authenticated host support
 on:
   workflow_dispatch:
     inputs:
+      platform_run_id:
+        description: Workflow run ID that produced the exact candidate and platform index
+        required: true
+        type: string
       candidate_artifact_id:
         description: Immutable artifact ID for the exact Breakdown Local candidate
         required: true
@@ -13,6 +17,10 @@ on:
         type: string
       evidence_artifact_ids:
         description: Comma-separated immutable artifact IDs containing passing guided-host rows
+        required: true
+        type: string
+      evidence_run_id:
+        description: Workflow run ID that produced the passing guided-host rows
         required: true
         type: string
 
@@ -51,6 +59,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/breakdown-candidate
 
       - name: Download the matching passing platform index
@@ -58,6 +67,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.platform_index_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.platform_run_id }}
           path: ${{ runner.temp }}/platform-index
 
       - name: Verify the immutable candidate and platform boundary
@@ -68,6 +78,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.evidence_artifact_ids }}
           github-token: ${{ github.token }}
+          run-id: ${{ inputs.evidence_run_id }}
           path: ${{ runner.temp }}/guided-host-evidence
 
       - name: Verify, index, and generate support from passing rows

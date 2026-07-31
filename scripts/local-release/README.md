@@ -68,6 +68,7 @@ Dispatch it with the immutable artifacts produced by the one platform-qualificat
 capture_run_url="$(
   gh workflow run local-host-evidence-capture.yml \
     --ref <candidate-source-ref> \
+    --raw-field platform_run_id=<platform-qualification-run-id> \
     --raw-field candidate_artifact_id=<candidate-artifact-id> \
     --raw-field platform_index_artifact_id=<platform-index-artifact-id>
 )"
@@ -90,9 +91,11 @@ the support table, and attest the exact pre-release index:
 support_run_url="$(
   gh workflow run local-host-support.yml \
     --ref <candidate-source-ref> \
+    --raw-field platform_run_id=<platform-qualification-run-id> \
     --raw-field candidate_artifact_id=<candidate-artifact-id> \
     --raw-field platform_index_artifact_id=<platform-index-artifact-id> \
-    --raw-field evidence_artifact_ids=<linux-row-id>,<macos-row-id>
+    --raw-field evidence_artifact_ids=<linux-row-id>,<macos-row-id> \
+    --raw-field evidence_run_id=<host-evidence-capture-run-id>
 )"
 support_run_id="${support_run_url##*/}"
 gh run watch "$support_run_id" --exit-status

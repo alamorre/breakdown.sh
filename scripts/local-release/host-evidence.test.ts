@@ -367,9 +367,13 @@ describe('authenticated host support workflow', () => {
     expect(workflow).toContain(
       'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
     );
+    expect(workflow).toContain('platform_run_id:');
+    expect(workflow).toContain('evidence_run_id:');
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
     expect(workflow).toContain('artifact-ids: ${{ inputs.platform_index_artifact_id }}');
     expect(workflow).toContain('artifact-ids: ${{ inputs.evidence_artifact_ids }}');
+    expect(workflow.match(/run-id: \$\{\{ inputs\.platform_run_id \}\}/g)).toHaveLength(2);
+    expect(workflow).toContain('run-id: ${{ inputs.evidence_run_id }}');
     expect(workflow).toContain('pnpm local:release:index-hosts');
     expect(workflow).toContain('actions/attest@b20087e3d92172ebf405cd2664f3fc3aa55348ea');
     expect(workflow).toContain('steps.attest.outputs.bundle-path');
@@ -384,6 +388,7 @@ describe('authenticated host evidence capture workflow', () => {
       'utf8',
     );
     const requiredSnippets = [
+      'platform_run_id:',
       'candidate_artifact_id:',
       'platform_index_artifact_id:',
       'copilot-requests: write',
@@ -417,6 +422,7 @@ describe('authenticated host evidence capture workflow', () => {
     ];
 
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
+    expect(workflow.match(/run-id: \$\{\{ inputs\.platform_run_id \}\}/g)).toHaveLength(3);
     expect(forbiddenSnippets.filter((snippet) => workflow.toLowerCase().includes(snippet))).toEqual(
       [],
     );
