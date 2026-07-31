@@ -1021,7 +1021,7 @@ nodes:
     expect(server.stderr()).toBe('');
   });
 
-  it('suppresses a cancelled submission response and removes pre-commit staging', async () => {
+  it('suppresses a cancelled submission response and leaves atomic submission state', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'breakdown-mcp-staged-cancel-'));
     temporaryDirectories.add(projectRoot);
     await writeFile(
@@ -1121,8 +1121,13 @@ nodes:
       ok: true,
       data: {
         run_id: runId,
-        status: 'incomplete',
         lock: null,
+      },
+    });
+    const attempts = inspected.data.attempts as Array<Record<string, unknown>>;
+    if (attempts.length === 0) {
+      expect(inspected.data).toMatchObject({
+        status: 'incomplete',
         attempts: [],
         nodes: [
           {
@@ -1131,14 +1136,36 @@ nodes:
             next_attempt: 1,
           },
         ],
-      },
-    });
-    expect(await readdir(stepsPath)).toEqual([]);
+      });
+      expect(await readdir(stepsPath)).toEqual([]);
+    } else {
+      expect(inspected.data).toMatchObject({
+        status: 'complete',
+        attempts: [
+          {
+            node_id: 'investigate',
+            attempt: 1,
+            status: 'succeeded',
+            selected: true,
+          },
+        ],
+        nodes: [
+          {
+            node_id: 'investigate',
+            state: 'complete',
+            next_attempt: 2,
+          },
+        ],
+      });
+      expect(attempts).toHaveLength(1);
+      expect(await readdir(stepsPath)).toEqual([basename(attempts[0]!.file as string)]);
+    }
     expect(responseReceived).toBe(false);
     expect(server.messages().some((message) => message.id === submitting.id)).toBe(false);
 
-    // Core publication-safety tests own deterministic after-commit deferral;
-    // this process test owns adapter suppression for observable pre-commit cancellation.
+    // Filesystem observation cannot establish whether the cancellation reached the child before
+    // its commit boundary. Core publication-safety tests own deterministic boundary coverage;
+    // this process test owns adapter suppression and rejects every non-atomic filesystem outcome.
     await server.close();
     expect(server.stderr()).toBe('');
   });
