@@ -26,6 +26,22 @@ function exactString(value) {
   return typeof value === 'string' && value.trim() === value && value.length > 0;
 }
 
+const FIXED_PROCESS_COMMANDS = Object.freeze({
+  'install-candidate-skills': 'breakdown-qualification-install-skills',
+  'setup-preflight': 'breakdown-qualification-setup-preflight',
+  'verify-control': 'breakdown-qualification-verify-control',
+  'write-breakdown-oracle': 'breakdown-qualification-write-oracle',
+  'read-terminal-result': 'breakdown-qualification-read-terminal-result',
+});
+
+const FIXED_PROCESS_SCRIPTS = Object.freeze({
+  'install-candidate-skills': 'install-candidate-skills.mjs',
+  'setup-preflight': 'run-setup-preflight.mjs',
+  'verify-control': 'verify-control.mjs',
+  'write-breakdown-oracle': 'write-breakdown-oracle.mjs',
+  'read-terminal-result': 'read-terminal-result.mjs',
+});
+
 async function emptyDirectory(path, label) {
   await mkdir(path, { recursive: true, mode: 0o700 });
   invariant((await readdir(path)).length === 0, `${label} must be empty: ${path}`);
@@ -213,7 +229,6 @@ function stagePrompt({
   row,
   runId,
   skillSourceDirectory,
-  terminalReaderPath,
 }) {
   const exactProcedure = procedure.prompt_or_action.replaceAll(
     '<run-id>',
@@ -231,27 +246,27 @@ ${procedure.id === 'author' ? `The exact fixture Inputs are:\n\n${fixtureInputs}
 ${procedure.id === 'hostile-content' ? `The exact hostile fixture is:\n\n${fixtureInputs}` : ''}
 ${
   procedure.id === 'install'
-    ? `The reviewed install operation already authorizes exactly two process calls. The harness has already inspected and pinned the exact candidate-derived skill source ${skillSourceDirectory}; do not spend this stage reading or enumerating its manifest or references. Invoke setup-breakdown, then immediately execute node ${join(projectDirectory, 'tools', 'install-candidate-skills.mjs')} exactly once. After it succeeds, immediately execute node ${join(projectDirectory, 'tools', 'run-setup-preflight.mjs')} exactly once. Do not ask for another approval, reverse their order, invoke either command twice, call preflight.mjs directly, or substitute another source or command.`
+    ? `The reviewed install operation already authorizes exactly two process calls. The harness has already inspected and pinned the exact candidate-derived skill source ${skillSourceDirectory}; do not spend this stage reading or enumerating its manifest or references. Invoke setup-breakdown, then immediately execute the literal command ${FIXED_PROCESS_COMMANDS['install-candidate-skills']} exactly once. After it succeeds, immediately execute the literal command ${FIXED_PROCESS_COMMANDS['setup-preflight']} exactly once. Use each command name alone: no arguments, quotes, redirection, prefixes, suffixes, or chaining. Do not ask for another approval, reverse their order, invoke either command twice, call preflight.mjs directly, or substitute another source or command.`
     : ''
 }
 ${
   procedure.id === 'author'
-    ? `After presenting and checking those bytes, invoke the fixed node ${join(projectDirectory, 'tools', 'write-breakdown-oracle.mjs')} command. Do not use a general write tool.`
+    ? `After presenting and checking those bytes, invoke the literal fixed command ${FIXED_PROCESS_COMMANDS['write-breakdown-oracle']} with no arguments or shell decoration. Do not use a general write tool.`
     : ''
 }
 ${
   procedure.id === 'summarize'
-    ? `Read the exact current Selected Terminal Result only through the fixed command node ${terminalReaderPath}.`
+    ? `Read the exact current Selected Terminal Result only through the literal fixed command ${FIXED_PROCESS_COMMANDS['read-terminal-result']} with no arguments or shell decoration.`
     : ''
 }
 ${
   procedure.id === 'refresh'
-    ? `Invoke the granted fixed control only through the exact command node ${join(projectDirectory, 'tools', 'verify-control.mjs')}.`
+    ? `Invoke the granted fixed control only through the literal fixed command ${FIXED_PROCESS_COMMANDS['verify-control']} with no arguments or shell decoration.`
     : ''
 }
 ${
   authorization.allowed_fixed_processes.includes('setup-preflight')
-    ? `Invoke the stage setup preflight exactly once through the fixed command node ${join(projectDirectory, 'tools', 'run-setup-preflight.mjs')}; do not invoke preflight.mjs directly or supply any arguments.`
+    ? `Invoke the stage setup preflight exactly once through the literal fixed command ${FIXED_PROCESS_COMMANDS['setup-preflight']}; do not invoke preflight.mjs directly or supply arguments or shell decoration.`
     : ''
 }
 
@@ -306,27 +321,19 @@ function copilotArguments({
     args.push('--allow-tool=shell(breakdown:*)');
   }
   if (authorization.allowed_fixed_processes.includes('install-candidate-skills')) {
-    args.push(
-      `--allow-tool=shell(node ${join(projectDirectory, 'tools', 'install-candidate-skills.mjs')})`,
-    );
+    args.push(`--allow-tool=shell(${FIXED_PROCESS_COMMANDS['install-candidate-skills']})`);
   }
   if (authorization.allowed_fixed_processes.includes('setup-preflight')) {
-    args.push(
-      `--allow-tool=shell(node ${join(projectDirectory, 'tools', 'run-setup-preflight.mjs')})`,
-    );
+    args.push(`--allow-tool=shell(${FIXED_PROCESS_COMMANDS['setup-preflight']})`);
   }
   if (authorization.allowed_fixed_processes.includes('verify-control')) {
-    args.push(`--allow-tool=shell(node ${join(projectDirectory, 'tools', 'verify-control.mjs')})`);
+    args.push(`--allow-tool=shell(${FIXED_PROCESS_COMMANDS['verify-control']})`);
   }
   if (authorization.allowed_fixed_processes.includes('write-breakdown-oracle')) {
-    args.push(
-      `--allow-tool=shell(node ${join(projectDirectory, 'tools', 'write-breakdown-oracle.mjs')})`,
-    );
+    args.push(`--allow-tool=shell(${FIXED_PROCESS_COMMANDS['write-breakdown-oracle']})`);
   }
   if (authorization.allowed_fixed_processes.includes('read-terminal-result')) {
-    args.push(
-      `--allow-tool=shell(node ${join(projectDirectory, 'tools', 'read-terminal-result.mjs')})`,
-    );
+    args.push(`--allow-tool=shell(${FIXED_PROCESS_COMMANDS['read-terminal-result']})`);
   }
   return args;
 }
@@ -363,7 +370,7 @@ function assertCandidateSource(provenance, sourceCommit) {
   );
 }
 
-async function createQualificationCliShim({ workRoot }) {
+export async function createQualificationCommandShims({ projectDirectory, workRoot }) {
   const shimDirectory = join(workRoot, 'qualification-cli-shim');
   await mkdir(shimDirectory, { mode: 0o700 });
   const shimPath = join(shimDirectory, 'breakdown');
@@ -436,6 +443,26 @@ process.exit(result.status === null ? 99 : result.status);
 `;
   await writeFile(shimPath, source, { mode: 0o700 });
   await runCommand('node', ['--check', shimPath], { cwd: workRoot, env: process.env });
+  for (const [processName, command] of Object.entries(FIXED_PROCESS_COMMANDS)) {
+    const target = join(projectDirectory, 'tools', FIXED_PROCESS_SCRIPTS[processName]);
+    const fixedSource = `#!/usr/bin/env node
+const { spawnSync } = require('node:child_process');
+
+if (process.argv.length !== 2) {
+  process.stderr.write('Fixed qualification command rejected arguments.\\n');
+  process.exit(96);
+}
+const result = spawnSync(process.execPath, [${JSON.stringify(target)}], {
+  env: process.env,
+  stdio: 'inherit',
+});
+if (result.error) throw result.error;
+process.exit(result.status === null ? 99 : result.status);
+`;
+    const fixedPath = join(shimDirectory, command);
+    await writeFile(fixedPath, fixedSource, { mode: 0o700 });
+    await runCommand('node', ['--check', fixedPath], { cwd: workRoot, env: process.env });
+  }
   return { shimDirectory, shimPath };
 }
 
@@ -1086,7 +1113,7 @@ export async function executeAgentHostQualification({
     const executionSession = randomUUID();
     const copilotHome = join(workRoot, 'copilot-home');
     await mkdir(copilotHome, { mode: 0o700 });
-    const cliShim = await createQualificationCliShim({ workRoot });
+    const commandShims = await createQualificationCommandShims({ projectDirectory, workRoot });
     const fixtureInputs = [
       ['brief.md', await readFile(join(projectDirectory, 'inputs', 'brief.md'), 'utf8')],
       ['control.txt', await readFile(join(projectDirectory, 'inputs', 'control.txt'), 'utf8')],
@@ -1140,7 +1167,6 @@ export async function executeAgentHostQualification({
         row,
         runId: runIdBefore,
         skillSourceDirectory: installation.skillSourceDirectory,
-        terminalReaderPath: join(projectDirectory, 'tools', 'read-terminal-result.mjs'),
       });
       let result;
       try {
@@ -1188,7 +1214,7 @@ export async function executeAgentHostQualification({
               BREAKDOWN_QUALIFICATION_PREFLIGHT_SKILL: STAGE_PREFLIGHT_SKILL[procedure.id],
               BREAKDOWN_QUALIFICATION_PROJECT: projectDirectory,
               BREAKDOWN_QUALIFICATION_REAL_CLI: join(installation.binDirectory, 'breakdown'),
-              PATH: `${cliShim.shimDirectory}:${installation.binDirectory}:${environment.PATH ?? ''}`,
+              PATH: `${commandShims.shimDirectory}:${installation.binDirectory}:${environment.PATH ?? ''}`,
               BREAKDOWN_QUALIFICATION_TERMINAL_LOG: terminalAuditPath,
               BREAKDOWN_QUALIFICATION_TERMINAL_RESULT: terminalBoundary?.path ?? '',
               BREAKDOWN_QUALIFICATION_TERMINAL_SHA256: terminalBoundary?.sha256 ?? '',

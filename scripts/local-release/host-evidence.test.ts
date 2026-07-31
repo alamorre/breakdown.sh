@@ -1,10 +1,13 @@
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createQualificationCommandShims } from './agent-host-qualification.mjs';
 import {
   GUIDED_HOST_JOURNEY_STAGES,
   GUIDED_HOST_FULL_MARK_DIMENSIONS,
@@ -36,6 +39,7 @@ const captureEnvironment = {
   GITHUB_RUN_ATTEMPT: '2',
   BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
 };
+const execFileAsync = promisify(execFile);
 
 const executionSessionId = 'github-actions:12345:1:execute:linux';
 const reviewSessionId = 'github-actions:12345:1:review:linux';
@@ -382,6 +386,45 @@ describe('authenticated host support workflow', () => {
 });
 
 describe('authenticated host evidence capture workflow', () => {
+  it('should expose argument-free fixed commands without granting arbitrary node execution', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'breakdown-command-shims-'));
+    temporaryDirectories.push(root);
+    const projectDirectory = join(root, 'qualification-project');
+    const toolsDirectory = join(projectDirectory, 'tools');
+    await mkdir(toolsDirectory, { recursive: true });
+    for (const script of [
+      'install-candidate-skills.mjs',
+      'run-setup-preflight.mjs',
+      'verify-control.mjs',
+      'write-breakdown-oracle.mjs',
+      'read-terminal-result.mjs',
+    ]) {
+      await writeFile(
+        join(toolsDirectory, script),
+        `import { appendFileSync } from 'node:fs';\nappendFileSync(process.env.FIXED_TEST_LOG, ${JSON.stringify(`${script}\n`)});\n`,
+      );
+    }
+    const logPath = join(root, 'fixed-command.log');
+    const { shimDirectory } = await createQualificationCommandShims({
+      projectDirectory,
+      workRoot: root,
+    });
+    const installCommand = join(shimDirectory, 'breakdown-qualification-install-skills');
+
+    await execFileAsync(installCommand, [], {
+      env: { ...process.env, FIXED_TEST_LOG: logPath },
+    });
+    await expect(readFile(logPath, 'utf8')).resolves.toBe('install-candidate-skills.mjs\n');
+    await expect(
+      execFileAsync(installCommand, ['unexpected'], {
+        env: { ...process.env, FIXED_TEST_LOG: logPath },
+      }),
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining('Fixed qualification command rejected arguments.'),
+    });
+    await expect(readFile(logPath, 'utf8')).resolves.toBe('install-candidate-skills.mjs\n');
+  });
+
   it('should conduct and independently review unattended rows on GitHub-hosted Linux and macOS', async () => {
     const workflow = await readFile(
       join(repositoryRoot, '.github', 'workflows', 'local-host-evidence-capture.yml'),
@@ -453,6 +496,9 @@ describe('authenticated host evidence capture workflow', () => {
       'run-setup-preflight.mjs',
       'exactly two process calls',
       'do not spend this stage reading or enumerating its manifest or references',
+      'breakdown-qualification-install-skills',
+      'breakdown-qualification-setup-preflight',
+      'Fixed qualification command rejected arguments.',
       'Sanitized visible interaction:',
       '[...sanitized middle omitted...]',
       'sanitizeHostEvidenceText',
@@ -482,6 +528,7 @@ describe('authenticated host evidence capture workflow', () => {
     );
     expect(executionHarness).toContain('`--add-dir=${projectDirectory}`');
     expect(executionHarness.match(/--add-dir=/g)).toHaveLength(1);
+    expect(executionHarness).not.toContain('--allow-tool=shell(node');
     expect(harness.match(/--add-dir=/g)).toHaveLength(2);
     expect(harness).toContain("status: 'replace-with-passed-or-failed'");
     expect(harness).toContain('score: null');
