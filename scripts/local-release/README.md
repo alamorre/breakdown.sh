@@ -104,10 +104,12 @@ generate scores, impersonate the reviewer, or mark observed behavior as passed.
 
 GitHub has no documented CLI or REST endpoint for uploading a local directory as an Actions
 artifact outside a runner job. Ingress therefore uses a one-job, ephemeral self-hosted runner on
-the trusted machine holding the private row. The job runs only the workflow from `main`, executes
-no checkout or repository script, and uploads the selected directory with
-`actions/upload-artifact@v7`. Register the current verified GitHub Actions runner package shown
-under **Settings → Actions → Runners → New self-hosted runner**, then configure it:
+the trusted machine holding the private row. The job runs only the workflow from `main`, checks it
+out without persisted credentials, and runs only the tested binder to validate the submission,
+bind current-run storage identity, and stage the submission plus its declared regular retained
+files. It excludes undeclared files and uploads the staged directory with a commit-pinned
+`actions/upload-artifact` v7 release. Register the current verified GitHub Actions runner package
+shown under **Settings → Actions → Runners → New self-hosted runner**, then configure it:
 
 ```sh
 registration_token="$(
@@ -143,10 +145,10 @@ gh api "repos/alamorre/breakdown.sh/actions/runs/$capture_run_id/artifacts" \
   --jq '.artifacts[] | {id, name, digest, expires_at}'
 ```
 
-The ingress job creates one seven-day raw artifact. A separate GitHub-hosted job downloads that
-exact same-run artifact and candidate `8774500090`, rejects missing or multiple submissions,
-rejects changed retained bytes and conflicting storage identity, and copies only the declared row
-files. It binds:
+The ingress job includes declared dot-prefixed evidence, excludes every undeclared file, and
+creates one seven-day raw artifact. A separate GitHub-hosted job downloads that exact same-run
+artifact and candidate `8774500090`, rechecks the single submission, retained bytes, and storage
+identity, and copies only the declared row files. The binder sets:
 
 - `mechanism: github-actions-artifact-v7`;
 - the current `GITHUB_RUN_ID`;

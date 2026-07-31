@@ -24,6 +24,12 @@ const candidateDigest = 'a'.repeat(64);
 const corpusDigest = 'b'.repeat(64);
 const gitCommit = 'c'.repeat(40);
 const repositoryRoot = join(import.meta.dirname, '../..');
+const captureEnvironment = {
+  GITHUB_ACTIONS: 'true',
+  GITHUB_RUN_ID: '7654321',
+  GITHUB_RUN_ATTEMPT: '2',
+  BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
+};
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -308,7 +314,8 @@ describe('authenticated host evidence capture workflow', () => {
       'permissions:\n  actions: read\n  contents: read',
       "github.ref == 'refs/heads/main'",
       'runs-on: [self-hosted, breakdown-host-evidence-ingress]',
-      'actions/upload-artifact@v7',
+      'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
+      'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
       'raw_artifact_id: ${{ steps.upload-raw-row.outputs.artifact-id }}',
       'artifact-ids: 8774500090',
       'sha256:0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904',
@@ -317,7 +324,9 @@ describe('authenticated host evidence capture workflow', () => {
       'BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: breakdown-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}',
       'pnpm local:release:bind-host',
       'pnpm local:release:qualify-host',
+      'path: ${{ runner.temp }}/staged-raw-host-row',
       'path: ${{ runner.temp }}/qualified-host-row',
+      'include-hidden-files: true',
       'retention-days: 90',
     ];
     const forbiddenSnippets = [
@@ -336,15 +345,16 @@ describe('authenticated host evidence capture workflow', () => {
     expect(forbiddenSnippets.filter((snippet) => workflow.toLowerCase().includes(snippet))).toEqual(
       [],
     );
-    expect(workflow.match(/actions\/upload-artifact@v7/g)).toHaveLength(2);
+    expect(workflow).not.toMatch(/uses: [^\n]+@v\d/);
+    expect(workflow.match(/include-hidden-files: true/g)).toHaveLength(2);
+    expect(
+      workflow.indexOf(
+        'pnpm local:release:bind-host --raw-root "$RAW_ROW_REALPATH" --output "${{ runner.temp }}/staged-raw-host-row"',
+      ),
+    ).toBeLessThan(workflow.indexOf('id: upload-raw-row'));
     expect(workflow.indexOf('pnpm local:release:qualify-host')).toBeLessThan(
-      workflow.lastIndexOf('actions/upload-artifact@v7'),
+      workflow.lastIndexOf('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'),
     );
-    const ingressJob = workflow.slice(
-      workflow.indexOf('  ingest:'),
-      workflow.indexOf('  finalize:'),
-    );
-    expect(ingressJob).not.toContain('actions/checkout');
   });
 });
 
@@ -533,15 +543,11 @@ describe('bindHostEvidenceSubmission', () => {
       artifact_name: '',
     };
     await writeJson(row.submissionPath, rawSubmission);
+    await writeFile(join(row.rowRoot, 'undeclared-private.txt'), 'must not be staged\n');
     const outputDirectory = join(candidate.root, 'bound-row');
 
     await bindHostEvidenceSubmission({
-      environment: {
-        GITHUB_ACTIONS: 'true',
-        GITHUB_RUN_ID: '7654321',
-        GITHUB_RUN_ATTEMPT: '2',
-        BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
-      },
+      environment: captureEnvironment,
       outputDirectory,
       rawRoot: row.rowRoot,
     });
@@ -563,6 +569,9 @@ describe('bindHostEvidenceSubmission', () => {
         await readFile(join(row.rowRoot, retained.path)),
       );
     }
+    await expect(readFile(join(outputDirectory, 'undeclared-private.txt'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
 
   it.each([
@@ -575,24 +584,18 @@ describe('bindHostEvidenceSubmission', () => {
     async (field, conflictingValue) => {
       const candidate = await candidateFixture();
       const row = await submissionFixture({ root: candidate.root });
-      const environment = {
-        GITHUB_ACTIONS: 'true',
-        GITHUB_RUN_ID: '7654321',
-        GITHUB_RUN_ATTEMPT: '2',
-        BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
-      };
       row.submission.immutability = {
         mechanism: 'github-actions-artifact-v7',
-        workflow_run_id: environment.GITHUB_RUN_ID,
-        workflow_run_attempt: environment.GITHUB_RUN_ATTEMPT,
-        artifact_name: environment.BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME,
+        workflow_run_id: captureEnvironment.GITHUB_RUN_ID,
+        workflow_run_attempt: captureEnvironment.GITHUB_RUN_ATTEMPT,
+        artifact_name: captureEnvironment.BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME,
         [field]: conflictingValue,
       };
       await writeJson(row.submissionPath, row.submission);
 
       await expect(
         bindHostEvidenceSubmission({
-          environment,
+          environment: captureEnvironment,
           outputDirectory: join(candidate.root, 'rejected-row'),
           rawRoot: row.rowRoot,
         }),
@@ -605,18 +608,12 @@ describe('bindHostEvidenceSubmission', () => {
   it('should reject missing or multiple raw guided-host submissions', async () => {
     const candidate = await candidateFixture();
     const row = await submissionFixture({ root: candidate.root });
-    const environment = {
-      GITHUB_ACTIONS: 'true',
-      GITHUB_RUN_ID: '7654321',
-      GITHUB_RUN_ATTEMPT: '2',
-      BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
-    };
     const emptyRoot = join(candidate.root, 'empty-raw-root');
     await mkdir(emptyRoot);
 
     await expect(
       bindHostEvidenceSubmission({
-        environment,
+        environment: captureEnvironment,
         outputDirectory: join(candidate.root, 'missing-output'),
         rawRoot: emptyRoot,
       }),
@@ -627,7 +624,7 @@ describe('bindHostEvidenceSubmission', () => {
     await writeJson(join(duplicateRoot, 'guided-host-submission.json'), row.submission);
     await expect(
       bindHostEvidenceSubmission({
-        environment,
+        environment: captureEnvironment,
         outputDirectory: join(candidate.root, 'duplicate-output'),
         rawRoot: row.rowRoot,
       }),

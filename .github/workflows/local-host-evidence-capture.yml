@@ -20,7 +20,23 @@ jobs:
     timeout-minutes: 10
     outputs:
       raw_artifact_id: ${{ steps.upload-raw-row.outputs.artifact-id }}
+    env:
+      BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: breakdown-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Check out the trusted ingress helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Install exact Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.13.0
+          package-manager-cache: false
+
       - name: Validate the operator-selected row directory
         env:
           RAW_ROW_PATH: ${{ inputs.raw_row_path }}
@@ -40,24 +56,23 @@ jobs:
             echo "raw_row_path must directly contain guided-host-submission.json." >&2
             exit 1
           fi
-          submission_count="$(find "$raw_row_realpath" -type f -name guided-host-submission.json -print | awk 'END { print NR }')"
-          if [[ "$submission_count" != 1 ]]; then
-            echo "raw_row_path must contain exactly one guided-host-submission.json." >&2
-            exit 1
-          fi
           {
             echo "RAW_ROW_REALPATH<<BREAKDOWN_PATH"
             echo "$raw_row_realpath"
             echo "BREAKDOWN_PATH"
           } >> "$GITHUB_ENV"
 
+      - name: Bind and stage only the declared raw row files
+        run: pnpm local:release:bind-host --raw-root "$RAW_ROW_REALPATH" --output "${{ runner.temp }}/staged-raw-host-row"
+
       - name: Upload the immutable raw row
         id: upload-raw-row
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: breakdown-host-evidence-raw-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.RAW_ROW_REALPATH }}
+          path: ${{ runner.temp }}/staged-raw-host-row
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
 
   finalize:
@@ -75,15 +90,15 @@ jobs:
       CANDIDATE_WORKFLOW_RUN_ID: '30580700387'
     steps:
       - name: Check out the host evidence finalizer
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Install exact Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.13.0
           cache: pnpm
@@ -116,14 +131,14 @@ jobs:
           fi
 
       - name: Download the exact retained candidate
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: 8774500090
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/breakdown-candidate
 
       - name: Download the immutable raw row
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: ${{ needs.ingest.outputs.raw_artifact_id }}
           github-token: ${{ github.token }}
@@ -149,9 +164,10 @@ jobs:
           fi
 
       - name: Retain the complete qualified host row
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME }}
           path: ${{ runner.temp }}/qualified-host-row
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 90
