@@ -445,11 +445,13 @@ describe('authenticated host evidence capture workflow', () => {
       '--no-auto-update',
       '--deny-tool=url',
       '--disallow-temp-dir',
+      'environment.GITHUB_WORKSPACE ?? dirname(outputDirectory)',
       'BREAKDOWN_QUALIFICATION_SKILL_SOURCE',
       'agent-workspaces',
       'install-candidate-skills.mjs',
       'read-terminal-result.mjs',
       'run-setup-preflight.mjs',
+      'exactly two process calls',
       'sanitizeHostEvidenceText',
       'deterministicStageObservation',
       'randomUUID',
@@ -470,6 +472,7 @@ describe('authenticated host evidence capture workflow', () => {
     expect(harness).not.toContain('function sessionIdentity');
     expect(harness).not.toContain('COPILOT_SKILLS_DIRS');
     expect(harness).not.toContain("preflight.mjs')}:*");
+    expect(harness).not.toContain('join(outputDirectory, `.session-');
     expect(
       harness.slice(0, harness.indexOf('export async function reviewAgentHostQualification')),
     ).not.toContain('--add-dir');

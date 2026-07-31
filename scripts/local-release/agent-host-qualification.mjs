@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { arch, platform, release, type, version } from 'node:os';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 
 import { filesBelow, sha256 } from './filesystem.mjs';
 import {
@@ -231,7 +231,7 @@ ${procedure.id === 'author' ? `The exact fixture Inputs are:\n\n${fixtureInputs}
 ${procedure.id === 'hostile-content' ? `The exact hostile fixture is:\n\n${fixtureInputs}` : ''}
 ${
   procedure.id === 'install'
-    ? `The harness selected the exact candidate-derived skill source ${skillSourceDirectory}. Invoke setup-breakdown and use the fixed command node ${join(projectDirectory, 'tools', 'install-candidate-skills.mjs')} to install that exact canonical set, then run its full preflight. Do not substitute another source or command.`
+    ? `The reviewed install operation already authorizes exactly two process calls. Invoke setup-breakdown, then execute node ${join(projectDirectory, 'tools', 'install-candidate-skills.mjs')} exactly once. After it succeeds, execute node ${join(projectDirectory, 'tools', 'run-setup-preflight.mjs')} exactly once. Do not ask for another approval, reverse their order, invoke either command twice, call preflight.mjs directly, or substitute another source or command. The harness selected the exact candidate-derived skill source ${skillSourceDirectory}.`
     : ''
 }
 ${
@@ -784,6 +784,14 @@ async function readPreflightAudit(path, stage, authorization) {
     .filter(Boolean)
     .map((line) => JSON.parse(line));
   const expected = authorization.allowed_fixed_processes.includes('setup-preflight');
+  const auditSummary = records.map((record) => ({
+    process: record.process,
+    mode: record.mode,
+    skill: record.skill,
+    exit_status: record.exit_status,
+    stdout_sha256: record.stdout_sha256,
+    stderr_sha256: record.stderr_sha256,
+  }));
   invariant(
     expected
       ? records.length === 1 &&
@@ -794,7 +802,7 @@ async function readPreflightAudit(path, stage, authorization) {
           /^[0-9a-f]{64}$/.test(records[0].stdout_sha256) &&
           /^[0-9a-f]{64}$/.test(records[0].stderr_sha256)
       : records.length === 0,
-    `${stage} did not preserve the exact fixed setup preflight boundary.`,
+    `${stage} did not preserve the exact fixed setup preflight boundary: ${JSON.stringify(auditSummary)}`,
   );
   return records;
 }
@@ -1026,7 +1034,17 @@ export async function executeAgentHostQualification({
   const { manifest, digest, corpusRevision } = await readCandidateRelease(candidateDirectory);
   const provenance = await readCandidateProvenance(candidateDirectory, manifest.release_version);
   assertCandidateSource(provenance, sourceCommit);
-  const workRoot = await mkdtemp(join(dirname(outputDirectory), '.breakdown-host-execution-'));
+  const workParent = environment.GITHUB_WORKSPACE ?? dirname(outputDirectory);
+  invariant(
+    isAbsolute(workParent),
+    'Agent-operated qualification requires an absolute isolated work parent.',
+  );
+  const workParentFacts = await lstat(workParent);
+  invariant(
+    workParentFacts.isDirectory() && !workParentFacts.isSymbolicLink(),
+    'Agent-operated qualification work parent must be a real directory.',
+  );
+  const workRoot = await mkdtemp(join(workParent, '.breakdown-host-execution-'));
   try {
     const kitDirectory = join(workRoot, 'kit');
     await writeHostQualificationTemplate({ candidateDirectory, outputDirectory: kitDirectory });
@@ -1081,7 +1099,7 @@ export async function executeAgentHostQualification({
       const interactionPath = `interaction-${ordinal}-${procedure.id}.md`;
       const actionPath = `actions-${ordinal}-${procedure.id}.json`;
       const artifactPath = `artifacts-${ordinal}-${procedure.id}.json`;
-      const sharePath = join(outputDirectory, `.session-${ordinal}-${procedure.id}.md`);
+      const sharePath = join(workRoot, `.session-${ordinal}-${procedure.id}.md`);
       const commandAuditPath = join(workRoot, `commands-${ordinal}-${procedure.id}.jsonl`);
       const controlAuditPath = join(workRoot, `control-${ordinal}-${procedure.id}.jsonl`);
       const authorAuditPath = join(workRoot, `author-${ordinal}-${procedure.id}.jsonl`);
