@@ -315,7 +315,7 @@ function validatePlatformIndex(index, candidate) {
 function validateHostIndex(index, candidate) {
   validateBoundEvidence(
     index,
-    'breakdown.guided-host-evidence-index.v1',
+    'breakdown.guided-host-evidence-index.v2',
     'Host evidence index',
     candidate,
   );
@@ -470,6 +470,8 @@ exact full version.
 - ${hostIndex.supported_hosts.length} exact Agent Host rows are Supported.
 - Other capable Agent Hosts remain Compatible unless their exact row appears in the attached
   generated support evidence.
+- Supported Host usability qualification was independently agent-reviewed from retained visible
+  evidence in fresh sessions; it is not human usability research.
 
 The attached publication manifest, evidence indexes, checksums, SBOM, provenance inputs, legal
 material, and human approval are the complete release evidence.
@@ -541,6 +543,7 @@ export async function prepareLocalPublication({
   const platformFile = 'breakdown-platform-evidence-index.json';
   const approvalFile = 'breakdown-human-release-approval.json';
   const tagFile = 'breakdown-signed-tag-evidence.json';
+  const hostBindingFile = 'breakdown-signed-tag-host-index-binding.json';
   await copyNamedFile(platformIndexPath, outputDirectory, platformFile);
   await copyNamedFile(hostIndexPath, outputDirectory, hostFile);
   await copyNamedFile(approvalPath, outputDirectory, approvalFile);
@@ -548,6 +551,40 @@ export async function prepareLocalPublication({
   for (const file of supportFiles) {
     await copyNamedFile(join(supportDirectory, file), outputDirectory, file);
   }
+  const hostBinding = {
+    schema_version: 'breakdown.signed-tag-host-index-binding.v1',
+    release_version: candidate.releaseVersion,
+    candidate_digest: candidate.digest,
+    source: candidate.provenance.source,
+    signed_tag: {
+      tag: candidate.tag,
+      tag_object_sha: tagInput.value.tag_object_sha,
+      target_commit: tagInput.value.target.sha,
+      evidence: { file: tagFile, sha256: sha256(tagInput.bytes) },
+    },
+    host_index: {
+      file: hostFile,
+      sha256: hostDigest,
+      source: hostInput.value.source,
+      boundary: hostInput.value.release_binding.boundary,
+      rows_unchanged: true,
+    },
+    attestation: {
+      file: 'breakdown-host-evidence-index.attestation.json',
+      sha256: sha256(
+        await readFile(
+          join(supportDirectory, 'breakdown-host-evidence-index.attestation.json'),
+        ),
+      ),
+      signer_workflow: `${candidate.provenance.source.repository}/.github/workflows/local-host-support.yml`,
+      source_digest: candidate.provenance.source.git_commit,
+      github_hosted_required: true,
+    },
+  };
+  await writeFile(
+    join(outputDirectory, hostBindingFile),
+    `${JSON.stringify(hostBinding, null, 2)}\n`,
+  );
   const notesFile = `breakdown-release-notes-${candidate.releaseVersion}.md`;
   await writeFile(
     join(outputDirectory, notesFile),
@@ -565,6 +602,7 @@ export async function prepareLocalPublication({
     ['breakdown-host-evidence-index.attestation.json', 'host-index-attestation'],
     [approvalFile, 'human-release-approval'],
     [tagFile, 'signed-tag-evidence'],
+    [hostBindingFile, 'signed-tag-host-index-binding'],
     [notesFile, 'release-notes'],
   ]);
   const payloadFiles = [...roles.keys()].sort();
@@ -603,6 +641,10 @@ export async function prepareLocalPublication({
       host_index: { file: hostFile, sha256: sha256(hostInput.bytes) },
       human_approval: { file: approvalFile, sha256: sha256(approvalInput.bytes) },
       signed_tag: { file: tagFile, sha256: sha256(tagInput.bytes) },
+      signed_tag_host_index_binding: {
+        file: hostBindingFile,
+        sha256: sha256(await readFile(join(outputDirectory, hostBindingFile))),
+      },
     },
     license_scope: candidate.manifest.license_scope,
     publication: {
@@ -894,8 +936,6 @@ export async function verifyPublishedLocalRelease({
       join(releaseAssetsDirectory, 'breakdown-host-evidence-index.attestation.json'),
       '--signer-workflow',
       `${repository}/.github/workflows/local-host-support.yml`,
-      '--source-ref',
-      `refs/tags/${tag}`,
       '--source-digest',
       candidate.provenance.source.git_commit,
       '--deny-self-hosted-runners',

@@ -122,3 +122,13 @@ The complete deterministic core, CLI, package, disk, crash, concurrency, and
 applicable security suite MUST run against actual candidate artifacts on every
 maintained platform tuple and retain exact OS, architecture, Node patch,
 filesystem, runner, corpus revision, and candidate digest.
+
+### REQ-PKG-017
+
+The host evidence index MUST be produced and attested against the exact
+platform-qualified candidate and source before the stable tag. The protected
+publication ceremony MUST retain its bytes unchanged, verify its dedicated
+GitHub-hosted signer attestation at the candidate source digest, and create an
+explicit signed-tag/index binding record. This automated host gate MUST NOT
+weaken or impersonate any human legal, signing, npm ownership, provenance, or
+final-publication authority required by REQ-PKG-014.

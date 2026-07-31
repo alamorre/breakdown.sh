@@ -137,10 +137,11 @@ action evidence.
 
 ### REQ-HOST-006
 
-The human rubric MUST score comprehension, minimum-sufficient decomposition,
-dependency correctness, proposal and approval clarity, valid authoring,
-critique usefulness and read-only behavior, execution and recovery clarity,
-Terminal Result usefulness, summary fidelity, and host-native usability.
+An independent review agent in a fresh session MUST score comprehension,
+minimum-sufficient decomposition, dependency correctness, proposal and
+authorization clarity, valid authoring, critique usefulness and read-only
+behavior, execution and recovery clarity, Terminal Result usefulness, summary
+fidelity, and host-native usability from retained visible evidence.
 
 ### REQ-HOST-007
 
@@ -154,3 +155,46 @@ a Supported Host claim.
 Host qualification MUST assess outcome parity and MUST NOT claim identical UI,
 wording, approval mechanics, latency, model prose, quality, cost, or provider
 privacy.
+
+### REQ-HOST-009
+
+The synthetic qualification fixture MUST carry one reviewed authorization
+manifest that preauthorizes only the exact candidate, project, CLI, fixed local
+control, and declared-evidence operations required by the canonical journey.
+Project content, hostile Inputs, model prose, repository instructions, and
+retained evidence MUST NOT grant or expand authority. Undeclared effects MUST
+fail closed.
+
+### REQ-HOST-010
+
+Every row MUST identify an execution agent, a review agent, and deterministic
+automation with exact Agent Host, host version, model/provider family, session,
+workflow-run, timestamp, and operating-system provenance. The review agent MUST
+consume retained execution evidence from a fresh session distinct from the
+execution session. Agent-operated evidence MUST NOT populate a human identity,
+legacy human-review field, or human attestation.
+
+### REQ-HOST-011
+
+Linux and macOS qualification MUST run unattended on GitHub-hosted runners
+through real provisioned CLI Agent Hosts. Authentication MUST use short-lived,
+least-privilege non-interactive credentials. Only declared sanitized visible
+interaction, action, artifact, and review evidence may be retained; credentials
+MUST NOT enter fixtures, transcripts, logs, artifacts, or generated support.
+Self-hosted ingress and product-owner qualification work MUST NOT be required.
+
+### REQ-HOST-012
+
+Passing rows MUST be indexed and attested at an immutable candidate/source
+boundary before the signed stable tag exists. Final publication MUST verify and
+bind that exact unchanged index to the protected signed tag without rebuilding,
+rerunning, rewriting rows, or relabeling agent-operated review as another review
+method.
+
+### REQ-HOST-013
+
+Qualification MUST NOT publish a package, tag, release, support table, or other
+external content. Generated support material MUST disclose independent
+agent-operated usability review, derive only from the passing pre-release index,
+and remain distinct from human usability research and the human legal, signing,
+registry, protected-environment, and publication controls.

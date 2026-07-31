@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breakdown.sh/schemas/breakdown.guided-host-evidence.v2.schema.json",
+  "title": "Breakdown independently agent-reviewed guided-host evidence",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "release_version",
+    "status",
+    "host",
+    "operating_system",
+    "transport",
+    "breakdown_version",
+    "model",
+    "participants",
+    "candidate",
+    "source",
+    "journey",
+    "review",
+    "rubric",
+    "hostile_content",
+    "outcome_parity",
+    "retained_evidence",
+    "immutability"
+  ],
+  "not": { "required": ["human_review"] },
+  "properties": {
+    "schema_version": { "const": "breakdown.guided-host-evidence.v2" },
+    "release_version": { "type": "string", "minLength": 1 },
+    "status": { "const": "passed" },
+    "host": { "type": "object" },
+    "operating_system": { "type": "object" },
+    "transport": { "enum": ["cli", "mcp"] },
+    "breakdown_version": { "type": "string", "minLength": 1 },
+    "model": { "type": "object" },
+    "participants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_agent", "review_agent", "automation"],
+      "properties": {
+        "execution_agent": {
+          "allOf": [
+            { "$ref": "breakdown.guided-host-participant.v1.schema.json" },
+            { "properties": { "role": { "const": "execution-agent" }, "kind": { "const": "agent" } } }
+          ]
+        },
+        "review_agent": {
+          "allOf": [
+            { "$ref": "breakdown.guided-host-participant.v1.schema.json" },
+            { "properties": { "role": { "const": "review-agent" }, "kind": { "const": "agent" } } }
+          ]
+        },
+        "automation": {
+          "allOf": [
+            { "$ref": "breakdown.guided-host-participant.v1.schema.json" },
+            { "properties": { "role": { "const": "automation" }, "kind": { "const": "automation" } } }
+          ]
+        }
+      }
+    },
+    "candidate": { "type": "object" },
+    "source": { "type": "object" },
+    "journey": { "type": "object" },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "reviewed_at", "attestation", "evidence"],
+      "properties": {
+        "method": { "const": "independent-agent" },
+        "reviewed_at": { "type": "string", "format": "date-time" },
+        "attestation": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "rubric": { "type": "object" },
+    "hostile_content": { "type": "object" },
+    "outcome_parity": { "type": "object" },
+    "retained_evidence": { "type": "array", "minItems": 1 },
+    "immutability": { "type": "object" }
+  }
+}

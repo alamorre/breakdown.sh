@@ -42,7 +42,7 @@
       "id": "DOC-005",
       "requirements": ["REQ-DOC-005"],
       "oracle_type": "byte",
-      "oracle": "Frozen outputs compare with reviewed literal bytes; structural/effect/human rows occur only at their settled observable seams."
+      "oracle": "Frozen outputs compare with reviewed literal bytes; structural, effect, independent-agent-review, and human release rows occur only at their settled observable seams."
     },
     {
       "id": "DOC-006",

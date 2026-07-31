@@ -29,7 +29,9 @@ non-normative.
 Every normative requirement MUST have a stable non-reused `REQ-<GROUP>-NNN`
 identifier and MUST map to at least one stable traceability row. Machine
 schemas own public shapes, machine catalogs own limits and enumerated CLI/MCP
-facts, and prose owns meanings and invariants.
+facts, and prose owns meanings and invariants. Guided-host evidence schemas MUST
+distinguish execution-agent, review-agent, automation, and human identities while
+forbidding human identities and legacy human attestations in agent-operated rows.
 
 ### REQ-DOC-004
 
@@ -43,8 +45,8 @@ oracle type, environment applicability, gate, and retained evidence.
 Byte oracles MUST be used for frozen serialization, hashes, golden records,
 stdout and protocol framing, and packaged assets. Expected bytes MUST be
 reviewed literals independent of implementation output. Structural, effect,
-and human oracles MUST be used only at the settled dispatcher, packaged
-process, guided-product, and release-artifact seams.
+and independent agent-review oracles MUST be used only at the settled
+dispatcher, packaged process, guided-product, and release-artifact seams.
 
 ### REQ-DOC-006
 

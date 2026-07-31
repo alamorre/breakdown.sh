@@ -272,7 +272,7 @@ async function publicationFixture() {
   }));
   const hostIndexPath = join(root, 'breakdown-host-evidence-index.json');
   await writeJson(hostIndexPath, {
-    schema_version: 'breakdown.guided-host-evidence-index.v1',
+    schema_version: 'breakdown.guided-host-evidence-index.v2',
     release_version: releaseVersion,
     status: 'passed',
     candidate_digest: { algorithm: 'SHA-256', content: candidateDigest },
@@ -283,6 +283,17 @@ async function publicationFixture() {
     source: {
       repository: 'https://github.com/alamorre/breakdown.sh',
       git_commit: gitCommit,
+    },
+    qualification: {
+      method: 'agent-operated',
+      independent_review: true,
+      authorization: 'reviewed-workflow-configuration',
+    },
+    release_binding: {
+      boundary: 'candidate-source',
+      signed_tag: null,
+      final_binding_required: true,
+      rows_must_remain_unchanged: true,
     },
     coverage: {
       guided_cli_operating_systems: ['linux', 'macos'],
@@ -508,6 +519,33 @@ describe('prepareLocalPublication', () => {
       JSON.parse(await readFile(fixture.platformIndexPath, 'utf8')).rows,
     );
     expect(manifest.supported_hosts).toEqual(fixture.supportedHosts);
+    expect(manifest.evidence.signed_tag_host_index_binding.file).toBe(
+      'breakdown-signed-tag-host-index-binding.json',
+    );
+    const hostBinding = JSON.parse(
+      await readFile(
+        join(fixture.outputDirectory, 'breakdown-signed-tag-host-index-binding.json'),
+        'utf8',
+      ),
+    );
+    expect(hostBinding).toMatchObject({
+      schema_version: 'breakdown.signed-tag-host-index-binding.v1',
+      release_version: releaseVersion,
+      candidate_digest: { content: fixture.candidateDigest },
+      signed_tag: {
+        tag: 'breakdown-local-v1.0.0',
+        target_commit: gitCommit,
+      },
+      host_index: {
+        boundary: 'candidate-source',
+        rows_unchanged: true,
+      },
+      attestation: {
+        file: 'breakdown-host-evidence-index.attestation.json',
+        signer_workflow:
+          'https://github.com/alamorre/breakdown.sh/.github/workflows/local-host-support.yml',
+      },
+    });
   });
 
   it('should keep publication closed when one human gate is not approved', async () => {
@@ -599,7 +637,7 @@ describe('prepareLocalPublication', () => {
       schema_version: 'breakdown.publication-inspection.v1',
       release_version: releaseVersion,
       status: 'passed',
-      public_assets: 21,
+      public_assets: 22,
     });
   });
 
@@ -787,9 +825,9 @@ platform-index-artifact-id: 5678`,
       status: 'passed',
       github: {
         immutable: true,
-        release_assets: 21,
-        verified_assets: 21,
-        asset_provenance_attestations: 21,
+        release_assets: 22,
+        verified_assets: 22,
+        asset_provenance_attestations: 22,
       },
       npm: {
         dist_tag: 'latest',

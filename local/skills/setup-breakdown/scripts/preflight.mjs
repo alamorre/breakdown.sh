@@ -222,8 +222,6 @@ async function verifyHostEvidenceAttestation(indexPath, bundlePath) {
       HOST_EVIDENCE_REPOSITORY,
       '--signer-workflow',
       HOST_EVIDENCE_SIGNER_WORKFLOW,
-      '--source-ref',
-      `refs/tags/breakdown-local-v${RELEASE_VERSION}`,
       '--source-digest',
       claimedIndex.source.git_commit,
       '--format',
@@ -517,10 +515,15 @@ async function readHostEvidenceIndex(path, candidateBinding) {
   ].sort();
   const supportedHosts = (index.rows ?? []).map(supportedHostRow);
   if (
-    index?.schema_version !== 'breakdown.guided-host-evidence-index.v1' ||
+    index?.schema_version !== 'breakdown.guided-host-evidence-index.v2' ||
     index?.release_version !== RELEASE_VERSION ||
     index?.status !== 'passed' ||
     index?.gate?.satisfied !== true ||
+    index?.qualification?.method !== 'agent-operated' ||
+    index?.qualification?.independent_review !== true ||
+    index?.release_binding?.boundary !== 'candidate-source' ||
+    index?.release_binding?.signed_tag !== null ||
+    index?.release_binding?.rows_must_remain_unchanged !== true ||
     index?.candidate_digest?.algorithm !== 'SHA-256' ||
     index?.candidate_digest?.content !== candidateBinding.digest.content ||
     JSON.stringify(index?.source) !== JSON.stringify(candidateBinding.source) ||
@@ -880,7 +883,7 @@ async function main() {
         resultCheck(
           'host_evidence_attestation',
           'pass',
-          'GitHub authenticated the index, signer workflow, repository, and immutable release tag.',
+          'GitHub authenticated the pre-release index, candidate source digest, repository, and dedicated GitHub-hosted signer workflow.',
         ),
       );
     } catch (error) {

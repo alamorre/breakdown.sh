@@ -1,10 +1,14 @@
-name: Breakdown Local authenticated host support
+name: Breakdown Local pre-release authenticated host support
 
 on:
   workflow_dispatch:
     inputs:
       candidate_artifact_id:
         description: Immutable artifact ID for the exact Breakdown Local candidate
+        required: true
+        type: string
+      platform_index_artifact_id:
+        description: Immutable artifact ID for the matching passing platform index
         required: true
         type: string
       evidence_artifact_ids:
@@ -20,21 +24,20 @@ permissions:
 
 jobs:
   index-and-attest:
-    name: Index and attest exact passing host evidence
-    if: ${{ startsWith(github.ref, 'refs/tags/breakdown-local-v') }}
+    name: Index and attest exact pre-release host evidence
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Check out the release-tag indexer
-        uses: actions/checkout@v6
+      - name: Check out the candidate-source indexer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Install exact Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.13.0
           cache: pnpm
@@ -44,14 +47,24 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download the immutable candidate
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/breakdown-candidate
 
+      - name: Download the matching passing platform index
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ inputs.platform_index_artifact_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/platform-index
+
+      - name: Verify the immutable candidate and platform boundary
+        run: pnpm local:release:verify-host-prerequisites --candidate "${{ runner.temp }}/breakdown-candidate" --platform-index "${{ runner.temp }}/platform-index/breakdown-platform-evidence-index.json"
+
       - name: Download every immutable guided-host row
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: ${{ inputs.evidence_artifact_ids }}
           github-token: ${{ github.token }}
@@ -60,19 +73,19 @@ jobs:
       - name: Verify, index, and generate support from passing rows
         run: pnpm local:release:index-hosts --candidate "${{ runner.temp }}/breakdown-candidate" --evidence-root "${{ runner.temp }}/guided-host-evidence" --output "${{ runner.temp }}/breakdown-host-evidence-index.json" --support-output "${{ runner.temp }}/breakdown-host-support"
 
-      - name: Attest the exact generated index
+      - name: Attest the immutable candidate/source-bound pre-release index
         id: attest
-        uses: actions/attest@v4
+        uses: actions/attest@b20087e3d92172ebf405cd2664f3fc3aa55348ea # v4.0.0
         with:
           subject-path: ${{ runner.temp }}/breakdown-host-evidence-index.json
 
-      - name: Add the Sigstore bundle to the support set
+      - name: Add the Sigstore bundle to the unchanged support set
         run: cp "${{ steps.attest.outputs.bundle-path }}" "${{ runner.temp }}/breakdown-host-support/breakdown-host-evidence-index.attestation.json"
 
-      - name: Retain the authenticated generated support set
-        uses: actions/upload-artifact@v7
+      - name: Retain the authenticated pre-release support set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: breakdown-host-support
+          name: breakdown-host-support-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/breakdown-host-evidence-index.json
             ${{ runner.temp }}/breakdown-host-support

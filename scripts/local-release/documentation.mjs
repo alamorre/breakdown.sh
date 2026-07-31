@@ -158,7 +158,11 @@ export async function buildDocumentation(expectedSkillManifestBytes) {
   const supportAuthorities = await authorityLines(
     [
       'local/contracts/conformance/hosts/fixtures/guided-journey.json',
-      'local/contracts/conformance/hosts/fixtures/human-rubric.json',
+      'local/contracts/conformance/hosts/fixtures/agent-review-rubric.json',
+      'local/contracts/conformance/hosts/fixtures/qualification-authorization.json',
+      'local/contracts/schemas/breakdown.guided-host-authorization.v1.schema.json',
+      'local/contracts/schemas/breakdown.guided-host-evidence.v2.schema.json',
+      'local/contracts/schemas/breakdown.guided-host-participant.v1.schema.json',
       'local/contracts/conformance/traceability/host.json',
       'local/contracts/specifications/skills-and-hosts.md',
       releaseMetadataPath,
@@ -428,6 +432,10 @@ An Agent Host with the required capabilities but no exact passing row is Compati
 A bare model or unprovisioned cloud surface is Unsupported. Support claims attach to an exact host
 surface, host version, operating system, transport, Breakdown version, artifact digest, and passing
 indexed evidence. Model/provider families do not become durable compatibility claims.
+
+Usability qualification is independently agent-reviewed from retained visible evidence in a fresh
+review session. It is not a claim of human usability research. Human legal, signing, registry,
+protected-environment, and final-publication controls remain separate release gates.
 
 Evidence rule: ${releaseMetadata.exact_evidence.claim}
 `,

@@ -525,13 +525,24 @@ describe('setup preflight executable', () => {
     }));
     const indexPath = join(copiedRoot, 'breakdown-host-evidence-index.json');
     const hostEvidenceIndex = {
-      schema_version: 'breakdown.guided-host-evidence-index.v1',
+      schema_version: 'breakdown.guided-host-evidence-index.v2',
       release_version: releaseVersion,
       status: 'passed',
       candidate_digest: candidate.digest,
       source: {
         repository: 'https://github.com/alamorre/breakdown.sh',
         git_commit: '1'.repeat(40),
+      },
+      qualification: {
+        method: 'agent-operated',
+        independent_review: true,
+        authorization: 'reviewed-workflow-configuration',
+      },
+      release_binding: {
+        boundary: 'candidate-source',
+        signed_tag: null,
+        final_binding_required: true,
+        rows_must_remain_unchanged: true,
       },
       coverage: {
         guided_cli_operating_systems: ['linux', 'macos'],
@@ -603,8 +614,6 @@ process.stdout.write('[{"verificationResult":{}}]\\n');
       'alamorre/breakdown.sh',
       '--signer-workflow',
       'alamorre/breakdown.sh/.github/workflows/local-host-support.yml',
-      '--source-ref',
-      `refs/tags/breakdown-local-v${releaseVersion}`,
       '--source-digest',
       '1'.repeat(40),
       '--format',

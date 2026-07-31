@@ -208,7 +208,6 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$HOST_SUPPORT_DIR/breakdown-host-evidence-index.attestation.json" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-host-support.yml" \
-            --source-ref "$GITHUB_REF" \
             --source-digest "$GITHUB_SHA" \
             --deny-self-hosted-runners
 

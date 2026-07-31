@@ -1,6 +1,10 @@
 {
-  "schema_version": "breakdown.guided-host-rubric.v1",
+  "schema_version": "breakdown.guided-host-agent-review-rubric.v1",
   "release_version": "1.0.0",
+  "review_method": "independent-agent",
+  "required_roles": ["execution-agent", "review-agent", "automation"],
+  "forbidden_roles": ["human"],
+  "fresh_session_required": true,
   "scale": { "minimum": 0, "maximum": 4 },
   "dimensions": [
     "comprehension",

@@ -48,11 +48,11 @@
         },
         {
           "path": "scripts/preflight.mjs",
-          "sha256": "48789d8af881b796e4ed68aec10a4e7a1432aaa094cf96b0f8657ffc905a2431"
+          "sha256": "925ba9fe9a4ce390355dfabd0f0c4bffd2d0b0ea7ab1229cf1ab9006608e50e3"
         },
         {
           "path": "SKILL.md",
-          "sha256": "20e5cef477f178b2e933d31770e69f29f17f65fb69a3a1d90859dafff3670018"
+          "sha256": "5c07fadfb59a389915a8114eada115ca83b0c49ab655cda41e594bef7179e8fe"
         },
         {
           "path": "THIRD_PARTY_NOTICES.md",

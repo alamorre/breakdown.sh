@@ -49,11 +49,12 @@ until they approve each mutation.
    directory, add `--host-evidence-index <absolute-index-path>`,
    `--host-evidence-bundle <absolute-bundle-path>`, and
    `--candidate-directory <absolute-candidate-path>`. The index is generated separately from the
-   unchanged candidate release. Preflight uses GitHub CLI attestation verification to bind its
-   digest to this repository, the release tag, and the dedicated signer workflow, then verifies
-   its coverage and derived rows against the installed skill bytes and every primary candidate
-   artifact. Without that authenticated exact set, full preflight cannot classify a host above
-   Compatible Host.
+   unchanged candidate release. Preflight uses GitHub CLI attestation verification to bind its digest
+   to this repository, the exact candidate source commit, and the dedicated GitHub-hosted signer
+   workflow, then verifies its coverage and derived rows against the installed skill bytes and every
+   primary candidate artifact. The stable publication ceremony separately binds those unchanged index
+   bytes to the protected signed tag. Without that authenticated exact set, full preflight cannot
+   classify a host above Compatible Host.
 
    Add `--mcp-command <command>` plus repeatable `--mcp-arg <argument>` only when the user selected
    MCP. Pass command and arguments separately; never interpolate project content into a shell

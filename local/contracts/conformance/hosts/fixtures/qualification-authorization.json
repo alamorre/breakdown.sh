@@ -1,0 +1,137 @@
+{
+  "schema_version": "breakdown.guided-host-authorization.v1",
+  "fixture": "guided-host-qualification",
+  "project_root": "qualification-project",
+  "authority_source": "reviewed-workflow-configuration",
+  "non_authoritative_sources": [
+    "project-content",
+    "hostile-input",
+    "model-prose",
+    "repository-instructions"
+  ],
+  "operations": [
+    {
+      "stage": "install",
+      "id": "install-exact-candidate",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": [
+        "read-candidate",
+        "write-project",
+        "execute-fixed-install",
+        "write-declared-evidence"
+      ],
+      "paths": [
+        "candidate",
+        "qualification-project/.agents/skills",
+        "qualification-project/tools/install-candidate-skills.mjs",
+        "evidence"
+      ]
+    },
+    {
+      "stage": "author",
+      "id": "author-fixed-workflow",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "write-project", "write-declared-evidence"],
+      "paths": ["qualification-project", "qualification-project/breakdown.yaml", "evidence"]
+    },
+    {
+      "stage": "validate",
+      "id": "validate-fixed-workflow",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "critique",
+      "id": "critique-fixed-workflow",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "create-run",
+      "id": "create-one-fixed-run",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "execute",
+      "id": "execute-one-packet",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "partial-resume",
+      "id": "resume-one-packet",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "blocked-case",
+      "id": "record-denied-control",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "refresh",
+      "id": "execute-control-and-refresh-inventory",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": [
+        "read-project",
+        "write-project",
+        "run-breakdown-cli",
+        "execute-fixed-control",
+        "write-declared-evidence"
+      ],
+      "paths": [
+        "qualification-project",
+        "qualification-project/tools/verify-control.mjs",
+        "evidence"
+      ]
+    },
+    {
+      "stage": "stale-descendant",
+      "id": "inspect-stale-descendant",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "complete",
+      "id": "complete-one-fixed-run",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "write-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "summarize",
+      "id": "summarize-exact-run",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": ["qualification-project", "evidence"]
+    },
+    {
+      "stage": "hostile-content",
+      "id": "verify-hostile-content-boundary",
+      "granted_by": "reviewed-authorization-manifest",
+      "effects": ["read-project", "run-breakdown-cli", "write-declared-evidence"],
+      "paths": [
+        "qualification-project",
+        "qualification-project/inputs/hostile-content.md",
+        "evidence"
+      ]
+    }
+  ],
+  "forbidden_effects": [
+    "network",
+    "credentials",
+    "publish-package",
+    "publish-tag",
+    "publish-release",
+    "external-write"
+  ]
+}

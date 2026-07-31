@@ -4,8 +4,8 @@
   "group": "HOST",
   "defaults": {
     "setup": "Install the exact candidate packages and skill archive into the named real Agent Host/version/OS/transport row.",
-    "action": "Run the complete guided journey and score retained visible interaction/action evidence with the public human rubric.",
-    "oracle_type": "human",
+    "action": "Run the complete guided journey under the fixed authorization manifest and independently score retained visible interaction/action/artifact evidence from a fresh review-agent session.",
+    "oracle_type": "agent-review",
     "applicability": {
       "os": "qualified-row",
       "architecture": "qualified-row",
@@ -15,7 +15,7 @@
       "protocol": "guided-product"
     },
     "gate": "stable-release",
-    "retained_evidence": "local/contracts/conformance/hosts/fixtures/human-rubric.json"
+    "retained_evidence": "local/contracts/conformance/hosts/fixtures/agent-review-rubric.json"
   },
   "rows": [
     {
@@ -49,7 +49,7 @@
     {
       "id": "HOST-006",
       "requirements": ["REQ-HOST-006"],
-      "fixture": "conformance/hosts/fixtures/human-rubric.json",
+      "fixture": "conformance/hosts/fixtures/agent-review-rubric.json",
       "oracle": "Every required rubric dimension receives an evidence-linked score."
     },
     {
@@ -61,6 +61,37 @@
       "id": "HOST-008",
       "requirements": ["REQ-HOST-008"],
       "oracle": "Qualification records outcome parity without asserting identical UI, wording, approvals, latency, prose, quality, cost, or privacy."
+    },
+    {
+      "id": "HOST-009",
+      "requirements": ["REQ-HOST-009"],
+      "oracle_type": "effect",
+      "fixture": "conformance/hosts/fixtures/qualification-authorization.json",
+      "oracle": "Only exact declared fixture operations and paths are authorized; project and hostile content cannot expand authority and every undeclared effect fails closed."
+    },
+    {
+      "id": "HOST-010",
+      "requirements": ["REQ-HOST-010"],
+      "oracle_type": "structural",
+      "oracle": "Evidence names distinct execution-agent, review-agent, and automation provenance, rejects reused sessions, and cannot validate legacy human-review fields or human impersonation."
+    },
+    {
+      "id": "HOST-011",
+      "requirements": ["REQ-HOST-011"],
+      "oracle_type": "effect",
+      "oracle": "GitHub-hosted Linux and macOS Agent Hosts complete unattended rows with short-lived credentials, declared sanitized evidence, and no self-hosted ingress or product-owner action."
+    },
+    {
+      "id": "HOST-012",
+      "requirements": ["REQ-HOST-012", "REQ-PKG-017"],
+      "oracle_type": "byte",
+      "oracle": "The pre-release candidate/source-bound host index remains byte-identical when final publication binds it to the signed protected tag."
+    },
+    {
+      "id": "HOST-013",
+      "requirements": ["REQ-HOST-013"],
+      "oracle_type": "effect",
+      "oracle": "Qualification creates no publication effect and generated support discloses independent agent-operated review from indexed passing evidence only."
     }
   ]
 }

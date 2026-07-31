@@ -22,6 +22,12 @@
     "transport",
     "breakdown-version",
     "artifact-digests",
+    "authorization-manifest",
+    "execution-agent-identity",
+    "review-agent-identity",
+    "automation-identity",
+    "timestamps",
+    "review-method",
     "visible-interactions",
     "visible-actions",
     "resulting-artifacts"

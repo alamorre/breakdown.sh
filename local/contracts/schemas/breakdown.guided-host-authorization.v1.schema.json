@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breakdown.sh/schemas/breakdown.guided-host-authorization.v1.schema.json",
+  "title": "Breakdown guided-host qualification authorization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fixture",
+    "project_root",
+    "authority_source",
+    "non_authoritative_sources",
+    "operations",
+    "forbidden_effects"
+  ],
+  "properties": {
+    "schema_version": { "const": "breakdown.guided-host-authorization.v1" },
+    "fixture": { "const": "guided-host-qualification" },
+    "project_root": { "const": "qualification-project" },
+    "authority_source": { "const": "reviewed-workflow-configuration" },
+    "non_authoritative_sources": {
+      "const": [
+        "project-content",
+        "hostile-input",
+        "model-prose",
+        "repository-instructions"
+      ]
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "id", "granted_by", "effects", "paths"],
+        "properties": {
+          "stage": {
+            "enum": [
+              "install",
+              "author",
+              "validate",
+              "critique",
+              "create-run",
+              "execute",
+              "partial-resume",
+              "blocked-case",
+              "refresh",
+              "stale-descendant",
+              "complete",
+              "summarize",
+              "hostile-content"
+            ]
+          },
+          "id": { "type": "string", "minLength": 1 },
+          "granted_by": { "const": "reviewed-authorization-manifest" },
+          "effects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "read-candidate",
+                "read-project",
+                "write-project",
+                "run-breakdown-cli",
+                "execute-fixed-install",
+                "execute-fixed-control",
+                "write-declared-evidence"
+              ]
+            }
+          },
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "forbidden_effects": {
+      "const": [
+        "network",
+        "credentials",
+        "publish-package",
+        "publish-tag",
+        "publish-release",
+        "external-write"
+      ]
+    }
+  }
+}

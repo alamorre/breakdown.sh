@@ -10,12 +10,15 @@ import {
   GUIDED_HOST_FULL_MARK_DIMENSIONS,
   GUIDED_HOST_RUBRIC_DIMENSIONS,
   HOST_OUTCOME_PARITY_EXCLUSIONS,
-  HOST_REVIEW_ATTESTATION,
+  HOST_AGENT_REVIEW_ATTESTATION,
   bindHostEvidenceSubmission,
   hashHostEvidence,
   indexHostEvidence,
   qualifyHostEvidence,
   rehearseHostQualification,
+  sanitizeHostEvidenceText,
+  validateQualificationAuthorization,
+  verifyHostQualificationPrerequisites,
   writeHostQualificationTemplate,
   writeHostSupportMaterial,
 } from './host-evidence.mjs';
@@ -33,6 +36,9 @@ const captureEnvironment = {
   GITHUB_RUN_ATTEMPT: '2',
   BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: 'breakdown-host-evidence-7654321-2',
 };
+
+const executionSessionId = 'github-actions:12345:1:execute:linux';
+const reviewSessionId = 'github-actions:12345:1:review:linux';
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -159,7 +165,7 @@ async function submissionFixture({
       [
         `interaction-${stage}.md`,
         'visible-interactions',
-        `# ${stage}\n\nThe human reviewer retained the visible host interaction for ${stage}.\n`,
+        `# ${stage}\n\nThe execution agent retained the visible host interaction for ${stage}.\n`,
       ],
       [
         `actions-${stage}.json`,
@@ -192,7 +198,7 @@ async function submissionFixture({
     );
   }
   retainedFiles.push(
-    ['rubric.md', 'human-rubric', '# Human rubric notes\n'],
+    ['review.md', 'agent-review', '# Independent agent review and rubric notes\n'],
     ['hostile.md', 'hostile-content', '# Hostile-content observations\n'],
     ['parity.md', 'outcome-parity', '# Outcome parity observations\n'],
   );
@@ -200,7 +206,7 @@ async function submissionFixture({
     await writeFile(join(rowRoot, path), contents);
   }
   const submission = {
-    schema_version: 'breakdown.guided-host-submission.v1',
+    schema_version: 'breakdown.guided-host-submission.v2',
     release_version: releaseVersion,
     host: {
       surface: host,
@@ -224,6 +230,37 @@ async function submissionFixture({
       provider_family: providerFamily,
       model_family: modelFamily ?? (providerFamily === 'openai' ? 'gpt-5' : 'claude-4'),
     },
+    participants: {
+      execution_agent: {
+        role: 'execution-agent',
+        kind: 'agent',
+        session_id: executionSessionId.replace('linux', os),
+        started_at: '2026-07-29T17:00:00.000Z',
+        completed_at: '2026-07-29T17:30:00.000Z',
+        host: { surface: host, version: hostVersion },
+        model: {
+          provider_family: providerFamily,
+          model_family: modelFamily ?? (providerFamily === 'openai' ? 'gpt-5' : 'claude-4'),
+        },
+      },
+      review_agent: {
+        role: 'review-agent',
+        kind: 'agent',
+        session_id: reviewSessionId.replace('linux', os),
+        started_at: '2026-07-29T17:31:00.000Z',
+        completed_at: '2026-07-29T18:00:00.000Z',
+        host: { surface: 'GitHub Copilot CLI', version: '1.0.77' },
+        model: { provider_family: 'anthropic', model_family: 'claude-sonnet-4.6' },
+      },
+      automation: {
+        role: 'automation',
+        kind: 'automation',
+        workflow: '.github/workflows/local-host-evidence-capture.yml',
+        workflow_run_id: '12345',
+        workflow_run_attempt: '1',
+        observed_at: '2026-07-29T18:00:00.000Z',
+      },
+    },
     skill_archive_file: `breakdown-skills-${releaseVersion}.tar.gz`,
     journey: {
       stages: GUIDED_HOST_JOURNEY_STAGES.map((id) => ({
@@ -238,14 +275,14 @@ async function submissionFixture({
       scores: GUIDED_HOST_RUBRIC_DIMENSIONS.map((dimension) => ({
         dimension,
         score: 4,
-        evidence: ['rubric.md'],
+        evidence: ['review.md'],
       })),
     },
-    human_review: {
-      reviewer: 'reviewer@example.com',
+    review: {
+      method: 'independent-agent',
       reviewed_at: '2026-07-29T18:00:00.000Z',
-      attestation: HOST_REVIEW_ATTESTATION,
-      evidence: ['rubric.md'],
+      attestation: HOST_AGENT_REVIEW_ATTESTATION,
+      evidence: ['review.md'],
     },
     hostile_content: {
       authority_not_expanded: true,
@@ -305,59 +342,60 @@ afterEach(async () => {
 });
 
 describe('authenticated host support workflow', () => {
-  it('should index immutable candidate and evidence artifacts on a release tag before attesting', async () => {
+  it('should index immutable candidate and evidence artifacts before the release tag', async () => {
     const workflow = await readFile(
       join(repositoryRoot, '.github', 'workflows', 'local-host-support.yml'),
       'utf8',
     );
 
-    expect(workflow).toContain("startsWith(github.ref, 'refs/tags/breakdown-local-v')");
+    expect(workflow).not.toContain("startsWith(github.ref, 'refs/tags/breakdown-local-v')");
     expect(workflow).toContain('actions: read');
     expect(workflow).toContain('attestations: write');
     expect(workflow).toContain('id-token: write');
-    expect(workflow).toContain('actions/download-artifact@v8');
+    expect(workflow).toContain(
+      'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
+    );
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
+    expect(workflow).toContain('artifact-ids: ${{ inputs.platform_index_artifact_id }}');
     expect(workflow).toContain('artifact-ids: ${{ inputs.evidence_artifact_ids }}');
     expect(workflow).toContain('pnpm local:release:index-hosts');
-    expect(workflow).toContain('actions/attest@v4');
+    expect(workflow).toContain('actions/attest@b20087e3d92172ebf405cd2664f3fc3aa55348ea');
     expect(workflow).toContain('steps.attest.outputs.bundle-path');
-    expect(workflow).toContain('actions/upload-artifact@v7');
+    expect(workflow).toContain('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a');
   });
 });
 
 describe('authenticated host evidence capture workflow', () => {
-  it('should ingest one raw row and retain a current-run-bound qualified row only', async () => {
+  it('should conduct and independently review unattended rows on GitHub-hosted Linux and macOS', async () => {
     const workflow = await readFile(
       join(repositoryRoot, '.github', 'workflows', 'local-host-evidence-capture.yml'),
       'utf8',
     );
     const requiredSnippets = [
-      'raw_row_path:',
-      'permissions:\n  actions: read\n  contents: read',
-      "github.ref == 'refs/heads/main'",
-      'runs-on: [self-hosted, breakdown-host-evidence-ingress]',
+      'candidate_artifact_id:',
+      'platform_index_artifact_id:',
+      'copilot-requests: write',
+      'runner: ubuntu-24.04',
+      'runner: macos-15',
+      'model: gpt-5.3-codex',
+      'model: claude-sonnet-4.6',
       'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
       'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
-      'raw_artifact_id: ${{ steps.upload-raw-row.outputs.artifact-id }}',
-      'artifact-ids: 8774500090',
-      'sha256:0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904',
-      'f772a5482bd1de65c1d79e557993183e7508a7e07839879975b69833d0d51efc',
-      'artifact-ids: ${{ needs.ingest.outputs.raw_artifact_id }}',
-      'BREAKDOWN_HOST_EVIDENCE_ARTIFACT_NAME: breakdown-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}',
-      'pnpm local:release:bind-host',
+      'pnpm local:release:execute-host',
+      'pnpm local:release:review-host',
       'pnpm local:release:qualify-host',
-      'path: ${{ runner.temp }}/staged-raw-host-row',
       'path: ${{ runner.temp }}/qualified-host-row',
       'include-hidden-files: true',
       'retention-days: 90',
     ];
     const forbiddenSnippets = [
+      'raw_row_path',
+      'self-hosted',
       'attestations: write',
       'contents: write',
       'id-token: write',
       'local:release:index-hosts',
       'actions/attest',
-      'always()',
       'npm publish',
       'release tag',
       'windows',
@@ -369,14 +407,33 @@ describe('authenticated host evidence capture workflow', () => {
     );
     expect(workflow).not.toMatch(/uses: [^\n]+@v\d/);
     expect(workflow.match(/include-hidden-files: true/g)).toHaveLength(2);
-    expect(
-      workflow.indexOf(
-        'pnpm local:release:bind-host --raw-root "$RAW_ROW_REALPATH" --output "${{ runner.temp }}/staged-raw-host-row"',
-      ),
-    ).toBeLessThan(workflow.indexOf('id: upload-raw-row'));
+    expect(workflow.indexOf('pnpm local:release:execute-host')).toBeLessThan(
+      workflow.indexOf('pnpm local:release:review-host'),
+    );
     expect(workflow.indexOf('pnpm local:release:qualify-host')).toBeLessThan(
       workflow.lastIndexOf('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'),
     );
+
+    const harness = await readFile(
+      join(repositoryRoot, 'scripts', 'local-release', 'agent-host-qualification.mjs'),
+      'utf8',
+    );
+    for (const boundary of [
+      '--disable-builtin-mcps',
+      '--no-custom-instructions',
+      '--deny-tool=url',
+      '--disallow-temp-dir',
+      'BREAKDOWN_QUALIFICATION_SKILL_SOURCE',
+      'install-candidate-skills.mjs',
+      'sanitizeHostEvidenceText',
+      'deterministicStageObservation',
+      'readCandidateRelease',
+      'distinct fresh sessions',
+    ]) {
+      expect(harness).toContain(boundary);
+    }
+    expect(harness).not.toContain('--allow-all');
+    expect(harness).not.toContain('--share-gist');
   });
 });
 
@@ -386,7 +443,7 @@ describe('qualifyHostEvidence', () => {
     const row = await submissionFixture({ root: candidate.root });
 
     await expect(qualifySubmission(candidate, row)).resolves.toMatchObject({
-      schema_version: 'breakdown.guided-host-evidence.v1',
+      schema_version: 'breakdown.guided-host-evidence.v2',
       release_version: releaseVersion,
       status: 'passed',
       host: row.submission.host,
@@ -416,6 +473,14 @@ describe('qualifyHostEvidence', () => {
       },
       outcome_parity: {
         passed: true,
+      },
+      review: {
+        method: 'independent-agent',
+      },
+      participants: {
+        execution_agent: { role: 'execution-agent', kind: 'agent' },
+        review_agent: { role: 'review-agent', kind: 'agent' },
+        automation: { role: 'automation', kind: 'automation' },
       },
     });
 
@@ -458,11 +523,11 @@ describe('qualifyHostEvidence', () => {
       'changed authority, truthfulness, approval, or publication behavior',
     ],
     [
-      'a missing human-review attestation',
+      'a missing independent-agent attestation',
       (submission: Awaited<ReturnType<typeof submissionFixture>>['submission']) => {
-        submission.human_review.attestation = '';
+        submission.review.attestation = '';
       },
-      'has no exact human-review identity, time, and attestation',
+      'has no exact independent-agent review method, time, and attestation',
     ],
     [
       'a prohibited outcome-parity claim',
@@ -505,6 +570,47 @@ describe('qualifyHostEvidence', () => {
     await writeJson(row.submissionPath, row.submission);
 
     await expect(qualifySubmission(candidate, row)).rejects.toThrow(message);
+  });
+
+  it('should reject a review agent that self-certifies its execution session', async () => {
+    const candidate = await candidateFixture();
+    const row = await submissionFixture({ root: candidate.root });
+    row.submission.participants.review_agent.session_id =
+      row.submission.participants.execution_agent.session_id;
+    await writeJson(row.submissionPath, row.submission);
+
+    await expect(qualifySubmission(candidate, row)).rejects.toThrow(
+      'Execution and review agents must use distinct fresh sessions',
+    );
+  });
+
+  it('should reject review provenance that does not start after execution', async () => {
+    const candidate = await candidateFixture();
+    const row = await submissionFixture({ root: candidate.root });
+    row.submission.participants.review_agent.started_at =
+      row.submission.participants.execution_agent.started_at;
+    await writeJson(row.submissionPath, row.submission);
+
+    await expect(qualifySubmission(candidate, row)).rejects.toThrow(
+      'Independent review timestamps must follow execution',
+    );
+  });
+
+  it('should reject legacy human review fields and human impersonation', async () => {
+    const candidate = await candidateFixture();
+    const row = await submissionFixture({ root: candidate.root });
+    Object.assign(row.submission, {
+      human_review: {
+        reviewer: 'Product Owner',
+        reviewed_at: '2026-07-29T18:00:00.000Z',
+        attestation: 'Human reviewed.',
+      },
+    });
+    await writeJson(row.submissionPath, row.submission);
+
+    await expect(qualifySubmission(candidate, row)).rejects.toThrow(
+      'Agent-operated qualification cannot contain legacy human-review fields',
+    );
   });
 
   it('should reject retained interaction or action evidence whose bytes changed', async () => {
@@ -550,6 +656,79 @@ describe('qualifyHostEvidence', () => {
         submissionPath: row.submissionPath,
       }),
     ).rejects.toThrow('bind evidence to the current GitHub Actions run and artifact');
+  });
+});
+
+describe('qualification authorization and sanitization', () => {
+  it('should accept only the exact fixture operations and fail closed on publication', async () => {
+    const manifest = JSON.parse(
+      await readFile(
+        join(
+          repositoryRoot,
+          'local',
+          'contracts',
+          'conformance',
+          'hosts',
+          'fixtures',
+          'qualification-authorization.json',
+        ),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
+
+    expect(validateQualificationAuthorization(manifest)).toMatchObject({
+      schema_version: 'breakdown.guided-host-authorization.v1',
+      fixture: 'guided-host-qualification',
+    });
+    const expanded = structuredClone(manifest) as {
+      operations: Array<{ stage: string; effects: string[] }>;
+    };
+    expanded.operations[0]!.effects.push('publish-package');
+    expect(() => validateQualificationAuthorization(expanded)).toThrow(
+      'Qualification authorization contains an undeclared effect',
+    );
+  });
+
+  it('should redact credentials and reject retained secret material', () => {
+    const secret = 'github_pat_example_credential_value';
+    expect(sanitizeHostEvidenceText(`token=${secret}\n`, [secret])).toBe('token=[REDACTED]\n');
+    expect(() => sanitizeHostEvidenceText(`token=${secret}\n`, [secret], { reject: true })).toThrow(
+      'Retained host evidence contained credential material',
+    );
+  });
+
+  it('should require a passing platform index for the exact candidate and source', async () => {
+    const candidate = await candidateFixture();
+    const platformIndexPath = join(candidate.root, 'breakdown-platform-evidence-index.json');
+    await writeJson(platformIndexPath, {
+      schema_version: 'breakdown.platform-qualification-index.v1',
+      release_version: releaseVersion,
+      status: 'passed',
+      candidate_digest: { algorithm: 'SHA-256', content: candidateDigest },
+      corpus_revision: { file: 'local/contracts/MANIFEST.json', sha256: corpusDigest },
+      source: {
+        repository: 'https://github.com/alamorre/breakdown.sh',
+        git_commit: gitCommit,
+      },
+      gate: { satisfied: true },
+    });
+
+    await expect(
+      verifyHostQualificationPrerequisites({
+        candidateDirectory: candidate.candidateDirectory,
+        platformIndexPath,
+      }),
+    ).resolves.toMatchObject({ source_commit: gitCommit, candidate_digest: candidateDigest });
+
+    const mismatched = JSON.parse(await readFile(platformIndexPath, 'utf8'));
+    mismatched.source.git_commit = 'd'.repeat(40);
+    await writeJson(platformIndexPath, mismatched);
+    await expect(
+      verifyHostQualificationPrerequisites({
+        candidateDirectory: candidate.candidateDirectory,
+        platformIndexPath,
+      }),
+    ).rejects.toThrow('Platform index is not bound to the exact host-qualification candidate');
   });
 });
 
@@ -773,34 +952,36 @@ describe('writeHostQualificationTemplate', () => {
       'operator-reference/breakdown.expected.yaml',
       'candidate',
       'KIT-MANIFEST.json',
+      'qualification-authorization.json',
     ]) {
       expect(guide).toContain(file);
     }
-    expect(guide).toContain('one macOS CLI row');
-    expect(guide).toContain('one Linux CLI row');
-    expect(guide).toContain('two provider/model families');
-    expect(guide).toContain('preserve host-native UI and wording');
-    expect(guide).toContain('8774500090');
-    expect(guide).toContain('45bf368ebfcd21c09f98020d757332cf69eac170');
-    expect(guide).toContain('does not create a Supported Host claim');
-    expect(guide).toContain('does not require platform requalification');
-    expect(guide).toContain('Human-only');
-    expect(guide).toContain('Agent/automation may');
-    expect(guide).toContain('tar -xzf');
-    expect(guide).toContain('$project_dir/.agents/skills');
-    expect(guide).toContain('$project_dir/.claude/skills');
+    await expect(
+      readFile(
+        join(outputDirectory, 'qualification-project', 'tools', 'install-candidate-skills.mjs'),
+        'utf8',
+      ),
+    ).resolves.toContain('BREAKDOWN_QUALIFICATION_SKILL_SOURCE');
+    expect(guide).toContain('Linux and macOS rows');
+    expect(guide).toContain('two model or provider families');
+    expect(guide).toContain('host/model/provider versions');
+    expect(guide).toContain(gitCommit);
+    expect(guide).toContain('Only exact passing rows');
+    expect(guide).toContain('requires one replacement candidate');
+    expect(guide).toContain('Agent-operated authorization');
+    expect(guide).toContain('execution agent');
+    expect(guide).toContain('independent review agent');
 
     const releaseGuide = await readFile(
       join(repositoryRoot, 'scripts', 'local-release', 'README.md'),
       'utf8',
     );
-    expect(releaseGuide).toContain('pnpm local:release:hash-host');
-    expect(releaseGuide).toContain('pnpm local:release:rehearse-host');
-    expect(releaseGuide.indexOf('pnpm local:release:rehearse-host')).toBeLessThan(
-      releaseGuide.indexOf('./config.sh'),
-    );
-    expect(releaseGuide).toContain('Copy `row-template/`');
-    expect(releaseGuide).toContain('Do not dispatch `local-host-support.yml` during capture');
+    expect(releaseGuide).toContain('local-host-evidence-capture.yml');
+    expect(releaseGuide).toContain('local-host-support.yml');
+    expect(releaseGuide).toContain('candidate_artifact_id');
+    expect(releaseGuide).toContain('platform_index_artifact_id');
+    expect(releaseGuide).toContain('without an interim human step');
+    expect(releaseGuide).not.toContain('self-hosted runner');
   });
 
   it('should expose local hash and pre-capture rehearsal commands', async () => {
@@ -863,11 +1044,11 @@ describe('writeHostQualificationTemplate', () => {
       'score outside 0-4',
     ],
     [
-      'absent human review',
+      'absent independent-agent review',
       async (row: Awaited<ReturnType<typeof submissionFixture>>) => {
-        row.submission.human_review.reviewer = '';
+        row.submission.review.attestation = '';
       },
-      'no exact human-review identity, time, and attestation',
+      'no exact independent-agent review method, time, and attestation',
     ],
     [
       'unsafe hostile-content results',
@@ -959,7 +1140,7 @@ describe('writeHostQualificationTemplate', () => {
         submissionPath: join(boundDirectory, 'guided-host-submission.json'),
       }),
     ).resolves.toMatchObject({
-      schema_version: 'breakdown.guided-host-evidence.v1',
+      schema_version: 'breakdown.guided-host-evidence.v2',
       status: 'passed',
       immutability: {
         workflow_run_id: captureEnvironment.GITHUB_RUN_ID,
@@ -981,7 +1162,7 @@ describe('writeHostQualificationTemplate', () => {
       retained_evidence: Array<{ path: string; role: string; sha256: string }>;
       journey: unknown;
       rubric: unknown;
-      human_review: unknown;
+      review: unknown;
       hostile_content: unknown;
       outcome_parity: unknown;
     };
@@ -995,7 +1176,7 @@ describe('writeHostQualificationTemplate', () => {
     expect(hashed).toMatchObject({
       journey: before.journey,
       rubric: before.rubric,
-      human_review: before.human_review,
+      review: before.review,
       hostile_content: before.hostile_content,
       outcome_parity: before.outcome_parity,
     });
@@ -1015,7 +1196,7 @@ describe('writeHostQualificationTemplate', () => {
     await expect(readFile(submissionPath)).resolves.toEqual(submissionBeforeRejection);
   });
 
-  it('should scaffold a private row without completing any human-owned field or observation', async () => {
+  it('should scaffold a private row without completing any agent review or observation', async () => {
     const candidate = await candidateFixture();
     const outputDirectory = join(candidate.root, 'scaffolded-host-qualification-kit');
     await writeHostQualificationTemplate({
@@ -1040,11 +1221,11 @@ describe('writeHostQualificationTemplate', () => {
       }),
     );
     expect(submission.rubric.scores.every(({ score }) => score === null)).toBe(true);
-    expect(submission.human_review).toMatchObject({
-      reviewer: '',
+    expect(submission.review).toMatchObject({
+      method: 'independent-agent',
       reviewed_at: '',
       attestation: '',
-      evidence: ['rubric.md'],
+      evidence: ['review.md'],
     });
     expect(submission.hostile_content).toMatchObject({
       authority_not_expanded: null,
@@ -1072,10 +1253,10 @@ describe('writeHostQualificationTemplate', () => {
       );
     }
     const rowGuide = await readFile(join(rowDirectory, 'ROW-README.md'), 'utf8');
-    expect(rowGuide).toContain('Never edit a stage status to `passed` until');
+    expect(rowGuide).toContain('Automation marks a stage `passed` only after');
     expect(rowGuide).toContain('local:release:hash-host');
     expect(rowGuide).toContain('local:release:rehearse-host');
-    expect(rowGuide).toContain(HOST_REVIEW_ATTESTATION);
+    expect(rowGuide).toContain(HOST_AGENT_REVIEW_ATTESTATION);
   });
 
   it('should copy exact candidate bytes and generate the complete kit reproducibly', async () => {
@@ -1352,7 +1533,7 @@ describe('writeHostQualificationTemplate', () => {
     ) as {
       schema_version: string;
       gates: { no_zero: boolean; minimum_percent: number; full_mark_dimensions: string[] };
-      human_only: string[];
+      review_policy: string[];
       dimensions: Array<{
         dimension: string;
         criterion: string;
@@ -1389,8 +1570,8 @@ describe('writeHostQualificationTemplate', () => {
         GUIDED_HOST_FULL_MARK_DIMENSIONS.includes(dimension.dimension),
       );
     }
-    expect(rubric.human_only.join(' ')).toContain('human reviewer');
-    expect(rubric.human_only.join(' ')).toContain('must not assign');
+    expect(rubric.review_policy.join(' ')).toContain('review agent');
+    expect(rubric.review_policy.join(' ')).toContain('fresh session');
 
     const handbook = await readFile(join(outputDirectory, 'RUBRIC-HANDBOOK.md'), 'utf8');
     expect(handbook).toContain('A score without cited retained evidence is invalid');
@@ -1422,7 +1603,7 @@ describe('writeHostQualificationTemplate', () => {
         id: string;
         setup: string[];
         prompt_or_action: string;
-        human_checkpoint: { required: boolean; instruction: string };
+        authorization: { preauthorized: boolean; instruction: string };
         expected_observations: string[];
         evidence: Record<string, { file: string; requirements: string[]; example: string }>;
         failure_criteria: string[];
@@ -1434,15 +1615,20 @@ describe('writeHostQualificationTemplate', () => {
     expect(procedures.host_native_variation.join(' ')).toContain('wording');
     expect(procedures.stages[0]!.setup.join(' ')).toContain('bootstrap commands');
     expect(procedures.stages[1]!.prompt_or_action).toContain(
-      'appends the complete bytes of operator-reference/breakdown.expected.yaml',
+      'supplies the complete bytes of operator-reference/breakdown.expected.yaml',
     );
+    expect(JSON.stringify(procedures.stages)).not.toMatch(/\bhuman\b/i);
+    expect(JSON.stringify(procedures.stages)).not.toMatch(/wait for (?:my )?approval/i);
+    expect(JSON.stringify(procedures.stages)).not.toMatch(/\bI authorize\b|present[^.]+and wait/i);
 
     const evidenceFiles = new Set<string>();
     for (const [position, stage] of procedures.stages.entries()) {
       expect(stage.setup.length, `${stage.id} setup`).toBeGreaterThan(0);
       expect(stage.prompt_or_action.length, `${stage.id} prompt/action`).toBeGreaterThan(20);
-      expect(typeof stage.human_checkpoint.required, `${stage.id} checkpoint kind`).toBe('boolean');
-      expect(stage.human_checkpoint.instruction.length, `${stage.id} checkpoint`).toBeGreaterThan(
+      expect(typeof stage.authorization.preauthorized, `${stage.id} authorization kind`).toBe(
+        'boolean',
+      );
+      expect(stage.authorization.instruction.length, `${stage.id} authorization`).toBeGreaterThan(
         20,
       );
       expect(stage.expected_observations.length, `${stage.id} observations`).toBeGreaterThan(0);
@@ -1578,12 +1764,12 @@ describe('writeHostQualificationTemplate', () => {
       skill_archive_file: string;
       journey: { stages: Array<{ id: string; status: string }> };
       rubric: { scores: Array<{ dimension: string; score: null }> };
-      human_review: { reviewer: string; attestation: string };
+      review: { method: string; attestation: string };
       outcome_parity: { assessed: boolean; disclaimed_dimensions: string[] };
       retained_evidence: unknown[];
     };
     expect(submission).toMatchObject({
-      schema_version: 'breakdown.guided-host-submission.v1',
+      schema_version: 'breakdown.guided-host-submission.v2',
       release_version: releaseVersion,
       skill_archive_file: `breakdown-skills-${releaseVersion}.tar.gz`,
       journey: {
@@ -1595,8 +1781,8 @@ describe('writeHostQualificationTemplate', () => {
           score: null,
         })),
       },
-      human_review: {
-        reviewer: '',
+      review: {
+        method: 'independent-agent',
         attestation: '',
       },
       outcome_parity: {
@@ -1608,11 +1794,11 @@ describe('writeHostQualificationTemplate', () => {
     const guide = await readFile(join(outputDirectory, 'GUIDED-HOST-QUALIFICATION.md'), 'utf8');
     expect(guide).toContain(`Breakdown Local ${releaseVersion}`);
     expect(guide).toContain(candidateDigest);
-    expect(guide).toContain('real Agent Host');
-    expect(guide).toContain('Do not mark a stage passed');
-    expect(guide).toContain('human reviewer');
+    expect(guide).toContain('Copilot CLI');
+    expect(guide).toContain('distinct fresh review-agent sessions');
+    expect(guide).toContain('independent review agent');
     expect(guide).toContain('local-host-evidence-capture.yml');
-    expect(guide).toContain('local:release:qualify-host');
+    expect(guide).toContain('Only exact passing rows');
   });
 });
 
@@ -1647,7 +1833,7 @@ describe('indexHostEvidence', () => {
         outputPath,
       }),
     ).resolves.toMatchObject({
-      schema_version: 'breakdown.guided-host-evidence-index.v1',
+      schema_version: 'breakdown.guided-host-evidence-index.v2',
       release_version: releaseVersion,
       status: 'passed',
       coverage: {
@@ -1841,7 +2027,7 @@ describe('writeHostSupportMaterial', () => {
       supported_hosts: unknown[];
     };
     expect(supportJson).toMatchObject({
-      schema_version: 'breakdown.generated-host-support.v1',
+      schema_version: 'breakdown.generated-host-support.v2',
       release_version: releaseVersion,
       source_index: {
         file: 'breakdown-host-evidence-index.json',

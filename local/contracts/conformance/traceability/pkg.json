@@ -106,6 +106,12 @@
       "requirements": ["REQ-PKG-016"],
       "oracle_type": "effect",
       "oracle": "Every maintained tuple runs the applicable suite against exact candidate digests and retains the full platform identity and corpus revision."
+    },
+    {
+      "id": "PKG-017",
+      "requirements": ["REQ-PKG-017"],
+      "oracle_type": "byte",
+      "oracle": "The GitHub-hosted pre-release host-index attestation verifies at the candidate source digest and the protected ceremony creates an exact unchanged signed-tag/index binding record."
     }
   ]
 }

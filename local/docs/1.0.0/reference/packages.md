@@ -10,7 +10,7 @@ authoritative. Regenerate this file instead of editing it by hand.
 ## Generated from
 
 - `local/contracts/conformance/package/fixtures/artifact-expectations.json` — SHA-256 `cb962b90f237fc1a26e9102d333dd9c40f338d38f70be0ebe536deba54045699`
-- `local/contracts/specifications/release.md` — SHA-256 `0d11d538ccc8dd2e1340d77fb0c69d88c89991d7df9ce7449e6069bb46ccf614`
+- `local/contracts/specifications/release.md` — SHA-256 `3619f257fbb60bef81729a9abdc12e34d7f5b3643a648b2f2a9de251fc8c1b53`
 - `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
 - `packages/breakdown-cli/package.json` — SHA-256 `c46206fa0de7cd27c3926fdf044682f678ec26d51f1e2f7cbad64f6161a12572`
 - `packages/breakdown-core/package.json` — SHA-256 `3be32da0f9715e6f359dc83d7cc90ad52f2c30fd5b41808d58058ac0280d7da8`

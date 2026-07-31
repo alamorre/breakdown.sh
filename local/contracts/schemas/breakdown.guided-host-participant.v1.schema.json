@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breakdown.sh/schemas/breakdown.guided-host-participant.v1.schema.json",
+  "title": "Breakdown guided-host participant identity",
+  "oneOf": [
+    { "$ref": "#/$defs/executionAgent" },
+    { "$ref": "#/$defs/reviewAgent" },
+    { "$ref": "#/$defs/automation" },
+    { "$ref": "#/$defs/human" }
+  ],
+  "$defs": {
+    "agentHost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "version"],
+      "properties": {
+        "surface": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_family", "model_family"],
+      "properties": {
+        "provider_family": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "model_family": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,127}$" }
+      }
+    },
+    "agentBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "kind", "session_id", "started_at", "completed_at", "host", "model"],
+      "properties": {
+        "role": { "enum": ["execution-agent", "review-agent"] },
+        "kind": { "const": "agent" },
+        "session_id": { "type": "string", "minLength": 1 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "host": { "$ref": "#/$defs/agentHost" },
+        "model": { "$ref": "#/$defs/model" }
+      }
+    },
+    "executionAgent": {
+      "allOf": [
+        { "$ref": "#/$defs/agentBase" },
+        { "properties": { "role": { "const": "execution-agent" } } }
+      ]
+    },
+    "reviewAgent": {
+      "allOf": [
+        { "$ref": "#/$defs/agentBase" },
+        { "properties": { "role": { "const": "review-agent" } } }
+      ]
+    },
+    "automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "kind", "workflow", "workflow_run_id", "workflow_run_attempt", "observed_at"],
+      "properties": {
+        "role": { "const": "automation" },
+        "kind": { "const": "automation" },
+        "workflow": { "type": "string", "minLength": 1 },
+        "workflow_run_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "workflow_run_attempt": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "human": {
+      "description": "Reserved for non-qualification human release controls. Agent-operated host evidence forbids this identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "kind", "identity"],
+      "properties": {
+        "role": { "const": "human" },
+        "kind": { "const": "human" },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
