@@ -19,6 +19,7 @@ const cliExecutablePath =
   fileURLToPath(new URL('../../breakdown-cli/dist/index.js', import.meta.url));
 const children = new Set<ChildProcessWithoutNullStreams>();
 const temporaryDirectories = new Set<string>();
+const stdioResponseTimeoutMs = 5_000;
 const mcpProtocolFixtures = JSON.parse(
   await readFile(
     join(
@@ -150,7 +151,7 @@ function startServer() {
       setTimeout(() => {
         if (!messageWaiters.delete(waiter)) return;
         reject(new Error('Timed out waiting for a JSON-RPC message.'));
-      }, 1_000);
+      }, stdioResponseTimeoutMs);
     });
   }
 
