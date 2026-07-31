@@ -89,18 +89,47 @@ rm candidate.zip
 pnpm local:release:prepare-host --candidate "$candidate_dir" --output "$kit_dir"
 ```
 
-Copy `guided-host-submission.template.json` to
-`guided-host-submission.json` in a new private row directory. Complete all 13 stages in one real
-Agent Host against those exact candidate artifacts. Put every declared retained interaction,
-action, artifact, rubric, hostile-content, and parity file directly beside the submission and
-record its SHA-256 in `retained_evidence`. The row directory must contain exactly one
-`guided-host-submission.json`; leave its run ID, run attempt, and final artifact name empty. The
+The generated kit contains the exact copied candidate bytes, fixed disposable project,
+byte-exact Workflow Definition oracle, all 13 stage procedures, evidence examples, rubric anchors,
+and a pending private-row scaffold. Read `GUIDED-HOST-QUALIFICATION.md` first. Copy `row-template/`
+and `qualification-project/` to new private paths outside the kit, Agent Host
+installation, and future runner work directory:
+
+```sh
+row_dir=/absolute/private/path/to/guided-host-row
+project_dir=/absolute/private/path/to/qualification-project
+cp -R "$kit_dir/row-template" "$row_dir"
+cp -R "$kit_dir/qualification-project" "$project_dir"
+chmod -R go-rwx "$row_dir" "$project_dir"
+```
+
+Complete `OPERATOR-PLAYBOOK.md` from `install` through `hostile-content` in one real Agent Host
+against the copied candidate artifacts. Replace every scaffold evidence file with the actual
+interaction, action, or artifact record named by its stage. The row directory must contain exactly
+one `guided-host-submission.json`; leave its run ID, run attempt, and final artifact name empty. The
 mechanism remains `github-actions-artifact-v7`.
 
 A human—not an agent or workflow—must personally give the required journey approvals, review the
 retained files, score every rubric dimension, and complete the reviewer identity, UTC time, and
 exact attestation. An agent may prepare files and run deterministic checks, but it must not
 generate scores, impersonate the reviewer, or mark observed behavior as passed.
+
+After the human-owned row is complete, fill only blank retained-file digests and run the local
+read-only pre-capture rehearsal:
+
+```sh
+pnpm local:release:hash-host \
+  --submission "$row_dir/guided-host-submission.json"
+pnpm local:release:rehearse-host \
+  --kit "$kit_dir" \
+  --submission "$row_dir/guided-host-submission.json"
+```
+
+Hashing refuses to replace a previously recorded digest after evidence changes. Rehearsal checks
+the generated kit and candidate binding, every unique stage evidence triple, evidence schemas and
+digests, human review, rubric gates, hostile-content safety, parity disclaimers, and blank future
+Actions identity. It edits nothing, uploads nothing, and creates no passing evidence or Supported
+Host claim. Do not register an ephemeral runner until it succeeds.
 
 GitHub has no documented CLI or REST endpoint for uploading a local directory as an Actions
 artifact outside a runner job. Ingress therefore uses a one-job, ephemeral self-hosted runner on
