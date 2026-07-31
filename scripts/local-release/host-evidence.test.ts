@@ -7,7 +7,10 @@ import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createQualificationCommandShims } from './agent-host-qualification.mjs';
+import {
+  createQualificationCommandShims,
+  installableSkillInventory,
+} from './agent-host-qualification.mjs';
 import {
   GUIDED_HOST_JOURNEY_STAGES,
   GUIDED_HOST_FULL_MARK_DIMENSIONS,
@@ -386,6 +389,19 @@ describe('authenticated host support workflow', () => {
 });
 
 describe('authenticated host evidence capture workflow', () => {
+  it('should exclude archive metadata from the exact installable skill inventory', () => {
+    const inventory = [
+      { path: 'MANIFEST.json', sha256: 'manifest' },
+      { path: 'VERSION', sha256: 'version' },
+      { path: 'LICENSE', sha256: 'pack-license' },
+      { path: 'author-breakdown/SKILL.md', sha256: 'author' },
+      { path: 'setup-breakdown/SKILL.md', sha256: 'setup' },
+      { path: 'setup-breakdown/references/installation.md', sha256: 'reference' },
+    ];
+
+    expect(installableSkillInventory(inventory)).toEqual(inventory.slice(3));
+  });
+
   it('should expose argument-free fixed commands without granting arbitrary node execution', async () => {
     const root = await mkdtemp(join(tmpdir(), 'breakdown-command-shims-'));
     temporaryDirectories.push(root);

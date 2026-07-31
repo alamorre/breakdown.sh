@@ -42,6 +42,20 @@ const FIXED_PROCESS_SCRIPTS = Object.freeze({
   'read-terminal-result': 'read-terminal-result.mjs',
 });
 
+const CANONICAL_AGENT_SKILLS = Object.freeze([
+  'author-breakdown',
+  'critique-breakdown',
+  'run-breakdown',
+  'setup-breakdown',
+  'summarize-breakdown-run',
+]);
+
+export function installableSkillInventory(inventory) {
+  return inventory.filter(({ path }) =>
+    CANONICAL_AGENT_SKILLS.some((skill) => path.startsWith(`${skill}/`)),
+  );
+}
+
 async function emptyDirectory(path, label) {
   await mkdir(path, { recursive: true, mode: 0o700 });
   invariant((await readdir(path)).length === 0, `${label} must be empty: ${path}`);
@@ -908,7 +922,8 @@ async function deterministicStageObservation({
   if (procedure.id === 'install') {
     const installedInventory = await snapshotArtifacts(join(projectDirectory, '.agents', 'skills'));
     invariant(
-      JSON.stringify(installedInventory) === JSON.stringify(skillSourceBaseline),
+      JSON.stringify(installedInventory) ===
+        JSON.stringify(installableSkillInventory(skillSourceBaseline)),
       'Install stage did not preserve the exact candidate Agent Skill bytes.',
     );
     invariant(
@@ -1014,19 +1029,12 @@ async function installCandidate({ candidateDirectory, kitDirectory, projectDirec
   const skillPackRoots = await readdir(extracted);
   invariant(skillPackRoots.length === 1, 'Candidate Agent Skills archive has the wrong root.');
   const skillSourceDirectory = join(extracted, skillPackRoots[0]);
-  const expectedSkills = [
-    'author-breakdown',
-    'critique-breakdown',
-    'run-breakdown',
-    'setup-breakdown',
-    'summarize-breakdown-run',
-  ];
   const actualSkills = (await readdir(skillSourceDirectory, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
     .map((entry) => entry.name)
     .sort();
   invariant(
-    JSON.stringify(actualSkills) === JSON.stringify(expectedSkills),
+    JSON.stringify(actualSkills) === JSON.stringify(CANONICAL_AGENT_SKILLS),
     'Candidate Agent Skills archive does not contain the exact canonical set.',
   );
   const projectSkillsDirectory = join(projectDirectory, '.agents', 'skills');
