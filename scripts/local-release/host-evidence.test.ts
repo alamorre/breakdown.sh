@@ -452,6 +452,7 @@ describe('authenticated host evidence capture workflow', () => {
       'read-terminal-result.mjs',
       'run-setup-preflight.mjs',
       'exactly two process calls',
+      'Sanitized visible interaction:',
       'sanitizeHostEvidenceText',
       'deterministicStageObservation',
       'randomUUID',
@@ -473,9 +474,13 @@ describe('authenticated host evidence capture workflow', () => {
     expect(harness).not.toContain('COPILOT_SKILLS_DIRS');
     expect(harness).not.toContain("preflight.mjs')}:*");
     expect(harness).not.toContain('join(outputDirectory, `.session-');
-    expect(
-      harness.slice(0, harness.indexOf('export async function reviewAgentHostQualification')),
-    ).not.toContain('--add-dir');
+    const executionHarness = harness.slice(
+      0,
+      harness.indexOf('export async function reviewAgentHostQualification'),
+    );
+    expect(executionHarness).toContain('`--add-dir=${projectDirectory}`');
+    expect(executionHarness.match(/--add-dir=/g)).toHaveLength(1);
+    expect(harness.match(/--add-dir=/g)).toHaveLength(2);
     expect(harness).toContain("status: 'replace-with-passed-or-failed'");
     expect(harness).toContain('score: null');
   });

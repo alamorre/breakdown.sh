@@ -300,6 +300,7 @@ function copilotArguments({
     '--secret-env-vars=GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,GH_TOKEN',
     `--session-id=${sessionId}`,
     `--share=${sharePath}`,
+    `--add-dir=${projectDirectory}`,
   ];
   if (authorization.allowed_cli_operations.length > 0) {
     args.push('--allow-tool=shell(breakdown:*)');
@@ -772,7 +773,7 @@ async function readAuthorAudit(path, stage, oracle) {
   return records;
 }
 
-async function readPreflightAudit(path, stage, authorization) {
+async function readPreflightAudit(path, stage, authorization, visibleInteraction) {
   let text = '';
   try {
     text = await readFile(path, 'utf8');
@@ -802,7 +803,7 @@ async function readPreflightAudit(path, stage, authorization) {
           /^[0-9a-f]{64}$/.test(records[0].stdout_sha256) &&
           /^[0-9a-f]{64}$/.test(records[0].stderr_sha256)
       : records.length === 0,
-    `${stage} did not preserve the exact fixed setup preflight boundary: ${JSON.stringify(auditSummary)}`,
+    `${stage} did not preserve the exact fixed setup preflight boundary: ${JSON.stringify(auditSummary)}\nSanitized visible interaction:\n${visibleInteraction.slice(0, 8_000)}`,
   );
   return records;
 }
@@ -1235,6 +1236,7 @@ export async function executeAgentHostQualification({
         preflightAuditPath,
         procedure.id,
         stageAuthorization,
+        transcript,
       );
       const terminalAudit = await readTerminalAudit(
         terminalAuditPath,

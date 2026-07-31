@@ -144,7 +144,7 @@ const GUIDED_HOST_STAGE_PROCEDURES = Object.freeze([
       'Record the exact host surface/version, operating-system identity, architecture, and CLI transport before mutation.',
     ],
     prompt_or_action:
-      'Invoke setup-breakdown for the explicit qualification-project root and exact host surface/version. Ask it to inspect first, propose installation of the kit-bound CLI and five canonical skills, verify the matching reviewed preauthorization before every mutation and disposable probe, then run full preflight. Do not provide a host-evidence index.',
+      'Invoke setup-breakdown for the explicit qualification-project root and exact host surface/version. Inspect first and identify the kit-bound CLI and five canonical skills. The reviewed install-exact-candidate manifest operation is the already-granted approval for the fixed installer and disposable probe, so do not request another interactive approval. Execute the two fixed commands in the prompted order, then report the full preflight result. Do not provide a host-evidence index.',
     authorization_checkpoint: {
       required: true,
       instruction:
