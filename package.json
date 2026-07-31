@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit && pnpm --filter @breakdown-sh/core typecheck && pnpm --filter @breakdown-sh/cli typecheck && pnpm --filter @breakdown-sh/mcp typecheck",
     "test": "vitest run && pnpm --filter @breakdown-sh/core test && pnpm --filter @breakdown-sh/cli test && pnpm --filter @breakdown-sh/mcp test",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage && pnpm --filter @breakdown-sh/core test:coverage && pnpm --filter @breakdown-sh/cli test:coverage && pnpm --filter @breakdown-sh/mcp test:coverage",
+    "test:coverage": "vitest run --coverage --maxWorkers=1 && pnpm --filter @breakdown-sh/core test:coverage && pnpm --filter @breakdown-sh/cli test:coverage && pnpm --filter @breakdown-sh/mcp test:coverage",
     "audit:high": "pnpm audit --audit-level high",
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run build",
     "ci:secrets": "doppler run -- sh -c 'pnpm secrets:check && pnpm ci'",
