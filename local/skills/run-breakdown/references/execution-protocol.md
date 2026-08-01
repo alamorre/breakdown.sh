@@ -15,12 +15,13 @@ exact displayed value before sending one `breakdown.operation-request.v1` docume
 1. Validate the live Workflow Definition:
 
    ```json
-   {"schema_version":"breakdown.operation-request.v1","operation":"validate_workflow"}
+   { "schema_version": "breakdown.operation-request.v1", "operation": "validate_workflow" }
    ```
 
    Stop on `ok: false`. From a successful `data.workflow`, show the complete validated Workflow
    Definition. Resolve every declared Workflow Input to an explicit project-relative override or
    its displayed default.
+
 2. Present one approval proposal containing:
    - the exact absolute project root and fixed `breakdown.yaml` definition;
    - the complete validated Workflow Definition and exact Workflow Input path map;
@@ -35,7 +36,11 @@ exact displayed value before sending one `breakdown.operation-request.v1` docume
 3. Only after approval, create exactly one Run. Omit `inputs` only when there are no overrides:
 
    ```json
-   {"schema_version":"breakdown.operation-request.v1","operation":"create_run","inputs":{"brief":"inputs/brief.md"}}
+   {
+     "schema_version": "breakdown.operation-request.v1",
+     "operation": "create_run",
+     "inputs": { "brief": "inputs/brief.md" }
+   }
    ```
 
 4. Take the exact Run ID only from successful `data.run_id`, present it, and use it for every later
@@ -46,7 +51,11 @@ exact displayed value before sending one `breakdown.operation-request.v1` docume
 For existing work, the user supplies the exact Run ID. Start every opportunity with:
 
 ```json
-{"schema_version":"breakdown.operation-request.v1","operation":"inspect_run","run_id":"<exact-run-id>"}
+{
+  "schema_version": "breakdown.operation-request.v1",
+  "operation": "inspect_run",
+  "run_id": "<exact-run-id>"
+}
 ```
 
 Stop on failure. Report `data.status`, node states, non-successful attempts, Selected Terminal
@@ -55,7 +64,13 @@ Results, and any observed lock. If complete and no separately approved refresh i
 Prepare an ordinary batch with the approved limit, never above three:
 
 ```json
-{"schema_version":"breakdown.operation-request.v1","operation":"prepare_work","run_id":"<exact-run-id>","mode":{"kind":"resume"},"limit":3}
+{
+  "schema_version": "breakdown.operation-request.v1",
+  "operation": "prepare_work",
+  "run_id": "<exact-run-id>",
+  "mode": { "kind": "resume" },
+  "limit": 3
+}
 ```
 
 An empty successful `data.packets` batch means there is no eligible work in this opportunity.
@@ -98,8 +113,8 @@ For each returned Work Packet:
    ```
 
    Add top-level `candidate.json` only when the packet declares a Data Contract, using the complete
-   structured Result in the declared type. For a non-success, omit `candidate.json`, keep
-   `candidate.markdown`, and add exactly one top-level problem:
+   structured Result in the declared type. For a non-success, omit `candidate.json` entirely; never
+   set it to `null`. Keep `candidate.markdown`, and add exactly one singular top-level problem:
 
    ```json
    "problem": { "code": "<code>", "message": "<message>" }
@@ -132,7 +147,13 @@ Run and node.
 After approval, prepare exactly one refresh packet:
 
 ```json
-{"schema_version":"breakdown.operation-request.v1","operation":"prepare_work","run_id":"<exact-run-id>","mode":{"kind":"refresh","node_id":"<exact-node-id>"},"limit":1}
+{
+  "schema_version": "breakdown.operation-request.v1",
+  "operation": "prepare_work",
+  "run_id": "<exact-run-id>",
+  "mode": { "kind": "refresh", "node_id": "<exact-node-id>" },
+  "limit": 1
+}
 ```
 
 Execute, read, and serialize its submission through the same protocol. A non-successful refresh is

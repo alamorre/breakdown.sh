@@ -18,7 +18,7 @@ authoritative. Regenerate this file instead of editing it by hand.
 - `local/contracts/schemas/breakdown.guided-host-participant.v1.schema.json` — SHA-256 `af7a4185959c0ec44269f43b923f6c045e4fe096d32e580e2fa6b5b705c6079d`
 - `local/contracts/specifications/skills-and-hosts.md` — SHA-256 `61a71de1699578fb180f49b6be011d5c3518dcd60c87dad9ad5e66d01fdbdc0f`
 - `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
-- `local/skills/setup-breakdown/assets/skill-pack-manifest.json` — SHA-256 `fbe94598f5b68397b631e76a59ee8319afb3dc555e2a5e4217879c1b27b8e89d`
+- `local/skills/setup-breakdown/assets/skill-pack-manifest.json` — SHA-256 `00f53af5179a88f212ecdfa69e6c9a7881e5f536680f342aaa95ffd7b5079f32`
 
 
 ## Supported Host rows

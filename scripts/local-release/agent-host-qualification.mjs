@@ -274,6 +274,11 @@ ${
     : ''
 }
 ${
+  procedure.id === 'blocked-case'
+    ? 'Make no trial submission. The first and only blocked candidate must contain top-level markdown and one singular top-level problem, and must omit json entirely rather than setting it to null. Omit result and problems. If that sole submission is rejected, re-inspect and stop; never repair or resubmit it.'
+    : ''
+}
+${
   procedure.id === 'refresh'
     ? `Invoke the granted fixed control only through the literal fixed command ${FIXED_PROCESS_COMMANDS['verify-control']} with no arguments or shell decoration.`
     : ''
@@ -444,6 +449,11 @@ appendFileSync(process.env.BREAKDOWN_QUALIFICATION_COMMAND_LOG, JSON.stringify({
     ok: response.ok,
     node_id: response.data && response.data.packets && response.data.packets[0] && response.data.packets[0].node.id,
     expected_attempt: response.data && response.data.packets && response.data.packets[0] && response.data.packets[0].expected_attempt,
+    error: response.error === undefined ? null : {
+      kind: response.error.kind,
+      code: response.error.code,
+      diagnostics: Array.isArray(response.error.diagnostics) ? response.error.diagnostics.map(({ code, path, message }) => ({ code, path, message })) : [],
+    },
   },
   input_sha256: hash(input),
   stdout_sha256: hash(result.stdout),

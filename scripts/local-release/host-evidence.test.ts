@@ -405,6 +405,8 @@ describe('authenticated host evidence capture workflow', () => {
     expect(protocol).toContain('Never nest `markdown` or `json` below a `result` object.');
     expect(protocol).toContain('"markdown": "<complete Markdown Result>"');
     expect(protocol).toContain('"problem": { "code": "<code>", "message": "<message>" }');
+    expect(protocol).toContain('omit `candidate.json` entirely; never');
+    expect(protocol).toContain('set it to `null`');
   });
 
   it('should exclude archive metadata from the exact installable skill inventory', () => {
@@ -533,6 +535,8 @@ describe('authenticated host evidence capture workflow', () => {
       'breakdown-qualification-install-skills',
       'breakdown-qualification-setup-preflight',
       'Fixed qualification command rejected arguments.',
+      'Make no trial submission',
+      'error: response.error',
       'Sanitized visible interaction:',
       '[...sanitized middle omitted...]',
       'sanitizeHostEvidenceText',
