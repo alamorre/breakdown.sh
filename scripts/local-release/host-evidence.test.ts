@@ -389,6 +389,24 @@ describe('authenticated host support workflow', () => {
 });
 
 describe('authenticated host evidence capture workflow', () => {
+  it('should give execution agents exact successful and non-successful Candidate Outcome envelopes', async () => {
+    const protocol = await readFile(
+      join(
+        repositoryRoot,
+        'local',
+        'skills',
+        'run-breakdown',
+        'references',
+        'execution-protocol.md',
+      ),
+      'utf8',
+    );
+
+    expect(protocol).toContain('Never nest `markdown` or `json` below a `result` object.');
+    expect(protocol).toContain('"markdown": "<complete Markdown Result>"');
+    expect(protocol).toContain('"problem": { "code": "<code>", "message": "<message>" }');
+  });
+
   it('should exclude archive metadata from the exact installable skill inventory', () => {
     const inventory = [
       { path: 'MANIFEST.json', sha256: 'manifest' },

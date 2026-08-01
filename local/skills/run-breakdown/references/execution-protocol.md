@@ -78,6 +78,33 @@ For each returned Work Packet:
    `packet.submission`. Use `status: "succeeded"` only when the complete Markdown Result and any
    required JSON satisfy the packet. Otherwise use `failed`, `blocked`, or `cancelled`, include
    explanatory Markdown and exactly one `{code,message}` problem, and include no JSON.
+   Never nest `markdown` or `json` below a `result` object. A successful submission has this exact
+   field layout; replace both object placeholders with the complete values already returned by
+   `prepare_work`:
+
+   ```json
+   {
+     "schema_version": "breakdown.operation-request.v1",
+     "operation": "submit_candidate",
+     "packet": { "<complete Work Packet object>": "<replace this placeholder>" },
+     "candidate": {
+       "schema_version": "breakdown.candidate.v1",
+       "submission": { "<exact packet.submission object>": "<replace this placeholder>" },
+       "status": "succeeded",
+       "executor": { "kind": "agent", "name": "<host-selected name>" },
+       "markdown": "<complete Markdown Result>"
+     }
+   }
+   ```
+
+   Add top-level `candidate.json` only when the packet declares a Data Contract, using the complete
+   structured Result in the declared type. For a non-success, omit `candidate.json`, keep
+   `candidate.markdown`, and add exactly one top-level problem:
+
+   ```json
+   "problem": { "code": "<code>", "message": "<message>" }
+   ```
+
 5. Record Executor `kind`, a host-selected `name`, and optional host version only. Model and
    provider identity remain conversational and are never submitted.
 
