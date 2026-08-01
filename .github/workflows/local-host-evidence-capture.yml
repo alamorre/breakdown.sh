@@ -37,11 +37,11 @@ jobs:
             os: linux
             model: gpt-5.3-codex
             provider: openai
-          - row: macos-claude
+          - row: macos-mai
             runner: macos-15
             os: macos
-            model: claude-sonnet-4.6
-            provider: anthropic
+            model: mai-code-1-flash
+            provider: microsoft
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out the reviewed qualification boundary
@@ -108,10 +108,10 @@ jobs:
         include:
           - row: linux-gpt
             execution_model: gpt-5.3-codex
-            review_model: claude-sonnet-4.6
-            review_provider: anthropic
-          - row: macos-claude
-            execution_model: claude-sonnet-4.6
+            review_model: mai-code-1-flash
+            review_provider: microsoft
+          - row: macos-mai
+            execution_model: mai-code-1-flash
             review_model: gpt-5.3-codex
             review_provider: openai
     runs-on: ubuntu-24.04
