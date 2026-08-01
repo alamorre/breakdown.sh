@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createQualificationCommandShims,
   installableSkillInventory,
+  runCommand,
 } from './agent-host-qualification.mjs';
 import {
   GUIDED_HOST_JOURNEY_STAGES,
@@ -405,8 +406,17 @@ describe('authenticated host evidence capture workflow', () => {
     expect(protocol).toContain('Never nest `markdown` or `json` below a `result` object.');
     expect(protocol).toContain('"markdown": "<complete Markdown Result>"');
     expect(protocol).toContain('"problem": { "code": "<code>", "message": "<message>" }');
+    expect(protocol).toContain('`problem.code` must match `^[a-z][a-z0-9_]{0,63}$`');
     expect(protocol).toContain('omit `candidate.json` entirely; never');
     expect(protocol).toContain('set it to `null`');
+  });
+
+  it('should terminate a host subprocess when its invocation deadline expires', async () => {
+    await expect(
+      runCommand(process.execPath, ['-e', 'setInterval(() => {}, 1_000)'], {
+        timeoutMs: 50,
+      }),
+    ).rejects.toThrow('timed out after 50ms');
   });
 
   it('should exclude archive metadata from the exact installable skill inventory', () => {
@@ -536,6 +546,9 @@ describe('authenticated host evidence capture workflow', () => {
       'breakdown-qualification-setup-preflight',
       'Fixed qualification command rejected arguments.',
       'Make no trial submission',
+      'problem code process_denied',
+      'Starting Agent Host stage',
+      'Completed Agent Host stage',
       'error: response.error',
       'Sanitized visible interaction:',
       '[...sanitized middle omitted...]',
@@ -568,6 +581,7 @@ describe('authenticated host evidence capture workflow', () => {
     expect(executionHarness.match(/--add-dir=/g)).toHaveLength(1);
     expect(executionHarness).not.toContain('--allow-tool=shell(node');
     expect(harness.match(/--add-dir=/g)).toHaveLength(2);
+    expect(harness.match(/timeoutMs: AGENT_HOST_INVOCATION_TIMEOUT_MS/g)).toHaveLength(2);
     expect(harness).toContain("status: 'replace-with-passed-or-failed'");
     expect(harness).toContain('score: null');
   });

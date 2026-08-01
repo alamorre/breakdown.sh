@@ -115,6 +115,8 @@ For each returned Work Packet:
    Add top-level `candidate.json` only when the packet declares a Data Contract, using the complete
    structured Result in the declared type. For a non-success, omit `candidate.json` entirely; never
    set it to `null`. Keep `candidate.markdown`, and add exactly one singular top-level problem:
+   `problem.code` must match `^[a-z][a-z0-9_]{0,63}$` (lowercase snake_case, such as
+   `process_denied`).
 
    ```json
    "problem": { "code": "<code>", "message": "<message>" }

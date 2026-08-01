@@ -49,6 +49,8 @@ const CANONICAL_AGENT_SKILLS = Object.freeze([
   'setup-breakdown',
   'summarize-breakdown-run',
 ]);
+const AGENT_HOST_INVOCATION_TIMEOUT_MS = 6 * 60 * 1_000;
+const PROCESS_TERMINATION_GRACE_MS = 5_000;
 
 export function installableSkillInventory(inventory) {
   return inventory.filter(({ path }) =>
@@ -61,8 +63,13 @@ async function emptyDirectory(path, label) {
   invariant((await readdir(path)).length === 0, `${label} must be empty: ${path}`);
 }
 
-async function runCommand(command, args, options = {}) {
+export async function runCommand(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
+    invariant(
+      options.timeoutMs === undefined ||
+        (Number.isSafeInteger(options.timeoutMs) && options.timeoutMs > 0),
+      'Command timeout must be a positive safe integer.',
+    );
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
@@ -71,17 +78,42 @@ async function runCommand(command, args, options = {}) {
     });
     const stdout = [];
     const stderr = [];
+    let timedOut = false;
+    let timeout;
+    let forceKillTimeout;
+    const clearTimers = () => {
+      clearTimeout(timeout);
+      clearTimeout(forceKillTimeout);
+    };
+    if (options.timeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        forceKillTimeout = setTimeout(() => child.kill('SIGKILL'), PROCESS_TERMINATION_GRACE_MS);
+        forceKillTimeout.unref();
+      }, options.timeoutMs);
+      timeout.unref();
+    }
     child.stdout.on('data', (chunk) => stdout.push(chunk));
     child.stderr.on('data', (chunk) => stderr.push(chunk));
-    child.on('error', reject);
+    child.on('error', (error) => {
+      clearTimers();
+      reject(error);
+    });
     child.on('close', (code, signal) => {
+      clearTimers();
       const result = {
         code,
         signal,
+        timedOut,
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: Buffer.concat(stderr).toString('utf8'),
       };
-      if (code === 0) resolvePromise(result);
+      if (timedOut) {
+        const failure = new Error(`${command} timed out after ${options.timeoutMs}ms.`);
+        failure.result = result;
+        reject(failure);
+      } else if (code === 0) resolvePromise(result);
       else {
         const failure = new Error(
           `${command} exited ${code ?? `for signal ${signal}`}: ${result.stderr || result.stdout}`,
@@ -275,7 +307,7 @@ ${
 }
 ${
   procedure.id === 'blocked-case'
-    ? 'Make no trial submission. The first and only blocked candidate must contain top-level markdown and one singular top-level problem, and must omit json entirely rather than setting it to null. Omit result and problems. If that sole submission is rejected, re-inspect and stop; never repair or resubmit it.'
+    ? 'Make no trial submission. The first and only blocked candidate must contain top-level markdown and one singular top-level problem with the exact lowercase snake_case problem code process_denied, and must omit json entirely rather than setting it to null. Omit result and problems. If that sole submission is rejected, re-inspect and stop; never repair or resubmit it.'
     : ''
 }
 ${
@@ -1200,6 +1232,9 @@ export async function executeAgentHostQualification({
         skillSourceDirectory: installation.skillSourceDirectory,
       });
       let result;
+      process.stdout.write(
+        `Starting Agent Host stage ${position + 1}/${procedures.stages.length}: ${procedure.id}\n`,
+      );
       try {
         result = await runCommand(
           'copilot',
@@ -1250,14 +1285,20 @@ export async function executeAgentHostQualification({
               BREAKDOWN_QUALIFICATION_TERMINAL_RESULT: terminalBoundary?.path ?? '',
               BREAKDOWN_QUALIFICATION_TERMINAL_SHA256: terminalBoundary?.sha256 ?? '',
             }),
+            timeoutMs: AGENT_HOST_INVOCATION_TIMEOUT_MS,
           },
         );
       } catch (error) {
-        const unsafe = error.result?.stderr || error.result?.stdout || error.message;
+        const unsafe = error.result?.timedOut
+          ? error.message
+          : error.result?.stderr || error.result?.stdout || error.message;
         throw new Error(
           `Agent Host stage ${procedure.id} failed: ${sanitizeHostEvidenceText(unsafe, secrets)}`,
         );
       }
+      process.stdout.write(
+        `Completed Agent Host stage ${position + 1}/${procedures.stages.length}: ${procedure.id}\n`,
+      );
       invariant(
         JSON.stringify(await snapshotArtifacts(stageWorkspace.workspace)) ===
           JSON.stringify(stageWorkspaceBaseline),
@@ -1673,6 +1714,7 @@ export async function reviewAgentHostQualification({
   try {
     const secrets = credentialValues(environment);
     let result;
+    process.stdout.write(`Starting independent Agent Host review for ${row}\n`);
     try {
       result = await runCommand(
         'copilot',
@@ -1707,14 +1749,18 @@ export async function reviewAgentHostQualification({
             COPILOT_HOME: join(reviewHome, 'copilot-home'),
             HOME: reviewHome,
           }),
+          timeoutMs: AGENT_HOST_INVOCATION_TIMEOUT_MS,
         },
       );
     } catch (error) {
-      const unsafe = error.result?.stderr || error.result?.stdout || error.message;
+      const unsafe = error.result?.timedOut
+        ? error.message
+        : error.result?.stderr || error.result?.stdout || error.message;
       throw new Error(
         `Independent Agent Host review failed: ${sanitizeHostEvidenceText(unsafe, secrets)}`,
       );
     }
+    process.stdout.write(`Completed independent Agent Host review for ${row}\n`);
     const sanitized = sanitizeHostEvidenceText(result.stdout, secrets);
     const reviewOutput = validateReviewOutput(parseReviewOutput(sanitized), execution);
     const retainedEvidence = [...execution.retained_evidence];
