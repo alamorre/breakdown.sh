@@ -485,9 +485,9 @@ describe('authenticated host evidence capture workflow', () => {
       'runner: ubuntu-24.04',
       'runner: macos-15',
       'model: gpt-5.3-codex',
-      'row: macos-mai',
-      'model: mai-code-1-flash',
-      'provider: microsoft',
+      'row: macos-claude',
+      'model: claude-sonnet-4.6',
+      'provider: anthropic',
       'copilot --version',
       'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
       'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
@@ -586,8 +586,7 @@ describe('authenticated host evidence capture workflow', () => {
     expect(harness.match(/timeoutMs: AGENT_HOST_INVOCATION_TIMEOUT_MS/g)).toHaveLength(2);
     expect(harness).toContain("status: 'replace-with-passed-or-failed'");
     expect(harness).toContain('score: null');
-    expect(workflow.match(/mai-code-1-flash/g)).toHaveLength(3);
-    expect(workflow).not.toContain('claude-sonnet-4.6');
+    expect(workflow.match(/claude-sonnet-4.6/g)).toHaveLength(3);
   });
 });
 
