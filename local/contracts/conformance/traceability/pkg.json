@@ -106,6 +106,13 @@
       "requirements": ["REQ-PKG-016"],
       "oracle_type": "effect",
       "oracle": "Every maintained tuple runs the applicable suite against exact candidate digests and retains the full platform identity and corpus revision."
+    },
+    {
+      "id": "PKG-017",
+      "requirements": ["REQ-PKG-017"],
+      "oracle_type": "effect",
+      "retained_evidence": "scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml",
+      "oracle": "Stable publication accepts only an attested exact deferred empty support index or a fully qualified passing set and rejects missing, mismatched, or false Supported Host claims."
     }
   ]
 }

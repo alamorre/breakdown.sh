@@ -9,12 +9,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   HUMAN_RELEASE_ATTESTATIONS,
+  QUALIFIED_HUMAN_RELEASE_ATTESTATIONS,
   inspectLocalPublication,
   prepareLocalPublication,
   verifyPublishedLocalRelease,
   writeHumanReleaseApprovalTemplate,
 } from './publication.mjs';
-import { writeHostSupportMaterial } from './host-evidence.mjs';
+import { indexDeferredHostSupport, writeHostSupportMaterial } from './host-evidence.mjs';
 
 const temporaryDirectories: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -270,11 +271,18 @@ async function publicationFixture() {
     },
     evidence: row.evidence,
   }));
-  const hostIndexPath = join(root, 'breakdown-host-evidence-index.json');
+  const hostIndexPath = join(root, 'breakdown-host-support-index.json');
   await writeJson(hostIndexPath, {
-    schema_version: 'breakdown.guided-host-evidence-index.v1',
+    schema_version: 'breakdown.host-support-index.v1',
     release_version: releaseVersion,
+    tag: `breakdown-local-v${releaseVersion}`,
     status: 'passed',
+    policy: {
+      state: 'qualified',
+      certification_issue: 188,
+      supported_host_claims: supportedHosts.length,
+      evidence_rows: hostRows.length,
+    },
     candidate_digest: { algorithm: 'SHA-256', content: candidateDigest },
     corpus_revision: {
       file: 'local/contracts/MANIFEST.json',
@@ -312,7 +320,7 @@ async function publicationFixture() {
     gate: { satisfied: true },
   });
   await writeHostSupportMaterial({ indexPath: hostIndexPath, outputDirectory: supportDirectory });
-  await writeJson(join(supportDirectory, 'breakdown-host-evidence-index.attestation.json'), {
+  await writeJson(join(supportDirectory, 'breakdown-host-support-index.attestation.json'), {
     mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
   });
 
@@ -332,11 +340,16 @@ async function publicationFixture() {
       github_login: 'release-approver',
     },
     approved_at: '2026-07-29T20:00:00.000Z',
+    host_support_policy: {
+      state: 'qualified',
+      certification_issue: 188,
+      supported_hosts: supportedHosts,
+    },
     attestations: Object.fromEntries(
-      HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
+      QUALIFIED_HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
     ),
     statement:
-      'I approve publication of only the identified candidate bytes after completing every recorded human gate.',
+      'I approve publication of only the identified candidate bytes after reviewing and accepting the fully qualified passing host-support policy and its exact supported_hosts claims.',
   });
 
   const tagEvidencePath = join(root, 'breakdown-signed-tag-evidence.json');
@@ -399,6 +412,42 @@ function prepareFixture(fixture: Awaited<ReturnType<typeof publicationFixture>>)
   });
 }
 
+async function configureDeferredHostSupport(
+  fixture: Awaited<ReturnType<typeof publicationFixture>>,
+) {
+  await rm(fixture.supportDirectory, { recursive: true, force: true });
+  await mkdir(fixture.supportDirectory);
+  fixture.hostIndexPath = join(
+    fixture.candidateDirectory,
+    '..',
+    'breakdown-host-support-index.json',
+  );
+  await indexDeferredHostSupport({
+    candidateDirectory: fixture.candidateDirectory,
+    outputPath: fixture.hostIndexPath,
+    releaseTag: 'breakdown-local-v1.0.0',
+  });
+  await writeHostSupportMaterial({
+    indexPath: fixture.hostIndexPath,
+    outputDirectory: fixture.supportDirectory,
+  });
+  await writeJson(join(fixture.supportDirectory, 'breakdown-host-support-index.attestation.json'), {
+    mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
+  });
+  const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
+  approval.host_support_policy = {
+    state: 'deferred',
+    certification_issue: 188,
+    supported_hosts: [],
+  };
+  approval.attestations = Object.fromEntries(
+    HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
+  );
+  approval.statement =
+    'I approve publication of only the identified candidate bytes after reviewing and accepting the Breakdown Local 1.0 deferred host-certification policy with supported_hosts: [].';
+  await writeJson(fixture.approvalPath, approval);
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
@@ -433,11 +482,19 @@ describe('prepareLocalPublication', () => {
         github_login: '',
       },
       approved_at: '',
+      host_support_policy: {
+        state: 'deferred',
+        certification_issue: 188,
+        supported_hosts: [],
+      },
     });
     const template = JSON.parse(await readFile(outputPath, 'utf8'));
     expect(template.attestations).toEqual(
       Object.fromEntries(HUMAN_RELEASE_ATTESTATIONS.map((name) => [name, false])),
     );
+    expect(template.attestations).toHaveProperty('zero_claim_deferred_host_policy_reviewed', false);
+    expect(template.attestations).not.toHaveProperty('host_gate_passed');
+    expect(template.statement).toContain('supported_hosts: []');
   });
 
   it('should expose approval-template creation as a strict operator command', async () => {
@@ -510,6 +567,112 @@ describe('prepareLocalPublication', () => {
     expect(manifest.supported_hosts).toEqual(fixture.supportedHosts);
   });
 
+  it('should reject a qualified support set without an exact release-tag binding', async () => {
+    const fixture = await publicationFixture();
+    const hostIndex = JSON.parse(await readFile(fixture.hostIndexPath, 'utf8'));
+    delete hostIndex.tag;
+    await writeJson(fixture.hostIndexPath, hostIndex);
+
+    await expect(prepareFixture(fixture)).rejects.toThrow(
+      'Host support index is not bound to the canonical release schema and tag.',
+    );
+  });
+
+  it('should reject a zero-claim approval for a qualified support set', async () => {
+    const fixture = await publicationFixture();
+    const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
+    approval.host_support_policy = {
+      state: 'deferred',
+      certification_issue: 188,
+      supported_hosts: [],
+    };
+    await writeJson(fixture.approvalPath, approval);
+
+    await expect(prepareFixture(fixture)).rejects.toThrow(
+      'Human release approval does not match the authenticated host support policy.',
+    );
+  });
+
+  it('should publish the authenticated deferred policy with zero Supported Host claims', async () => {
+    const fixture = await publicationFixture();
+    await configureDeferredHostSupport(fixture);
+
+    await expect(prepareFixture(fixture)).resolves.toMatchObject({ supported_hosts: 0 });
+
+    const manifest = JSON.parse(
+      await readFile(
+        join(fixture.outputDirectory, 'breakdown-publication-manifest-1.0.0.json'),
+        'utf8',
+      ),
+    );
+    expect(manifest.host_support_policy).toMatchObject({
+      state: 'deferred',
+      certification_issue: 188,
+      supported_host_claims: 0,
+      evidence_rows: 0,
+    });
+    expect(manifest.supported_hosts).toEqual([]);
+    const notes = await readFile(
+      join(fixture.outputDirectory, 'breakdown-release-notes-1.0.0.md'),
+      'utf8',
+    );
+    expect(notes).toContain('supported_hosts: []');
+    expect(notes).toContain('Supported Host certification is deferred');
+    expect(notes).toContain('Compatible, not Supported');
+    expect(notes).toContain('Unsupported');
+    expect(notes).not.toContain('host gate passed');
+  });
+
+  it('should reject a deferred support set not bound to the signed release tag', async () => {
+    const fixture = await publicationFixture();
+    await configureDeferredHostSupport(fixture);
+    const hostIndex = JSON.parse(await readFile(fixture.hostIndexPath, 'utf8'));
+    hostIndex.tag = 'breakdown-local-v1.0.1';
+    await writeJson(fixture.hostIndexPath, hostIndex);
+
+    await expect(prepareFixture(fixture)).rejects.toThrow(
+      'Host support index is not bound to the canonical release schema and tag.',
+    );
+  });
+
+  it('should reject a non-empty claim disguised as deferred support', async () => {
+    const fixture = await publicationFixture();
+    await configureDeferredHostSupport(fixture);
+    const hostIndex = JSON.parse(await readFile(fixture.hostIndexPath, 'utf8'));
+    hostIndex.supported_hosts = [{ surface: 'Fabricated Host' }];
+    await writeJson(fixture.hostIndexPath, hostIndex);
+
+    await expect(prepareFixture(fixture)).rejects.toThrow(
+      'Deferred host support must contain zero evidence rows and zero claims.',
+    );
+  });
+
+  it('should reject a post-assembly false claim even when publication checksums are updated', async () => {
+    const fixture = await publicationFixture();
+    await configureDeferredHostSupport(fixture);
+    await prepareFixture(fixture);
+    const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const manifestPath = join(fixture.outputDirectory, manifestFile);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.supported_hosts = [{ surface: 'Fabricated Host' }];
+    await writeJson(manifestPath, manifest);
+    const checksumPath = join(fixture.outputDirectory, 'breakdown-publication-SHA256SUMS-1.0.0');
+    const manifestDigest = sha256(await readFile(manifestPath));
+    const checksumLines = (await readFile(checksumPath, 'utf8'))
+      .trimEnd()
+      .split('\n')
+      .map((line) =>
+        line.endsWith(`  ${manifestFile}`) ? `${manifestDigest}  ${manifestFile}` : line,
+      );
+    await writeFile(checksumPath, `${checksumLines.join('\n')}\n`);
+
+    await expect(
+      inspectLocalPublication({ publicationDirectory: fixture.outputDirectory }),
+    ).rejects.toThrow(
+      'Publication host support policy and claims do not match the authenticated index.',
+    );
+  });
+
   it('should keep publication closed when one human gate is not approved', async () => {
     const fixture = await publicationFixture();
     const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
@@ -554,7 +717,7 @@ describe('prepareLocalPublication', () => {
     );
 
     await expect(prepareFixture(fixture)).rejects.toThrow(
-      'Generated host support Markdown is not derived from the exact passing host index.',
+      'Generated host support Markdown is not derived from the authenticated host support index.',
     );
   });
 
@@ -580,7 +743,7 @@ describe('prepareLocalPublication', () => {
         fixture.candidateDirectory,
         '--platform-index',
         fixture.platformIndexPath,
-        '--host-index',
+        '--host-support-index',
         fixture.hostIndexPath,
         '--host-support',
         fixture.supportDirectory,
@@ -654,6 +817,7 @@ describe('verifyPublishedLocalRelease', () => {
 
   it('should verify every public byte, immutable release record, npm channel, and signature', async () => {
     const fixture = await publicationFixture();
+    await configureDeferredHostSupport(fixture);
     await prepareFixture(fixture);
     const workDirectory = join(fixture.outputDirectory, '..', 'public-verification');
     await mkdir(workDirectory);
@@ -662,11 +826,13 @@ describe('verifyPublishedLocalRelease', () => {
       ['@breakdown-sh/cli@1.0.0', 'breakdown-sh-cli-1.0.0.tgz'],
       ['@breakdown-sh/mcp@1.0.0', 'breakdown-sh-mcp-1.0.0.tgz'],
     ]);
+    const commands: Array<{ command: string; args: string[] }> = [];
     const commandRunner = async (
       command: string,
       args: string[],
       options: { cwd?: string } = {},
     ) => {
+      commands.push({ command, args });
       if (command === 'gh' && args[0] === 'release' && args[1] === 'download') {
         const destination = args[args.indexOf('--dir') + 1]!;
         await mkdir(destination, { recursive: true });
@@ -797,7 +963,17 @@ platform-index-artifact-id: 5678`,
         exact_tarballs: 3,
         signatures_and_provenance: 'passed',
       },
+      host_support_policy: { state: 'deferred' },
+      supported_hosts: 0,
     });
+    expect(
+      commands.find(
+        ({ command, args }) =>
+          command === 'gh' &&
+          args[0] === 'attestation' &&
+          args.some((arg) => arg.endsWith('breakdown-host-support-index.attestation.json')),
+      )?.args[2],
+    ).toContain('breakdown-host-support-index.json');
   });
 });
 
@@ -830,6 +1006,8 @@ describe('stable publication workflow', () => {
       '([.rules[].type] | index("deletion"))',
       '(.bypass_actors | length) == 0',
       'gh attestation verify "$HOST_INDEX"',
+      'breakdown-host-support-index.json',
+      'breakdown-host-support-index.attestation.json',
       '--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-host-support.yml"',
       'pnpm local:release:prepare-publication',
       'actions/attest@v4',

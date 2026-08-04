@@ -59,6 +59,26 @@ export const HOST_OUTCOME_PARITY_EXCLUSIONS = Object.freeze([
 export const HOST_REVIEW_ATTESTATION =
   'I reviewed every retained journey, action, artifact, rubric, hostile-content, and outcome-parity record for this exact row.';
 
+export const DEFERRED_HOST_SUPPORT_POLICY = Object.freeze({
+  state: 'deferred',
+  certification_issue: 188,
+  supported_host_claims: 0,
+  evidence_rows: 0,
+  capture_workflow: Object.freeze({
+    file: '.github/workflows/local-host-evidence-capture.yml',
+    workflow_id: 324133712,
+    required_state: 'disabled_manually',
+  }),
+});
+
+export const DEFERRED_HOST_CLASSIFICATIONS = Object.freeze({
+  supported: 'No Agent Host is Supported by Breakdown Local 1.0 while certification is deferred.',
+  compatible:
+    'A capable Agent Host without an exact passing indexed row is Compatible, not Supported.',
+  unsupported:
+    'A host on a non-maintained operating system, bare model, or unprovisioned cloud surface is Unsupported for this release.',
+});
+
 const QUALIFICATION_FIXTURE_ROOT = new URL('./host-qualification-fixture/', import.meta.url);
 const QUALIFICATION_FIXTURE_FILES = Object.freeze([
   'operator-reference/breakdown.expected.yaml',
@@ -2006,6 +2026,48 @@ function supportedHostRow(row) {
   };
 }
 
+export async function indexDeferredHostSupport({ candidateDirectory, outputPath, releaseTag }) {
+  const { manifest, digest, corpusRevision } = await readCandidateRelease(candidateDirectory);
+  const provenance = await readCandidateProvenance(candidateDirectory, manifest.release_version);
+  invariant(
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(manifest.release_version) &&
+      releaseTag === `breakdown-local-v${manifest.release_version}`,
+    'Host support tag does not identify the exact candidate release.',
+  );
+  const index = {
+    schema_version: 'breakdown.host-support-index.v1',
+    release_version: manifest.release_version,
+    tag: releaseTag,
+    status: 'deferred',
+    policy: DEFERRED_HOST_SUPPORT_POLICY,
+    candidate_digest: digest,
+    corpus_revision: corpusRevision,
+    source: {
+      repository: provenance.source.repository,
+      git_commit: provenance.source.git_commit,
+    },
+    coverage: {
+      guided_cli_operating_systems: [],
+      model_families: [],
+      provider_families: [],
+    },
+    rows: [],
+    supported_hosts: [],
+    classifications: DEFERRED_HOST_CLASSIFICATIONS,
+    outcome_parity: {
+      assessed: false,
+      disclaimed_dimensions: HOST_OUTCOME_PARITY_EXCLUSIONS,
+    },
+    gate: {
+      requirement:
+        'Stable publication requires this authenticated deferred empty policy or a fully qualified passing support set.',
+      satisfied: true,
+    },
+  };
+  await writeFile(outputPath, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 });
+  return index;
+}
+
 export async function indexHostEvidence({ candidateDirectory, evidencePaths, outputPath }) {
   const { manifest, digest, corpusRevision } = await readCandidateRelease(candidateDirectory);
   const provenance = await readCandidateProvenance(candidateDirectory, manifest.release_version);
@@ -2179,6 +2241,65 @@ export function validatePassingHostIndex(index) {
   );
 }
 
+export function validateHostSupportIndex(index) {
+  if (index.schema_version === 'breakdown.guided-host-evidence-index.v1') {
+    validatePassingHostIndex(index);
+    return;
+  }
+  invariant(
+    index.schema_version === 'breakdown.host-support-index.v1',
+    'Host support index has the wrong schema.',
+  );
+  if (index.policy?.state === 'qualified') {
+    invariant(
+      index.status === 'passed' &&
+        index.gate?.satisfied === true &&
+        index.tag === `breakdown-local-v${index.release_version}` &&
+        index.policy.certification_issue === 188 &&
+        index.policy.evidence_rows === index.rows?.length &&
+        index.policy.supported_host_claims === index.supported_hosts?.length &&
+        Object.keys(index.policy).length === 4,
+      'Qualified host support policy is incomplete or altered.',
+    );
+    validatePassingHostIndex({
+      ...index,
+      schema_version: 'breakdown.guided-host-evidence-index.v1',
+    });
+    return;
+  }
+  invariant(
+    index.status === 'deferred' &&
+      index.gate?.satisfied === true &&
+      /^breakdown-local-v\d+\.\d+\.\d+$/.test(index.tag ?? '') &&
+      index.tag === `breakdown-local-v${index.release_version}`,
+    'Host support index is not an authenticated deferred release policy.',
+  );
+  invariant(
+    JSON.stringify(index.policy) === JSON.stringify(DEFERRED_HOST_SUPPORT_POLICY),
+    'Deferred host support policy is incomplete or altered.',
+  );
+  invariant(
+    Array.isArray(index.rows) &&
+      index.rows.length === 0 &&
+      Array.isArray(index.supported_hosts) &&
+      index.supported_hosts.length === 0 &&
+      JSON.stringify(index.coverage) ===
+        JSON.stringify({
+          guided_cli_operating_systems: [],
+          model_families: [],
+          provider_families: [],
+        }),
+    'Deferred host support must contain zero evidence rows and zero claims.',
+  );
+  invariant(
+    JSON.stringify(index.classifications) === JSON.stringify(DEFERRED_HOST_CLASSIFICATIONS) &&
+      index.outcome_parity?.assessed === false &&
+      JSON.stringify(index.outcome_parity?.disclaimed_dimensions) ===
+        JSON.stringify(HOST_OUTCOME_PARITY_EXCLUSIONS),
+    'Deferred host support contains a false classification or qualification claim.',
+  );
+}
+
 function markdownCell(value) {
   return String(value).replaceAll('|', '\\|').replaceAll('\n', ' ');
 }
@@ -2191,6 +2312,8 @@ export function generatedHostSupportJson(index, indexFile, indexDigest) {
       file: indexFile,
       sha256: indexDigest,
     },
+    tag: index.tag,
+    policy: index.policy,
     supported_hosts: index.supported_hosts,
     classifications: index.classifications,
     outcome_parity: index.outcome_parity,
@@ -2198,6 +2321,28 @@ export function generatedHostSupportJson(index, indexFile, indexDigest) {
 }
 
 export function generatedHostSupportMarkdown(index, indexFile, indexDigest) {
+  if (index.policy?.state === 'deferred') {
+    return `# Supported Agent Hosts
+
+Document kind: Generated immutable release evidence
+
+Document version: ${index.release_version}
+
+Generated only from \`${indexFile}\` (SHA-256 \`${indexDigest}\`). Regenerate this file instead of editing it by hand.
+
+## Supported Host certification is deferred
+
+| Supported Host rows | Policy |
+| --- | --- |
+| None | Certification is deliberately deferred to issue #188. |
+
+\`supported_hosts: []\`
+
+No Agent Host is Supported by Breakdown Local 1.0. An Agent Host with the required capabilities is Compatible, not Supported. Windows and any host on a non-maintained operating system, bare model, or unprovisioned cloud surface are Unsupported.
+
+The authenticated empty index is deliberate release evidence, not a passing real-host qualification. \`local-host-evidence-capture.yml\` (workflow ID \`324133712\`) must remain disabled until issue #188 is implemented and accepted.
+`;
+  }
   const rows = index.supported_hosts
     .map((row) => {
       const exactRow = `${row.surface} ${row.version} / ${row.os_name} ${row.os_version} (${row.os_release}) / ${row.architecture} / ${row.transport}`;
@@ -2237,7 +2382,7 @@ Qualification assesses outcome parity. It does not claim identical UI, wording, 
 export async function writeHostSupportMaterial({ indexPath, outputDirectory }) {
   const indexBytes = await readFile(indexPath);
   const index = parseJson(indexBytes, 'Host evidence index');
-  validatePassingHostIndex(index);
+  validateHostSupportIndex(index);
   const indexFile = basename(indexPath);
   const indexDigest = sha256(indexBytes);
   const support = generatedHostSupportJson(index, indexFile, indexDigest);

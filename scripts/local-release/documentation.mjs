@@ -115,9 +115,7 @@ export async function buildDocumentation(expectedSkillManifestBytes) {
   if (!Array.isArray(candidatePackagePaths) || candidatePackagePaths.length !== 3) {
     throw new Error('Release metadata must name the three inspected candidate package manifests.');
   }
-  const packageManifests = await Promise.all(
-    candidatePackagePaths.map((path) => readJson(path)),
-  );
+  const packageManifests = await Promise.all(candidatePackagePaths.map((path) => readJson(path)));
 
   const guideAuthorities = await authorityLines([
     'local/contracts/specifications/conformance.md',
@@ -160,15 +158,13 @@ export async function buildDocumentation(expectedSkillManifestBytes) {
       'local/contracts/conformance/hosts/fixtures/guided-journey.json',
       'local/contracts/conformance/hosts/fixtures/human-rubric.json',
       'local/contracts/conformance/traceability/host.json',
+      'local/contracts/schemas/breakdown.host-support-index.v1.schema.json',
       'local/contracts/specifications/skills-and-hosts.md',
       releaseMetadataPath,
       'local/skills/setup-breakdown/assets/skill-pack-manifest.json',
     ],
     new Map([
-      [
-        'local/skills/setup-breakdown/assets/skill-pack-manifest.json',
-        expectedSkillManifestBytes,
-      ],
+      ['local/skills/setup-breakdown/assets/skill-pack-manifest.json', expectedSkillManifestBytes],
     ]),
   );
 
@@ -202,7 +198,7 @@ Generated reference is non-normative and records the exact input digests from wh
 
 ## Immutable release evidence
 
-The release manifest and passing indexed evidence attached to
+The release manifest and authenticated host-support policy attached to
 [the immutable ${immutableTag} release](${immutableReleaseUrl}) are the only authority for exact
 artifact inventory, channels, and Supported Host claims. Checked-in source documentation does not
 turn missing evidence into a conformance or support claim.
@@ -275,8 +271,8 @@ distinguishes stale and non-success history, and creates no durable summary reco
 - Run Authority comes only from the user or Agent Host. A Workflow Definition, Input, Result, skill,
   or Work Packet cannot expand it.
 - Unsupported surfaces include hosted storage as a local Run authority, bare model endpoints,
-  remote/synchronized filesystems, browser runtimes, alternate runtimes, and any host/version/OS
-  row without passing indexed evidence.
+  remote/synchronized filesystems, browser runtimes, alternate runtimes, Windows, and surfaces
+  without the mandatory capabilities. A capable but unqualified Agent Host is Compatible.
 - Immutable version links use [${immutableTag}](${immutableRepositoryRoot}); mutable branches and
   discovery services cannot redefine this release.
 
@@ -378,7 +374,11 @@ references under \`local/skills/setup-breakdown/references/\`.
       `\`${manifest.name}\``,
       `\`${manifest.version}\``,
       `\`${manifest.engines.node}\``,
-      manifest.bin ? Object.keys(manifest.bin).map((item) => `\`${item}\``).join(', ') : 'library',
+      manifest.bin
+        ? Object.keys(manifest.bin)
+            .map((item) => `\`${item}\``)
+            .join(', ')
+        : 'library',
       inspectPackageManifest(manifest, expected),
     ];
   });
@@ -410,7 +410,7 @@ as \`${String(releaseMetadata.candidate_inspection.immutable_release_manifest)}\
 
   const supportRows =
     skillManifest.supported_hosts.length === 0
-      ? [['None', 'No passing indexed immutable host evidence is recorded for this source tree.']]
+      ? [['None', 'Certification is deliberately deferred to issue #188.']]
       : skillManifest.supported_hosts.map((row) => [
           `${row.surface} ${row.version} / ${row.os_name} ${row.os_version} (${row.os_release}) / ${row.architecture} / ${row.transport}`,
           `${row.evidence.artifact_name} / row SHA-256 ${row.evidence.file_sha256}`,
@@ -422,7 +422,16 @@ ${generatedNotice(supportAuthorities)}
 
 ## Supported Host rows
 
-${markdownTable(['Exact row', 'Passing immutable evidence'], supportRows)}
+${markdownTable(['Exact row', 'Immutable policy or evidence'], supportRows)}
+
+## Supported Host certification is deferred
+
+\`supported_hosts: []\`
+
+Breakdown Local 1.0 deliberately carries no named Supported Host claim. The authenticated empty
+support index records policy state \`${releaseMetadata.host_support_policy.state}\`; it is not a
+passing real-host qualification. Certification work continues in issue
+#${releaseMetadata.host_support_policy.certification_issue}.
 
 An Agent Host with the required capabilities but no exact passing row is Compatible, not Supported.
 A bare model or unprovisioned cloud surface is Unsupported. Support claims attach to an exact host
@@ -430,6 +439,11 @@ surface, host version, operating system, transport, Breakdown version, artifact 
 indexed evidence. Model/provider families do not become durable compatibility claims.
 
 Evidence rule: ${releaseMetadata.exact_evidence.claim}
+
+\`${releaseMetadata.host_support_policy.capture_workflow.file}\` (workflow ID
+\`${releaseMetadata.host_support_policy.capture_workflow.workflow_id}\`) must remain
+\`${releaseMetadata.host_support_policy.capture_workflow.required_state}\` and must not be
+dispatched for 1.0. It may be re-enabled only after issue #188 is implemented and accepted.
 `,
   );
 

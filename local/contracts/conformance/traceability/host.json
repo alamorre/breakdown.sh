@@ -38,7 +38,9 @@
     {
       "id": "HOST-004",
       "requirements": ["REQ-HOST-004"],
-      "oracle": "Indexed passing rows cover guided CLI on Linux and macOS plus at least two model/provider families, and non-maintained operating systems cannot create Supported Host claims."
+      "oracle_type": "effect",
+      "retained_evidence": "scripts/local-release/host-evidence.test.ts; .github/workflows/local-host-support.yml",
+      "oracle": "The attested candidate/source/tag-bound 1.0 support index records deferred policy, zero rows, and zero claims; capable hosts remain Compatible, Unsupported surfaces remain Unsupported, and the disabled capture workflow is neither dispatched nor enabled."
     },
     {
       "id": "HOST-005",

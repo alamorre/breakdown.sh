@@ -5,9 +5,10 @@ import { promisify } from 'node:util';
 
 import { sha256, sha512 } from './filesystem.mjs';
 import {
+  DEFERRED_HOST_SUPPORT_POLICY,
   generatedHostSupportJson,
   generatedHostSupportMarkdown,
-  validatePassingHostIndex,
+  validateHostSupportIndex,
 } from './host-evidence.mjs';
 import { releaseChannel } from './release-channel.mjs';
 
@@ -21,6 +22,15 @@ const maintainedPlatformTuples = [
   { os: 'macos', architecture: 'x64' },
   { os: 'macos', architecture: 'arm64' },
 ];
+const DEFERRED_APPROVAL_POLICY = Object.freeze({
+  state: DEFERRED_HOST_SUPPORT_POLICY.state,
+  certification_issue: DEFERRED_HOST_SUPPORT_POLICY.certification_issue,
+  supported_hosts: Object.freeze([]),
+});
+const DEFERRED_APPROVAL_STATEMENT =
+  'I approve publication of only the identified candidate bytes after reviewing and accepting the Breakdown Local 1.0 deferred host-certification policy with supported_hosts: [].';
+const QUALIFIED_APPROVAL_STATEMENT =
+  'I approve publication of only the identified candidate bytes after reviewing and accepting the fully qualified passing host-support policy and its exact supported_hosts claims.';
 
 export const HUMAN_RELEASE_ATTESTATIONS = Object.freeze([
   'legal_licensor_identity_confirmed',
@@ -41,13 +51,20 @@ export const HUMAN_RELEASE_ATTESTATIONS = Object.freeze([
   'documentation_gate_passed',
   'traceability_gate_passed',
   'platform_gate_passed',
-  'host_gate_passed',
+  'zero_claim_deferred_host_policy_reviewed',
   'github_release_immutability_enabled',
   'tag_protection_enabled',
   'npm_trusted_publishing_configured',
   'npm_provenance_enabled',
   'npm_registry_signatures_required',
 ]);
+export const QUALIFIED_HUMAN_RELEASE_ATTESTATIONS = Object.freeze(
+  HUMAN_RELEASE_ATTESTATIONS.map((name) =>
+    name === 'zero_claim_deferred_host_policy_reviewed'
+      ? 'qualified_host_support_policy_reviewed'
+      : name,
+  ),
+);
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -313,16 +330,43 @@ function validatePlatformIndex(index, candidate) {
 }
 
 function validateHostIndex(index, candidate) {
-  validateBoundEvidence(
-    index,
-    'breakdown.guided-host-evidence-index.v1',
-    'Host evidence index',
-    candidate,
+  invariant(
+    index.schema_version === 'breakdown.host-support-index.v1' && index.tag === candidate.tag,
+    'Host support index is not bound to the canonical release schema and tag.',
   );
-  validatePassingHostIndex(index);
+  validateHostSupportIndex(index);
+  invariant(
+    index.release_version === candidate.releaseVersion &&
+      index.gate?.satisfied === true &&
+      sameJson(index.candidate_digest, candidate.digest) &&
+      sameJson(index.corpus_revision, candidate.corpusRevision) &&
+      index.source?.repository === candidate.provenance.source.repository &&
+      index.source?.git_commit === candidate.provenance.source.git_commit,
+    'Host support index is not bound to the exact candidate, source, corpus, and tag.',
+  );
 }
 
-function validateApproval(approval, candidate) {
+function approvalRequirements(hostIndex) {
+  if (hostIndex.policy.state === 'deferred') {
+    return {
+      attestations: HUMAN_RELEASE_ATTESTATIONS,
+      policy: DEFERRED_APPROVAL_POLICY,
+      statement: DEFERRED_APPROVAL_STATEMENT,
+    };
+  }
+  return {
+    attestations: QUALIFIED_HUMAN_RELEASE_ATTESTATIONS,
+    policy: {
+      state: 'qualified',
+      certification_issue: hostIndex.policy.certification_issue,
+      supported_hosts: hostIndex.supported_hosts,
+    },
+    statement: QUALIFIED_APPROVAL_STATEMENT,
+  };
+}
+
+function validateApproval(approval, candidate, hostIndex) {
+  const requirements = approvalRequirements(hostIndex);
   invariant(
     approval.schema_version === 'breakdown.human-release-approval.v1' &&
       approval.release_version === candidate.releaseVersion &&
@@ -333,21 +377,24 @@ function validateApproval(approval, candidate) {
     'Human release approval is not bound to the exact candidate.',
   );
   invariant(
+    sameJson(approval.host_support_policy, requirements.policy),
+    'Human release approval does not match the authenticated host support policy.',
+  );
+  invariant(
     exactString(approval.approver?.name) &&
       /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(approval.approver?.email ?? '') &&
       /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(
         approval.approver?.github_login ?? '',
       ) &&
       Number.isFinite(Date.parse(approval.approved_at)) &&
-      approval.statement ===
-        'I approve publication of only the identified candidate bytes after completing every recorded human gate.',
+      approval.statement === requirements.statement,
     'Human release approval has incomplete approver identity or statement.',
   );
   invariant(
     sameJson(
       Object.keys(approval.attestations ?? {}).sort(),
-      [...HUMAN_RELEASE_ATTESTATIONS].sort(),
-    ) && HUMAN_RELEASE_ATTESTATIONS.every((name) => approval.attestations[name] === true),
+      [...requirements.attestations].sort(),
+    ) && requirements.attestations.every((name) => approval.attestations[name] === true),
     'Human release approval does not affirm every required gate.',
   );
 }
@@ -416,9 +463,9 @@ export async function writeHumanReleaseApprovalTemplate({ candidateDirectory, ou
       github_login: '',
     },
     approved_at: '',
+    host_support_policy: DEFERRED_APPROVAL_POLICY,
     attestations: Object.fromEntries(HUMAN_RELEASE_ATTESTATIONS.map((name) => [name, false])),
-    statement:
-      'I approve publication of only the identified candidate bytes after completing every recorded human gate.',
+    statement: DEFERRED_APPROVAL_STATEMENT,
   };
   await writeFile(outputPath, `${JSON.stringify(template, null, 2)}\n`, {
     flag: 'wx',
@@ -449,6 +496,10 @@ async function artifactRecord(directory, file, role) {
 }
 
 function releaseNotes(candidate, platformIndex, hostIndex) {
+  const hostQualification =
+    hostIndex.policy?.state === 'deferred'
+      ? `- Supported Host certification is deferred for Breakdown Local 1.0.\n- \`supported_hosts: []\`\n- Capable unqualified Agent Hosts are Compatible, not Supported. Windows and surfaces without the mandatory capabilities are Unsupported.`
+      : `- ${hostIndex.supported_hosts.length} exact Agent Host rows are Supported.\n- Other capable Agent Hosts remain Compatible unless their exact row appears in the attached\n  generated support evidence.`;
   return `# Breakdown Local ${candidate.releaseVersion}
 
 This stable release publishes the exact once-built candidate identified by
@@ -467,9 +518,7 @@ exact full version.
 ## Qualification
 
 - ${platformIndex.rows.length} maintained platform rows passed against the exact candidate.
-- ${hostIndex.supported_hosts.length} exact Agent Host rows are Supported.
-- Other capable Agent Hosts remain Compatible unless their exact row appears in the attached
-  generated support evidence.
+${hostQualification}
 
 The attached publication manifest, evidence indexes, checksums, SBOM, provenance inputs, legal
 material, and human approval are the complete release evidence.
@@ -505,12 +554,14 @@ export async function prepareLocalPublication({
   const tagInput = await readJson(tagEvidencePath, 'Signed tag evidence');
   validatePlatformIndex(platformInput.value, candidate);
   validateHostIndex(hostInput.value, candidate);
-  validateApproval(approvalInput.value, candidate);
+  validateApproval(approvalInput.value, candidate, hostInput.value);
   validateTagEvidence(tagInput.value, candidate);
 
   const supportFiles = await regularFiles(supportDirectory, 'Generated host support directory');
+  const hostFile = 'breakdown-host-support-index.json';
+  const hostAttestationFile = 'breakdown-host-support-index.attestation.json';
   const expectedSupportFiles = [
-    'breakdown-host-evidence-index.attestation.json',
+    hostAttestationFile,
     `breakdown-supported-hosts-${candidate.releaseVersion}.json`,
     `breakdown-supported-hosts-${candidate.releaseVersion}.md`,
   ].sort();
@@ -519,20 +570,19 @@ export async function prepareLocalPublication({
     'Generated host support directory has an incomplete or unexpected inventory.',
   );
   const supportJsonFile = `breakdown-supported-hosts-${candidate.releaseVersion}.json`;
-  const hostFile = 'breakdown-host-evidence-index.json';
   const hostDigest = sha256(hostInput.bytes);
   const expectedSupportJson = generatedHostSupportJson(hostInput.value, hostFile, hostDigest);
   const supportJsonBytes = await readFile(join(supportDirectory, supportJsonFile));
   const supportJson = parseJson(supportJsonBytes, 'Generated host support JSON');
   invariant(
     sameJson(supportJson, expectedSupportJson),
-    'Generated host support is not derived from the exact passing host index.',
+    'Generated host support is not derived from the authenticated host support index.',
   );
   const supportMarkdownFile = `breakdown-supported-hosts-${candidate.releaseVersion}.md`;
   invariant(
     (await readFile(join(supportDirectory, supportMarkdownFile), 'utf8')) ===
       generatedHostSupportMarkdown(hostInput.value, hostFile, hostDigest),
-    'Generated host support Markdown is not derived from the exact passing host index.',
+    'Generated host support Markdown is not derived from the authenticated host support index.',
   );
 
   for (const file of candidate.files) {
@@ -559,10 +609,10 @@ export async function prepareLocalPublication({
     [candidate.manifestFile, 'candidate-release-manifest'],
     ['SHA256SUMS', 'candidate-checksum-inventory'],
     [platformFile, 'platform-evidence-index'],
-    [hostFile, 'host-evidence-index'],
+    [hostFile, 'host-support-index'],
     [supportJsonFile, 'generated-supported-hosts'],
     [supportMarkdownFile, 'generated-supported-hosts'],
-    ['breakdown-host-evidence-index.attestation.json', 'host-index-attestation'],
+    [hostAttestationFile, 'host-index-attestation'],
     [approvalFile, 'human-release-approval'],
     [tagFile, 'signed-tag-evidence'],
     [notesFile, 'release-notes'],
@@ -597,10 +647,11 @@ export async function prepareLocalPublication({
     artifacts,
     packages: candidate.manifest.packages,
     qualified_platforms: platformInput.value.rows,
+    host_support_policy: hostInput.value.policy ?? { state: 'qualified' },
     supported_hosts: hostInput.value.supported_hosts,
     evidence: {
       platform_index: { file: platformFile, sha256: sha256(platformInput.bytes) },
-      host_index: { file: hostFile, sha256: sha256(hostInput.bytes) },
+      host_support_index: { file: hostFile, sha256: sha256(hostInput.bytes) },
       human_approval: { file: approvalFile, sha256: sha256(approvalInput.bytes) },
       signed_tag: { file: tagFile, sha256: sha256(tagInput.bytes) },
     },
@@ -702,6 +753,41 @@ export async function inspectLocalPublication({ publicationDirectory }) {
       candidate.manifestFile === manifest.candidate?.release_manifest?.file &&
       sha256(candidate.manifestBytes) === manifest.candidate?.release_manifest?.sha256,
     'Publication manifest is not bound to its preserved candidate.',
+  );
+  const hostIndexFile = manifest.evidence?.host_support_index?.file;
+  invariant(
+    releaseFilePattern.test(hostIndexFile ?? '') && files.includes(hostIndexFile),
+    'Publication manifest has no retained host support index.',
+  );
+  const hostIndexBytes = await readFile(join(publicationDirectory, hostIndexFile));
+  invariant(
+    sha256(hostIndexBytes) === manifest.evidence.host_support_index.sha256,
+    'Publication host support index digest does not match its evidence binding.',
+  );
+  const hostIndex = parseJson(hostIndexBytes, 'Publication host support index');
+  validateHostIndex(hostIndex, candidate);
+  invariant(
+    sameJson(manifest.host_support_policy, hostIndex.policy ?? { state: 'qualified' }) &&
+      sameJson(manifest.supported_hosts, hostIndex.supported_hosts),
+    'Publication host support policy and claims do not match the authenticated index.',
+  );
+  const supportJsonFile = `breakdown-supported-hosts-${manifest.release_version}.json`;
+  const supportMarkdownFile = `breakdown-supported-hosts-${manifest.release_version}.md`;
+  invariant(
+    files.includes(supportJsonFile) && files.includes(supportMarkdownFile),
+    'Publication is missing generated host support material.',
+  );
+  invariant(
+    sameJson(
+      parseJson(
+        await readFile(join(publicationDirectory, supportJsonFile)),
+        'Publication generated host support JSON',
+      ),
+      generatedHostSupportJson(hostIndex, hostIndexFile, sha256(hostIndexBytes)),
+    ) &&
+      (await readFile(join(publicationDirectory, supportMarkdownFile), 'utf8')) ===
+        generatedHostSupportMarkdown(hostIndex, hostIndexFile, sha256(hostIndexBytes)),
+    'Publication generated host support material does not match the authenticated index.',
   );
   return {
     schema_version: 'breakdown.publication-inspection.v1',
@@ -882,16 +968,25 @@ export async function verifyPublishedLocalRelease({
     {},
   );
   await assertMatchingDirectories(publicationDirectory, releaseAssetsDirectory, publicationFiles);
+  const hostIndexFile = manifest.evidence.host_support_index.file;
+  const hostAttestationFile = manifest.artifacts.find(
+    (artifact) => artifact.role === 'host-index-attestation',
+  )?.file;
+  invariant(
+    releaseFilePattern.test(hostIndexFile ?? '') &&
+      releaseFilePattern.test(hostAttestationFile ?? ''),
+    'Publication has no exact host support index and attestation.',
+  );
   await commandRunner(
     'gh',
     [
       'attestation',
       'verify',
-      join(releaseAssetsDirectory, 'breakdown-host-evidence-index.json'),
+      join(releaseAssetsDirectory, hostIndexFile),
       '--repo',
       repository,
       '--bundle',
-      join(releaseAssetsDirectory, 'breakdown-host-evidence-index.attestation.json'),
+      join(releaseAssetsDirectory, hostAttestationFile),
       '--signer-workflow',
       `${repository}/.github/workflows/local-host-support.yml`,
       '--source-ref',
@@ -1033,6 +1128,8 @@ export async function verifyPublishedLocalRelease({
       exact_tarballs: manifest.packages.length,
       signatures_and_provenance: 'passed',
     },
+    host_support_policy: manifest.host_support_policy,
+    supported_hosts: manifest.supported_hosts.length,
     license_scope: manifest.license_scope,
   };
 }

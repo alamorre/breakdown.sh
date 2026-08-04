@@ -13,7 +13,7 @@ authoritative. Regenerate this file instead of editing it by hand.
 - `local/contracts/schemas/breakdown.operation-request.v1.schema.json` — SHA-256 `d1e0fd4fdbb711d3d1452802ba42ea5e059f6726bdf45447bd5c8bddd2152e3e`
 - `local/contracts/schemas/breakdown.operation-value.v1.schema.json` — SHA-256 `4484e729885785b745db13851484c4a1238f095ec377e43d338e98080dcdc83c`
 - `local/contracts/specifications/operations.md` — SHA-256 `335f9f4c6334b951a6fb92b00ca7598727511e19f9c3ca407fdb0e09c7ce6856`
-- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
+- `local/docs/release-metadata.json` — SHA-256 `41dadb3b249de0b06de694ae42293f417c0be04ded75903c05c4e9f7fc1a3b81`
 
 
 ## Operations

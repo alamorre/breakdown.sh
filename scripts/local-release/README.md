@@ -2,209 +2,68 @@
 
 Document kind: Human release-operator guidance
 
-This procedure prepares and publishes the first stable Breakdown Local release without rebuilding
-or replacing any qualified artifact. It is deliberately split between local inspection, explicit
-human approval, a protected GitHub environment, and automated post-publication verification.
+This procedure prepares Breakdown Local 1.0 for local testing and eventual stable publication
+without rebuilding or replacing qualified artifacts. It keeps the package, legal, signing,
+security, provenance, and platform controls intact while deliberately publishing zero Supported
+Host claims.
 
-The checked-in `1.0.0` corpus is the stable source release. Regenerate the versioned documentation
-and build exactly one candidate before using this ceremony; never reuse candidate evidence from a
-different source commit or release version.
+## The 1.0 host policy
+
+Supported Host certification is deferred for Breakdown Local 1.0. The release carries
+`supported_hosts: []`; this is an explicit policy, not a passing real-host qualification. An Agent
+Host with the mandatory capabilities is Compatible, not Supported. Windows, bare models,
+unprovisioned cloud surfaces, and surfaces without the mandatory capabilities are Unsupported.
+
+`.github/workflows/local-host-evidence-capture.yml` (workflow ID `324133712`) is intentionally
+`disabled_manually`. It MUST remain disabled and MUST NOT be dispatched during the 1.0 ceremony.
+It may be re-enabled only after issue #188 is implemented and accepted. Do not use the preserved
+#186 branch or any Codex, Copilot, Claude Code, or other real-host journey for this release.
 
 ## One-time publisher controls
 
-The legal licensor and npm/GitHub publisher must complete these controls personally:
+The legal licensor and npm/GitHub publisher complete these controls personally:
 
-1. Confirm the identity and authority of the legal licensor and publisher.
+1. Confirm legal licensor and publisher identity and authority.
 2. Confirm control of the `@breakdown-sh` npm scope and all three package names.
 3. Configure npm trusted publishing for `@breakdown-sh/core`, `@breakdown-sh/cli`, and
-   `@breakdown-sh/mcp` against `local-stable-publication.yml`, the
-   `alamorre/breakdown.sh` repository, and the `breakdown-local-stable` environment. Permit
-   `npm publish`, require two-factor authentication, and disallow token publishing after the
-   trusted-publisher path is proven.
-4. Enable GitHub release immutability before drafting the release.
-5. Create an active repository tag ruleset for `refs/tags/breakdown-local-v*` with both restricted
-   updates and restricted deletions, no excluded matching refs, and no bypass actors; retain its
-   numeric ruleset ID.
-6. Protect the `breakdown-local-stable` GitHub environment with required human reviewers and
-   prevent self-review where repository policy permits.
-7. Confirm the DCO 1.1 and no-CLA policy, then review every in-scope contribution for DCO sign-off
-   and AI-assisted provenance.
+   `@breakdown-sh/mcp` against `local-stable-publication.yml` and the
+   `breakdown-local-stable` environment.
+4. Enable GitHub release immutability.
+5. Protect `refs/tags/breakdown-local-v*` with restricted update and deletion, no exclusions, and
+   no bypass actors; retain the ruleset ID.
+6. Protect the `breakdown-local-stable` environment with required human review.
+7. Confirm DCO 1.1 and the no-CLA policy, then review AI-assisted provenance.
 
-These controls are release blockers. A workflow input or checked checkbox cannot create missing
-legal authority, npm ownership, or review.
+These controls remain real release blockers. The deferred host policy changes none of them.
 
-## Qualify exactly one candidate
+## Build and qualify exactly one candidate
 
-Dispatch `local-platform-qualification.yml` once at the exact stable source commit, before creating
-the release tag, and retain the immutable artifact IDs for:
-
-- `breakdown-local-candidate`;
-- `breakdown-platform-evidence-index`.
-
-The workflow builds the candidate once. The platform and host indexers bind every row to its
-candidate digest, corpus revision, source commit, exact environment, and retained GitHub Actions
-artifact. Do not rerun the build, extract, repack, rename, edit, or rebuild the candidate after
-qualification.
-
-Before approval, independently inspect:
-
-- exact dependencies and copied content;
-- every artifact-local `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`;
-- secret and private-data scan results;
-- the final byte inventory, `SHA256SUMS`, SBOM, and provenance inputs;
-- package, security, documentation, traceability, platform, and real-host gates;
-- the generated Supported Host JSON and Markdown, ensuring no unindexed row is claimed.
-
-## Capture one completed guided-host row
-
-`local-host-evidence-capture.yml` is the authenticated ingress and finalization boundary for one
-completed real-host journey. It does not conduct a journey, supply approvals, score a rubric,
-index host rows, attest support, or publish anything. The raw row never enters source control.
-
-The retained candidate for these journeys is fixed:
-
-- qualification run `30580700387`, attempt 1;
-- candidate artifact ID `8774500090`, named `breakdown-local-candidate`;
-- Actions artifact digest
-  `sha256:0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904`;
-- candidate content digest
-  `f772a5482bd1de65c1d79e557993183e7508a7e07839879975b69833d0d51efc`;
-- source commit `45bf368ebfcd21c09f98020d757332cf69eac170`;
-- artifact expiry `2026-10-28T20:47:31Z`.
-
-Before the artifact expires, an authenticated repository operator can download it by immutable ID
-and generate a candidate-bound kit:
+Regenerate and check versioned documentation before building:
 
 ```sh
-candidate_dir=/absolute/path/to/breakdown-local-candidate
-kit_dir=/absolute/path/to/guided-host-kit
-mkdir -m 700 "$candidate_dir"
-gh api repos/alamorre/breakdown.sh/actions/artifacts/8774500090/zip > candidate.zip
-printf '%s  %s\n' \
-  0d3deb74069c159d7dfa562d7af387f0c8f4d50e01105355663f6561a6fcd904 \
-  candidate.zip |
-  shasum -a 256 --check
-unzip -q candidate.zip -d "$candidate_dir"
-rm candidate.zip
-pnpm local:release:prepare-host --candidate "$candidate_dir" --output "$kit_dir"
+pnpm local:docs:generate
+pnpm local:docs:check
 ```
 
-The generated kit contains the exact copied candidate bytes, fixed disposable project,
-byte-exact Workflow Definition oracle, all 13 stage procedures, evidence examples, rubric anchors,
-and a pending private-row scaffold. Read `GUIDED-HOST-QUALIFICATION.md` first. Copy `row-template/`
-and `qualification-project/` to new private paths outside the kit, Agent Host
-installation, and future runner work directory:
+Dispatch `local-platform-qualification.yml` once at the exact stable source commit. Retain the
+immutable artifact IDs for `breakdown-local-candidate` and
+`breakdown-platform-evidence-index`. That workflow builds the candidate once and qualifies the
+maintained Linux glibc x64/arm64 and macOS x64/arm64 tuples.
 
-```sh
-row_dir=/absolute/private/path/to/guided-host-row
-project_dir=/absolute/private/path/to/qualification-project
-cp -R "$kit_dir/row-template" "$row_dir"
-cp -R "$kit_dir/qualification-project" "$project_dir"
-chmod -R go-rwx "$row_dir" "$project_dir"
-```
+If any candidate artifact, canonical skill, normative contract, schema, or generated documentation
+byte changes, discard the old candidate evidence, build one new candidate from the resulting exact
+source, and rerun all maintained Linux/macOS platform qualification before publication. Never
+extract, repack, rename, edit, or rebuild a qualified candidate.
 
-Complete `OPERATOR-PLAYBOOK.md` from `install` through `hostile-content` in one real Agent Host
-against the copied candidate artifacts. Replace every scaffold evidence file with the actual
-interaction, action, or artifact record named by its stage. The row directory must contain exactly
-one `guided-host-submission.json`; leave its run ID, run attempt, and final artifact name empty. The
-mechanism remains `github-actions-artifact-v7`.
-
-A human—not an agent or workflow—must personally give the required journey approvals, review the
-retained files, score every rubric dimension, and complete the reviewer identity, UTC time, and
-exact attestation. An agent may prepare files and run deterministic checks, but it must not
-generate scores, impersonate the reviewer, or mark observed behavior as passed.
-
-After the human-owned row is complete, fill only blank retained-file digests and run the local
-read-only pre-capture rehearsal:
-
-```sh
-pnpm local:release:hash-host \
-  --submission "$row_dir/guided-host-submission.json"
-pnpm local:release:rehearse-host \
-  --kit "$kit_dir" \
-  --submission "$row_dir/guided-host-submission.json"
-```
-
-Hashing refuses to replace a previously recorded digest after evidence changes. Rehearsal checks
-the generated kit and candidate binding, every unique stage evidence triple, evidence schemas and
-digests, human review, rubric gates, hostile-content safety, parity disclaimers, and blank future
-Actions identity. It edits nothing, uploads nothing, and creates no passing evidence or Supported
-Host claim. Do not register an ephemeral runner until it succeeds.
-
-GitHub has no documented CLI or REST endpoint for uploading a local directory as an Actions
-artifact outside a runner job. Ingress therefore uses a one-job, ephemeral self-hosted runner on
-the trusted machine holding the private row. The job runs only the workflow from `main`, checks it
-out without persisted credentials, and runs only the tested binder to validate the submission,
-bind current-run storage identity, and stage the submission plus its declared regular retained
-files. It excludes undeclared files and uploads the staged directory with a commit-pinned
-`actions/upload-artifact` v7 release. Register the current verified GitHub Actions runner package
-shown under **Settings → Actions → Runners → New self-hosted runner**, then configure it:
-
-```sh
-registration_token="$(
-  gh api --method POST \
-    repos/alamorre/breakdown.sh/actions/runners/registration-token \
-    --jq .token
-)"
-./config.sh \
-  --url https://github.com/alamorre/breakdown.sh \
-  --token "$registration_token" \
-  --name breakdown-host-evidence-ingress \
-  --labels breakdown-host-evidence-ingress \
-  --ephemeral \
-  --unattended
-unset registration_token
-./run.sh
-```
-
-Keep this runner offline except for the intended capture, and place the raw row outside the runner
-installation and work directories. In another terminal, dispatch the trusted workflow from
-`main`:
-
-```sh
-row_dir=/absolute/path/to/one-completed-private-row
-capture_run_url="$(
-  gh workflow run local-host-evidence-capture.yml \
-    --ref main \
-    --raw-field raw_row_path="$row_dir"
-)"
-capture_run_id="${capture_run_url##*/}"
-gh run watch "$capture_run_id" --exit-status
-gh api "repos/alamorre/breakdown.sh/actions/runs/$capture_run_id/artifacts" \
-  --jq '.artifacts[] | {id, name, digest, expires_at}'
-```
-
-The ingress job includes declared dot-prefixed evidence, excludes every undeclared file, and
-creates one seven-day raw artifact. A separate GitHub-hosted job downloads that exact same-run
-artifact and candidate `8774500090`, rechecks the single submission, retained bytes, and storage
-identity, and copies only the declared row files. The binder sets:
-
-- `mechanism: github-actions-artifact-v7`;
-- the current `GITHUB_RUN_ID`;
-- the current `GITHUB_RUN_ATTEMPT`;
-- `breakdown-host-evidence-<run-id>-<run-attempt>`.
-
-It then runs `pnpm local:release:qualify-host` and, only after qualification succeeds, uploads the
-complete 90-day `breakdown-host-evidence-<run-id>-<run-attempt>` row. Preserve that final artifact
-ID for `local-host-support.yml`. The seven-day raw artifact is not a qualified row.
-
-Do not dispatch `local-host-support.yml` during capture. A captured row creates no Supported Host
-claim. Linux and macOS CLI rows spanning at least two model/provider families must all be
-human-reviewed, captured, later indexed from a signed release tag, and attested before generated
-support material can name any exact row Supported. Windows remains Unsupported for Breakdown
-Local 1.0.
+Before approval, independently inspect exact dependencies, copied content, notices, secret/private
+data scans, the final byte inventory, `SHA256SUMS`, SBOM, provenance inputs, package/security/docs/
+traceability/platform gates, and the zero-claim host policy.
 
 ## Sign and protect the source tag
 
-After the candidate and platform index exist, download the candidate and record:
-
-- the candidate digest at
-  `platform_conformance.current_build.candidate_digest.content` in its release manifest;
-- the SHA-256 of its exact `SHA256SUMS` file;
-- the immutable candidate artifact ID;
-- the immutable platform-index artifact ID.
-
-Create `breakdown-local-tag-message.txt` with this exact shape and no trailing blank line:
+Record the candidate digest from its release manifest, the SHA-256 of `SHA256SUMS`, and the two
+immutable artifact IDs. Create a signed annotated tag message with this exact shape and no trailing
+blank line:
 
 ```text
 Breakdown Local 1.0.0
@@ -215,29 +74,29 @@ candidate-artifact-id: <candidate artifact ID>
 platform-index-artifact-id: <platform index artifact ID>
 ```
 
-Create one signed annotated tag at the exact candidate source commit with that message and push it
-without force:
+Create and verify `breakdown-local-v1.0.0` at the exact candidate source commit, then push it
+without force. Never move, delete, recreate, or reuse a release tag or published version.
 
-```sh
-git tag -s -F breakdown-local-tag-message.txt breakdown-local-v1.0.0 <candidate-source-commit>
-git tag -v breakdown-local-v1.0.0
-git push origin breakdown-local-v1.0.0
-```
+## Generate and attest the empty host-support set
 
-Never move, delete, recreate, or reuse a release tag or published version. The publication
-workflow verifies GitHub's annotated-tag signature result; the exact candidate digest, checksum
-inventory, artifact IDs, and source commit in the signed object; and the strict no-bypass
-update/deletion ruleset before it accepts the candidate. Pushing the tag does not build another
-candidate.
+After pushing the signed tag, dispatch `local-host-support.yml` from that tag with only the exact
+candidate artifact ID. The workflow:
 
-After pushing the signed tag, dispatch `local-host-support.yml` from that tag with the retained
-candidate artifact ID and the exact passing guided-host row artifact IDs. Retain the resulting
-host-support artifact ID.
+1. verifies that workflow ID `324133712` is still `disabled_manually`;
+2. downloads the immutable candidate;
+3. creates `breakdown-host-support-index.json` with `policy.state: "deferred"`, zero evidence rows,
+   and `supported_hosts: []`, bound to the candidate digest, corpus, source commit, and tag;
+4. deterministically generates JSON and Markdown support material;
+5. attests the exact index on a GitHub-hosted runner; and
+6. uploads the index, generated support, and Sigstore bundle as `breakdown-host-support`.
+
+Retain that artifact ID. A missing artifact is not equivalent to deliberate deferral. Do not add
+evidence rows or real-host artifact inputs to this ceremony.
 
 ## Record the human approval
 
-Download the exact candidate artifact into an otherwise empty directory, then create a
-candidate-bound template:
+Download the exact candidate into an otherwise empty directory and create the candidate-bound
+template:
 
 ```sh
 pnpm local:release:create-approval \
@@ -245,58 +104,38 @@ pnpm local:release:create-approval \
   --output /absolute/path/to/breakdown-human-release-approval.json
 ```
 
-The command copies the stable version, candidate digest, source repository, source commit, and tag
-from the candidate. It creates every required attestation as `false` and refuses to overwrite an
-existing approval. Fill the approver identity and ISO-8601 approval time. Change an attestation to
-`true` only after personally reviewing its retained evidence. Do not change the binding fields or
-the approval statement.
+Fill the approver identity and ISO-8601 time. Set an attestation to `true` only after personally
+reviewing its retained evidence. In particular,
+`zero_claim_deferred_host_policy_reviewed` affirms that the approver reviewed and accepted the 1.0
+policy with `supported_hosts: []`; it does not claim a host journey ran or passed. Do not alter the
+candidate binding or approval statement.
 
-Encode that one approval JSON for the protected workflow input:
+Encode the exact JSON for the protected workflow input:
 
 ```sh
 node -e "process.stdout.write(require('node:fs').readFileSync(process.argv[1]).toString('base64'))" \
   /absolute/path/to/breakdown-human-release-approval.json
 ```
 
-The final approval must cover legal authority, scope control, DCO/no-CLA and AI provenance,
-dependency/copied-content/legal reviews, secret/private-data scans, every automated gate, GitHub
-immutability/tag protection, and npm trusted publishing/provenance/signatures. The workflow
-validates and attaches the decoded exact JSON, and the final publication attestation protects it.
-
 ## Publish once
 
-Dispatch `.github/workflows/local-stable-publication.yml` from the signed tag and supply:
+Dispatch `local-stable-publication.yml` from the signed tag and supply the candidate artifact ID,
+passing platform-index artifact ID, authenticated host-support artifact ID, encoded human approval,
+and active tag-ruleset ID.
 
-- the candidate artifact ID;
-- the passing platform-index artifact ID;
-- the authenticated host-support artifact ID;
-- the base64-encoded candidate-bound human approval;
-- the active tag-ruleset ID.
+Before publishing, the workflow rejects a missing or unattested host index; candidate, corpus,
+source, or tag mismatch; any deferred evidence row or Supported Host claim; altered generated
+support; or an approval that does not accept the zero-claim policy. It then preserves candidate
+bytes, attaches all evidence, writes a publication manifest and release notes containing
+`supported_hosts: []`, attests every asset, publishes the exact npm tarballs and immutable GitHub
+Release, and verifies every public byte and trust record.
 
-The protected environment supplies the last human authorization. The workflow:
-
-1. downloads every input by immutable artifact ID;
-2. verifies the signed protected tag and deeply reinspects the candidate without rebuilding;
-3. validates the candidate-bound human approval and passing evidence indexes;
-4. copies every candidate byte unchanged, attaches the exact evidence and support table, and
-   creates a final publication manifest plus an outer checksum inventory;
-5. attests every publication asset and uploads all assets to a GitHub draft;
-6. publishes the three exact `.tgz` files through npm OIDC trusted publishing with provenance and
-   the `latest` dist-tag;
-7. publishes the draft as an ordinary immutable GitHub Release;
-8. downloads and verifies every public GitHub asset, release attestation, npm tarball, `latest`
-   channel, registry signature, provenance record, immutable link, and license boundary.
-
-The final post-publication report is retained as
-`breakdown-post-publication-inspection-<version>`. The release is not declared complete unless that
-report has `status: "passed"`.
+The final report is retained as `breakdown-post-publication-inspection-<version>`. The release is
+not complete unless it has `status: "passed"` and confirms zero Supported Hosts.
 
 ## Failure rule
 
-Before npm publication, a failed GitHub draft may be inspected and discarded by an authorized
-human. Once any npm package or immutable GitHub Release is public, do not overwrite, unpublish,
-rebuild, reuse the version, or rerun blindly. Preserve all evidence, stop the ceremony, assess the
-partial public state, and publish any correction under a new SemVer.
-
-Public installation and documentation examples remain pinned to the exact full version even
-though the stable registry channel is `latest`.
+Before npm publication, an authorized human may inspect and discard a failed GitHub draft. Once any
+npm package or immutable GitHub Release is public, do not overwrite, unpublish, rebuild, reuse the
+version, or rerun blindly. Preserve all evidence, stop, assess the partial public state, and publish
+any correction under a new SemVer.

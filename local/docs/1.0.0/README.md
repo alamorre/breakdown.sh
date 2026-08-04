@@ -30,7 +30,7 @@ Generated reference is non-normative and records the exact input digests from wh
 
 ## Immutable release evidence
 
-The release manifest and passing indexed evidence attached to
+The release manifest and authenticated host-support policy attached to
 [the immutable breakdown-local-v1.0.0 release](https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0) are the only authority for exact
 artifact inventory, channels, and Supported Host claims. Checked-in source documentation does not
 turn missing evidence into a conformance or support claim.

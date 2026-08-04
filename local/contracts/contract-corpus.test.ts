@@ -34,7 +34,7 @@ const expectedRowCounts = {
   MCP: 12,
   SKILL: 13,
   HOST: 8,
-  PKG: 16,
+  PKG: 17,
   DOC: 13,
 } as const;
 const expectedRequirementCounts = {
@@ -43,7 +43,7 @@ const expectedRequirementCounts = {
   'specifications/hashing-and-state.md': 16,
   'specifications/mcp.md': 12,
   'specifications/operations.md': 18,
-  'specifications/release.md': 16,
+  'specifications/release.md': 17,
   'specifications/run-records.md': 18,
   'specifications/security-and-publication.md': 24,
   'specifications/skills-and-hosts.md': 21,
@@ -387,6 +387,7 @@ describe('verifyContractCorpus', () => {
     expect([...schemaIds].sort()).toEqual([
       'breakdown.candidate.v1',
       'breakdown.cli-output.v1',
+      'breakdown.host-support-index.v1',
       'breakdown.mcp-output.v1',
       'breakdown.operation-request.v1',
       'breakdown.operation-value.v1',

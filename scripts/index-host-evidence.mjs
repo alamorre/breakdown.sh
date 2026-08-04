@@ -6,22 +6,35 @@ import { pathToFileURL } from 'node:url';
 
 import { requiredArgumentValue } from './local-release/command-line.mjs';
 import { filesBelow } from './local-release/filesystem.mjs';
-import { indexHostEvidence, writeHostSupportMaterial } from './local-release/host-evidence.mjs';
+import {
+  indexDeferredHostSupport,
+  indexHostEvidence,
+  writeHostSupportMaterial,
+} from './local-release/host-evidence.mjs';
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: index-host-evidence.mjs --candidate PATH --evidence-root PATH --output PATH --support-output PATH';
-  const evidenceRoot = resolve(requiredArgumentValue(argv, '--evidence-root', usage));
-  const evidencePaths = (await filesBelow(evidenceRoot)).filter(
-    (path) =>
-      path.endsWith('/guided-host-evidence.json') || path.endsWith('\\guided-host-evidence.json'),
-  );
+    'Usage: index-host-evidence.mjs --candidate PATH --output PATH --support-output PATH (--policy deferred --tag TAG | --evidence-root PATH)';
   const outputPath = resolve(requiredArgumentValue(argv, '--output', usage));
-  const index = await indexHostEvidence({
-    candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
-    evidencePaths,
-    outputPath,
-  });
+  const candidateDirectory = resolve(requiredArgumentValue(argv, '--candidate', usage));
+  const index =
+    argv[argv.indexOf('--policy') + 1] === 'deferred'
+      ? await indexDeferredHostSupport({
+          candidateDirectory,
+          outputPath,
+          releaseTag: requiredArgumentValue(argv, '--tag', usage),
+        })
+      : await indexHostEvidence({
+          candidateDirectory,
+          evidencePaths: (
+            await filesBelow(resolve(requiredArgumentValue(argv, '--evidence-root', usage)))
+          ).filter(
+            (path) =>
+              path.endsWith('/guided-host-evidence.json') ||
+              path.endsWith('\\guided-host-evidence.json'),
+          ),
+          outputPath,
+        });
   const support = await writeHostSupportMaterial({
     indexPath: outputPath,
     outputDirectory: resolve(requiredArgumentValue(argv, '--support-output', usage)),

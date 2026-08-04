@@ -45,15 +45,16 @@ until they approve each mutation.
    ```
 
    When the release provides its exact immutable
-   `breakdown-host-evidence-index.json`, its GitHub attestation bundle, and the retained candidate
+   `breakdown-host-support-index.json`, its GitHub attestation bundle, and the retained candidate
    directory, add `--host-evidence-index <absolute-index-path>`,
    `--host-evidence-bundle <absolute-bundle-path>`, and
    `--candidate-directory <absolute-candidate-path>`. The index is generated separately from the
    unchanged candidate release. Preflight uses GitHub CLI attestation verification to bind its
    digest to this repository, the release tag, and the dedicated signer workflow, then verifies
-   its coverage and derived rows against the installed skill bytes and every primary candidate
-   artifact. Without that authenticated exact set, full preflight cannot classify a host above
-   Compatible Host.
+   its policy or coverage and derived rows against the installed skill bytes and every primary
+   candidate artifact. The 1.0 deferred index contains zero rows and therefore confirms Compatible,
+   never Supported, for a capable host. Without an authenticated exact set, full preflight likewise
+   cannot classify a host above Compatible Host.
 
    Add `--mcp-command <command>` plus repeatable `--mcp-arg <argument>` only when the user selected
    MCP. Pass command and arguments separately; never interpolate project content into a shell

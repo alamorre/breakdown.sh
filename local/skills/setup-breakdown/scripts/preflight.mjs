@@ -506,6 +506,64 @@ async function readHostEvidenceIndex(path, candidateBinding) {
   const facts = await lstat(path);
   if (!facts.isFile()) throw new Error('host evidence index is not a regular file');
   const index = JSON.parse(await readFile(path, 'utf8'));
+  if (index?.schema_version === 'breakdown.host-support-index.v1') {
+    const expectedPolicy = {
+      state: 'deferred',
+      certification_issue: 188,
+      supported_host_claims: 0,
+      evidence_rows: 0,
+      capture_workflow: {
+        file: '.github/workflows/local-host-evidence-capture.yml',
+        workflow_id: 324133712,
+        required_state: 'disabled_manually',
+      },
+    };
+    const expectedClassifications = {
+      supported:
+        'No Agent Host is Supported by Breakdown Local 1.0 while certification is deferred.',
+      compatible:
+        'A capable Agent Host without an exact passing indexed row is Compatible, not Supported.',
+      unsupported:
+        'A host on a non-maintained operating system, bare model, or unprovisioned cloud surface is Unsupported for this release.',
+    };
+    const expectedDisclaimers = [
+      'ui',
+      'wording',
+      'approval-mechanics',
+      'latency',
+      'model-prose',
+      'quality',
+      'cost',
+      'provider-privacy',
+    ];
+    if (
+      index.release_version !== RELEASE_VERSION ||
+      index.tag !== `breakdown-local-v${RELEASE_VERSION}` ||
+      index.status !== 'deferred' ||
+      index.gate?.satisfied !== true ||
+      JSON.stringify(index.policy) !== JSON.stringify(expectedPolicy) ||
+      index.candidate_digest?.algorithm !== 'SHA-256' ||
+      index.candidate_digest?.content !== candidateBinding.digest.content ||
+      JSON.stringify(index.source) !== JSON.stringify(candidateBinding.source) ||
+      JSON.stringify(index.coverage) !==
+        JSON.stringify({
+          guided_cli_operating_systems: [],
+          model_families: [],
+          provider_families: [],
+        }) ||
+      !Array.isArray(index.rows) ||
+      index.rows.length !== 0 ||
+      !Array.isArray(index.supported_hosts) ||
+      index.supported_hosts.length !== 0 ||
+      JSON.stringify(index.classifications) !== JSON.stringify(expectedClassifications) ||
+      index.outcome_parity?.assessed !== false ||
+      JSON.stringify(index.outcome_parity?.disclaimed_dimensions) !==
+        JSON.stringify(expectedDisclaimers)
+    ) {
+      throw new Error('host evidence index is invalid, failing, or mismatched');
+    }
+    return [];
+  }
   const indexedOperatingSystems = ['linux', 'macos'].filter((family) =>
     index.rows?.some((row) => row.transport === 'cli' && row.operating_system?.family === family),
   );

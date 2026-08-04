@@ -7,6 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  DEFERRED_HOST_CLASSIFICATIONS,
+  DEFERRED_HOST_SUPPORT_POLICY,
+  HOST_OUTCOME_PARITY_EXCLUSIONS,
+} from '../../scripts/local-release/host-evidence.mjs';
+
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const skillsRoot = join(workspaceRoot, 'local', 'skills');
 const releaseVersion = '1.0.0';
@@ -625,6 +631,48 @@ process.stdout.write('[{"verificationResult":{}}]\\n');
     expect(JSON.parse(compatible.stdout)).toMatchObject({
       classification: 'Compatible Host',
     });
+
+    const deferredHostSupportIndex = {
+      schema_version: 'breakdown.host-support-index.v1',
+      release_version: releaseVersion,
+      tag: `breakdown-local-v${releaseVersion}`,
+      status: 'deferred',
+      policy: DEFERRED_HOST_SUPPORT_POLICY,
+      candidate_digest: candidate.digest,
+      source: {
+        repository: 'https://github.com/alamorre/breakdown.sh',
+        git_commit: '1'.repeat(40),
+      },
+      coverage: {
+        guided_cli_operating_systems: [],
+        model_families: [],
+        provider_families: [],
+      },
+      rows: [],
+      supported_hosts: [],
+      classifications: DEFERRED_HOST_CLASSIFICATIONS,
+      outcome_parity: {
+        assessed: false,
+        disclaimed_dimensions: HOST_OUTCOME_PARITY_EXCLUSIONS,
+      },
+      gate: { satisfied: true },
+    };
+    await writeFile(indexPath, `${JSON.stringify(deferredHostSupportIndex, null, 2)}\n`);
+    const deferred = await runPreflight(
+      copiedRoot,
+      projectRoot,
+      ['--mode', 'full', ...hostEvidenceArguments],
+      preflightEnvironment,
+    );
+    expect(deferred.status, deferred.stderr).toBe(0);
+    expect(JSON.parse(deferred.stdout)).toMatchObject({
+      classification: 'Compatible Host',
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: 'host_evidence_index', status: 'pass' }),
+      ]),
+    });
+
+    await writeFile(indexPath, `${JSON.stringify(hostEvidenceIndex, null, 2)}\n`);
 
     const unauthenticated = await runPreflight(
       copiedRoot,
