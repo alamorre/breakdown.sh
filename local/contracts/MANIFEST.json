@@ -224,8 +224,8 @@
       "path": "conformance/traceability/host.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 2732,
-      "sha256": "b5c2ec39bcc00b6a2b259fc947d7f3cb8a64b0821cb5651e0448970f106920e1"
+      "bytes": 2959,
+      "sha256": "8b9792f692bd65bb8037af0700e21133166affa6b200f3ba1c0eb6e249e047cf"
     },
     {
       "path": "conformance/traceability/mcp.json",
@@ -245,8 +245,8 @@
       "path": "conformance/traceability/pkg.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 4737,
-      "sha256": "ac31f9516981ac0a5f58d31c7e6c3898160f259e5bcffb0808927e385d9a3db5"
+      "bytes": 5158,
+      "sha256": "d3f1d69b8bd6dd6406944edf619ddee178d164b035b4cb1fee382c67324c247c"
     },
     {
       "path": "conformance/traceability/pub.json",
@@ -627,6 +627,13 @@
       "sha256": "51503d15c9f3131ce84a63f099f3f55b241551d747b2fee389686dbe59ac37e9"
     },
     {
+      "path": "schemas/breakdown.host-support-index.v1.schema.json",
+      "media_type": "application/json",
+      "role": "schema",
+      "bytes": 5481,
+      "sha256": "15bbdcf8c55ba621798ba02c7d20eb6e58a82607f558f0a648bd4e08d2ab6bd7"
+    },
+    {
       "path": "schemas/breakdown.mcp-output.v1.schema.json",
       "media_type": "application/json",
       "role": "schema",
@@ -700,8 +707,8 @@
       "path": "specifications/conformance.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 4519,
-      "sha256": "d9a4a34a949fef022ff17561990ed8327bd3d3836c7d853bec2141921dc83e35"
+      "bytes": 4764,
+      "sha256": "4752bb51d94404f5ba72417b217b7ace87957ca7b46d4fed770119f12456a486"
     },
     {
       "path": "specifications/hashing-and-state.md",
@@ -728,8 +735,8 @@
       "path": "specifications/release.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 4977,
-      "sha256": "0d11d538ccc8dd2e1340d77fb0c69d88c89991d7df9ce7449e6069bb46ccf614"
+      "bytes": 5615,
+      "sha256": "e07312f1ee8caae8d73172f295d20a9bbf3a51b122cc4d40bdd0819f8d6d8672"
     },
     {
       "path": "specifications/run-records.md",
@@ -749,8 +756,8 @@
       "path": "specifications/skills-and-hosts.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 6259,
-      "sha256": "3eef928c9cbcc680de0e05423aec41140f83c60ee7f6bc79682ae246d9ae5d69"
+      "bytes": 6531,
+      "sha256": "2c7b0f7c19d63656fbb331eda6c42088dfb3ba47e6fb3cb192a7f712f22dac93"
     },
     {
       "path": "specifications/workflow-definition.md",

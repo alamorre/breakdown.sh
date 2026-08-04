@@ -9,4 +9,4 @@
 - Support reference: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/reference/support.md
 - Normative contracts: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/contracts/README.md
 - Immutable release evidence: https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0
-- Release metadata input: SHA-256 ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70
+- Release metadata input: SHA-256 41dadb3b249de0b06de694ae42293f417c0be04ded75903c05c4e9f7fc1a3b81

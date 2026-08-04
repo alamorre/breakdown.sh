@@ -122,3 +122,13 @@ The complete deterministic core, CLI, package, disk, crash, concurrency, and
 applicable security suite MUST run against actual candidate artifacts on every
 maintained platform tuple and retain exact OS, architecture, Node patch,
 filesystem, runner, corpus revision, and candidate digest.
+
+### REQ-PKG-017
+
+Stable publication MUST require an attested host-support index bound to the exact candidate digest,
+contract corpus revision, source commit, and protected release tag. For Breakdown Local 1.0 that
+index MUST record the explicit `deferred` certification policy, zero evidence rows, and
+`supported_hosts: []`; it MUST NOT describe deferral as a passing real-host gate. Publication MAY
+instead accept a future fully qualified passing support set only when every named Supported Host is
+derived from exact passing immutable evidence. A missing, unattested, mismatched, or non-empty
+unqualified support set MUST fail closed.

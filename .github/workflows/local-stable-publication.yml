@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       host_support_artifact_id:
-        description: Immutable artifact ID for the passing host index, support table, and attestation
+        description: Immutable artifact ID for the authenticated host policy, support material, and attestation
         required: true
         type: string
       human_approval_base64:
@@ -80,7 +80,7 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/platform-index
 
-      - name: Download the passing host support set by artifact ID
+      - name: Download the authenticated host support set by artifact ID
         uses: actions/download-artifact@v8
         with:
           artifact-ids: ${{ inputs.host_support_artifact_id }}
@@ -100,8 +100,8 @@ jobs:
           }
           printf 'CANDIDATE_DIR=%s\n' "${{ runner.temp }}/candidate" >> "$GITHUB_ENV"
           printf 'PLATFORM_INDEX=%s\n' "$(resolve_one "${{ runner.temp }}/platform-index" breakdown-platform-evidence-index.json)" >> "$GITHUB_ENV"
-          printf 'HOST_INDEX=%s\n' "$(resolve_one "${{ runner.temp }}/host-support" breakdown-host-evidence-index.json)" >> "$GITHUB_ENV"
-          printf 'HOST_SUPPORT_DIR=%s\n' "$(dirname "$(resolve_one "${{ runner.temp }}/host-support" breakdown-host-evidence-index.attestation.json)")" >> "$GITHUB_ENV"
+          printf 'HOST_INDEX=%s\n' "$(resolve_one "${{ runner.temp }}/host-support" breakdown-host-support-index.json)" >> "$GITHUB_ENV"
+          printf 'HOST_SUPPORT_DIR=%s\n' "$(dirname "$(resolve_one "${{ runner.temp }}/host-support" breakdown-host-support-index.attestation.json)")" >> "$GITHUB_ENV"
           printf 'PUBLICATION_DIR=%s\n' "${{ runner.temp }}/publication" >> "$GITHUB_ENV"
           printf 'VERIFICATION_DIR=%s\n' "${{ runner.temp }}/post-publication" >> "$GITHUB_ENV"
           printf 'VERIFICATION_REPORT=%s\n' "${{ runner.temp }}/breakdown-post-publication-inspection.json" >> "$GITHUB_ENV"
@@ -206,7 +206,7 @@ jobs:
         run: |
           gh attestation verify "$HOST_INDEX" \
             --repo "$GITHUB_REPOSITORY" \
-            --bundle "$HOST_SUPPORT_DIR/breakdown-host-evidence-index.attestation.json" \
+            --bundle "$HOST_SUPPORT_DIR/breakdown-host-support-index.attestation.json" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-host-support.yml" \
             --source-ref "$GITHUB_REF" \
             --source-digest "$GITHUB_SHA" \
@@ -218,7 +218,7 @@ jobs:
           pnpm local:release:prepare-publication \
             --candidate "$CANDIDATE_DIR" \
             --platform-index "$PLATFORM_INDEX" \
-            --host-index "$HOST_INDEX" \
+            --host-support-index "$HOST_INDEX" \
             --host-support "$HOST_SUPPORT_DIR" \
             --approval "$HUMAN_APPROVAL" \
             --tag-evidence "${{ runner.temp }}/breakdown-signed-tag-evidence.json" \

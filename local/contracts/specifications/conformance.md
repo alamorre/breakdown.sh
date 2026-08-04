@@ -93,15 +93,18 @@ distinctions. MCP MUST remain optional after the CLI baseline.
 ### REQ-DOC-012
 
 The release manifest MUST be authoritative for exact artifact inventory,
-supported families, channels, and Supported Host claims. Only passing indexed
-immutable evidence may appear in support material. Repository and versioned
+supported families, channels, and Supported Host claims. Support material MUST
+derive only from the authenticated host-support index: either the explicit
+deferred empty 1.0 policy or exact passing indexed immutable evidence. Repository and versioned
 `llms.txt` files MUST remain small discovery indexes rather than mirrors or
 authorities.
 
 ### REQ-DOC-013
 
 Stable release MUST remain blocked until every applicable deterministic,
-platform, security, package, legal, documentation, guided-host, hostile-content,
-and indexed-evidence gate passes against exactly the published bytes.
+platform, security, package, legal, documentation, and indexed-evidence gate
+passes against exactly the published bytes. For 1.0 the applicable host gate is
+review and attestation of the deferred empty policy; guided-host and
+hostile-content gates become applicable to a later qualified support set.
 Prereleases MAY retain incomplete rows but MUST NOT claim conformance or an
 unsupported host row.

@@ -129,6 +129,12 @@ describe('Breakdown Local release documentation', () => {
     expect(guide).toContain(
       'https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/',
     );
+    const support = await readFile(join(documentationRoot, 'reference', 'support.md'), 'utf8');
+    expect(support).toContain('Supported Host certification is deferred');
+    expect(support).toContain('supported_hosts: []');
+    expect(support).toContain('Compatible, not Supported');
+    expect(support).toContain('Unsupported');
+    expect(support).toContain('issue #188');
 
     for (const path of markdownPaths.filter((path) => path.startsWith('reference/'))) {
       const reference = await readFile(join(documentationRoot, path), 'utf8');
@@ -245,9 +251,7 @@ describe('Breakdown Local release documentation', () => {
       join(repositoryRoot, 'local', 'docs', releaseVersion),
       join(repositoryRoot, 'local', 'skills'),
     ];
-    const markdownPaths = (
-      await Promise.all(releasedRoots.map((root) => filesBelow(root)))
-    )
+    const markdownPaths = (await Promise.all(releasedRoots.map((root) => filesBelow(root))))
       .flat()
       .filter((path) => path.endsWith('.md') && !path.endsWith('.test.md'));
 
@@ -258,7 +262,10 @@ describe('Breakdown Local release documentation', () => {
         /^Document kind: (?:Authored normative contract|Contract index \(non-normative\)|Generated reference|License and notice material|Task-oriented guidance)$/m,
       );
       expect(document, path).toMatch(
-        new RegExp(`^(?:Contract|Document) version: ${releaseVersion.replaceAll('.', '\\.')}$`, 'm'),
+        new RegExp(
+          `^(?:Contract|Document) version: ${releaseVersion.replaceAll('.', '\\.')}$`,
+          'm',
+        ),
       );
     }
   });

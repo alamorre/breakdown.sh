@@ -7,10 +7,6 @@ on:
         description: Immutable artifact ID for the exact Breakdown Local candidate
         required: true
         type: string
-      evidence_artifact_ids:
-        description: Comma-separated immutable artifact IDs containing passing guided-host rows
-        required: true
-        type: string
 
 permissions:
   actions: read
@@ -20,7 +16,7 @@ permissions:
 
 jobs:
   index-and-attest:
-    name: Index and attest exact passing host evidence
+    name: Attest the deferred empty host support policy
     if: ${{ startsWith(github.ref, 'refs/tags/breakdown-local-v') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -50,31 +46,30 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/breakdown-candidate
 
-      - name: Download every immutable guided-host row
-        uses: actions/download-artifact@v8
-        with:
-          artifact-ids: ${{ inputs.evidence_artifact_ids }}
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/guided-host-evidence
+      - name: Require guided-host capture to remain disabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/324133712" --jq .state)" = disabled_manually
 
-      - name: Verify, index, and generate support from passing rows
-        run: pnpm local:release:index-hosts --candidate "${{ runner.temp }}/breakdown-candidate" --evidence-root "${{ runner.temp }}/guided-host-evidence" --output "${{ runner.temp }}/breakdown-host-evidence-index.json" --support-output "${{ runner.temp }}/breakdown-host-support"
+      - name: Generate the candidate, source, and tag-bound deferred support set
+        run: pnpm local:release:defer-host-support --candidate "${{ runner.temp }}/breakdown-candidate" --tag "$GITHUB_REF_NAME" --output "${{ runner.temp }}/breakdown-host-support-index.json" --support-output "${{ runner.temp }}/breakdown-host-support"
 
       - name: Attest the exact generated index
         id: attest
         uses: actions/attest@v4
         with:
-          subject-path: ${{ runner.temp }}/breakdown-host-evidence-index.json
+          subject-path: ${{ runner.temp }}/breakdown-host-support-index.json
 
       - name: Add the Sigstore bundle to the support set
-        run: cp "${{ steps.attest.outputs.bundle-path }}" "${{ runner.temp }}/breakdown-host-support/breakdown-host-evidence-index.attestation.json"
+        run: cp "${{ steps.attest.outputs.bundle-path }}" "${{ runner.temp }}/breakdown-host-support/breakdown-host-support-index.attestation.json"
 
       - name: Retain the authenticated generated support set
         uses: actions/upload-artifact@v7
         with:
           name: breakdown-host-support
           path: |
-            ${{ runner.temp }}/breakdown-host-evidence-index.json
+            ${{ runner.temp }}/breakdown-host-support-index.json
             ${{ runner.temp }}/breakdown-host-support
           if-no-files-found: error
           retention-days: 90

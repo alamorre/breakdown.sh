@@ -12,7 +12,7 @@ authoritative. Regenerate this file instead of editing it by hand.
 - `local/contracts/catalogs/mcp.v1.json` — SHA-256 `a872a0f39e7775e951087e322f7182a6780186bd30e8ef93b43d1d94fc3524e3`
 - `local/contracts/schemas/breakdown.mcp-output.v1.schema.json` — SHA-256 `57139ffc12da9c0fd4f940d9c824a4eb2c23fea4948aafa5c2a55a0147052569`
 - `local/contracts/specifications/mcp.md` — SHA-256 `ec837c9b0c7c968e0ae0930b99fff82ceac027cdab0303a7b7cef48f5dffb2f7`
-- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
+- `local/docs/release-metadata.json` — SHA-256 `41dadb3b249de0b06de694ae42293f417c0be04ded75903c05c4e9f7fc1a3b81`
 
 
 MCP is optional. The canonical CLI remains the baseline and both transports dispatch the same

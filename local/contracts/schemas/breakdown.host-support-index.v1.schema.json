@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "breakdown.host-support-index.v1",
+  "$comment": "release_version=1.0.0; immutable release evidence for either explicit deferred empty host certification or a fully qualified passing support set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_version",
+    "tag",
+    "status",
+    "policy",
+    "candidate_digest",
+    "corpus_revision",
+    "source",
+    "coverage",
+    "rows",
+    "supported_hosts",
+    "classifications",
+    "outcome_parity",
+    "gate"
+  ],
+  "properties": {
+    "schema_version": { "const": "breakdown.host-support-index.v1" },
+    "release_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^breakdown-local-v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "status": { "enum": ["deferred", "passed"] },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "certification_issue", "supported_host_claims", "evidence_rows"],
+      "properties": {
+        "state": { "enum": ["deferred", "qualified"] },
+        "certification_issue": { "type": "integer", "minimum": 1 },
+        "supported_host_claims": { "type": "integer", "minimum": 0 },
+        "evidence_rows": { "type": "integer", "minimum": 0 },
+        "capture_workflow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "workflow_id", "required_state"],
+          "properties": {
+            "file": { "const": ".github/workflows/local-host-evidence-capture.yml" },
+            "workflow_id": { "const": 324133712 },
+            "required_state": { "const": "disabled_manually" }
+          }
+        }
+      }
+    },
+    "candidate_digest": { "$ref": "#/$defs/candidate_digest" },
+    "corpus_revision": { "$ref": "#/$defs/artifact_digest" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "git_commit"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "git_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["guided_cli_operating_systems", "model_families", "provider_families"],
+      "properties": {
+        "guided_cli_operating_systems": {
+          "type": "array",
+          "items": { "enum": ["linux", "macos"] },
+          "uniqueItems": true
+        },
+        "model_families": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "provider_families": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "rows": { "type": "array", "items": { "type": "object" } },
+    "supported_hosts": { "type": "array", "items": { "type": "object" } },
+    "classifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "compatible", "unsupported"],
+      "properties": {
+        "supported": { "type": "string", "minLength": 1 },
+        "compatible": { "type": "string", "minLength": 1 },
+        "unsupported": { "type": "string", "minLength": 1 }
+      }
+    },
+    "outcome_parity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assessed", "disclaimed_dimensions"],
+      "properties": {
+        "assessed": { "type": "boolean" },
+        "disclaimed_dimensions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement", "satisfied"],
+      "properties": {
+        "requirement": { "type": "string", "minLength": 1 },
+        "satisfied": { "const": true }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "policy": { "properties": { "state": { "const": "deferred" } }, "required": ["state"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": { "const": "deferred" },
+          "policy": {
+            "required": ["capture_workflow"],
+            "properties": {
+              "supported_host_claims": { "const": 0 },
+              "evidence_rows": { "const": 0 }
+            }
+          },
+          "rows": { "maxItems": 0 },
+          "supported_hosts": { "maxItems": 0 }
+        }
+      },
+      "else": {
+        "properties": {
+          "status": { "const": "passed" },
+          "rows": { "minItems": 1 },
+          "supported_hosts": { "minItems": 1 }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "candidate_digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "content"],
+      "properties": {
+        "algorithm": { "const": "SHA-256" },
+        "content": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "artifact_digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

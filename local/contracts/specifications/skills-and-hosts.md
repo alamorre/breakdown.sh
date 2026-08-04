@@ -122,11 +122,15 @@ or unprovisioned cloud surface is Unsupported.
 
 ### REQ-HOST-004
 
-Stable qualification MUST include at least one passing guided CLI host row on
-Linux and macOS and real-host smoke evidence across at least two model/provider
-families. Passing evidence MUST use the exact candidate skill archive and
-package artifacts. A host running on an operating system outside the
-maintained platform tuples is Unsupported for this release.
+Breakdown Local 1.0 MUST publish with Supported Host certification explicitly
+deferred and with zero evidence rows and zero Supported Host claims. The empty
+set MUST be represented by an immutable candidate/source/tag-bound index and
+attestation, not by a passing qualification status. Capable unqualified hosts
+are Compatible. Windows, bare models, unprovisioned cloud surfaces, and hosts
+without the mandatory capabilities are Unsupported. The disabled
+`local-host-evidence-capture.yml` workflow (ID `324133712`) MUST NOT be
+dispatched or re-enabled for 1.0 and may be re-enabled only after issue #188 is
+implemented and accepted.
 
 ### REQ-HOST-005
 

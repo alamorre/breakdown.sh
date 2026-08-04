@@ -13,6 +13,7 @@ import {
   HOST_REVIEW_ATTESTATION,
   bindHostEvidenceSubmission,
   hashHostEvidence,
+  indexDeferredHostSupport,
   indexHostEvidence,
   qualifyHostEvidence,
   rehearseHostQualification,
@@ -305,7 +306,7 @@ afterEach(async () => {
 });
 
 describe('authenticated host support workflow', () => {
-  it('should index immutable candidate and evidence artifacts on a release tag before attesting', async () => {
+  it('should attest an explicit deferred empty support set on a release tag', async () => {
     const workflow = await readFile(
       join(repositoryRoot, '.github', 'workflows', 'local-host-support.yml'),
       'utf8',
@@ -317,11 +318,72 @@ describe('authenticated host support workflow', () => {
     expect(workflow).toContain('id-token: write');
     expect(workflow).toContain('actions/download-artifact@v8');
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
-    expect(workflow).toContain('artifact-ids: ${{ inputs.evidence_artifact_ids }}');
-    expect(workflow).toContain('pnpm local:release:index-hosts');
+    expect(workflow).not.toContain('evidence_artifact_ids');
+    expect(workflow).toContain('actions/workflows/324133712');
+    expect(workflow).toContain('disabled_manually');
+    expect(workflow).toContain('pnpm local:release:defer-host-support');
+    expect(workflow).toContain('--tag "$GITHUB_REF_NAME"');
     expect(workflow).toContain('actions/attest@v4');
     expect(workflow).toContain('steps.attest.outputs.bundle-path');
     expect(workflow).toContain('actions/upload-artifact@v7');
+  });
+});
+
+describe('indexDeferredHostSupport', () => {
+  it('should bind a deliberate zero-claim policy to the exact candidate, source, and tag', async () => {
+    const candidate = await candidateFixture();
+    const outputPath = join(candidate.root, 'breakdown-host-support-index.json');
+
+    await expect(
+      indexDeferredHostSupport({
+        candidateDirectory: candidate.candidateDirectory,
+        outputPath,
+        releaseTag: 'breakdown-local-v1.0.0',
+      }),
+    ).resolves.toMatchObject({
+      schema_version: 'breakdown.host-support-index.v1',
+      release_version: releaseVersion,
+      tag: 'breakdown-local-v1.0.0',
+      status: 'deferred',
+      policy: {
+        state: 'deferred',
+        certification_issue: 188,
+        supported_host_claims: 0,
+        evidence_rows: 0,
+        capture_workflow: {
+          file: '.github/workflows/local-host-evidence-capture.yml',
+          workflow_id: 324133712,
+          required_state: 'disabled_manually',
+        },
+      },
+      source: {
+        repository: 'https://github.com/alamorre/breakdown.sh',
+        git_commit: gitCommit,
+      },
+      rows: [],
+      supported_hosts: [],
+      gate: { satisfied: true },
+    });
+
+    const firstBytes = await readFile(outputPath);
+    await indexDeferredHostSupport({
+      candidateDirectory: candidate.candidateDirectory,
+      outputPath,
+      releaseTag: 'breakdown-local-v1.0.0',
+    });
+    expect(await readFile(outputPath)).toEqual(firstBytes);
+  });
+
+  it('should reject a tag that does not identify the candidate release', async () => {
+    const candidate = await candidateFixture();
+
+    await expect(
+      indexDeferredHostSupport({
+        candidateDirectory: candidate.candidateDirectory,
+        outputPath: join(candidate.root, 'breakdown-host-support-index.json'),
+        releaseTag: 'breakdown-local-v1.0.1',
+      }),
+    ).rejects.toThrow('Host support tag does not identify the exact candidate release.');
   });
 });
 
@@ -794,13 +856,12 @@ describe('writeHostQualificationTemplate', () => {
       join(repositoryRoot, 'scripts', 'local-release', 'README.md'),
       'utf8',
     );
-    expect(releaseGuide).toContain('pnpm local:release:hash-host');
-    expect(releaseGuide).toContain('pnpm local:release:rehearse-host');
-    expect(releaseGuide.indexOf('pnpm local:release:rehearse-host')).toBeLessThan(
-      releaseGuide.indexOf('./config.sh'),
-    );
-    expect(releaseGuide).toContain('Copy `row-template/`');
-    expect(releaseGuide).toContain('Do not dispatch `local-host-support.yml` during capture');
+    expect(releaseGuide).toContain('supported_hosts: []');
+    expect(releaseGuide).toContain('workflow ID `324133712`');
+    expect(releaseGuide).toContain('MUST remain disabled and MUST NOT be dispatched');
+    expect(releaseGuide).toContain('issue #188');
+    expect(releaseGuide).not.toContain('gh workflow run local-host-evidence-capture.yml');
+    expect(releaseGuide).not.toContain('evidence_artifact_ids');
   });
 
   it('should expose local hash and pre-capture rehearsal commands', async () => {
@@ -1795,6 +1856,40 @@ describe('indexHostEvidence', () => {
 });
 
 describe('writeHostSupportMaterial', () => {
+  it('should deterministically disclose deferred certification and zero Supported Hosts', async () => {
+    const candidate = await candidateFixture();
+    const indexPath = join(candidate.root, 'breakdown-host-support-index.json');
+    const outputDirectory = join(candidate.root, 'deferred-support');
+    await mkdir(outputDirectory);
+    const index = await indexDeferredHostSupport({
+      candidateDirectory: candidate.candidateDirectory,
+      outputPath: indexPath,
+      releaseTag: 'breakdown-local-v1.0.0',
+    });
+
+    const generated = await writeHostSupportMaterial({ indexPath, outputDirectory });
+
+    expect(generated.support).toMatchObject({
+      policy: index.policy,
+      supported_hosts: [],
+    });
+    const markdown = await readFile(join(outputDirectory, generated.markdownFile), 'utf8');
+    expect(markdown).toContain('Supported Host certification is deferred');
+    expect(markdown).toContain('| None | Certification is deliberately deferred to issue #188. |');
+    expect(markdown).toContain('Compatible, not Supported');
+    expect(markdown).toContain('Unsupported');
+    expect(markdown).not.toContain('| Exact row | Breakdown and artifact digests |');
+
+    const tampered = { ...index, rows: [{ status: 'passed' }] };
+    await writeJson(indexPath, tampered);
+    await expect(
+      writeHostSupportMaterial({
+        indexPath,
+        outputDirectory: join(candidate.root, 'fabricated-deferred-support'),
+      }),
+    ).rejects.toThrow('Deferred host support must contain zero evidence rows and zero claims.');
+  });
+
   it('should generate support JSON and Markdown only from the passing host index', async () => {
     const candidate = await candidateFixture();
     const submissions = [
@@ -1822,6 +1917,18 @@ describe('writeHostSupportMaterial', () => {
       evidencePaths: submissions.map((submission) => submission.outputPath),
       outputPath: indexPath,
     });
+    const qualifiedIndex = {
+      ...index,
+      schema_version: 'breakdown.host-support-index.v1',
+      tag: 'breakdown-local-v1.0.0',
+      policy: {
+        state: 'qualified',
+        certification_issue: 188,
+        supported_host_claims: index.supported_hosts.length,
+        evidence_rows: index.rows.length,
+      },
+    };
+    await writeJson(indexPath, qualifiedIndex);
     const outputDirectory = join(candidate.root, 'support');
     await mkdir(outputDirectory);
 

@@ -17,5 +17,15 @@
   "exact_evidence": {
     "supported_hosts": "local/skills/setup-breakdown/assets/skill-pack-manifest.json",
     "claim": "No Supported Host claim without a passing indexed immutable evidence row."
+  },
+  "host_support_policy": {
+    "state": "deferred",
+    "certification_issue": 188,
+    "supported_hosts": [],
+    "capture_workflow": {
+      "file": ".github/workflows/local-host-evidence-capture.yml",
+      "workflow_id": 324133712,
+      "required_state": "disabled_manually"
+    }
   }
 }

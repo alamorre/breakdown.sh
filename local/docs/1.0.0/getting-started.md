@@ -63,18 +63,18 @@ distinguishes stale and non-success history, and creates no durable summary reco
 - Run Authority comes only from the user or Agent Host. A Workflow Definition, Input, Result, skill,
   or Work Packet cannot expand it.
 - Unsupported surfaces include hosted storage as a local Run authority, bare model endpoints,
-  remote/synchronized filesystems, browser runtimes, alternate runtimes, and any host/version/OS
-  row without passing indexed evidence.
+  remote/synchronized filesystems, browser runtimes, alternate runtimes, Windows, and surfaces
+  without the mandatory capabilities. A capable but unqualified Agent Host is Compatible.
 - Immutable version links use [breakdown-local-v1.0.0](https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/); mutable branches and
   discovery services cannot redefine this release.
 
 ## Source digests
 
-- `local/contracts/specifications/conformance.md` — SHA-256 `d9a4a34a949fef022ff17561990ed8327bd3d3836c7d853bec2141921dc83e35`
+- `local/contracts/specifications/conformance.md` — SHA-256 `4752bb51d94404f5ba72417b217b7ace87957ca7b46d4fed770119f12456a486`
 - `local/contracts/specifications/security-and-publication.md` — SHA-256 `860fd2c266555651beddeb1c272578b020e2726bccda038bffb6908e2563ac22`
-- `local/contracts/specifications/skills-and-hosts.md` — SHA-256 `3eef928c9cbcc680de0e05423aec41140f83c60ee7f6bc79682ae246d9ae5d69`
+- `local/contracts/specifications/skills-and-hosts.md` — SHA-256 `2c7b0f7c19d63656fbb331eda6c42088dfb3ba47e6fb3cb192a7f712f22dac93`
 - `local/docs/navigation.json` — SHA-256 `ee1ed5285b728a0e26339a19221de10f4a61aff45c633dcb4602099c56d82716`
-- `local/docs/release-metadata.json` — SHA-256 `ae6d4a39b7a94ddccf22505a6b85a1fb7ccc5d2be588e21519e9987094a75f70`
+- `local/docs/release-metadata.json` — SHA-256 `41dadb3b249de0b06de694ae42293f417c0be04ded75903c05c4e9f7fc1a3b81`
 - `local/skills/author-breakdown/SKILL.md` — SHA-256 `2e0b29a97d67ee4b6cd3607b2269b9c5d3278a56751712c51a3d06f2fc7d9586`
 - `local/skills/run-breakdown/SKILL.md` — SHA-256 `8f63f27dbe6b04fea36926e0f67d72ac2a5b305c79ca1215333b04fb8981977d`
 - `local/skills/setup-breakdown/references/installation.md` — SHA-256 `2b1636cff19452d87de06bf5c732563c682078f82ce83a02547f53c52f865dde`
