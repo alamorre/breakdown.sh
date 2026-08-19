@@ -9,17 +9,23 @@ import { prepareLocalPublication } from './local-release/publication.mjs';
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: prepare-local-publication.mjs --candidate PATH --platform-index PATH --host-support-index PATH --host-support PATH --approval PATH --tag-evidence PATH --output PATH';
+    'Usage: prepare-local-publication.mjs --candidate PATH --platform-index PATH --host-support-index PATH --host-support PATH --approval PATH --approval-signature PATH --approval-verification PATH --github-controls PATH --tag-evidence PATH --workflow-identity PATH --output PATH';
   const outputDirectory = resolve(requiredArgumentValue(argv, '--output', usage));
   await mkdir(outputDirectory, { recursive: true });
   const inspection = await prepareLocalPublication({
     approvalPath: resolve(requiredArgumentValue(argv, '--approval', usage)),
+    approvalSignaturePath: resolve(requiredArgumentValue(argv, '--approval-signature', usage)),
+    approvalVerificationPath: resolve(
+      requiredArgumentValue(argv, '--approval-verification', usage),
+    ),
     candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
+    githubControlsPath: resolve(requiredArgumentValue(argv, '--github-controls', usage)),
     hostIndexPath: resolve(requiredArgumentValue(argv, '--host-support-index', usage)),
     outputDirectory,
     platformIndexPath: resolve(requiredArgumentValue(argv, '--platform-index', usage)),
     supportDirectory: resolve(requiredArgumentValue(argv, '--host-support', usage)),
     tagEvidencePath: resolve(requiredArgumentValue(argv, '--tag-evidence', usage)),
+    workflowIdentityPath: resolve(requiredArgumentValue(argv, '--workflow-identity', usage)),
   });
   process.stdout.write(`${JSON.stringify(inspection, null, 2)}\n`);
 }

@@ -19,8 +19,8 @@ on:
         description: Base64-encoded candidate-bound breakdown-human-release-approval.json
         required: true
         type: string
-      tag_ruleset_id:
-        description: Active repository ruleset ID protecting breakdown-local-v* tags
+      human_approval_signature_base64:
+        description: Base64-encoded SSH signature for the exact human approval
         required: true
         type: string
 
@@ -109,12 +109,19 @@ jobs:
       - name: Decode the exact candidate-bound human approval
         env:
           HUMAN_APPROVAL_BASE64: ${{ inputs.human_approval_base64 }}
+          HUMAN_APPROVAL_SIGNATURE_BASE64: ${{ inputs.human_approval_signature_base64 }}
         shell: bash
         run: |
           set -euo pipefail
           printf '%s' "$HUMAN_APPROVAL_BASE64" | base64 --decode > "${{ runner.temp }}/breakdown-human-release-approval.json"
+          printf '%s' "$HUMAN_APPROVAL_SIGNATURE_BASE64" | base64 --decode > "${{ runner.temp }}/breakdown-human-release-approval.json.sig"
           jq -e '.schema_version == "breakdown.human-release-approval.v1"' "${{ runner.temp }}/breakdown-human-release-approval.json"
+          grep -qx -- '-----BEGIN SSH SIGNATURE-----' "${{ runner.temp }}/breakdown-human-release-approval.json.sig"
           printf 'HUMAN_APPROVAL=%s\n' "${{ runner.temp }}/breakdown-human-release-approval.json" >> "$GITHUB_ENV"
+          printf 'HUMAN_APPROVAL_SIGNATURE=%s\n' "${{ runner.temp }}/breakdown-human-release-approval.json.sig" >> "$GITHUB_ENV"
+          printf 'HUMAN_APPROVAL_VERIFICATION=%s\n' "${{ runner.temp }}/breakdown-human-release-approval-verification.json" >> "$GITHUB_ENV"
+          printf 'GITHUB_CONTROLS=%s\n' "${{ runner.temp }}/breakdown-github-release-controls.json" >> "$GITHUB_ENV"
+          printf 'WORKFLOW_IDENTITY=%s\n' "${{ runner.temp }}/breakdown-stable-workflow-identity.json" >> "$GITHUB_ENV"
 
       - name: Reinspect the downloaded candidate without rebuilding
         shell: bash
@@ -126,12 +133,102 @@ jobs:
           printf 'CANDIDATE_DIGEST=%s\n' "$(jq -r '.platform_conformance.current_build.candidate_digest.content' "${manifests[0]}")" >> "$GITHUB_ENV"
           printf 'CANDIDATE_CHECKSUM_INVENTORY_SHA256=%s\n' "$(sha256sum "$CANDIDATE_DIR/SHA256SUMS" | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
+      - name: Verify the sole maintainer's GitHub-recognized approval signature
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_CONTROL_READ_TOKEN || github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm local:release:verify-approval \
+            --approval "$HUMAN_APPROVAL" \
+            --signature "$HUMAN_APPROVAL_SIGNATURE" \
+            --output "$HUMAN_APPROVAL_VERIFICATION"
+
+      - name: Re-read every GitHub publication control
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_CONTROL_READ_TOKEN || github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm local:release:verify-github-controls \
+            --phase publication \
+            --tag "$GITHUB_REF_NAME" \
+            --output "$GITHUB_CONTROLS"
+
+      - name: Prove the GitHub-hosted runner and npm OIDC subject boundary
+        env:
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ inputs.host_support_artifact_id }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTOR" = alamorre
+          test "$GITHUB_TRIGGERING_ACTOR" = alamorre
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          oidc_response="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org")"
+          oidc_token="$(jq -er '.value' <<< "$oidc_response")"
+          OIDC_TOKEN="$oidc_token" node -e '
+            const payload = process.env.OIDC_TOKEN.split(".")[1];
+            process.stdout.write(`${Buffer.from(payload, "base64url").toString("utf8")}\n`);
+          ' > "${{ runner.temp }}/oidc-claims.json"
+          jq -e \
+            --arg audience 'npm:registry.npmjs.org' \
+            --arg ref "$GITHUB_REF" \
+            --arg sha "$GITHUB_SHA" \
+            --arg subject 'repo:alamorre/breakdown.sh:environment:breakdown-local-stable' \
+            '.aud == $audience and .sub == $subject and .ref == $ref and .sha == $sha and .runner_environment == "github-hosted"' \
+            "${{ runner.temp }}/oidc-claims.json"
+          jq -n \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg approval_verification_sha256 "$(sha256sum "$HUMAN_APPROVAL_VERIFICATION" | cut -d' ' -f1)" \
+            --arg candidate_artifact_id "$CANDIDATE_ARTIFACT_ID" \
+            --arg controls_sha256 "$(sha256sum "$GITHUB_CONTROLS" | cut -d' ' -f1)" \
+            --arg environment 'breakdown-local-stable' \
+            --arg host_support_artifact_id "$HOST_SUPPORT_ARTIFACT_ID" \
+            --arg platform_index_artifact_id "$PLATFORM_INDEX_ARTIFACT_ID" \
+            --arg ref "$GITHUB_REF" \
+            --arg ref_name "$GITHUB_REF_NAME" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg runner_environment "$RUNNER_ENVIRONMENT" \
+            --arg source_commit "$GITHUB_SHA" \
+            --arg triggering_actor "$GITHUB_TRIGGERING_ACTOR" \
+            --argjson ruleset_id 20015652 \
+            --slurpfile oidc "${{ runner.temp }}/oidc-claims.json" \
+            '{
+              schema_version: "breakdown.stable-workflow-identity.v1",
+              repository: $repository,
+              ref: $ref,
+              ref_name: $ref_name,
+              source_commit: $source_commit,
+              actor: $actor,
+              triggering_actor: $triggering_actor,
+              environment: $environment,
+              runner_environment: $runner_environment,
+              oidc: {
+                subject: $oidc[0].sub,
+                audience: $oidc[0].aud,
+                job_workflow_ref: $oidc[0].job_workflow_ref
+              },
+              artifact_ids: {
+                candidate: $candidate_artifact_id,
+                platform_index: $platform_index_artifact_id,
+                host_support: $host_support_artifact_id
+              },
+              release_controls: {
+                ruleset_id: $ruleset_id,
+                snapshot_sha256: $controls_sha256
+              },
+              approval_verification_sha256: $approval_verification_sha256
+            }' > "$WORKFLOW_IDENTITY"
+
       - name: Verify the candidate-bound tag signature and strict protection ruleset
         env:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           GH_TOKEN: ${{ github.token }}
           PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
-          TAG_RULESET_ID: ${{ inputs.tag_ruleset_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -151,26 +248,11 @@ jobs:
             "$CANDIDATE_ARTIFACT_ID" \
             "$PLATFORM_INDEX_ARTIFACT_ID")"
           test "$(jq -r '.message' "${{ runner.temp }}/annotated-tag.json")" = "$expected_message"
-          gh api "repos/${GITHUB_REPOSITORY}/rulesets/${TAG_RULESET_ID}" > "${{ runner.temp }}/tag-ruleset.json"
-          jq -e \
-            --arg ref "$GITHUB_REF" \
-            '.target == "tag" and
-             .enforcement == "active" and
-             (.conditions.ref_name.include | type) == "array" and
-             (.conditions.ref_name.include | any(. == "~ALL" or . == $ref or . == "refs/tags/breakdown-local-v*")) and
-             (.conditions.ref_name.exclude | type) == "array" and
-             (.conditions.ref_name.exclude | length) == 0 and
-             (.bypass_actors | type) == "array" and
-             (.bypass_actors | length) == 0 and
-             (.rules | type) == "array" and
-             ([.rules[].type] | index("update")) != null and
-             ([.rules[].type] | index("deletion")) != null' \
-            "${{ runner.temp }}/tag-ruleset.json"
           jq \
             --arg repository "https://github.com/${GITHUB_REPOSITORY}" \
             --arg candidate_artifact_id "$CANDIDATE_ARTIFACT_ID" \
             --arg platform_index_artifact_id "$PLATFORM_INDEX_ARTIFACT_ID" \
-            --slurpfile ruleset "${{ runner.temp }}/tag-ruleset.json" \
+            --slurpfile controls "$GITHUB_CONTROLS" \
             '{
               schema_version: "breakdown.signed-tag-evidence.v1",
               repository: $repository,
@@ -187,13 +269,14 @@ jobs:
                 reason: .verification.reason
               },
               protection: {
-                ruleset_id: $ruleset[0].id,
-                name: $ruleset[0].name,
-                target: $ruleset[0].target,
-                enforcement: $ruleset[0].enforcement,
-                conditions: $ruleset[0].conditions,
-                rules: $ruleset[0].rules,
-                bypass_actors: $ruleset[0].bypass_actors
+                ruleset_id: $controls[0].tag_ruleset.id,
+                name: $controls[0].tag_ruleset.name,
+                target: $controls[0].tag_ruleset.target,
+                enforcement: $controls[0].tag_ruleset.enforcement,
+                conditions: $controls[0].tag_ruleset.conditions,
+                rules: $controls[0].tag_ruleset.rules,
+                bypass_actors: $controls[0].tag_ruleset.bypass_actors,
+                current_user_can_bypass: $controls[0].tag_ruleset.current_user_can_bypass
               }
             }' \
             "${{ runner.temp }}/annotated-tag.json" \
@@ -221,10 +304,28 @@ jobs:
             --host-support-index "$HOST_INDEX" \
             --host-support "$HOST_SUPPORT_DIR" \
             --approval "$HUMAN_APPROVAL" \
+            --approval-signature "$HUMAN_APPROVAL_SIGNATURE" \
+            --approval-verification "$HUMAN_APPROVAL_VERIFICATION" \
+            --github-controls "$GITHUB_CONTROLS" \
             --tag-evidence "${{ runner.temp }}/breakdown-signed-tag-evidence.json" \
+            --workflow-identity "$WORKFLOW_IDENTITY" \
             --output "$PUBLICATION_DIR"
           RELEASE_VERSION="$(jq -r '.release_version' "$PUBLICATION_DIR"/breakdown-publication-manifest-*.json)"
           printf 'RELEASE_VERSION=%s\n' "$RELEASE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Retain the complete pre-publication gate evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-stable-release-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/breakdown-github-release-controls.json
+            ${{ runner.temp }}/breakdown-human-release-approval.json
+            ${{ runner.temp }}/breakdown-human-release-approval.json.sig
+            ${{ runner.temp }}/breakdown-human-release-approval-verification.json
+            ${{ runner.temp }}/breakdown-signed-tag-evidence.json
+            ${{ runner.temp }}/breakdown-stable-workflow-identity.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Attest every exact publication asset
         uses: actions/attest@v4

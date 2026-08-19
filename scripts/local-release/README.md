@@ -31,8 +31,21 @@ The legal licensor and npm/GitHub publisher complete these controls personally:
 4. Enable GitHub release immutability.
 5. Protect `refs/tags/breakdown-local-v*` with restricted update and deletion, no exclusions, and
    no bypass actors; retain the ruleset ID.
-6. Protect the `breakdown-local-stable` environment with required human review.
+6. Restrict environment `breakdown-local-stable` (ID `18989155368`) to the exact custom tag
+   policy `breakdown-local-v*`, disable administrator bypass, and configure no required-reviewer
+   rule.
 7. Confirm DCO 1.1 and the no-CLA policy, then review AI-assisted provenance.
+
+`alamorre` is permanently the sole maintainer, approver, and publisher. No collaborator, alternate
+account, or automation identity is added to manufacture separation of duties. The signed approval,
+exact artifact bindings, immutable identities, no-bypass settings, and retained evidence are
+compensating controls; they are not independent review.
+
+The stable workflow needs read access to repository administration settings so it can re-read
+immutable releases. It first uses the ephemeral `GITHUB_TOKEN`; if the repository does not grant
+that token the required read, configure environment secret `RELEASE_CONTROL_READ_TOKEN` as a
+fine-grained token limited to this repository with read-only Administration, Actions, and Metadata
+permissions. The token is never retained or used for npm publication.
 
 These controls remain real release blockers. The deferred host policy changes none of them.
 
@@ -60,6 +73,20 @@ data scans, the final byte inventory, `SHA256SUMS`, SBOM, provenance inputs, pac
 traceability/platform gates, and the zero-claim host policy.
 
 ## Sign and protect the source tag
+
+Immediately before creating the tag, retain a read-only sanitized snapshot and require it to pass:
+
+```sh
+pnpm local:release:verify-github-controls \
+  --phase pre-tag \
+  --output /absolute/path/to/breakdown-github-release-controls-pre-tag.json
+```
+
+The command fails unless release immutability is enabled; environment ID `18989155368` has only the
+exact `breakdown-local-v*` tag policy and no administrator bypass or reviewer rule; ruleset `20015652`
+has exactly the protected ref, update/deletion restrictions, no exclusions or bypass actors, and
+`current_user_can_bypass: never`; `alamorre` remains the only direct collaborator; and no stable tag
+or release already exists. Do not create the tag from a stale or failed snapshot.
 
 Record the candidate digest from its release manifest, the SHA-256 of `SHA256SUMS`, and the two
 immutable artifact IDs. Create a signed annotated tag message with this exact shape and no trailing
@@ -104,31 +131,58 @@ pnpm local:release:create-approval \
   --output /absolute/path/to/breakdown-human-release-approval.json
 ```
 
-Fill the approver identity and ISO-8601 time. Set an attestation to `true` only after personally
+Fill `approver.github_login` with `alamorre`, the publisher identity, and a canonical UTC ISO-8601
+approval time. Set an attestation to `true` only after personally
 reviewing its retained evidence. In particular,
 `zero_claim_deferred_host_policy_reviewed` affirms that the approver reviewed and accepted the 1.0
 policy with `supported_hosts: []`; it does not claim a host journey ran or passed. Do not alter the
 candidate binding or approval statement.
 
-Encode the exact JSON for the protected workflow input:
+Sign the exact completed JSON with the publisher-controlled SSH signing key registered in GitHub.
+The namespace is part of the signature and must not change:
+
+```sh
+ssh-keygen -Y sign \
+  -f "$(git config --get user.signingkey)" \
+  -n breakdown-local-release \
+  /absolute/path/to/breakdown-human-release-approval.json
+
+pnpm local:release:verify-approval \
+  --approval /absolute/path/to/breakdown-human-release-approval.json \
+  --signature /absolute/path/to/breakdown-human-release-approval.json.sig \
+  --output /absolute/path/to/breakdown-human-release-approval-verification.json
+```
+
+The verification command fetches `alamorre`'s current GitHub SSH signing keys and fails unless one
+authenticates the exact approval bytes. Retain the approval, detached signature, and verification
+record. Editing the JSON after signing invalidates the approval.
+
+Encode the exact JSON and signature for the two protected workflow inputs:
 
 ```sh
 node -e "process.stdout.write(require('node:fs').readFileSync(process.argv[1]).toString('base64'))" \
   /absolute/path/to/breakdown-human-release-approval.json
+node -e "process.stdout.write(require('node:fs').readFileSync(process.argv[1]).toString('base64'))" \
+  /absolute/path/to/breakdown-human-release-approval.json.sig
 ```
 
 ## Publish once
 
 Dispatch `local-stable-publication.yml` from the signed tag and supply the candidate artifact ID,
 passing platform-index artifact ID, authenticated host-support artifact ID, encoded human approval,
-and active tag-ruleset ID.
+and encoded approval signature. Ruleset ID `20015652` is fixed by policy and is not caller input.
 
-Before publishing, the workflow rejects a missing or unattested host index; candidate, corpus,
-source, or tag mismatch; any deferred evidence row or Supported Host claim; altered generated
-support; or an approval that does not accept the zero-claim policy. It then preserves candidate
-bytes, attaches all evidence, writes a publication manifest and release notes containing
-`supported_hosts: []`, attests every asset, publishes the exact npm tarballs and immutable GitHub
-Release, and verifies every public byte and trust record.
+Before publishing, the workflow re-verifies the approval signature against GitHub, every approval
+binding and attestation, repository immutability, the exact environment and ruleset settings,
+administrator/ruleset no-bypass state, sole-maintainer identity, GitHub-hosted runner, npm OIDC
+subject, signed tag, immutable artifact IDs, and all candidate/platform/host-policy digests. It also
+rejects a missing or unattested host index; candidate, corpus, source, or tag mismatch; any deferred
+evidence row or Supported Host claim; altered generated support; or an approval that does not accept
+the zero-claim policy. The workflow uploads the sanitized controls, approval, signature,
+verification, tag evidence, and runner/OIDC identity before its first irreversible step. It then
+preserves candidate bytes, attaches all evidence, writes a publication manifest and release notes
+containing `supported_hosts: []`, attests every asset, publishes the exact npm tarballs and immutable
+GitHub Release, and verifies every public byte and trust record.
 
 The final report is retained as `breakdown-post-publication-inspection-<version>`. The release is
 not complete unless it has `status: "passed"` and confirms zero Supported Hosts.

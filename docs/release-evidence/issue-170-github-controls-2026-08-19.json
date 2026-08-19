@@ -1,0 +1,77 @@
+{
+  "schema_version": "breakdown.github-release-controls.v1",
+  "captured_at": "2026-08-19T20:32:42.142Z",
+  "phase": "pre-tag",
+  "repository": {
+    "full_name": "alamorre/breakdown.sh",
+    "visibility": "public",
+    "html_url": "https://github.com/alamorre/breakdown.sh"
+  },
+  "permanent_operating_model": {
+    "sole_maintainer": "alamorre",
+    "independent_review": false,
+    "compensating_controls_are_independent_review": false
+  },
+  "environment": {
+    "id": 18989155368,
+    "name": "breakdown-local-stable",
+    "can_admins_bypass": false,
+    "protection_rules": [
+      {
+        "id": 63160584,
+        "type": "branch_policy"
+      }
+    ],
+    "deployment_branch_policy": {
+      "protected_branches": false,
+      "custom_branch_policies": true
+    }
+  },
+  "deployment_branch_policies": [
+    {
+      "id": 57768709,
+      "name": "breakdown-local-v*",
+      "type": "tag"
+    }
+  ],
+  "immutable_releases": {
+    "enabled": true,
+    "enforced_by_owner": false
+  },
+  "tag_ruleset": {
+    "id": 20015652,
+    "name": "Protect Breakdown Local stable release tags",
+    "target": "tag",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": ["refs/tags/breakdown-local-v*"]
+      }
+    },
+    "rules": [
+      {
+        "type": "update"
+      },
+      {
+        "type": "deletion"
+      }
+    ],
+    "bypass_actors": [],
+    "current_user_can_bypass": "never"
+  },
+  "direct_collaborators": [
+    {
+      "login": "alamorre",
+      "role_name": "admin"
+    }
+  ],
+  "publication_identity": {
+    "intended_tag": null,
+    "matching_tags": [],
+    "matching_releases": []
+  },
+  "verification": {
+    "status": "passed"
+  }
+}
