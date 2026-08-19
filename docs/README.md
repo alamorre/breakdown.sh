@@ -19,6 +19,7 @@ notes, or short-lived implementation plans.
 | `docs/google-drive-integration.md`      | Public after review    | `/docs/google-drive`      |
 | `specs.md`                              | Public after review    | `/docs/product`           |
 | `README.md`                             | Public repo overview   | None                      |
+| `CONTRIBUTING.md`                       | Contributor/operator   | None                      |
 | `implementation_plan.md`                | Internal               | None                      |
 
 ## Convention
