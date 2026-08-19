@@ -113,6 +113,13 @@
       "oracle_type": "effect",
       "retained_evidence": "scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml",
       "oracle": "Stable publication accepts only an attested exact deferred empty support index or a fully qualified passing set and rejects missing, mismatched, or false Supported Host claims."
+    },
+    {
+      "id": "PKG-018",
+      "requirements": ["REQ-PKG-018"],
+      "oracle_type": "effect",
+      "retained_evidence": "scripts/local-release/release-controls.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml; docs/release-evidence/issue-170-github-controls-2026-08-19.json",
+      "oracle": "Pre-tag and publication gates enforce the permanent sole-maintainer model, GitHub-recognized signed approval, exact no-bypass repository controls, GitHub-hosted runner, npm OIDC subject, and retained sanitized evidence without claiming independent review."
     }
   ]
 }

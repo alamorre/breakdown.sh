@@ -132,3 +132,17 @@ index MUST record the explicit `deferred` certification policy, zero evidence ro
 instead accept a future fully qualified passing support set only when every named Supported Host is
 derived from exact passing immutable evidence. A missing, unattested, mismatched, or non-empty
 unqualified support set MUST fail closed.
+
+### REQ-PKG-018
+
+The permanent sole maintainer, release approver, and publisher is `alamorre`; the stable release
+process MUST NOT require or claim an independent reviewer, nominal collaborator, alternate account,
+or automation identity. Before tag creation and again before publication, the release gate MUST
+verify and retain sanitized evidence that environment `breakdown-local-stable` admits only the
+exact `breakdown-local-v*` tag policy with administrator bypass disabled, immutable GitHub Releases
+are enabled, and tag ruleset `20015652` has exactly `refs/tags/breakdown-local-v*`, update/deletion
+restrictions, no exclusions or bypass actors, and no maintainer bypass. Before its first irreversible
+step, stable publication MUST verify a candidate-bound SSH approval signature against the
+maintainer's GitHub-recognized signing identity and retain the approval, signature, verification,
+GitHub-hosted runner identity, npm OIDC subject, artifact IDs, source/tag bindings, and exact control
+snapshot. These compensating controls MUST NOT be described as independent review.
