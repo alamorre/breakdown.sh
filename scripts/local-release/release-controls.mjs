@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { sha256 } from './filesystem.mjs';
+import { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -670,21 +671,41 @@ export function validateWorkflowIdentityEvidence(
     platformIndexArtifactId,
   },
 ) {
+  const tagRef = `refs/tags/${candidate.tag}`;
+  const workflowPath = `${RELEASE_CONTROL_POLICY.repository}/.github/workflows/local-stable-publication.yml`;
+  const tagExecution =
+    evidence?.execution?.mode === 'tag' &&
+    evidence?.execution?.ref === tagRef &&
+    evidence?.execution?.source_commit === candidate.provenance.source.git_commit &&
+    evidence?.execution?.workflow_ref === `${workflowPath}@${tagRef}` &&
+    evidence?.execution?.workflow_sha === candidate.provenance.source.git_commit &&
+    evidence?.actor === 'github-actions[bot]' &&
+    ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(evidence?.triggering_actor);
+  const recoveryExecution =
+    candidate.tag === V1_RELEASE_RECOVERY_POLICY.tag &&
+    candidate.provenance.source.git_commit === V1_RELEASE_RECOVERY_POLICY.sourceSha &&
+    evidence?.execution?.mode === 'v1-recovery' &&
+    evidence?.execution?.ref === tagRef &&
+    evidence?.execution?.source_commit === candidate.provenance.source.git_commit &&
+    evidence?.execution?.workflow_ref === `${workflowPath}@refs/heads/main` &&
+    exactSha1(evidence?.execution?.workflow_sha) &&
+    evidence?.actor === RELEASE_CONTROL_POLICY.maintainer &&
+    evidence?.triggering_actor === RELEASE_CONTROL_POLICY.maintainer;
   invariant(
     evidence?.schema_version === 'breakdown.stable-workflow-identity.v1' &&
       evidence?.repository === RELEASE_CONTROL_POLICY.repository &&
-      evidence?.ref === `refs/tags/${candidate.tag}` &&
+      evidence?.ref === tagRef &&
       evidence?.ref_name === candidate.tag &&
       evidence?.source_commit === candidate.provenance.source.git_commit &&
-      evidence?.actor === 'github-actions[bot]' &&
-      ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(
-        evidence?.triggering_actor,
-      ) &&
+      (tagExecution || recoveryExecution) &&
       evidence?.environment === RELEASE_CONTROL_POLICY.environment &&
       evidence?.runner_environment === 'github-hosted' &&
       evidence?.oidc?.subject ===
         `repo:${RELEASE_CONTROL_POLICY.repository}:environment:${RELEASE_CONTROL_POLICY.environment}` &&
       evidence?.oidc?.audience === RELEASE_CONTROL_POLICY.oidcAudience &&
+      evidence?.oidc?.ref === tagRef &&
+      evidence?.oidc?.sha === candidate.provenance.source.git_commit &&
+      evidence?.oidc?.job_workflow_ref === evidence.execution.workflow_ref &&
       evidence?.artifact_ids?.candidate === candidateArtifactId &&
       evidence?.artifact_ids?.platform_index === platformIndexArtifactId &&
       /^[1-9]\d*$/.test(evidence?.artifact_ids?.host_support ?? '') &&

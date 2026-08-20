@@ -1,7 +1,8 @@
 name: Breakdown Local stable publication
-run-name: Breakdown Local stable publication for ceremony ${{ inputs.ceremony_run_id }}
+run-name: Breakdown Local stable publication for ceremony ${{ inputs.ceremony_run_id || github.event.deployment.payload.ceremony_run_id }}
 
 on:
+  deployment:
   workflow_dispatch:
     inputs:
       candidate_artifact_id:
@@ -46,6 +47,17 @@ on:
         required: false
         type: string
 
+env:
+  AUTHORIZATION_ARTIFACT_ID_INPUT: ${{ inputs.authorization_artifact_id || github.event.deployment.payload.authorization_artifact_id }}
+  CANDIDATE_ARTIFACT_ID_INPUT: ${{ inputs.candidate_artifact_id || github.event.deployment.payload.candidate_artifact_id }}
+  CEREMONY_RUN_ID_INPUT: ${{ inputs.ceremony_run_id || github.event.deployment.payload.ceremony_run_id }}
+  HOST_SUPPORT_ARTIFACT_ID_INPUT: ${{ inputs.host_support_artifact_id || github.event.deployment.payload.host_support_artifact_id }}
+  NPM_BOOTSTRAP_ARTIFACT_ID_INPUT: ${{ inputs.npm_bootstrap_artifact_id || github.event.deployment.payload.npm_bootstrap_artifact_id }}
+  NPM_BOOTSTRAP_CONFIRMATION_INPUT: ${{ inputs.npm_bootstrap_confirmation || github.event.deployment.payload.npm_bootstrap_confirmation }}
+  NPM_PUBLICATION_MODE_INPUT: ${{ inputs.npm_publication_mode || github.event.deployment.payload.npm_publication_mode }}
+  NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT: ${{ inputs.npm_trusted_publishing_artifact_id || github.event.deployment.payload.npm_trusted_publishing_artifact_id }}
+  PLATFORM_INDEX_ARTIFACT_ID_INPUT: ${{ inputs.platform_index_artifact_id || github.event.deployment.payload.platform_index_artifact_id }}
+
 permissions:
   actions: read
   attestations: write
@@ -59,16 +71,70 @@ concurrency:
 jobs:
   gate-publish-and-verify:
     name: Gate, publish, and verify the exact stable release
-    if: ${{ startsWith(github.ref, 'refs/tags/breakdown-local-v') }}
+    if: >-
+      ${{ startsWith(github.ref, 'refs/tags/breakdown-local-v') &&
+          (github.event_name == 'workflow_dispatch' ||
+           (github.event_name == 'deployment' &&
+            github.event.deployment.task == 'breakdown-local-v1-recovery' &&
+            github.event.deployment.ref == 'breakdown-local-v1.0.0' &&
+            github.event.deployment.payload.ceremony_run_id == '32391936576' &&
+            github.event.deployment.payload.candidate_artifact_id == '9413780200' &&
+            github.event.deployment.payload.platform_index_artifact_id == '9413912347' &&
+            github.event.deployment.payload.authorization_artifact_id == '9415223409' &&
+            github.event.deployment.payload.npm_publication_mode == 'first-package-bootstrap' &&
+            github.event.deployment.payload.npm_bootstrap_confirmation == 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0' &&
+            github.event.deployment.payload.npm_trusted_publishing_artifact_id == '' &&
+            github.event.deployment.payload.npm_bootstrap_artifact_id == '')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: breakdown-local-stable
     steps:
-      - name: Check out the signed release tag
+      - name: Check out the exact workflow implementation
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve the immutable release target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_TAG: ${{ github.event.deployment.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag=''
+          execution_mode=tag
+          if test "$EVENT_NAME" = workflow_dispatch; then
+            [[ "$GITHUB_REF" == refs/tags/breakdown-local-v* ]]
+            release_tag="$GITHUB_REF_NAME"
+          else
+            execution_mode=v1-recovery
+            test "$EVENT_NAME" = deployment
+            test "$GITHUB_REF" = refs/tags/breakdown-local-v1.0.0
+            release_tag="$RECOVERY_TAG"
+            test "$release_tag" = breakdown-local-v1.0.0
+            test "$CEREMONY_RUN_ID_INPUT" = 32391936576
+            test "$CANDIDATE_ARTIFACT_ID_INPUT" = 9413780200
+            test "$PLATFORM_INDEX_ARTIFACT_ID_INPUT" = 9413912347
+            test "$AUTHORIZATION_ARTIFACT_ID_INPUT" = 9415223409
+            test "$NPM_PUBLICATION_MODE_INPUT" = first-package-bootstrap
+          fi
+          tag_ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_tag}")"
+          test "$(jq -r '.object.type' <<< "$tag_ref")" = tag
+          tag_object_url="$(jq -er '.object.url' <<< "$tag_ref")"
+          release_sha="$(gh api "$tag_object_url" --jq 'select(.object.type == "commit") | .object.sha')"
+          [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]]
+          if test "$execution_mode" = v1-recovery; then
+            test "$release_sha" = 723e296c5a0ab5431a02022830adff8bcf0dd818
+            test "$(jq -r '.object.sha' <<< "$tag_ref")" = 222766090da2ad070e8b45619d8f0f844829144f
+          fi
+          test "$release_sha" = "$GITHUB_SHA"
+          printf 'RELEASE_EXECUTION_MODE=%s\n' "$execution_mode" >> "$GITHUB_ENV"
+          printf 'RELEASE_REF=refs/tags/%s\n' "$release_tag" >> "$GITHUB_ENV"
+          printf 'RELEASE_SHA=%s\n' "$release_sha" >> "$GITHUB_ENV"
+          printf 'RELEASE_TAG=%s\n' "$release_tag" >> "$GITHUB_ENV"
 
       - name: Install pnpm
         uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
@@ -90,14 +156,14 @@ jobs:
 
       - name: Resolve immutable artifact source runs before downloading bytes
         env:
-          AUTHORIZATION_ARTIFACT_ID: ${{ inputs.authorization_artifact_id }}
-          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
-          CEREMONY_RUN_ID: ${{ inputs.ceremony_run_id }}
+          AUTHORIZATION_ARTIFACT_ID: ${{ env.AUTHORIZATION_ARTIFACT_ID_INPUT }}
+          CANDIDATE_ARTIFACT_ID: ${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}
+          CEREMONY_RUN_ID: ${{ env.CEREMONY_RUN_ID_INPUT }}
           GH_TOKEN: ${{ github.token }}
-          HOST_SUPPORT_ARTIFACT_ID: ${{ inputs.host_support_artifact_id }}
-          NPM_BOOTSTRAP_ARTIFACT_ID: ${{ inputs.npm_bootstrap_artifact_id }}
-          NPM_TRUSTED_PUBLISHING_ARTIFACT_ID: ${{ inputs.npm_trusted_publishing_artifact_id }}
-          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ env.HOST_SUPPORT_ARTIFACT_ID_INPUT }}
+          NPM_BOOTSTRAP_ARTIFACT_ID: ${{ env.NPM_BOOTSTRAP_ARTIFACT_ID_INPUT }}
+          NPM_TRUSTED_PUBLISHING_ARTIFACT_ID: ${{ env.NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}
         shell: bash
         run: |
           set -euo pipefail
@@ -112,7 +178,7 @@ jobs:
               --arg id "$artifact_id" \
               --arg name "$expected_name" \
               --arg name_match "$name_match" \
-              --arg source_sha "$GITHUB_SHA" \
+              --arg source_sha "$RELEASE_SHA" \
               '(.id | tostring) == $id and (if $name_match == "prefix" then (.name | startswith($name)) else .name == $name end) and .expired == false and .workflow_run.head_sha == $source_sha' \
               "$metadata" > /dev/null
             jq -er '.workflow_run.id | tostring' "$metadata"
@@ -130,11 +196,11 @@ jobs:
           printf 'HOST_SUPPORT_RUN_ID=%s\n' "$host_run_id" >> "$GITHUB_ENV"
           printf 'AUTHORIZATION_RUN_ID=%s\n' "$authorization_run_id" >> "$GITHUB_ENV"
 
-          if test '${{ inputs.npm_publication_mode }}' != first-package-bootstrap; then
+          if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' != first-package-bootstrap; then
             trust_run_id="$(resolve_artifact_run "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID" breakdown-npm-trusted-publishing)"
             printf 'NPM_TRUST_RUN_ID=%s\n' "$trust_run_id" >> "$GITHUB_ENV"
           fi
-          if test '${{ inputs.npm_publication_mode }}' = finalize-bootstrap; then
+          if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' = finalize-bootstrap; then
             bootstrap_run_id="$(resolve_artifact_run "$NPM_BOOTSTRAP_ARTIFACT_ID" breakdown-npm-first-package-bootstrap- prefix)"
             printf 'NPM_BOOTSTRAP_RUN_ID=%s\n' "$bootstrap_run_id" >> "$GITHUB_ENV"
           fi
@@ -142,7 +208,7 @@ jobs:
       - name: Download the exact once-built candidate by artifact ID
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          artifact-ids: ${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}
           github-token: ${{ github.token }}
           run-id: ${{ env.CANDIDATE_RUN_ID }}
           path: ${{ runner.temp }}/candidate
@@ -150,7 +216,7 @@ jobs:
       - name: Download the passing platform index by artifact ID
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ inputs.platform_index_artifact_id }}
+          artifact-ids: ${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}
           github-token: ${{ github.token }}
           run-id: ${{ env.PLATFORM_INDEX_RUN_ID }}
           path: ${{ runner.temp }}/platform-index
@@ -158,7 +224,7 @@ jobs:
       - name: Download the authenticated host support set by artifact ID
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ inputs.host_support_artifact_id }}
+          artifact-ids: ${{ env.HOST_SUPPORT_ARTIFACT_ID_INPUT }}
           github-token: ${{ github.token }}
           run-id: ${{ env.HOST_SUPPORT_RUN_ID }}
           path: ${{ runner.temp }}/host-support
@@ -166,32 +232,32 @@ jobs:
       - name: Download the exact GitHub-authenticated release authorization
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ inputs.authorization_artifact_id }}
+          artifact-ids: ${{ env.AUTHORIZATION_ARTIFACT_ID_INPUT }}
           github-token: ${{ github.token }}
           run-id: ${{ env.AUTHORIZATION_RUN_ID }}
           path: ${{ runner.temp }}/authorization
 
       - name: Download the sanitized npm trusted-publisher inspection by artifact ID
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ inputs.npm_trusted_publishing_artifact_id }}
+          artifact-ids: ${{ env.NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT }}
           github-token: ${{ github.token }}
           run-id: ${{ env.NPM_TRUST_RUN_ID }}
           path: ${{ runner.temp }}/npm-trust
 
       - name: Download the authenticated first-package bootstrap evidence by artifact ID
-        if: ${{ inputs.npm_publication_mode == 'finalize-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'finalize-bootstrap' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          artifact-ids: ${{ inputs.npm_bootstrap_artifact_id }}
+          artifact-ids: ${{ env.NPM_BOOTSTRAP_ARTIFACT_ID_INPUT }}
           github-token: ${{ github.token }}
           run-id: ${{ env.NPM_BOOTSTRAP_RUN_ID }}
           path: ${{ runner.temp }}/npm-bootstrap
 
       - name: Resolve the one exact input of each kind
         env:
-          NPM_BOOTSTRAP_ARTIFACT_ID: ${{ inputs.npm_bootstrap_artifact_id }}
+          NPM_BOOTSTRAP_ARTIFACT_ID: ${{ env.NPM_BOOTSTRAP_ARTIFACT_ID_INPUT }}
         shell: bash
         run: |
           set -euo pipefail
@@ -217,11 +283,11 @@ jobs:
           printf 'AUTHORIZATION_VERIFICATION=%s\n' "${{ runner.temp }}/breakdown-github-release-authorization-verification.json" >> "$GITHUB_ENV"
           printf 'GITHUB_CONTROLS=%s\n' "${{ runner.temp }}/breakdown-github-release-controls.json" >> "$GITHUB_ENV"
           printf 'WORKFLOW_IDENTITY=%s\n' "${{ runner.temp }}/breakdown-stable-workflow-identity.json" >> "$GITHUB_ENV"
-          if test '${{ inputs.npm_publication_mode }}' != first-package-bootstrap; then
+          if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' != first-package-bootstrap; then
             printf 'NPM_TRUST_EVIDENCE=%s\n' "$(resolve_one "${{ runner.temp }}/npm-trust" breakdown-npm-trusted-publishing.json)" >> "$GITHUB_ENV"
             printf 'NPM_TRUST_ATTESTATION=%s\n' "$(resolve_one "${{ runner.temp }}/npm-trust" breakdown-npm-trusted-publishing.attestation.json)" >> "$GITHUB_ENV"
           fi
-          if test "${{ inputs.npm_publication_mode }}" = finalize-bootstrap; then
+          if test "${{ env.NPM_PUBLICATION_MODE_INPUT }}" = finalize-bootstrap; then
             test -n "$NPM_BOOTSTRAP_ARTIFACT_ID"
             printf 'DOWNLOADED_NPM_BOOTSTRAP_REPORT=%s\n' "$(resolve_one "${{ runner.temp }}/npm-bootstrap" breakdown-npm-first-package-bootstrap.json)" >> "$GITHUB_ENV"
             printf 'DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION=%s\n' "$(resolve_one "${{ runner.temp }}/npm-bootstrap" breakdown-npm-first-package-bootstrap.attestation.json)" >> "$GITHUB_ENV"
@@ -229,25 +295,25 @@ jobs:
 
       - name: Validate the explicitly selected npm publication mode
         env:
-          BOOTSTRAP_ARTIFACT_ID: ${{ inputs.npm_bootstrap_artifact_id }}
-          BOOTSTRAP_CONFIRMATION: ${{ inputs.npm_bootstrap_confirmation }}
-          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
-          AUTHORIZATION_ARTIFACT_ID: ${{ inputs.authorization_artifact_id }}
-          CEREMONY_RUN_ID: ${{ inputs.ceremony_run_id }}
-          HOST_SUPPORT_ARTIFACT_ID: ${{ inputs.host_support_artifact_id }}
-          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
-          TRUST_EVIDENCE_ARTIFACT_ID: ${{ inputs.npm_trusted_publishing_artifact_id }}
+          BOOTSTRAP_ARTIFACT_ID: ${{ env.NPM_BOOTSTRAP_ARTIFACT_ID_INPUT }}
+          BOOTSTRAP_CONFIRMATION: ${{ env.NPM_BOOTSTRAP_CONFIRMATION_INPUT }}
+          CANDIDATE_ARTIFACT_ID: ${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}
+          AUTHORIZATION_ARTIFACT_ID: ${{ env.AUTHORIZATION_ARTIFACT_ID_INPUT }}
+          CEREMONY_RUN_ID: ${{ env.CEREMONY_RUN_ID_INPUT }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ env.HOST_SUPPORT_ARTIFACT_ID_INPUT }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}
+          TRUST_EVIDENCE_ARTIFACT_ID: ${{ env.NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT }}
         shell: bash
         run: |
           set -euo pipefail
-          mode='${{ inputs.npm_publication_mode }}'
+          mode='${{ env.NPM_PUBLICATION_MODE_INPUT }}'
           [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$AUTHORIZATION_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$CEREMONY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$HOST_SUPPORT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$PLATFORM_INDEX_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           if test "$mode" = first-package-bootstrap; then
-            test "$GITHUB_REF_NAME" = breakdown-local-v1.0.0
+            test "$RELEASE_TAG" = breakdown-local-v1.0.0
             test "$BOOTSTRAP_CONFIRMATION" = 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0'
             test -z "$BOOTSTRAP_ARTIFACT_ID"
             test -z "$TRUST_EVIDENCE_ARTIFACT_ID"
@@ -262,7 +328,7 @@ jobs:
           fi
 
       - name: Validate the sanitized npm trusted-publisher inspection
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +338,7 @@ jobs:
             --bundle "$NPM_TRUST_ATTESTATION" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-npm-trust-inspection.yml" \
             --source-ref refs/heads/main \
-            --source-digest "$GITHUB_SHA" \
+            --source-digest "$RELEASE_SHA" \
             --deny-self-hosted-runners
 
       - name: Reinspect the downloaded candidate without rebuilding
@@ -296,15 +362,15 @@ jobs:
             --bundle "$AUTHORIZATION_ATTESTATION" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-release-ceremony.yml" \
             --source-ref refs/heads/main \
-            --source-digest "$GITHUB_SHA" \
+            --source-digest "$RELEASE_SHA" \
             --deny-self-hosted-runners
           jq -e \
-            --arg candidate_artifact_id '${{ inputs.candidate_artifact_id }}' \
+            --arg candidate_artifact_id '${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}' \
             --arg candidate_digest "$CANDIDATE_DIGEST" \
-            --arg ceremony_run_id '${{ inputs.ceremony_run_id }}' \
-            --arg mode '${{ inputs.npm_publication_mode }}' \
-            --arg platform_index_artifact_id '${{ inputs.platform_index_artifact_id }}' \
-            --arg source_sha "$GITHUB_SHA" \
+            --arg ceremony_run_id '${{ env.CEREMONY_RUN_ID_INPUT }}' \
+            --arg mode '${{ env.NPM_PUBLICATION_MODE_INPUT }}' \
+            --arg platform_index_artifact_id '${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}' \
+            --arg source_sha "$RELEASE_SHA" \
             '.schema_version == "breakdown.github-release-authorization.v1" and
              .approver.github_login == "alamorre" and
              .github_review.state == "approved" and
@@ -320,7 +386,7 @@ jobs:
             --arg authorization_sha256 "$(sha256sum "$AUTHORIZATION" | cut -d' ' -f1)" \
             --arg attestation_sha256 "$(sha256sum "$AUTHORIZATION_ATTESTATION" | cut -d' ' -f1)" \
             --arg repository "$GITHUB_REPOSITORY" \
-            --arg source_digest "$GITHUB_SHA" \
+            --arg source_digest "$RELEASE_SHA" \
             '{
               schema_version: "breakdown.github-release-authorization-verification.v1",
               repository: $repository,
@@ -343,19 +409,29 @@ jobs:
           set -euo pipefail
           pnpm local:release:verify-github-controls \
             --phase publication \
-            --tag "$GITHUB_REF_NAME" \
+            --tag "$RELEASE_TAG" \
             --output "$GITHUB_CONTROLS"
 
       - name: Prove the GitHub-hosted runner and npm OIDC subject boundary
         env:
-          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
-          HOST_SUPPORT_ARTIFACT_ID: ${{ inputs.host_support_artifact_id }}
-          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ env.HOST_SUPPORT_ARTIFACT_ID_INPUT }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_ACTOR" = 'github-actions[bot]'
-          [[ "$GITHUB_TRIGGERING_ACTOR" = 'github-actions[bot]' || "$GITHUB_TRIGGERING_ACTOR" = alamorre ]]
+          if test "$RELEASE_EXECUTION_MODE" = v1-recovery; then
+            test "$GITHUB_ACTOR" = alamorre
+            test "$GITHUB_TRIGGERING_ACTOR" = alamorre
+            test "$WORKFLOW_REF" = 'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main'
+          else
+            test "$GITHUB_ACTOR" = 'github-actions[bot]'
+            [[ "$GITHUB_TRIGGERING_ACTOR" = 'github-actions[bot]' || "$GITHUB_TRIGGERING_ACTOR" = alamorre ]]
+            test "$WORKFLOW_REF" = "alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@${RELEASE_REF}"
+          fi
+          [[ "$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$RUNNER_ENVIRONMENT" = github-hosted
           oidc_response="$(curl --fail --silent --show-error \
             --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
@@ -380,11 +456,16 @@ jobs:
             --arg environment 'breakdown-local-stable' \
             --arg host_support_artifact_id "$HOST_SUPPORT_ARTIFACT_ID" \
             --arg platform_index_artifact_id "$PLATFORM_INDEX_ARTIFACT_ID" \
-            --arg ref "$GITHUB_REF" \
-            --arg ref_name "$GITHUB_REF_NAME" \
+            --arg execution_mode "$RELEASE_EXECUTION_MODE" \
+            --arg execution_ref "$GITHUB_REF" \
+            --arg execution_sha "$GITHUB_SHA" \
+            --arg execution_workflow_ref "$WORKFLOW_REF" \
+            --arg execution_workflow_sha "$WORKFLOW_SHA" \
+            --arg ref "$RELEASE_REF" \
+            --arg ref_name "$RELEASE_TAG" \
             --arg repository "$GITHUB_REPOSITORY" \
             --arg runner_environment "$RUNNER_ENVIRONMENT" \
-            --arg source_commit "$GITHUB_SHA" \
+            --arg source_commit "$RELEASE_SHA" \
             --arg triggering_actor "$GITHUB_TRIGGERING_ACTOR" \
             --argjson ruleset_id 20015652 \
             --slurpfile oidc "${{ runner.temp }}/oidc-claims.json" \
@@ -401,7 +482,16 @@ jobs:
               oidc: {
                 subject: $oidc[0].sub,
                 audience: $oidc[0].aud,
-                job_workflow_ref: $oidc[0].job_workflow_ref
+                job_workflow_ref: $oidc[0].job_workflow_ref,
+                ref: $oidc[0].ref,
+                sha: $oidc[0].sha
+              },
+              execution: {
+                mode: $execution_mode,
+                ref: $execution_ref,
+                source_commit: $execution_sha,
+                workflow_ref: $execution_workflow_ref,
+                workflow_sha: $execution_workflow_sha
               },
               artifact_ids: {
                 candidate: $candidate_artifact_id,
@@ -429,23 +519,26 @@ jobs:
 
       - name: Verify the candidate-bound keyless tag and strict protection ruleset
         env:
-          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}
           GH_TOKEN: ${{ github.token }}
-          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}
         shell: bash
         run: |
           set -euo pipefail
-          "${{ runner.temp }}/gitsign" verify \
+          verification_status=0
+          "${{ runner.temp }}/gitsign" verify-tag \
             --certificate-identity 'https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main' \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-            "$GITHUB_REF_NAME" > "${{ runner.temp }}/gitsign-verification.log" 2>&1
-          tag_ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
+            "$RELEASE_TAG" > "${{ runner.temp }}/gitsign-verification.log" 2>&1 || verification_status=$?
+          cat "${{ runner.temp }}/gitsign-verification.log"
+          test "$verification_status" -eq 0
+          tag_ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}")"
           test "$(jq -r '.object.type' <<< "$tag_ref")" = tag
           tag_object_url="$(jq -r '.object.url' <<< "$tag_ref")"
           gh api "$tag_object_url" > "${{ runner.temp }}/annotated-tag.json"
           jq -e \
-            --arg tag "$GITHUB_REF_NAME" \
-            --arg commit "$GITHUB_SHA" \
+            --arg tag "$RELEASE_TAG" \
+            --arg commit "$RELEASE_SHA" \
             '.tag == $tag and .object.type == "commit" and .object.sha == $commit' \
             "${{ runner.temp }}/annotated-tag.json"
           tag_message="$(jq -r '.message' "${{ runner.temp }}/annotated-tag.json")"
@@ -502,6 +595,15 @@ jobs:
             > "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
           jq -e '.verification.verified == true and .signer.certificate_claims_verified == true' "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
 
+      - name: Retain the Gitsign annotated-tag verification log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: breakdown-gitsign-tag-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gitsign-verification.log
+          if-no-files-found: ignore
+          retention-days: 90
+
       - name: Verify the host index Sigstore attestation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -510,12 +612,12 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$HOST_SUPPORT_DIR/breakdown-host-support-index.attestation.json" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-host-support.yml" \
-            --source-ref "$GITHUB_REF" \
-            --source-digest "$GITHUB_SHA" \
+            --source-ref "$RELEASE_REF" \
+            --source-digest "$RELEASE_SHA" \
             --deny-self-hosted-runners
 
       - name: Verify the retained first-package bootstrap attestation
-        if: ${{ inputs.npm_publication_mode == 'finalize-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'finalize-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -523,12 +625,12 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-stable-publication.yml" \
-            --source-ref "$GITHUB_REF" \
-            --source-digest "$GITHUB_SHA" \
+            --source-ref "$RELEASE_REF" \
+            --source-digest "$RELEASE_SHA" \
             --deny-self-hosted-runners
 
       - name: Require removal of the one-time GitHub bootstrap secret
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_CONTROL_READ_TOKEN || github.token }}
         shell: bash
@@ -542,14 +644,14 @@ jobs:
         run: |
           set -euo pipefail
           args=(
-            --mode '${{ inputs.npm_publication_mode }}'
+            --mode '${{ env.NPM_PUBLICATION_MODE_INPUT }}'
             --candidate "$CANDIDATE_DIR"
             --output "$NPM_CONTROLS"
           )
-          if test '${{ inputs.npm_publication_mode }}' != first-package-bootstrap; then
+          if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' != first-package-bootstrap; then
             args+=(--trusted-publishing "$NPM_TRUST_EVIDENCE")
           fi
-          if test '${{ inputs.npm_publication_mode }}' = finalize-bootstrap; then
+          if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' = finalize-bootstrap; then
             args+=(--bootstrap-evidence "$DOWNLOADED_NPM_BOOTSTRAP_REPORT")
           fi
           pnpm local:release:prepare-npm "${args[@]}"
@@ -573,7 +675,7 @@ jobs:
             --npm-controls "$NPM_CONTROLS"
             --output "$PUBLICATION_DIR"
           )
-          if test '${{ inputs.npm_publication_mode }}' = finalize-bootstrap; then
+          if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' = finalize-bootstrap; then
             args+=(
               --npm-bootstrap-report "$DOWNLOADED_NPM_BOOTSTRAP_REPORT"
               --npm-bootstrap-attestation "$DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION"
@@ -607,16 +709,16 @@ jobs:
           subject-path: ${{ runner.temp }}/publication/*
 
       - name: Reverify the exact bootstrapped npm bytes before finalization
-        if: ${{ inputs.npm_publication_mode == 'finalize-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'finalize-bootstrap' }}
         run: pnpm local:release:verify-first-npm-packages --publication "$PUBLICATION_DIR"
 
       - name: Create the complete GitHub draft
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" "$PUBLICATION_DIR"/* \
+          gh release create "$RELEASE_TAG" "$PUBLICATION_DIR"/* \
             --draft \
             --latest=false \
             --notes-file "$PUBLICATION_DIR/breakdown-release-notes-${RELEASE_VERSION}.md" \
@@ -625,7 +727,7 @@ jobs:
             --verify-tag
 
       - name: Publish the exact inspected npm tarballs with OIDC and provenance
-        if: ${{ inputs.npm_publication_mode == 'oidc-trusted-publishing' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'oidc-trusted-publishing' }}
         shell: bash
         run: |
           npm publish "$PUBLICATION_DIR/breakdown-sh-core-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
@@ -633,7 +735,7 @@ jobs:
           npm publish "$PUBLICATION_DIR/breakdown-sh-mcp-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
 
       - name: Create the three first npm package records with the one-time credential
-        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'first-package-bootstrap' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_FIRST_PACKAGE_TOKEN }}
         shell: bash
@@ -645,21 +747,21 @@ jobs:
             --output "$NPM_BOOTSTRAP_REPORT"
 
       - name: Attest the sanitized first-package bootstrap result
-        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'first-package-bootstrap' }}
         id: attest-npm-bootstrap
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: ${{ runner.temp }}/breakdown-npm-first-package-bootstrap.json
 
       - name: Assemble the authenticated first-package bootstrap evidence
-        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'first-package-bootstrap' }}
         run: |
           mkdir "$NPM_BOOTSTRAP_EVIDENCE_DIR"
           cp "$NPM_BOOTSTRAP_REPORT" "$NPM_BOOTSTRAP_EVIDENCE_DIR/breakdown-npm-first-package-bootstrap.json"
           cp "${{ steps.attest-npm-bootstrap.outputs.bundle-path }}" "$NPM_BOOTSTRAP_EVIDENCE_DIR/breakdown-npm-first-package-bootstrap.attestation.json"
 
       - name: Retain the authenticated first-package bootstrap evidence
-        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT == 'first-package-bootstrap' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: breakdown-npm-first-package-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
@@ -668,11 +770,11 @@ jobs:
           retention-days: 90
 
       - name: Publish the ordinary immutable GitHub Release
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit "$GITHUB_REF_NAME" \
+          gh release edit "$RELEASE_TAG" \
             --draft=false \
             --latest \
             --prerelease=false \
@@ -680,7 +782,7 @@ jobs:
             --verify-tag
 
       - name: Verify every public byte and trust record
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -692,7 +794,7 @@ jobs:
             --output "$VERIFICATION_REPORT"
 
       - name: Retain the final post-publication inspection
-        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        if: ${{ env.NPM_PUBLICATION_MODE_INPUT != 'first-package-bootstrap' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: breakdown-post-publication-inspection-${{ env.RELEASE_VERSION }}

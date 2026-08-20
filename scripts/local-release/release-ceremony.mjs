@@ -1,5 +1,8 @@
 import { sha256 } from './filesystem.mjs';
 import { RELEASE_CONTROL_POLICY } from './release-controls.mjs';
+import { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
+
+export { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
 
 export const RELEASE_CEREMONY_POLICY = Object.freeze({
   workflow: 'local-release-ceremony.yml',
@@ -120,6 +123,19 @@ function validateArtifact(metadata, { id, name, runId, sourceSha }) {
       String(metadata?.workflow_run?.id) === runId &&
       metadata?.workflow_run?.head_sha === sourceSha,
     `${name} artifact metadata is not the exact retained qualification artifact.`,
+  );
+}
+
+function validateRecoveryArtifact(metadata, expected, { runId, sourceSha }) {
+  validateArtifact(metadata, {
+    id: expected.id,
+    name: expected.name,
+    runId,
+    sourceSha,
+  });
+  invariant(
+    metadata.digest === expected.digest,
+    `${expected.name} artifact archive digest differs from the retained recovery evidence.`,
   );
 }
 
@@ -448,6 +464,160 @@ export function validateAutomationSigner(signer) {
       signer?.transparency_log_verified === true,
     'Annotated tag was not verified against the exact keyless automation signing identity.',
   );
+}
+
+export function validateReleaseRecoveryEvidence(
+  {
+    authorization,
+    authorizationArtifact,
+    authorizationBytes,
+    candidate,
+    candidateArtifact,
+    ceremonyRun,
+    gitsignVerificationLog,
+    plan,
+    planArtifact,
+    planBytes,
+    platformArtifact,
+    platformIndex,
+    platformIndexSha256,
+    qualificationRun,
+    signer,
+    tagObject,
+    tagRef,
+  },
+  policy,
+) {
+  policy ??= V1_RELEASE_RECOVERY_POLICY;
+  invariant(
+    String(ceremonyRun?.id) === policy.ceremonyRunId &&
+      ceremonyRun?.workflow_id === policy.ceremonyWorkflowId &&
+      ceremonyRun?.repository?.full_name === RELEASE_CONTROL_POLICY.repository &&
+      ceremonyRun?.path === RELEASE_CEREMONY_POLICY.workflowPath &&
+      ceremonyRun?.event === 'workflow_dispatch' &&
+      ceremonyRun?.status === 'completed' &&
+      ceremonyRun?.conclusion === 'failure' &&
+      ceremonyRun?.run_attempt === 1 &&
+      ceremonyRun?.head_branch === 'main' &&
+      ceremonyRun?.head_sha === policy.sourceSha &&
+      ceremonyRun?.actor?.login === RELEASE_CONTROL_POLICY.maintainer &&
+      ceremonyRun?.triggering_actor?.login === RELEASE_CONTROL_POLICY.maintainer,
+    'Recovery did not receive the exact failed release ceremony run.',
+  );
+  validateRecoveryArtifact(planArtifact, policy.planArtifact, {
+    runId: policy.ceremonyRunId,
+    sourceSha: policy.sourceSha,
+  });
+  validateRecoveryArtifact(authorizationArtifact, policy.authorizationArtifact, {
+    runId: policy.ceremonyRunId,
+    sourceSha: policy.sourceSha,
+  });
+  validateRecoveryArtifact(candidateArtifact, policy.candidateArtifact, {
+    runId: policy.qualificationRunId,
+    sourceSha: policy.sourceSha,
+  });
+  validateRecoveryArtifact(platformArtifact, policy.platformArtifact, {
+    runId: policy.qualificationRunId,
+    sourceSha: policy.sourceSha,
+  });
+  invariant(
+    candidate?.tag === policy.tag &&
+      candidate?.releaseVersion === '1.0.0' &&
+      candidate?.provenance?.source?.git_commit === policy.sourceSha &&
+      candidate?.digest?.content === policy.candidateDigest &&
+      candidate?.checksumInventory?.sha256 === policy.candidateChecksumInventorySha256,
+    'Recovery candidate differs from the exact already-tagged v1.0.0 bytes.',
+  );
+  const rebuiltPlan = createReleaseCeremonyPlan({
+    candidate,
+    candidateArtifact,
+    candidateArtifactId: policy.candidateArtifact.id,
+    ceremonyRun: {
+      repository: ceremonyRun.repository.full_name,
+      ref: `refs/heads/${ceremonyRun.head_branch}`,
+      sha: ceremonyRun.head_sha,
+      actor: ceremonyRun.actor.login,
+      triggering_actor: ceremonyRun.triggering_actor.login,
+      id: ceremonyRun.id,
+      attempt: ceremonyRun.run_attempt,
+    },
+    currentMainSha: policy.sourceSha,
+    executionMode: 'execute',
+    npmPublicationMode: 'first-package-bootstrap',
+    plannedAt: new Date(plan?.planned_at),
+    platformIndex,
+    platformIndexArtifact: platformArtifact,
+    platformIndexArtifactId: policy.platformArtifact.id,
+    platformIndexSha256,
+    qualificationRun,
+  });
+  invariant(
+    sameJson(plan, rebuiltPlan) && sha256(planBytes) === policy.planSha256,
+    'Recovery plan is not the exact retained and candidate-derived ceremony plan.',
+  );
+  invariant(
+    sha256(authorizationBytes) === policy.authorizationSha256 &&
+      authorization?.plan?.sha256 === policy.planSha256 &&
+      sameJson(authorization?.plan?.value, plan),
+    'Recovery authorization differs from the exact retained ceremony authorization.',
+  );
+  validateGithubReleaseAuthorization(authorization, candidate, 'first-package-bootstrap');
+  const expectedTagMessage = releaseTagMessage({
+    authorizationSha256: policy.authorizationSha256,
+    plan,
+  });
+  invariant(
+    tagRef?.ref === `refs/tags/${policy.tag}` &&
+      tagRef?.object?.type === 'tag' &&
+      tagRef?.object?.sha === policy.tagObjectSha &&
+      tagObject?.sha === policy.tagObjectSha &&
+      tagObject?.tag === policy.tag &&
+      tagObject?.object?.type === 'commit' &&
+      tagObject?.object?.sha === policy.sourceSha,
+    'Recovery tag object or target differs from the immutable protected tag.',
+  );
+  invariant(
+    typeof tagObject?.message === 'string' &&
+      tagObject.message.startsWith(`${expectedTagMessage}\n-----BEGIN SIGNED MESSAGE-----\n`) &&
+      tagObject.message.endsWith('\n-----END SIGNED MESSAGE-----\n'),
+    'Recovery tag does not contain the complete exact ceremony message and Gitsign signature.',
+  );
+  invariant(
+    signer?.tag_verifier === 'verify-tag' &&
+      signer?.verification_log_sha256 === sha256(gitsignVerificationLog) &&
+      /^Validated Git signature: true$/m.test(gitsignVerificationLog.toString('utf8')) &&
+      /^Validated Rekor entry: true$/m.test(gitsignVerificationLog.toString('utf8')) &&
+      /^Validated Certificate claims: true$/m.test(gitsignVerificationLog.toString('utf8')),
+    'Annotated tag recovery must use the Gitsign tag verifier and retain its log digest.',
+  );
+  validateAutomationSigner(signer);
+  const report = {
+    schema_version: 'breakdown.release-recovery-verification.v1',
+    repository: RELEASE_CONTROL_POLICY.repository,
+    ceremony_run_id: policy.ceremonyRunId,
+    tag: policy.tag,
+    tag_object_sha: policy.tagObjectSha,
+    source_sha: policy.sourceSha,
+    artifact_ids: {
+      candidate: policy.candidateArtifact.id,
+      platform_index: policy.platformArtifact.id,
+      plan: policy.planArtifact.id,
+      authorization: policy.authorizationArtifact.id,
+    },
+    plan_sha256: policy.planSha256,
+    authorization_sha256: policy.authorizationSha256,
+    signer,
+    verification: {
+      artifact_archives: true,
+      authorization_attestation_required: true,
+      candidate_and_platform: true,
+      tag_message: true,
+      tag_target: true,
+      status: 'passed',
+    },
+  };
+  assertNoSecretMaterial(report);
+  return report;
 }
 
 export function decideCeremonyRecovery({ downstreamRuns, existingTag, plan }) {

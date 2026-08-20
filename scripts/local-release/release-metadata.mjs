@@ -49,6 +49,7 @@ const releaseSourceFiles = [
   'scripts/standalone-validator.mjs',
   'scripts/verify-local-publication.mjs',
   'scripts/verify-first-npm-packages.mjs',
+  'scripts/verify-v1-release-recovery.mjs',
   'packages/breakdown-core/package.json',
   'packages/breakdown-core/tsconfig.build.json',
   'packages/breakdown-core/tsconfig.json',
@@ -528,6 +529,7 @@ export async function writeReleaseManifest({
         'scripts/standalone-validator.mjs',
         'scripts/verify-local-publication.mjs',
         'scripts/verify-first-npm-packages.mjs',
+        'scripts/verify-v1-release-recovery.mjs',
       ],
       excluded: [
         'hosted application root and hosted assets',

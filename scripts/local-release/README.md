@@ -137,8 +137,9 @@ transparency log: https://rekor.sigstore.dev
 Gitsign creates a short-lived certificate and ephemeral signing key for one operation. No
 long-lived private key, maintainer key, or exportable signing secret is configured in GitHub.
 GitHub's annotated-tag API does not currently mark Gitsign signatures as `verified`; the release
-gate therefore requires identity-aware `gitsign verify`, including certificate claims and Rekor,
-and retains the exact signer evidence.
+gate therefore requires identity-aware `gitsign verify-tag`, including certificate claims and
+Rekor, and retains the exact signer evidence and the complete verification log. `gitsign verify`
+is the commit verifier and MUST NOT be used for an annotated tag.
 
 ## Retry and recovery
 
@@ -165,6 +166,53 @@ bytes.
 
 Use **Re-run failed jobs**, not **Re-run all jobs**, after tag creation. Re-running the plan would
 correctly fail because the protected tag already exists.
+
+### One-time v1.0.0 workflow-snapshot recovery
+
+Ceremony run `32391936576` pushed the protected annotated tag and then failed because its workflow
+snapshot invoked the commit-only `gitsign verify` command on that tag. A job rerun cannot repair
+the command: GitHub reuses the original run's `GITHUB_SHA`, `GITHUB_REF`, permissions, and workflow
+snapshot. Never delete, move, overwrite, recreate, or force-push `breakdown-local-v1.0.0` to make a
+rerun pass.
+
+The only supported continuation is `.github/workflows/local-v1-release-recovery.yml` on `main`.
+It is deliberately pinned to all of the already-public and retained identities:
+
+- ceremony run `32391936576` at source `723e296c5a0ab5431a02022830adff8bcf0dd818`;
+- tag object `222766090da2ad070e8b45619d8f0f844829144f` targeting that source;
+- candidate artifact `9413780200` and platform-index artifact `9413912347`;
+- plan artifact `9415176744` and plan SHA-256
+  `9567580b29ef3709552be88d358631d6d71a2caffb92db6bee39960a8eeb7d7e`; and
+- authorization artifact `9415223409` and authorization SHA-256
+  `2176405c1210221b6d1d13f026a7b5f678f8fb36b2437c9d216e117218788247`.
+
+Before dispatching anything, recovery revalidates the artifact archive digests, candidate and
+platform contents, original plan, authenticated authorization attestation, complete tag target and
+message, Gitsign certificate identity and OIDC issuer, Git signature, and Rekor entry. It uploads
+the Gitsign log even when tag verification fails.
+
+GitHub suppresses ordinary events created with `GITHUB_TOKEN`, so the recovery uses a separate
+short-lived fine-grained token only to create the exact tag-ref deployment that selects the current
+fixed stable-workflow snapshot while preserving the stable environment's tag-only branch policy.
+Create a fine-grained token for only `alamorre/breakdown.sh`, with only **Deployments: read and
+write**, expiration no longer than 24 hours, and store it as environment secret
+`RELEASE_RECOVERY_DEPLOYMENT_TOKEN` in `breakdown-local-authorization`. Never put it in
+`breakdown-local-stable`, a repository secret, a file, a command argument, or retained evidence.
+Delete the secret and revoke the token immediately after the continuation.
+
+Only after separate explicit authorization under issue #190, run the recovery workflow on `main`,
+approve its `breakdown-local-authorization` deployment, and enter exactly:
+
+```text
+CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING
+```
+
+The workflow dispatches or reuses exactly one host-support run on the immutable tag, then creates
+or reuses exactly one correlated `breakdown-local-v1-recovery` deployment. That deployment runs
+the existing stable-publication gates on the tag and keeps `NPM_FIRST_PACKAGE_TOKEN` exclusively
+inside `breakdown-local-stable`. Failed correlated child runs are rerun under their original run ID;
+mismatched evidence, active duplicates, or more than one correlated run fail closed. The recovery
+workflow itself contains no tag creation, npm publication, or GitHub Release command.
 
 ## Secret and evidence boundary
 
