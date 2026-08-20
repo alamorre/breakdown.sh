@@ -9,16 +9,18 @@ import { prepareLocalPublication } from './local-release/publication.mjs';
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: prepare-local-publication.mjs --candidate PATH --platform-index PATH --host-support-index PATH --host-support PATH --approval PATH --approval-signature PATH --approval-verification PATH --github-controls PATH --tag-evidence PATH --workflow-identity PATH --npm-controls PATH [--npm-bootstrap-report PATH --npm-bootstrap-attestation PATH] --output PATH';
+    'Usage: prepare-local-publication.mjs --candidate PATH --platform-index PATH --host-support-index PATH --host-support PATH --authorization PATH --authorization-attestation PATH --authorization-verification PATH --github-controls PATH --tag-evidence PATH --workflow-identity PATH --npm-controls PATH [--npm-bootstrap-report PATH --npm-bootstrap-attestation PATH] --output PATH';
   const optionalPath = (name) =>
     argv.includes(name) ? resolve(requiredArgumentValue(argv, name, usage)) : undefined;
   const outputDirectory = resolve(requiredArgumentValue(argv, '--output', usage));
   await mkdir(outputDirectory, { recursive: true });
   const inspection = await prepareLocalPublication({
-    approvalPath: resolve(requiredArgumentValue(argv, '--approval', usage)),
-    approvalSignaturePath: resolve(requiredArgumentValue(argv, '--approval-signature', usage)),
-    approvalVerificationPath: resolve(
-      requiredArgumentValue(argv, '--approval-verification', usage),
+    authorizationPath: resolve(requiredArgumentValue(argv, '--authorization', usage)),
+    authorizationAttestationPath: resolve(
+      requiredArgumentValue(argv, '--authorization-attestation', usage),
+    ),
+    authorizationVerificationPath: resolve(
+      requiredArgumentValue(argv, '--authorization-verification', usage),
     ),
     candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
     githubControlsPath: resolve(requiredArgumentValue(argv, '--github-controls', usage)),

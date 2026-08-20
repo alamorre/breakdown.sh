@@ -316,16 +316,20 @@ describe('authenticated host support workflow', () => {
     expect(workflow).toContain('actions: read');
     expect(workflow).toContain('attestations: write');
     expect(workflow).toContain('id-token: write');
-    expect(workflow).toContain('actions/download-artifact@v8');
+    expect(workflow).toContain(
+      'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8',
+    );
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
     expect(workflow).not.toContain('evidence_artifact_ids');
     expect(workflow).toContain('actions/workflows/324133712');
     expect(workflow).toContain('disabled_manually');
     expect(workflow).toContain('pnpm local:release:defer-host-support');
     expect(workflow).toContain('--tag "$GITHUB_REF_NAME"');
-    expect(workflow).toContain('actions/attest@v4');
+    expect(workflow).toContain('actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4');
     expect(workflow).toContain('steps.attest.outputs.bundle-path');
-    expect(workflow).toContain('actions/upload-artifact@v7');
+    expect(workflow).toContain(
+      'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7',
+    );
   });
 });
 

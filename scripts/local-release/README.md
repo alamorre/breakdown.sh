@@ -1,220 +1,175 @@
-# Breakdown Local stable release ceremony
+# Breakdown Local stable release runbook
 
-Document kind: Human release-operator guidance
+This runbook is the normative operator path for Breakdown Local stable releases. The ceremony is
+GitHub Actions-operated: the maintainer does not clone the repository, download or rebuild release
+bytes, prepare base64 inputs, handle a signing key, push a tag, or manually dispatch downstream
+workflows.
 
-This procedure prepares Breakdown Local 1.0 for local testing and eventual stable publication
-without rebuilding or replacing qualified artifacts. It keeps the package, legal, signing,
-security, provenance, and platform controls intact while deliberately publishing zero Supported
-Host claims.
+`alamorre` is permanently the sole maintainer, human release approver, and npm publisher. The
+GitHub review and automation signer are deliberately separate identities, but they are not
+independent review. See
+`docs/adr/0003-use-github-authorization-and-keyless-tag-signing.md` for the signing threat model.
 
-## The 1.0 host policy
+The implementation PR changes release-contract and workflow bytes. After it merges, every older
+candidate and qualification run is stale. Build and fully qualify one fresh candidate from the
+eventual merged `main` before resuming issue #190.
 
-Supported Host certification is deferred for Breakdown Local 1.0. The release carries
-`supported_hosts: []`; this is an explicit policy, not a passing real-host qualification. An Agent
-Host with the mandatory capabilities is Compatible, not Supported. Windows, bare models,
-unprovisioned cloud surfaces, and surfaces without the mandatory capabilities are Unsupported.
+## Permanent repository controls
 
-`.github/workflows/local-host-evidence-capture.yml` (workflow ID `324133712`) is intentionally
-`disabled_manually`. It MUST remain disabled and MUST NOT be dispatched during the 1.0 ceremony.
-It may be re-enabled only after issue #188 is implemented and accepted. Do not use the preserved
-#186 branch or any Codex, Copilot, Claude Code, or other real-host journey for this release.
+Every plan and publication re-reads these controls and fails closed on drift:
 
-## One-time publisher controls
+- immutable GitHub Releases are enabled;
+- environment `breakdown-local-stable` (ID `18989155368`) admits only tag pattern
+  `breakdown-local-v*`, has no reviewer rule, and disables administrator bypass;
+- environment `breakdown-local-authorization` (ID `20224502339`) admits only branch `main`, has
+  exactly required reviewer `alamorre` (user ID `15023107`), permits self-review for the documented
+  sole-maintainer model, and disables administrator bypass;
+- tag ruleset `20015652` protects exactly `refs/tags/breakdown-local-v*` from update and deletion,
+  with no exclusion, bypass actor, administrator bypass, or maintainer bypass;
+- `alamorre` remains the only direct collaborator; and
+- guided-host capture workflow `324133712` remains `disabled_manually` for the 1.0 deferred policy.
 
-The legal licensor and npm/GitHub publisher complete these controls personally:
+The deferred policy remains exactly `supported_hosts: []`.
 
-1. Confirm legal licensor and publisher identity and authority.
-2. Confirm control of the `@breakdown-sh` npm scope and all three package names.
-3. Follow the one-time, two-run npm procedure in `docs/npm-publishing.md`: use the constrained
-   first-package credential only to create the exact 1.0.0 records, then configure and inspect the
-   exact trusted publisher for all three packages before finalizing the release.
-4. Enable GitHub release immutability.
-5. Protect `refs/tags/breakdown-local-v*` with restricted update and deletion, no exclusions, and
-   no bypass actors; retain the ruleset ID.
-6. Restrict environment `breakdown-local-stable` (ID `18989155368`) to the exact custom tag
-   policy `breakdown-local-v*`, disable administrator bypass, and configure no required-reviewer
-   rule.
-7. Confirm DCO 1.1 and the no-CLA policy, then review AI-assisted provenance.
+Guided-host workflow ID `324133712` MUST remain disabled and MUST NOT be dispatched; see issue #188.
 
-`alamorre` is permanently the sole maintainer, approver, and publisher. No collaborator, alternate
-account, or automation identity is added to manufacture separation of duties. The signed approval,
-exact artifact bindings, immutable identities, no-bypass settings, and retained evidence are
-compensating controls; they are not independent review.
+The release-control reader first uses `GITHUB_TOKEN`. If that token cannot read Administration,
+Actions, Environments, and Metadata, store a fine-grained, read-only
+`RELEASE_CONTROL_READ_TOKEN` as a repository secret so the pre-authorization plan job can use it.
+The sole-maintainer repository has no untrusted direct collaborator, pull requests do not receive
+the secret, and the token has no write permission. Never retain its value in an artifact.
 
-The stable workflow needs read access to repository administration settings so it can re-read
-immutable releases. It first uses the ephemeral `GITHUB_TOKEN`; if the repository does not grant
-that token the required read, configure environment secret `RELEASE_CONTROL_READ_TOKEN` as a
-fine-grained token limited to this repository with read-only Administration, Actions, and Metadata
-permissions. The first-package finalization gate additionally requires read-only Environments
-permission so it can prove that `NPM_FIRST_PACKAGE_TOKEN` was removed. The token is never retained
-or used for npm publication.
+## 1. Build and fully qualify one current-main candidate
 
-These controls remain real release blockers. The deferred host policy changes none of them.
+In GitHub, open **Actions → Breakdown Local platform qualification → Run workflow**, select
+`main`, and run it once. Wait for every job to succeed. Record the artifact IDs shown for:
 
-## Build and qualify exactly one candidate
+- `breakdown-local-candidate`; and
+- `breakdown-platform-evidence-index`.
 
-Regenerate and check versioned documentation before building:
+The ceremony accepts them only when both are unexpired artifacts from the same successful,
+first-attempt `local-platform-qualification.yml` run, the candidate source is the exact current
+`main` SHA, and every maintained Linux/macOS row passed. It downloads by artifact ID, never by name
+alone, and never rebuilds or mutates candidate bytes.
 
-```sh
-pnpm local:docs:generate
-pnpm local:docs:check
-```
+If any candidate artifact, contract, schema, canonical skill, generated documentation, release
+script, or workflow byte changes, discard these IDs and qualify one new candidate from the new
+current `main`.
 
-Dispatch `local-platform-qualification.yml` once at the exact stable source commit. Retain the
-immutable artifact IDs for `breakdown-local-candidate` and
-`breakdown-platform-evidence-index`. That workflow builds the candidate once and qualifies the
-maintained Linux glibc x64/arm64 and macOS x64/arm64 tuples.
+## 2. Run the non-publishing dry run
 
-If any candidate artifact, canonical skill, normative contract, schema, or generated documentation
-byte changes, discard the old candidate evidence, build one new candidate from the resulting exact
-source, and rerun all maintained Linux/macOS platform qualification before publication. Never
-extract, repack, rename, edit, or rebuild a qualified candidate.
+Open **Actions → Breakdown Local release ceremony → Run workflow** on `main` and supply:
 
-Before approval, independently inspect exact dependencies, copied content, notices, secret/private
-data scans, the final byte inventory, `SHA256SUMS`, SBOM, provenance inputs, package/security/docs/
-traceability/platform gates, and the zero-claim host policy.
+- the exact current `main` SHA;
+- the candidate and platform-index artifact IDs;
+- execution mode `dry-run`;
+- the intended npm publication mode; and
+- any mode-required npm evidence artifact IDs.
 
-## Sign and protect the source tag
+The plan job verifies the candidate, qualification run, artifact IDs and GitHub artifact digests,
+platform index, source SHA, and pre-tag controls. Its summary presents the exact version, tag,
+candidate digest, `SHA256SUMS` digest, artifact IDs, npm mode, ceremony run ID, plan SHA-256, and
+every human attestation.
 
-Immediately before creating the tag, retain a read-only sanitized snapshot and require it to pass:
-
-```sh
-pnpm local:release:verify-github-controls \
-  --phase pre-tag \
-  --output /absolute/path/to/breakdown-github-release-controls-pre-tag.json
-```
-
-The command fails unless release immutability is enabled; environment ID `18989155368` has only the
-exact `breakdown-local-v*` tag policy and no administrator bypass or reviewer rule; ruleset `20015652`
-has exactly the protected ref, update/deletion restrictions, no exclusions or bypass actors, and
-`current_user_can_bypass: never`; `alamorre` remains the only direct collaborator; and no stable tag
-or release already exists. Do not create the tag from a stale or failed snapshot.
-
-Record the candidate digest from its release manifest, the SHA-256 of `SHA256SUMS`, and the two
-immutable artifact IDs. Create a signed annotated tag message with this exact shape and no trailing
-blank line:
+Review those exact values. Open **Review deployments**, select
+`breakdown-local-authorization`, paste the exact comment displayed by the plan job, and choose
+**Approve and deploy**. The required shape is:
 
 ```text
-Breakdown Local 1.0.0
-
-candidate-digest-sha256: <candidate digest>
-candidate-checksum-inventory-sha256: <SHA-256 of SHA256SUMS>
-candidate-artifact-id: <candidate artifact ID>
-platform-index-artifact-id: <platform index artifact ID>
+APPROVE BREAKDOWN LOCAL PLAN SHA256 <exact plan digest>
 ```
 
-Create and verify `breakdown-local-v1.0.0` at the exact candidate source commit, then push it
-without force. Never move, delete, recreate, or reuse a release tag or published version.
+The authorization job reads GitHub's workflow-review history, requires exactly one approval by
+`alamorre` for the exact environment and comment, creates the candidate-bound authorization, and
+attests its exact bytes. Automation does not approve, sign as the maintainer, or infer an approval
+from the dispatch event. The dry run verifies this attestation and stops before tag creation. It
+creates no tag, GitHub Release, or npm publication.
 
-## Generate and attest the empty host-support set
+Issue #196 is not complete until a post-merge dry run passes at this boundary and its URL is linked
+from the issue. A dry run from this implementation PR is useful CI evidence but cannot replace the
+required fresh post-merge candidate and dry run.
 
-After pushing the signed tag, dispatch `local-host-support.yml` from that tag with only the exact
-candidate artifact ID. The workflow:
+## 3. Execute the authorized ceremony
 
-1. verifies that workflow ID `324133712` is still `disabled_manually`;
-2. downloads the immutable candidate;
-3. creates `breakdown-host-support-index.json` with `policy.state: "deferred"`, zero evidence rows,
-   and `supported_hosts: []`, bound to the candidate digest, corpus, source commit, and tag;
-4. deterministically generates JSON and Markdown support material;
-5. attests the exact index on a GitHub-hosted runner; and
-6. uploads the index, generated support, and Sigstore bundle as `breakdown-host-support`.
+After reviewing the successful dry run, dispatch a fresh ceremony on the same exact candidate and
+platform IDs with execution mode `execute`. Review the newly generated plan and approve its exact
+digest in the same GitHub environment UI. A dry-run authorization cannot authorize execute mode,
+and an authorization from another run cannot be reused.
 
-Retain that artifact ID. A missing artifact is not equivalent to deliberate deferral. Do not add
-evidence rows or real-host artifact inputs to this ceremony.
+The execute job then:
 
-## Record the human approval
+1. verifies the attested GitHub authorization;
+2. installs checksummed Gitsign 0.17.1;
+3. creates one annotated tag whose message binds the candidate digest, checksum-inventory digest,
+   candidate/platform artifact IDs, ceremony run ID, plan digest, and authorization digest;
+4. signs and verifies it against the exact keyless GitHub Actions OIDC identity and Rekor;
+5. pushes the new tag once through the no-bypass tag ruleset;
+6. dispatches `local-host-support.yml` from that exact tag, waits for its one correlated run, and
+   resolves the one authenticated host-support artifact ID; and
+7. dispatches `local-stable-publication.yml` from the same tag with only exact artifact IDs and
+   waits for completion.
 
-Download the exact candidate into an otherwise empty directory and create the candidate-bound
-template:
+The ceremony supplies the retained authorization and host evidence by immutable artifact ID. There
+is no local JSON editing, signing, base64 encoding, evidence copy/paste, tag command, or later
+workflow dispatch.
 
-```sh
-pnpm local:release:create-approval \
-  --candidate /absolute/path/to/candidate \
-  --npm-publication-mode first-package-bootstrap \
-  --output /absolute/path/to/breakdown-human-release-approval.json
+For the one-time 1.0.0 npm bootstrap, first follow `docs/npm-publishing.md` to install the protected
+bootstrap environment secret, and select `first-package-bootstrap`. For finalization or later OIDC
+publication, first generate the sanitized npm trust artifact using the button-driven workflow
+described there and supply its artifact ID. Bootstrap finalization uses execution mode
+`resume-publication`: it requires the existing tag to have the same candidate digest,
+checksum-inventory digest, artifact IDs, source commit, and keyless signer, then obtains a fresh
+mode-specific GitHub authorization and continues without creating or changing the tag.
+
+## Keyless tag verification
+
+The automation signing identity is:
+
+```text
+method: sigstore-keyless-gitsign
+gitsign: 0.17.1
+linux-amd64 SHA-256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
+certificate identity: https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main
+OIDC issuer: https://token.actions.githubusercontent.com
+transparency log: https://rekor.sigstore.dev
 ```
 
-Fill `approver.github_login` with `alamorre`, the publisher identity, and a canonical UTC ISO-8601
-approval time. Set an attestation to `true` only after personally
-reviewing its retained evidence. In particular,
-`zero_claim_deferred_host_policy_reviewed` affirms that the approver reviewed and accepted the 1.0
-policy with `supported_hosts: []`; it does not claim a host journey ran or passed. Do not alter the
-candidate binding or approval statement.
+Gitsign creates a short-lived certificate and ephemeral signing key for one operation. No
+long-lived private key, maintainer key, or exportable signing secret is configured in GitHub.
+GitHub's annotated-tag API does not currently mark Gitsign signatures as `verified`; the release
+gate therefore requires identity-aware `gitsign verify`, including certificate claims and Rekor,
+and retains the exact signer evidence.
 
-Sign the exact completed JSON with the publisher-controlled SSH signing key registered in GitHub.
-The namespace is part of the signature and must not change:
+## Retry and recovery
 
-```sh
-ssh-keygen -Y sign \
-  -f "$(git config --get user.signingkey)" \
-  -n breakdown-local-release \
-  /absolute/path/to/breakdown-human-release-approval.json
+Never delete, move, force-push, recreate, or reuse a release tag. Never rebuild or replace a
+qualified candidate. Never overwrite, unpublish, or silently repair public npm or GitHub Release
+bytes.
 
-pnpm local:release:verify-approval \
-  --approval /absolute/path/to/breakdown-human-release-approval.json \
-  --signature /absolute/path/to/breakdown-human-release-approval.json.sig \
-  --output /absolute/path/to/breakdown-human-release-approval-verification.json
-```
+- **Before authorization:** correct the input or repository control and dispatch a new dry run.
+- **Authorization rejected or invalid:** the run fails before the tag; dispatch a new run and
+  approve its new exact plan digest.
+- **Failure before tag push:** rerun the failed job only if no stable tag exists; otherwise stop and
+  inspect the exact tag first.
+- **Failure after the exact tag exists but before host support:** rerun only the failed job in the
+  same ceremony run. The job accepts the tag only when its source, message, signer, ceremony run,
+  plan, and authorization all match; it never retags.
+- **Host-support failure:** rerun the one correlated child run or the failed parent job; never
+  dispatch a second correlated host run. Duplicate correlated runs fail closed.
+- **Stable-publication failure before public side effects:** preserve the gate artifact and inspect
+  the child run before any rerun.
+- **Interrupted first-package bootstrap:** rerun only after confirming already-public 1.0.0
+  tarballs byte-match the same immutable candidate; the bootstrap command skips only exact matches.
+- **Any npm package or immutable GitHub Release is public:** stop. Preserve all evidence, assess the
+  partial public state, and publish any correction under a new SemVer. Do not blindly rerun.
 
-The verification command fetches `alamorre`'s current GitHub SSH signing keys and fails unless one
-authenticates the exact approval bytes. Retain the approval, detached signature, and verification
-record. Editing the JSON after signing invalidates the approval.
+Use **Re-run failed jobs**, not **Re-run all jobs**, after tag creation. Re-running the plan would
+correctly fail because the protected tag already exists.
 
-Encode the exact JSON and signature for the two protected workflow inputs:
+## Secret and evidence boundary
 
-```sh
-node -e "process.stdout.write(require('node:fs').readFileSync(process.argv[1]).toString('base64'))" \
-  /absolute/path/to/breakdown-human-release-approval.json
-node -e "process.stdout.write(require('node:fs').readFileSync(process.argv[1]).toString('base64'))" \
-  /absolute/path/to/breakdown-human-release-approval.json.sig
-```
-
-## Bootstrap npm, transition to OIDC, and finalize
-
-For the first 1.0.0 publication only, follow `docs/npm-publishing.md`. Create the documented
-least-privilege granular access token, store it only as protected environment secret
-`NPM_FIRST_PACKAGE_TOKEN`, and dispatch `local-stable-publication.yml` from the signed tag with mode
-`first-package-bootstrap`. Supply the candidate, passing platform index, authenticated host-support
-artifact, encoded mode-bound approval and signature, plus the exact destructive confirmation. The
-ruleset ID is fixed by policy and is not caller input.
-
-Before publishing, the workflow re-verifies the approval signature against GitHub, every approval
-binding and attestation, repository immutability, exact environment and ruleset settings,
-administrator/ruleset no-bypass state, sole-maintainer identity, GitHub-hosted runner, npm OIDC
-subject, signed tag, immutable artifact IDs, all candidate/platform/host-policy digests, and npm
-bootstrap controls. It also rejects a missing or unattested host index; candidate, corpus, source,
-or tag mismatch; any deferred evidence row or Supported Host claim; altered generated support; or
-an approval that does not accept the zero-claim policy. It uploads the sanitized controls,
-approval, signature, verification, tag evidence, and runner/OIDC identity before publishing.
-
-The bootstrap run publishes only absent exact 1.0.0 records in core/CLI/MCP order, with provenance,
-then verifies the public bytes and registry evidence. It attests and uploads the sanitized
-`breakdown-npm-first-package-bootstrap` report and stops. It cannot create or finalize a GitHub
-Release.
-
-Next, configure each package's sole trusted publisher as repository `alamorre/breakdown.sh`,
-workflow `local-stable-publication.yml`, environment `breakdown-local-stable`, and permission
-`createPackage`. Require publishing 2FA while disallowing token publication, revoke the bootstrap
-token, remove `NPM_FIRST_PACKAGE_TOKEN`, and capture sanitized evidence with
-`pnpm local:release:inspect-npm-trust`. Create and sign a fresh approval using
-`--npm-publication-mode finalize-bootstrap`, then dispatch the same protected workflow with mode
-`finalize-bootstrap`, the bootstrap artifact ID, and the encoded trust evidence.
-
-The finalization run authenticates the bootstrap attestation, confirms the environment secret is
-absent, validates exact trust and human transition attestations, and byte-compares all three public
-1.0.0 tarballs. It never invokes `npm publish`. It then attaches and attests the complete release
-evidence, finalizes the immutable GitHub Release, and retains
-`breakdown-post-publication-inspection-<version>`. The release is not complete unless that report
-has `status: "passed"` and confirms zero Supported Hosts.
-
-Every later version uses `--npm-publication-mode oidc-trusted-publishing`; the workflow refuses npm
-tokens and publishes through the exact trusted publisher only.
-
-## Failure rule
-
-Before npm publication, an authorized human may inspect and discard a failed GitHub draft. During
-the one-time bootstrap, no draft exists; an interrupted rerun is allowed only when already-public
-1.0.0 tarballs byte-match the same immutable candidate. Once any npm package or immutable GitHub
-Release is public, do not overwrite, unpublish, rebuild, reuse the version, or rerun blindly.
-Preserve all evidence, stop, assess the partial public state, and publish any correction under a new
-SemVer.
+The ceremony retains only sanitized controls, immutable plans, GitHub review identity, artifact
+metadata/digests, attestations, signer verification, and publication evidence. It must never print
+or retain workflow tokens, npm tokens, private keys, credential-bearing npm configuration, or
+secret values. Every retained plan and authorization is rejected if it contains secret-shaped
+material.

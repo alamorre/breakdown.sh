@@ -1,0 +1,42 @@
+{
+  "schema_version": "breakdown.release-authorization-environment-evidence.v1",
+  "captured_at": "2026-08-20T02:30:04Z",
+  "repository": "alamorre/breakdown.sh",
+  "issue": 196,
+  "environment": {
+    "id": 20224502339,
+    "name": "breakdown-local-authorization",
+    "can_admins_bypass": false,
+    "required_reviewers": {
+      "rule_id": 63177549,
+      "prevent_self_review": false,
+      "reviewers": [
+        {
+          "type": "User",
+          "id": 15023107,
+          "login": "alamorre"
+        }
+      ]
+    },
+    "deployment_branch_policy": {
+      "protected_branches": false,
+      "custom_branch_policies": true,
+      "policies": [
+        {
+          "id": 57786856,
+          "name": "main",
+          "type": "branch"
+        }
+      ]
+    }
+  },
+  "operating_model": {
+    "sole_maintainer": "alamorre",
+    "independent_review": false,
+    "self_review_rationale": "The permanent one-maintainer model requires an explicit second GitHub-authenticated action by the same maintainer; it does not claim separation of duties."
+  },
+  "verification": {
+    "status": "passed",
+    "secret_material_retained": false
+  }
+}

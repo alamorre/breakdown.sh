@@ -14,6 +14,10 @@ export const RELEASE_CONTROL_POLICY = Object.freeze({
   maintainer: 'alamorre',
   environment: 'breakdown-local-stable',
   environmentId: 18989155368,
+  authorizationEnvironment: 'breakdown-local-authorization',
+  authorizationEnvironmentId: 20224502339,
+  authorizationReviewerId: 15023107,
+  authorizationBranch: 'main',
   deploymentTagPattern: 'breakdown-local-v*',
   deploymentTagRefPattern: 'refs/tags/breakdown-local-v*',
   rulesetId: 20015652,
@@ -104,6 +108,8 @@ function sanitizeRuleset(ruleset) {
 }
 
 export function validateGithubReleaseControls({
+  authorizationDeploymentPolicies,
+  authorizationEnvironment,
   collaborators,
   deploymentPolicies,
   environment,
@@ -148,6 +154,48 @@ export function validateGithubReleaseControls({
     'Stable publication environment does not admit exactly the protected release-tag pattern.',
   );
   invariant(
+    authorizationEnvironment?.id === RELEASE_CONTROL_POLICY.authorizationEnvironmentId &&
+      authorizationEnvironment?.name === RELEASE_CONTROL_POLICY.authorizationEnvironment &&
+      authorizationEnvironment?.can_admins_bypass === false,
+    'Release authorization environment identity or administrator-bypass policy differs.',
+  );
+  const authorizationRules = authorizationEnvironment.protection_rules ?? [];
+  const reviewerRule = authorizationRules.find((rule) => rule.type === 'required_reviewers');
+  invariant(
+    sameJson(authorizationRules.map((rule) => rule.type).sort(), [
+      'branch_policy',
+      'required_reviewers',
+    ]) &&
+      reviewerRule?.prevent_self_review === false &&
+      sameJson(
+        reviewerRule?.reviewers?.map((entry) => ({
+          type: entry.type,
+          id: entry.reviewer?.id,
+          login: entry.reviewer?.login,
+        })),
+        [
+          {
+            type: 'User',
+            id: RELEASE_CONTROL_POLICY.authorizationReviewerId,
+            login: RELEASE_CONTROL_POLICY.maintainer,
+          },
+        ],
+      ),
+    'Release authorization environment does not require the exact sole-maintainer review.',
+  );
+  invariant(
+    sameJson(authorizationEnvironment.deployment_branch_policy, {
+      protected_branches: false,
+      custom_branch_policies: true,
+    }) &&
+      authorizationDeploymentPolicies?.total_count === 1 &&
+      authorizationDeploymentPolicies.branch_policies?.length === 1 &&
+      authorizationDeploymentPolicies.branch_policies[0]?.name ===
+        RELEASE_CONTROL_POLICY.authorizationBranch &&
+      authorizationDeploymentPolicies.branch_policies[0]?.type === 'branch',
+    'Release authorization environment is not restricted to current main.',
+  );
+  invariant(
     immutableReleases?.enabled === true,
     'GitHub Release immutability is not enabled for the repository.',
   );
@@ -177,11 +225,14 @@ export function validateGithubReleaseControls({
   );
   invariant(Array.isArray(releases), 'GitHub Release inspection returned an invalid response.');
   if (phase === 'pre-tag') {
-    invariant(tag === undefined, 'Pre-tag verification must not receive an existing tag.');
-    invariant(stableTags.length === 0, 'A stable release tag already exists before tag creation.');
+    invariant(stableTag(tag), 'Pre-tag verification requires the intended stable tag.');
     invariant(
-      releases.every((release) => !stableTag(release.tag_name)),
-      'A stable GitHub Release already exists before tag creation.',
+      stableTags.every((entry) => entry.name !== tag),
+      'The intended stable release tag already exists before tag creation.',
+    );
+    invariant(
+      releases.every((release) => release.tag_name !== tag),
+      'A GitHub Release already exists for the intended stable tag.',
     );
   } else {
     invariant(phase === 'publication' && stableTag(tag), 'Unknown release-control phase.');
@@ -202,16 +253,21 @@ export async function inspectGithubReleaseControls({
   outputPath,
   phase,
   repository = RELEASE_CONTROL_POLICY.repository,
-  tag = undefined,
+  tag = '',
 }) {
   invariant(repository === RELEASE_CONTROL_POLICY.repository, 'Wrong repository.');
   invariant(phase === 'pre-tag' || phase === 'publication', 'Unknown release-control phase.');
-  invariant(phase === 'publication' ? stableTag(tag) : tag === undefined, 'Wrong phase tag.');
+  invariant(stableTag(tag), 'Wrong phase tag.');
   const environmentName = encodeURIComponent(RELEASE_CONTROL_POLICY.environment);
+  const authorizationEnvironmentName = encodeURIComponent(
+    RELEASE_CONTROL_POLICY.authorizationEnvironment,
+  );
   const [
     repositorySnapshot,
     environment,
     deploymentPolicies,
+    authorizationEnvironment,
+    authorizationDeploymentPolicies,
     immutableReleases,
     ruleset,
     collaborators,
@@ -228,6 +284,16 @@ export async function inspectGithubReleaseControls({
       commandRunner,
       `repos/${repository}/environments/${environmentName}/deployment-branch-policies`,
       'Stable environment deployment policies',
+    ),
+    ghJson(
+      commandRunner,
+      `repos/${repository}/environments/${authorizationEnvironmentName}`,
+      'Release authorization environment settings',
+    ),
+    ghJson(
+      commandRunner,
+      `repos/${repository}/environments/${authorizationEnvironmentName}/deployment-branch-policies`,
+      'Release authorization environment deployment policies',
     ),
     ghJson(commandRunner, `repos/${repository}/immutable-releases`, 'Immutable release settings'),
     ghJson(
@@ -248,6 +314,8 @@ export async function inspectGithubReleaseControls({
     ghJson(commandRunner, `repos/${repository}/releases?per_page=100`, 'GitHub Releases'),
   ]);
   validateGithubReleaseControls({
+    authorizationDeploymentPolicies,
+    authorizationEnvironment,
     collaborators,
     deploymentPolicies,
     environment,
@@ -279,6 +347,32 @@ export async function inspectGithubReleaseControls({
       name: policy.name,
       type: policy.type,
     })),
+    authorization_environment: {
+      ...sanitizeEnvironment(authorizationEnvironment),
+      protection_rules: authorizationEnvironment.protection_rules.map((rule) => ({
+        id: rule.id,
+        type: rule.type,
+        ...(rule.type === 'required_reviewers'
+          ? {
+              prevent_self_review: rule.prevent_self_review,
+              reviewers: rule.reviewers.map((entry) => ({
+                type: entry.type,
+                reviewer: {
+                  id: entry.reviewer.id,
+                  login: entry.reviewer.login,
+                },
+              })),
+            }
+          : {}),
+      })),
+    },
+    authorization_deployment_branch_policies: authorizationDeploymentPolicies.branch_policies.map(
+      (policy) => ({
+        id: policy.id,
+        name: policy.name,
+        type: policy.type,
+      }),
+    ),
     immutable_releases: {
       enabled: immutableReleases.enabled,
       enforced_by_owner: immutableReleases.enforced_by_owner,
@@ -334,6 +428,40 @@ export function validateRetainedGithubReleaseControls(snapshot, { repository, ta
       snapshot.deployment_branch_policies[0]?.name ===
         RELEASE_CONTROL_POLICY.deploymentTagPattern &&
       snapshot.deployment_branch_policies[0]?.type === 'tag' &&
+      snapshot?.authorization_environment?.id ===
+        RELEASE_CONTROL_POLICY.authorizationEnvironmentId &&
+      snapshot?.authorization_environment?.name ===
+        RELEASE_CONTROL_POLICY.authorizationEnvironment &&
+      snapshot?.authorization_environment?.can_admins_bypass === false &&
+      sameJson(
+        snapshot?.authorization_environment?.protection_rules?.map((rule) => rule.type).sort(),
+        ['branch_policy', 'required_reviewers'],
+      ) &&
+      snapshot?.authorization_environment?.protection_rules?.find(
+        (rule) => rule.type === 'required_reviewers',
+      )?.prevent_self_review === false &&
+      sameJson(
+        snapshot?.authorization_environment?.protection_rules?.find(
+          (rule) => rule.type === 'required_reviewers',
+        )?.reviewers,
+        [
+          {
+            type: 'User',
+            reviewer: {
+              id: RELEASE_CONTROL_POLICY.authorizationReviewerId,
+              login: RELEASE_CONTROL_POLICY.maintainer,
+            },
+          },
+        ],
+      ) &&
+      sameJson(snapshot?.authorization_environment?.deployment_branch_policy, {
+        protected_branches: false,
+        custom_branch_policies: true,
+      }) &&
+      snapshot?.authorization_deployment_branch_policies?.length === 1 &&
+      snapshot.authorization_deployment_branch_policies[0]?.name ===
+        RELEASE_CONTROL_POLICY.authorizationBranch &&
+      snapshot.authorization_deployment_branch_policies[0]?.type === 'branch' &&
       snapshot?.immutable_releases?.enabled === true &&
       snapshot?.tag_ruleset?.id === RELEASE_CONTROL_POLICY.rulesetId &&
       snapshot?.tag_ruleset?.name === RELEASE_CONTROL_POLICY.rulesetName &&
@@ -535,7 +663,7 @@ export function validateApprovalSignatureEvidence({
 export function validateWorkflowIdentityEvidence(
   evidence,
   {
-    approvalVerificationSha256,
+    authorizationVerificationSha256,
     candidate,
     candidateArtifactId,
     controlsSha256,
@@ -548,8 +676,10 @@ export function validateWorkflowIdentityEvidence(
       evidence?.ref === `refs/tags/${candidate.tag}` &&
       evidence?.ref_name === candidate.tag &&
       evidence?.source_commit === candidate.provenance.source.git_commit &&
-      evidence?.actor === RELEASE_CONTROL_POLICY.maintainer &&
-      evidence?.triggering_actor === RELEASE_CONTROL_POLICY.maintainer &&
+      evidence?.actor === 'github-actions[bot]' &&
+      ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(
+        evidence?.triggering_actor,
+      ) &&
       evidence?.environment === RELEASE_CONTROL_POLICY.environment &&
       evidence?.runner_environment === 'github-hosted' &&
       evidence?.oidc?.subject ===
@@ -560,7 +690,7 @@ export function validateWorkflowIdentityEvidence(
       /^[1-9]\d*$/.test(evidence?.artifact_ids?.host_support ?? '') &&
       evidence?.release_controls?.ruleset_id === RELEASE_CONTROL_POLICY.rulesetId &&
       evidence?.release_controls?.snapshot_sha256 === controlsSha256 &&
-      evidence?.approval_verification_sha256 === approvalVerificationSha256,
+      evidence?.authorization_verification_sha256 === authorizationVerificationSha256,
     'Stable workflow identity does not prove the exact runner, OIDC, actor, and artifact boundary.',
   );
 }

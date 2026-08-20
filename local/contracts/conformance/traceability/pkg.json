@@ -118,8 +118,8 @@
       "id": "PKG-018",
       "requirements": ["REQ-PKG-018"],
       "oracle_type": "effect",
-      "retained_evidence": "scripts/local-release/release-controls.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml; docs/release-evidence/issue-170-github-controls-2026-08-19.json",
-      "oracle": "Pre-tag and publication gates enforce the permanent sole-maintainer model, GitHub-recognized signed approval, exact no-bypass repository controls, GitHub-hosted runner, npm OIDC subject, and retained sanitized evidence without claiming independent review."
+      "retained_evidence": "scripts/local-release/release-ceremony.test.ts; scripts/local-release/release-controls.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-release-ceremony.yml; .github/workflows/local-stable-publication.yml; docs/adr/0003-use-github-authorization-and-keyless-tag-signing.md; docs/release-evidence/issue-196-authorization-environment-2026-08-20.json",
+      "oracle": "Pre-tag and publication gates enforce one current-main qualification, an exact GitHub-authenticated sole-maintainer plan approval, keyless workflow-bound tag signing, exact no-bypass repository controls, GitHub-hosted runners, npm OIDC subject, and retained sanitized evidence without claiming independent review."
     },
     {
       "id": "PKG-019",

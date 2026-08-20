@@ -46,18 +46,11 @@ secret `NPM_FIRST_PACKAGE_TOKEN` in `breakdown-local-stable`; never place it in 
 shell history, file, approval, or artifact. npm documents the granular-token controls in
 [About access tokens](https://docs.npmjs.com/about-access-tokens/).
 
-Create and sign a fresh approval using:
-
-```sh
-pnpm local:release:create-approval \
-  --candidate /absolute/path/to/candidate \
-  --npm-publication-mode first-package-bootstrap \
-  --output /absolute/path/to/breakdown-human-release-approval.json
-```
-
-Dispatch `local-stable-publication.yml` from the protected signed tag with mode
-`first-package-bootstrap`, the normal candidate/platform/host/approval inputs, and this exact
-destructive confirmation:
+Dispatch `local-release-ceremony.yml` on `main` with the exact qualified source SHA and candidate /
+platform artifact IDs, mode `first-package-bootstrap`, and execution mode `execute`. Review the
+exact plan summary and approve its SHA-256 through `breakdown-local-authorization` as documented in
+`scripts/local-release/README.md`. The ceremony binds this destructive confirmation into the
+downstream publication dispatch:
 
 ```text
 CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0
@@ -110,28 +103,34 @@ npm access set mfa=publish @breakdown-sh/mcp
 Then revoke the granular bootstrap token in npm and delete environment secret
 `NPM_FIRST_PACKAGE_TOKEN` from GitHub. Do not merely rotate or empty either credential.
 
-From a local session authenticated as the human publisher, with `NODE_AUTH_TOKEN` and `NPM_TOKEN`
-unset, capture a sanitized inspection:
+Create a separate npm granular access token that can read account, organization, package ownership,
+visibility, and trusted-publisher settings but cannot publish packages. Store it only as protected
+environment secret `NPM_TRUST_READ_TOKEN` in `breakdown-local-authorization`, with the shortest
+practical expiration. It is an inspection credential, never a publication credential.
 
-```sh
-pnpm local:release:inspect-npm-trust \
-  --output /absolute/path/to/breakdown-npm-trusted-publishing.json
-```
-
-The inspector fails unless the registry is public, the account belongs to `breakdown-sh`, every
-package is public and maintained by that account, and every package has exactly the repository,
-workflow, environment, and `createPackage` trust above. Its output omits token material, private
-maintainer emails, and registry trust IDs. Review the JSON before encoding it for a workflow input.
+Open **Actions → Breakdown Local npm trust inspection → Run workflow** on `main`, approve the
+protected environment job, and wait for success. The workflow uses the token only through an
+ephemeral mode-0600 npm configuration, deletes that file in the same step, and uploads only
+`breakdown-npm-trusted-publishing.json` plus its Sigstore attestation. It fails unless the registry
+is public, the account belongs to `breakdown-sh`, every package is public and maintained by that
+account, and every package has exactly the repository, workflow, environment, and `createPackage`
+trust above. The output omits tokens, private maintainer emails, and registry trust IDs. Record the
+`breakdown-npm-trusted-publishing` artifact ID, then revoke the read token and remove
+`NPM_TRUST_READ_TOKEN` after the final release if no later inspection is pending.
 
 ## 3. Verify and finalize 1.0.0
 
-Create and sign a new approval, this time using `--npm-publication-mode finalize-bootstrap`. Dispatch
-the same protected workflow from the same signed tag with:
+Dispatch a fresh `local-release-ceremony.yml` run on the same candidate with execution mode
+`resume-publication` and:
 
 - mode `finalize-bootstrap`;
 - the artifact ID from the successful bootstrap run;
-- base64-encoded sanitized trusted-publishing JSON; and
-- the normal immutable candidate, evidence, and fresh signed-approval inputs.
+- the sanitized trusted-publishing artifact ID; and
+- the normal immutable candidate/platform IDs and a fresh exact GitHub environment authorization.
+
+The ceremony reuses the existing protected tag only when its source, candidate/checksum digests,
+artifact IDs, and keyless signer match the exact plan. The new GitHub review authorizes only the
+finalization mode. Do not create or move a second tag.
 
 The workflow verifies the bootstrap artifact's Sigstore attestation against the exact repository,
 workflow, tag, and commit; rejects the still-present bootstrap environment secret; validates the
@@ -146,8 +145,8 @@ API response.
 
 ## 4. Publish later versions with OIDC only
 
-For every later release, use a fresh signed approval with mode `oidc-trusted-publishing` and provide
-a fresh sanitized trust inspection. The workflow refuses npm token environment variables and
+For every later release, use a fresh GitHub-authenticated ceremony authorization with mode
+`oidc-trusted-publishing` and provide a fresh attested sanitized trust-inspection artifact ID. The workflow refuses npm token environment variables and
 publishes all three exact tarballs with GitHub Actions OIDC provenance. Post-publication inspection
 again compares public bytes and audits registry signatures and provenance.
 

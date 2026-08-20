@@ -38,6 +38,38 @@ function releaseControlFixture() {
       total_count: 1,
       branch_policies: [{ id: 2, name: RELEASE_CONTROL_POLICY.deploymentTagPattern, type: 'tag' }],
     },
+    authorizationEnvironment: {
+      id: RELEASE_CONTROL_POLICY.authorizationEnvironmentId,
+      name: RELEASE_CONTROL_POLICY.authorizationEnvironment,
+      can_admins_bypass: false,
+      protection_rules: [
+        {
+          id: 3,
+          type: 'required_reviewers',
+          prevent_self_review: false,
+          reviewers: [
+            {
+              type: 'User',
+              reviewer: {
+                id: RELEASE_CONTROL_POLICY.authorizationReviewerId,
+                login: RELEASE_CONTROL_POLICY.maintainer,
+              },
+            },
+          ],
+        },
+        { id: 4, type: 'branch_policy' },
+      ],
+      deployment_branch_policy: {
+        protected_branches: false,
+        custom_branch_policies: true,
+      },
+    },
+    authorizationDeploymentPolicies: {
+      total_count: 1,
+      branch_policies: [
+        { id: 5, name: RELEASE_CONTROL_POLICY.authorizationBranch, type: 'branch' },
+      ],
+    },
     immutableReleases: { enabled: true, enforced_by_owner: false },
     ruleset: {
       id: RELEASE_CONTROL_POLICY.rulesetId,
@@ -58,7 +90,7 @@ function releaseControlFixture() {
     stableTags: [] as { name: string }[],
     releases: [] as { tag_name: string }[],
     phase: 'pre-tag',
-    tag: undefined as string | undefined,
+    tag: 'breakdown-local-v1.0.0' as string | undefined,
   };
 }
 
@@ -139,6 +171,14 @@ describe('GitHub stable release controls', () => {
         `repos/${RELEASE_CONTROL_POLICY.repository}/environments/${RELEASE_CONTROL_POLICY.environment}/deployment-branch-policies`,
         fixture.deploymentPolicies,
       ],
+      [
+        `repos/${RELEASE_CONTROL_POLICY.repository}/environments/${RELEASE_CONTROL_POLICY.authorizationEnvironment}`,
+        fixture.authorizationEnvironment,
+      ],
+      [
+        `repos/${RELEASE_CONTROL_POLICY.repository}/environments/${RELEASE_CONTROL_POLICY.authorizationEnvironment}/deployment-branch-policies`,
+        fixture.authorizationDeploymentPolicies,
+      ],
       [`repos/${RELEASE_CONTROL_POLICY.repository}/immutable-releases`, fixture.immutableReleases],
       [
         `repos/${RELEASE_CONTROL_POLICY.repository}/rulesets/${RELEASE_CONTROL_POLICY.rulesetId}`,
@@ -163,6 +203,7 @@ describe('GitHub stable release controls', () => {
         commandRunner,
         outputPath,
         phase: 'pre-tag',
+        tag: 'breakdown-local-v1.0.0',
       }),
     ).resolves.toMatchObject({
       schema_version: 'breakdown.github-release-controls.v1',
@@ -256,8 +297,8 @@ describe('stable workflow identity evidence', () => {
       ref: `refs/tags/${candidate.tag}`,
       ref_name: candidate.tag,
       source_commit: candidate.provenance.source.git_commit,
-      actor: RELEASE_CONTROL_POLICY.maintainer,
-      triggering_actor: RELEASE_CONTROL_POLICY.maintainer,
+      actor: 'github-actions[bot]',
+      triggering_actor: 'github-actions[bot]',
       environment: RELEASE_CONTROL_POLICY.environment,
       runner_environment: 'self-hosted',
       oidc: {
@@ -269,12 +310,12 @@ describe('stable workflow identity evidence', () => {
         ruleset_id: RELEASE_CONTROL_POLICY.rulesetId,
         snapshot_sha256: 'd'.repeat(64),
       },
-      approval_verification_sha256: 'e'.repeat(64),
+      authorization_verification_sha256: 'e'.repeat(64),
     };
 
     expect(() =>
       validateWorkflowIdentityEvidence(evidence, {
-        approvalVerificationSha256: 'e'.repeat(64),
+        authorizationVerificationSha256: 'e'.repeat(64),
         candidate,
         candidateArtifactId: '1',
         controlsSha256: 'd'.repeat(64),

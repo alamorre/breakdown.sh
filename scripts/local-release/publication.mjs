@@ -13,10 +13,14 @@ import {
 import { releaseChannel } from './release-channel.mjs';
 import {
   RELEASE_CONTROL_POLICY,
-  validateApprovalSignatureEvidence,
   validateRetainedGithubReleaseControls,
   validateWorkflowIdentityEvidence,
 } from './release-controls.mjs';
+import {
+  validateAutomationSigner,
+  validateGithubReleaseAuthorization,
+  validateGithubReleaseAuthorizationVerification,
+} from './release-ceremony.mjs';
 import { NPM_PUBLICATION_MODES, validateNpmPublicationControls } from './npm-publishing.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -36,8 +40,6 @@ const DEFERRED_APPROVAL_POLICY = Object.freeze({
 });
 const DEFERRED_APPROVAL_STATEMENT =
   'I approve publication of only the identified candidate bytes after reviewing and accepting the Breakdown Local 1.0 deferred host-certification policy with supported_hosts: [].';
-const QUALIFIED_APPROVAL_STATEMENT =
-  'I approve publication of only the identified candidate bytes after reviewing and accepting the fully qualified passing host-support policy and its exact supported_hosts claims.';
 
 const COMMON_HUMAN_RELEASE_ATTESTATIONS = Object.freeze([
   'legal_licensor_identity_confirmed',
@@ -197,7 +199,7 @@ async function validateChecksumInventory({ checksumFile, directory, directoryFil
   return { checksumBytes, checksummedFiles };
 }
 
-async function readCandidate(candidateDirectory, { allowAdditionalFiles = false } = {}) {
+export async function readCandidate(candidateDirectory, { allowAdditionalFiles = false } = {}) {
   const directoryFiles = await regularFiles(candidateDirectory, 'Candidate directory');
   const manifestFiles = directoryFiles.filter((file) =>
     /^breakdown-release-[0-9]+\.[0-9]+\.[0-9]+\.json$/.test(file),
@@ -366,7 +368,7 @@ function validateBoundEvidence(index, schemaVersion, label, candidate) {
   );
 }
 
-function validatePlatformIndex(index, candidate) {
+export function validatePlatformIndex(index, candidate) {
   validateBoundEvidence(
     index,
     'breakdown.platform-qualification-index.v1',
@@ -410,74 +412,24 @@ function validateHostIndex(index, candidate) {
   );
 }
 
-function approvalRequirements(hostIndex, npmPublicationMode) {
-  if (hostIndex.policy.state === 'deferred') {
-    return {
-      attestations: humanReleaseAttestations(npmPublicationMode),
-      policy: DEFERRED_APPROVAL_POLICY,
-      statement: DEFERRED_APPROVAL_STATEMENT,
-    };
-  }
-  return {
-    attestations: humanReleaseAttestations(npmPublicationMode, true),
-    policy: {
-      state: 'qualified',
-      certification_issue: hostIndex.policy.certification_issue,
-      supported_hosts: hostIndex.supported_hosts,
-    },
-    statement: QUALIFIED_APPROVAL_STATEMENT,
-  };
-}
-
-function validateApproval(approval, candidate, hostIndex, npmPublicationMode) {
-  const requirements = approvalRequirements(hostIndex, npmPublicationMode);
-  invariant(
-    approval.schema_version === 'breakdown.human-release-approval.v1' &&
-      approval.release_version === candidate.releaseVersion &&
-      sameJson(approval.candidate_digest, candidate.digest) &&
-      approval.source?.repository === candidate.provenance.source.repository &&
-      approval.source?.git_commit === candidate.provenance.source.git_commit &&
-      approval.tag === candidate.tag &&
-      approval.npm_publication_mode === npmPublicationMode,
-    'Human release approval is not bound to the exact candidate.',
-  );
-  invariant(
-    sameJson(approval.host_support_policy, requirements.policy),
-    'Human release approval does not match the authenticated host support policy.',
-  );
-  invariant(
-    exactString(approval.approver?.name) &&
-      /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(approval.approver?.email ?? '') &&
-      /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(
-        approval.approver?.github_login ?? '',
-      ) &&
-      approval.approver.github_login === RELEASE_CONTROL_POLICY.maintainer &&
-      Number.isFinite(Date.parse(approval.approved_at)) &&
-      new Date(approval.approved_at).toISOString() === approval.approved_at &&
-      approval.statement === requirements.statement,
-    'Human release approval has incomplete approver identity or statement.',
-  );
-  invariant(
-    sameJson(
-      Object.keys(approval.attestations ?? {}).sort(),
-      [...requirements.attestations].sort(),
-    ) && requirements.attestations.every((name) => approval.attestations[name] === true),
-    'Human release approval does not affirm every required gate.',
-  );
-}
-
-function validateTagEvidence(evidence, candidate) {
+function validateTagEvidence(evidence, candidate, authorization) {
   const protectedIncludes = evidence.protection?.conditions?.ref_name?.include;
   const protectedExcludes = evidence.protection?.conditions?.ref_name?.exclude;
   const protectionRules = evidence.protection?.rules?.map((rule) => rule.type) ?? [];
   const candidateArtifactId = evidence.artifact_ids?.candidate;
   const platformIndexArtifactId = evidence.artifact_ids?.platform_index;
-  const expectedMessage = `Breakdown Local ${candidate.releaseVersion}
+  const expectedMessagePrefix = `Breakdown Local ${candidate.releaseVersion}
 
 candidate-digest-sha256: ${candidate.digest.content}
 candidate-checksum-inventory-sha256: ${candidate.checksumInventory.sha256}
 candidate-artifact-id: ${candidateArtifactId}
 platform-index-artifact-id: ${platformIndexArtifactId}`;
+  const messagePattern = new RegExp(
+    `^${expectedMessagePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n` +
+      'release-ceremony-run-id: [1-9]\\d*\\n' +
+      'release-plan-sha256: [0-9a-f]{64}\\n' +
+      'release-authorization-sha256: [0-9a-f]{64}$',
+  );
   invariant(
     evidence.schema_version === 'breakdown.signed-tag-evidence.v1' &&
       evidence.repository === candidate.provenance.source.repository &&
@@ -486,11 +438,12 @@ platform-index-artifact-id: ${platformIndexArtifactId}`;
       evidence.target?.type === 'commit' &&
       evidence.target?.sha === candidate.provenance.source.git_commit &&
       evidence.verification?.verified === true &&
-      evidence.verification?.reason === 'valid' &&
       typeof evidence.message === 'string' &&
-      evidence.message.trimEnd() === expectedMessage &&
+      messagePattern.test(evidence.message.trimEnd()) &&
       /^[1-9]\d*$/.test(candidateArtifactId ?? '') &&
       /^[1-9]\d*$/.test(platformIndexArtifactId ?? '') &&
+      candidateArtifactId === authorization.plan.value.artifact_ids.candidate &&
+      platformIndexArtifactId === authorization.plan.value.artifact_ids.platform_index &&
       Number.isSafeInteger(evidence.protection?.ruleset_id) &&
       evidence.protection.ruleset_id === RELEASE_CONTROL_POLICY.rulesetId &&
       evidence.protection?.name === RELEASE_CONTROL_POLICY.rulesetName &&
@@ -506,6 +459,7 @@ platform-index-artifact-id: ${platformIndexArtifactId}`;
       evidence.protection?.current_user_can_bypass === 'never',
     'Signed tag evidence does not bind and protect the exact candidate bytes and source commit.',
   );
+  validateAutomationSigner(evidence.signer);
 }
 
 export async function writeHumanReleaseApprovalTemplate({
@@ -590,7 +544,7 @@ exact full version.
 ${hostQualification}
 
 The attached publication manifest, evidence indexes, checksums, SBOM, provenance inputs, legal
-material, signed human approval, GitHub controls, and workflow identity are the complete release
+material, GitHub-authenticated human authorization, GitHub controls, and workflow identity are the complete release
 evidence.
 
 ## npm publication identity
@@ -615,9 +569,9 @@ async function copyNamedFile(sourcePath, outputDirectory, outputName) {
 }
 
 export async function prepareLocalPublication({
-  approvalPath,
-  approvalSignaturePath,
-  approvalVerificationPath,
+  authorizationAttestationPath,
+  authorizationPath,
+  authorizationVerificationPath,
   candidateDirectory,
   githubControlsPath,
   hostIndexPath,
@@ -659,14 +613,14 @@ export async function prepareLocalPublication({
       'Non-finalization publication received bootstrap evidence assets.',
     );
   }
-  const approvalInput = await readJson(approvalPath, 'Human release approval');
-  const approvalSignatureBytes = await readRegularFile(
-    approvalSignaturePath,
-    'Human release approval signature',
+  const authorizationInput = await readJson(authorizationPath, 'GitHub release authorization');
+  const authorizationAttestationBytes = await readRegularFile(
+    authorizationAttestationPath,
+    'GitHub release authorization attestation',
   );
-  const approvalVerificationInput = await readJson(
-    approvalVerificationPath,
-    'Human release approval signature verification',
+  const authorizationVerificationInput = await readJson(
+    authorizationVerificationPath,
+    'GitHub release authorization verification',
   );
   const githubControlsInput = await readJson(githubControlsPath, 'GitHub release controls');
   const tagInput = await readJson(tagEvidencePath, 'Signed tag evidence');
@@ -674,20 +628,24 @@ export async function prepareLocalPublication({
   validatePlatformIndex(platformInput.value, candidate);
   validateHostIndex(hostInput.value, candidate);
   validateNpmPublicationControls(npmControlsInput.value, npmCandidateBinding(candidate));
-  validateApproval(approvalInput.value, candidate, hostInput.value, npmControlsInput.value.mode);
-  validateApprovalSignatureEvidence({
-    approval: approvalInput.value,
-    approvalBytes: approvalInput.bytes,
-    evidence: approvalVerificationInput.value,
-    signatureBytes: approvalSignatureBytes,
+  validateGithubReleaseAuthorization(
+    authorizationInput.value,
+    candidate,
+    npmControlsInput.value.mode,
+  );
+  validateGithubReleaseAuthorizationVerification({
+    authorizationBytes: authorizationInput.bytes,
+    attestationBytes: authorizationAttestationBytes,
+    evidence: authorizationVerificationInput.value,
+    sourceCommit: candidate.provenance.source.git_commit,
   });
   validateRetainedGithubReleaseControls(githubControlsInput.value, {
     repository: candidate.provenance.source.repository,
     tag: candidate.tag,
   });
-  validateTagEvidence(tagInput.value, candidate);
+  validateTagEvidence(tagInput.value, candidate, authorizationInput.value);
   validateWorkflowIdentityEvidence(workflowIdentityInput.value, {
-    approvalVerificationSha256: sha256(approvalVerificationInput.bytes),
+    authorizationVerificationSha256: sha256(authorizationVerificationInput.bytes),
     candidate,
     candidateArtifactId: tagInput.value.artifact_ids.candidate,
     controlsSha256: sha256(githubControlsInput.bytes),
@@ -726,9 +684,9 @@ export async function prepareLocalPublication({
     await copyNamedFile(join(candidateDirectory, file), outputDirectory, file);
   }
   const platformFile = 'breakdown-platform-evidence-index.json';
-  const approvalFile = 'breakdown-human-release-approval.json';
-  const approvalSignatureFile = 'breakdown-human-release-approval.json.sig';
-  const approvalVerificationFile = 'breakdown-human-release-approval-verification.json';
+  const authorizationFile = 'breakdown-github-release-authorization.json';
+  const authorizationAttestationFile = 'breakdown-github-release-authorization.attestation.json';
+  const authorizationVerificationFile = 'breakdown-github-release-authorization-verification.json';
   const githubControlsFile = 'breakdown-github-release-controls.json';
   const tagFile = 'breakdown-signed-tag-evidence.json';
   const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
@@ -737,9 +695,13 @@ export async function prepareLocalPublication({
   const npmBootstrapAttestationFile = 'breakdown-npm-first-package-bootstrap.attestation.json';
   await copyNamedFile(platformIndexPath, outputDirectory, platformFile);
   await copyNamedFile(hostIndexPath, outputDirectory, hostFile);
-  await copyNamedFile(approvalPath, outputDirectory, approvalFile);
-  await copyNamedFile(approvalSignaturePath, outputDirectory, approvalSignatureFile);
-  await copyNamedFile(approvalVerificationPath, outputDirectory, approvalVerificationFile);
+  await copyNamedFile(authorizationPath, outputDirectory, authorizationFile);
+  await copyNamedFile(authorizationAttestationPath, outputDirectory, authorizationAttestationFile);
+  await copyNamedFile(
+    authorizationVerificationPath,
+    outputDirectory,
+    authorizationVerificationFile,
+  );
   await copyNamedFile(githubControlsPath, outputDirectory, githubControlsFile);
   await copyNamedFile(tagEvidencePath, outputDirectory, tagFile);
   await copyNamedFile(workflowIdentityPath, outputDirectory, workflowIdentityFile);
@@ -766,9 +728,9 @@ export async function prepareLocalPublication({
     [supportJsonFile, 'generated-supported-hosts'],
     [supportMarkdownFile, 'generated-supported-hosts'],
     [hostAttestationFile, 'host-index-attestation'],
-    [approvalFile, 'human-release-approval'],
-    [approvalSignatureFile, 'human-release-approval-signature'],
-    [approvalVerificationFile, 'human-release-approval-signature-verification'],
+    [authorizationFile, 'github-release-authorization'],
+    [authorizationAttestationFile, 'github-release-authorization-attestation'],
+    [authorizationVerificationFile, 'github-release-authorization-verification'],
     [githubControlsFile, 'github-release-controls'],
     [tagFile, 'signed-tag-evidence'],
     [workflowIdentityFile, 'stable-workflow-identity'],
@@ -814,14 +776,17 @@ export async function prepareLocalPublication({
     evidence: {
       platform_index: { file: platformFile, sha256: sha256(platformInput.bytes) },
       host_support_index: { file: hostFile, sha256: sha256(hostInput.bytes) },
-      human_approval: { file: approvalFile, sha256: sha256(approvalInput.bytes) },
-      human_approval_signature: {
-        file: approvalSignatureFile,
-        sha256: sha256(approvalSignatureBytes),
+      github_release_authorization: {
+        file: authorizationFile,
+        sha256: sha256(authorizationInput.bytes),
       },
-      human_approval_verification: {
-        file: approvalVerificationFile,
-        sha256: sha256(approvalVerificationInput.bytes),
+      github_release_authorization_attestation: {
+        file: authorizationAttestationFile,
+        sha256: sha256(authorizationAttestationBytes),
+      },
+      github_release_authorization_verification: {
+        file: authorizationVerificationFile,
+        sha256: sha256(authorizationVerificationInput.bytes),
       },
       github_release_controls: {
         file: githubControlsFile,
@@ -839,7 +804,7 @@ export async function prepareLocalPublication({
     },
     license_scope: candidate.manifest.license_scope,
     publication: {
-      state: 'ready-for-human-controlled-publication',
+      state: 'ready-for-authorized-automation-publication',
       github_release: {
         immutable: true,
         prerelease: false,
@@ -923,7 +888,7 @@ export async function inspectLocalPublication({ publicationDirectory }) {
     );
   }
   invariant(
-    manifest.publication?.state === 'ready-for-human-controlled-publication' &&
+    manifest.publication?.state === 'ready-for-authorized-automation-publication' &&
       manifest.publication?.overwrite_or_rebuild_permitted === false &&
       manifest.publication?.post_publication_inspection_required === true,
     'Publication manifest does not preserve the release ceremony.',
@@ -1012,29 +977,29 @@ export async function inspectLocalPublication({ publicationDirectory }) {
         generatedHostSupportMarkdown(hostIndex, hostIndexFile, sha256(hostIndexBytes)),
     'Publication generated host support material does not match the authenticated index.',
   );
-  const approvalBytes = await readRegularFile(
-    join(publicationDirectory, manifest.evidence?.human_approval?.file),
-    'Publication human release approval',
+  const authorizationBytes = await readRegularFile(
+    join(publicationDirectory, manifest.evidence?.github_release_authorization?.file),
+    'Publication GitHub release authorization',
   );
-  const approval = parseJson(approvalBytes, 'Publication human release approval');
-  validateApproval(approval, candidate, hostIndex, npmControls.mode);
-  const approvalSignatureBytes = await readRegularFile(
-    join(publicationDirectory, manifest.evidence?.human_approval_signature?.file),
-    'Publication human release approval signature',
+  const authorization = parseJson(authorizationBytes, 'Publication GitHub release authorization');
+  validateGithubReleaseAuthorization(authorization, candidate, npmControls.mode);
+  const authorizationAttestationBytes = await readRegularFile(
+    join(publicationDirectory, manifest.evidence?.github_release_authorization_attestation?.file),
+    'Publication GitHub release authorization attestation',
   );
-  const approvalVerificationBytes = await readRegularFile(
-    join(publicationDirectory, manifest.evidence?.human_approval_verification?.file),
-    'Publication human release approval verification',
+  const authorizationVerificationBytes = await readRegularFile(
+    join(publicationDirectory, manifest.evidence?.github_release_authorization_verification?.file),
+    'Publication GitHub release authorization verification',
   );
-  const approvalVerification = parseJson(
-    approvalVerificationBytes,
-    'Publication human release approval verification',
+  const authorizationVerification = parseJson(
+    authorizationVerificationBytes,
+    'Publication GitHub release authorization verification',
   );
-  validateApprovalSignatureEvidence({
-    approval,
-    approvalBytes,
-    evidence: approvalVerification,
-    signatureBytes: approvalSignatureBytes,
+  validateGithubReleaseAuthorizationVerification({
+    authorizationBytes,
+    attestationBytes: authorizationAttestationBytes,
+    evidence: authorizationVerification,
+    sourceCommit: candidate.provenance.source.git_commit,
   });
   const githubControlsBytes = await readRegularFile(
     join(publicationDirectory, manifest.evidence?.github_release_controls?.file),
@@ -1050,14 +1015,14 @@ export async function inspectLocalPublication({ publicationDirectory }) {
     'Publication signed tag evidence',
   );
   const tagEvidence = parseJson(tagEvidenceBytes, 'Publication signed tag evidence');
-  validateTagEvidence(tagEvidence, candidate);
+  validateTagEvidence(tagEvidence, candidate, authorization);
   const workflowIdentityBytes = await readRegularFile(
     join(publicationDirectory, manifest.evidence?.stable_workflow_identity?.file),
     'Publication stable workflow identity',
   );
   const workflowIdentity = parseJson(workflowIdentityBytes, 'Publication stable workflow identity');
   validateWorkflowIdentityEvidence(workflowIdentity, {
-    approvalVerificationSha256: sha256(approvalVerificationBytes),
+    authorizationVerificationSha256: sha256(authorizationVerificationBytes),
     candidate,
     candidateArtifactId: tagEvidence.artifact_ids.candidate,
     controlsSha256: sha256(githubControlsBytes),
@@ -1123,6 +1088,13 @@ export async function verifyPublishedLocalRelease({
   const retainedTagEvidence = parseJson(
     await readFile(join(publicationDirectory, manifest.evidence.signed_tag.file)),
     'Retained signed tag evidence',
+  );
+  const retainedAuthorizationBytes = await readFile(
+    join(publicationDirectory, manifest.evidence.github_release_authorization.file),
+  );
+  const retainedAuthorization = parseJson(
+    retainedAuthorizationBytes,
+    'Retained GitHub release authorization',
   );
   const publicationFiles = await regularFiles(publicationDirectory, 'Publication directory');
   const releaseAssetsDirectory = join(workDirectory, 'github-release-assets');
@@ -1212,7 +1184,8 @@ export async function verifyPublishedLocalRelease({
       target: publicTagObject.object,
       message: publicTagObject.message,
       artifact_ids: retainedTagEvidence.artifact_ids,
-      verification: publicTagObject.verification,
+      verification: retainedTagEvidence.verification,
+      signer: retainedTagEvidence.signer,
       protection: {
         ruleset_id: publicRuleset.id,
         name: publicRuleset.name,
@@ -1225,6 +1198,7 @@ export async function verifyPublishedLocalRelease({
       },
     },
     candidate,
+    retainedAuthorization,
   );
   const publicAssets = [...(releaseView.assets ?? [])];
   invariant(
