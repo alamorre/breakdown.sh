@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  FINALIZE_BOOTSTRAP_HUMAN_RELEASE_ATTESTATIONS,
   HUMAN_RELEASE_ATTESTATIONS,
   QUALIFIED_HUMAN_RELEASE_ATTESTATIONS,
   inspectLocalPublication,
@@ -52,7 +53,7 @@ async function publicationFixture() {
     ['breakdown-skills-1.0.0.tar.gz', 'skills-archive'],
     ['breakdown-skills-1.0.0.zip', 'skills-archive'],
   ] as const;
-  const primaryBytes = new Map(
+  const primaryBytes = new Map<string, Buffer>(
     primaryArtifacts.map(([file]) => [file, Buffer.from(`exact candidate bytes: ${file}\n`)]),
   );
   for (const [file, bytes] of primaryBytes) {
@@ -334,6 +335,7 @@ async function publicationFixture() {
       git_commit: gitCommit,
     },
     tag: 'breakdown-local-v1.0.0',
+    npm_publication_mode: 'oidc-trusted-publishing',
     approver: {
       name: 'Adam La Morre',
       email: 'release@example.com',
@@ -499,6 +501,62 @@ platform-index-artifact-id: 5678`,
     approval_verification_sha256: sha256(await readFile(approvalVerificationPath)),
   });
 
+  const npmControlsPath = join(root, 'breakdown-npm-publication-controls.json');
+  const npmPublisher = 'adam-publisher';
+  const trustedPublishing = {
+    schema_version: 'breakdown.npm-trusted-publishing.v1',
+    captured_at: '2026-07-29T20:03:00.000Z',
+    registry: 'https://registry.npmjs.org/',
+    publisher: {
+      username: npmPublisher,
+      organization: 'breakdown-sh',
+      organization_role: 'owner',
+    },
+    packages: ['core', 'cli', 'mcp'].map((packageName) => ({
+      name: `@breakdown-sh/${packageName}`,
+      visibility: 'public',
+      maintainers: [npmPublisher],
+      trusted_publisher: {
+        type: 'github',
+        repository: 'alamorre/breakdown.sh',
+        file: 'local-stable-publication.yml',
+        environment: 'breakdown-local-stable',
+        permissions: ['createPackage'],
+      },
+    })),
+    credential_material_retained: false,
+    verification: { status: 'passed' },
+  };
+  await writeJson(npmControlsPath, {
+    schema_version: 'breakdown.npm-publication-controls.v1',
+    captured_at: '2026-07-29T20:04:00.000Z',
+    mode: 'oidc-trusted-publishing',
+    registry: 'https://registry.npmjs.org/',
+    release_version: releaseVersion,
+    candidate_digest: { algorithm: 'SHA-256', content: candidateDigest },
+    repository: 'alamorre/breakdown.sh',
+    workflow: 'local-stable-publication.yml',
+    environment: 'breakdown-local-stable',
+    packages: ['core', 'cli', 'mcp'].map((packageName) => {
+      const file = `breakdown-sh-${packageName}-${releaseVersion}.tgz`;
+      return {
+        name: `@breakdown-sh/${packageName}`,
+        version: releaseVersion,
+        artifact: file,
+        sha256: sha256(primaryBytes.get(file)!),
+      };
+    }),
+    authentication: {
+      method: 'oidc-trusted-publishing',
+      token_publication: 'human-confirmed-disabled',
+      credential_value_retained: false,
+    },
+    trusted_publishing: trustedPublishing,
+    provenance: 'required',
+    registry_signatures: 'required',
+    verification: { status: 'passed' },
+  });
+
   return {
     approvalPath,
     approvalSignaturePath,
@@ -507,6 +565,7 @@ platform-index-artifact-id: 5678`,
     candidateDigest,
     githubControlsPath,
     hostIndexPath,
+    npmControlsPath,
     outputDirectory,
     platformIndexPath,
     primaryBytes,
@@ -517,7 +576,10 @@ platform-index-artifact-id: 5678`,
   };
 }
 
-function prepareFixture(fixture: Awaited<ReturnType<typeof publicationFixture>>) {
+function prepareFixture(
+  fixture: Awaited<ReturnType<typeof publicationFixture>>,
+  bootstrapEvidence?: { attestationPath: string; reportPath: string },
+) {
   return prepareLocalPublication({
     approvalPath: fixture.approvalPath,
     approvalSignaturePath: fixture.approvalSignaturePath,
@@ -525,6 +587,9 @@ function prepareFixture(fixture: Awaited<ReturnType<typeof publicationFixture>>)
     candidateDirectory: fixture.candidateDirectory,
     githubControlsPath: fixture.githubControlsPath,
     hostIndexPath: fixture.hostIndexPath,
+    npmBootstrapAttestationPath: bootstrapEvidence?.attestationPath,
+    npmBootstrapReportPath: bootstrapEvidence?.reportPath,
+    npmControlsPath: fixture.npmControlsPath,
     outputDirectory: fixture.outputDirectory,
     platformIndexPath: fixture.platformIndexPath,
     supportDirectory: fixture.supportDirectory,
@@ -619,6 +684,7 @@ describe('prepareLocalPublication', () => {
         git_commit: gitCommit,
       },
       tag: 'breakdown-local-v1.0.0',
+      npm_publication_mode: 'oidc-trusted-publishing',
       approver: {
         name: '',
         email: '',
@@ -650,6 +716,8 @@ describe('prepareLocalPublication', () => {
         join(repositoryRoot, 'scripts', 'create-release-approval.mjs'),
         '--candidate',
         fixture.candidateDirectory,
+        '--npm-publication-mode',
+        'oidc-trusted-publishing',
         '--output',
         outputPath,
       ],
@@ -686,6 +754,61 @@ describe('prepareLocalPublication', () => {
     for (const [file, bytes] of fixture.primaryBytes) {
       expect(await readFile(join(fixture.outputDirectory, file))).toEqual(bytes);
     }
+  });
+
+  it('should retain the authenticated bootstrap report and bundle only in finalization', async () => {
+    const fixture = await publicationFixture();
+    await configureDeferredHostSupport(fixture);
+    const controls = JSON.parse(await readFile(fixture.npmControlsPath, 'utf8'));
+    const bootstrapReport = {
+      schema_version: 'breakdown.npm-first-package-bootstrap.v1',
+      registry: 'https://registry.npmjs.org/',
+      release_version: releaseVersion,
+      candidate_digest: controls.candidate_digest,
+      repository: 'alamorre/breakdown.sh',
+      workflow: 'local-stable-publication.yml',
+      environment: 'breakdown-local-stable',
+      publication_manifest: {
+        file: 'breakdown-publication-manifest-1.0.0.json',
+        sha256: 'e'.repeat(64),
+      },
+      packages: controls.packages,
+      authentication: 'one-time-granular-access-token',
+      credential_value_retained: false,
+      provenance: 'passed',
+      registry_signatures: 'passed',
+      verification: { status: 'passed' },
+    };
+    controls.mode = 'finalize-bootstrap';
+    controls.authentication.method = 'previously-completed-first-package-bootstrap';
+    controls.bootstrap_publication = bootstrapReport;
+    await writeJson(fixture.npmControlsPath, controls);
+    const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
+    approval.npm_publication_mode = 'finalize-bootstrap';
+    approval.attestations = Object.fromEntries(
+      FINALIZE_BOOTSTRAP_HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
+    );
+    await writeJson(fixture.approvalPath, approval);
+    await refreshApprovalEvidence(fixture);
+    const reportPath = join(fixture.outputDirectory, '..', 'bootstrap-report.json');
+    const attestationPath = join(fixture.outputDirectory, '..', 'bootstrap-attestation.json');
+    await writeJson(reportPath, bootstrapReport);
+    await writeJson(attestationPath, {
+      mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
+    });
+
+    await expect(prepareFixture(fixture, { attestationPath, reportPath })).resolves.toMatchObject({
+      public_assets: 28,
+    });
+    await expect(
+      readFile(join(fixture.outputDirectory, 'breakdown-npm-first-package-bootstrap.json'), 'utf8'),
+    ).resolves.toBe(await readFile(reportPath, 'utf8'));
+    await expect(
+      readFile(
+        join(fixture.outputDirectory, 'breakdown-npm-first-package-bootstrap.attestation.json'),
+        'utf8',
+      ),
+    ).resolves.toBe(await readFile(attestationPath, 'utf8'));
   });
 
   it('should derive stable channels and qualified claims only from passing evidence', async () => {
@@ -933,6 +1056,8 @@ describe('prepareLocalPublication', () => {
         fixture.tagEvidencePath,
         '--workflow-identity',
         fixture.workflowIdentityPath,
+        '--npm-controls',
+        fixture.npmControlsPath,
         '--output',
         fixture.outputDirectory,
       ],
@@ -944,7 +1069,7 @@ describe('prepareLocalPublication', () => {
       schema_version: 'breakdown.publication-inspection.v1',
       release_version: releaseVersion,
       status: 'passed',
-      public_assets: 25,
+      public_assets: 26,
     });
   });
 
@@ -1136,9 +1261,9 @@ platform-index-artifact-id: 5678`,
       status: 'passed',
       github: {
         immutable: true,
-        release_assets: 25,
-        verified_assets: 25,
-        asset_provenance_attestations: 25,
+        release_assets: 26,
+        verified_assets: 26,
+        asset_provenance_attestations: 26,
       },
       npm: {
         dist_tag: 'latest',
@@ -1173,6 +1298,12 @@ describe('stable publication workflow', () => {
       'host_support_artifact_id:',
       'human_approval_base64:',
       'human_approval_signature_base64:',
+      'npm_publication_mode:',
+      'first-package-bootstrap',
+      'finalize-bootstrap',
+      'oidc-trusted-publishing',
+      'npm_trusted_publishing_base64:',
+      'npm_bootstrap_artifact_id:',
       "startsWith(github.ref, 'refs/tags/breakdown-local-v')",
       'environment: breakdown-local-stable',
       'actions: read',
@@ -1198,6 +1329,11 @@ describe('stable publication workflow', () => {
       'breakdown-host-support-index.attestation.json',
       '--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-host-support.yml"',
       'pnpm local:release:prepare-publication',
+      'pnpm local:release:prepare-npm',
+      'pnpm local:release:publish-first-npm-packages',
+      'pnpm local:release:verify-first-npm-packages',
+      'secrets.NPM_FIRST_PACKAGE_TOKEN',
+      'breakdown-npm-first-package-bootstrap.attestation.json',
       'actions/attest@v4',
       'gh release create',
       '--draft',
@@ -1215,7 +1351,7 @@ describe('stable publication workflow', () => {
       'actions/upload-artifact@v7',
     ];
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
-    const forbiddenSnippets = ['local:release:build', 'NODE_AUTH_TOKEN', 'tag_ruleset_id:'];
+    const forbiddenSnippets = ['local:release:build', 'NPM_TOKEN', 'tag_ruleset_id:'];
     expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
 
     const qualificationWorkflow = await readFile(

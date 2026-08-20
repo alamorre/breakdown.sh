@@ -245,8 +245,8 @@
       "path": "conformance/traceability/pkg.json",
       "media_type": "application/json",
       "role": "conformance",
-      "bytes": 5771,
-      "sha256": "1bd71e6b10818bee09e951daf8787804a4e8c8ea6e20d18c0d36718c376d9454"
+      "bytes": 6413,
+      "sha256": "0b1ecd44624932af5e2aee238d2b8bcca546356c58fa8e252a5d74dce3245387"
     },
     {
       "path": "conformance/traceability/pub.json",
@@ -735,8 +735,8 @@
       "path": "specifications/release.md",
       "media_type": "text/markdown; charset=utf-8",
       "role": "specification",
-      "bytes": 6696,
-      "sha256": "cb570bc9d6b8cd908ea67a2996ea8dd486abc2749f213665a70fb504ca811577"
+      "bytes": 8683,
+      "sha256": "dcbec86882f496481153af2a3e8a2c1ec6f92cbf881e55765ce3781c856b8994"
     },
     {
       "path": "specifications/run-records.md",

@@ -9,7 +9,9 @@ import { prepareLocalPublication } from './local-release/publication.mjs';
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: prepare-local-publication.mjs --candidate PATH --platform-index PATH --host-support-index PATH --host-support PATH --approval PATH --approval-signature PATH --approval-verification PATH --github-controls PATH --tag-evidence PATH --workflow-identity PATH --output PATH';
+    'Usage: prepare-local-publication.mjs --candidate PATH --platform-index PATH --host-support-index PATH --host-support PATH --approval PATH --approval-signature PATH --approval-verification PATH --github-controls PATH --tag-evidence PATH --workflow-identity PATH --npm-controls PATH [--npm-bootstrap-report PATH --npm-bootstrap-attestation PATH] --output PATH';
+  const optionalPath = (name) =>
+    argv.includes(name) ? resolve(requiredArgumentValue(argv, name, usage)) : undefined;
   const outputDirectory = resolve(requiredArgumentValue(argv, '--output', usage));
   await mkdir(outputDirectory, { recursive: true });
   const inspection = await prepareLocalPublication({
@@ -21,6 +23,9 @@ export async function main(argv = process.argv) {
     candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
     githubControlsPath: resolve(requiredArgumentValue(argv, '--github-controls', usage)),
     hostIndexPath: resolve(requiredArgumentValue(argv, '--host-support-index', usage)),
+    npmBootstrapAttestationPath: optionalPath('--npm-bootstrap-attestation'),
+    npmBootstrapReportPath: optionalPath('--npm-bootstrap-report'),
+    npmControlsPath: resolve(requiredArgumentValue(argv, '--npm-controls', usage)),
     outputDirectory,
     platformIndexPath: resolve(requiredArgumentValue(argv, '--platform-index', usage)),
     supportDirectory: resolve(requiredArgumentValue(argv, '--host-support', usage)),

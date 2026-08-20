@@ -25,9 +25,9 @@ The legal licensor and npm/GitHub publisher complete these controls personally:
 
 1. Confirm legal licensor and publisher identity and authority.
 2. Confirm control of the `@breakdown-sh` npm scope and all three package names.
-3. Configure npm trusted publishing for `@breakdown-sh/core`, `@breakdown-sh/cli`, and
-   `@breakdown-sh/mcp` against `local-stable-publication.yml` and the
-   `breakdown-local-stable` environment.
+3. Follow the one-time, two-run npm procedure in `docs/npm-publishing.md`: use the constrained
+   first-package credential only to create the exact 1.0.0 records, then configure and inspect the
+   exact trusted publisher for all three packages before finalizing the release.
 4. Enable GitHub release immutability.
 5. Protect `refs/tags/breakdown-local-v*` with restricted update and deletion, no exclusions, and
    no bypass actors; retain the ruleset ID.
@@ -45,7 +45,9 @@ The stable workflow needs read access to repository administration settings so i
 immutable releases. It first uses the ephemeral `GITHUB_TOKEN`; if the repository does not grant
 that token the required read, configure environment secret `RELEASE_CONTROL_READ_TOKEN` as a
 fine-grained token limited to this repository with read-only Administration, Actions, and Metadata
-permissions. The token is never retained or used for npm publication.
+permissions. The first-package finalization gate additionally requires read-only Environments
+permission so it can prove that `NPM_FIRST_PACKAGE_TOKEN` was removed. The token is never retained
+or used for npm publication.
 
 These controls remain real release blockers. The deferred host policy changes none of them.
 
@@ -128,6 +130,7 @@ template:
 ```sh
 pnpm local:release:create-approval \
   --candidate /absolute/path/to/candidate \
+  --npm-publication-mode first-package-bootstrap \
   --output /absolute/path/to/breakdown-human-release-approval.json
 ```
 
@@ -166,30 +169,52 @@ node -e "process.stdout.write(require('node:fs').readFileSync(process.argv[1]).t
   /absolute/path/to/breakdown-human-release-approval.json.sig
 ```
 
-## Publish once
+## Bootstrap npm, transition to OIDC, and finalize
 
-Dispatch `local-stable-publication.yml` from the signed tag and supply the candidate artifact ID,
-passing platform-index artifact ID, authenticated host-support artifact ID, encoded human approval,
-and encoded approval signature. Ruleset ID `20015652` is fixed by policy and is not caller input.
+For the first 1.0.0 publication only, follow `docs/npm-publishing.md`. Create the documented
+least-privilege granular access token, store it only as protected environment secret
+`NPM_FIRST_PACKAGE_TOKEN`, and dispatch `local-stable-publication.yml` from the signed tag with mode
+`first-package-bootstrap`. Supply the candidate, passing platform index, authenticated host-support
+artifact, encoded mode-bound approval and signature, plus the exact destructive confirmation. The
+ruleset ID is fixed by policy and is not caller input.
 
 Before publishing, the workflow re-verifies the approval signature against GitHub, every approval
-binding and attestation, repository immutability, the exact environment and ruleset settings,
+binding and attestation, repository immutability, exact environment and ruleset settings,
 administrator/ruleset no-bypass state, sole-maintainer identity, GitHub-hosted runner, npm OIDC
-subject, signed tag, immutable artifact IDs, and all candidate/platform/host-policy digests. It also
-rejects a missing or unattested host index; candidate, corpus, source, or tag mismatch; any deferred
-evidence row or Supported Host claim; altered generated support; or an approval that does not accept
-the zero-claim policy. The workflow uploads the sanitized controls, approval, signature,
-verification, tag evidence, and runner/OIDC identity before its first irreversible step. It then
-preserves candidate bytes, attaches all evidence, writes a publication manifest and release notes
-containing `supported_hosts: []`, attests every asset, publishes the exact npm tarballs and immutable
-GitHub Release, and verifies every public byte and trust record.
+subject, signed tag, immutable artifact IDs, all candidate/platform/host-policy digests, and npm
+bootstrap controls. It also rejects a missing or unattested host index; candidate, corpus, source,
+or tag mismatch; any deferred evidence row or Supported Host claim; altered generated support; or
+an approval that does not accept the zero-claim policy. It uploads the sanitized controls,
+approval, signature, verification, tag evidence, and runner/OIDC identity before publishing.
 
-The final report is retained as `breakdown-post-publication-inspection-<version>`. The release is
-not complete unless it has `status: "passed"` and confirms zero Supported Hosts.
+The bootstrap run publishes only absent exact 1.0.0 records in core/CLI/MCP order, with provenance,
+then verifies the public bytes and registry evidence. It attests and uploads the sanitized
+`breakdown-npm-first-package-bootstrap` report and stops. It cannot create or finalize a GitHub
+Release.
+
+Next, configure each package's sole trusted publisher as repository `alamorre/breakdown.sh`,
+workflow `local-stable-publication.yml`, environment `breakdown-local-stable`, and permission
+`createPackage`. Require publishing 2FA while disallowing token publication, revoke the bootstrap
+token, remove `NPM_FIRST_PACKAGE_TOKEN`, and capture sanitized evidence with
+`pnpm local:release:inspect-npm-trust`. Create and sign a fresh approval using
+`--npm-publication-mode finalize-bootstrap`, then dispatch the same protected workflow with mode
+`finalize-bootstrap`, the bootstrap artifact ID, and the encoded trust evidence.
+
+The finalization run authenticates the bootstrap attestation, confirms the environment secret is
+absent, validates exact trust and human transition attestations, and byte-compares all three public
+1.0.0 tarballs. It never invokes `npm publish`. It then attaches and attests the complete release
+evidence, finalizes the immutable GitHub Release, and retains
+`breakdown-post-publication-inspection-<version>`. The release is not complete unless that report
+has `status: "passed"` and confirms zero Supported Hosts.
+
+Every later version uses `--npm-publication-mode oidc-trusted-publishing`; the workflow refuses npm
+tokens and publishes through the exact trusted publisher only.
 
 ## Failure rule
 
-Before npm publication, an authorized human may inspect and discard a failed GitHub draft. Once any
-npm package or immutable GitHub Release is public, do not overwrite, unpublish, rebuild, reuse the
-version, or rerun blindly. Preserve all evidence, stop, assess the partial public state, and publish
-any correction under a new SemVer.
+Before npm publication, an authorized human may inspect and discard a failed GitHub draft. During
+the one-time bootstrap, no draft exists; an interrupted rerun is allowed only when already-public
+1.0.0 tarballs byte-match the same immutable candidate. Once any npm package or immutable GitHub
+Release is public, do not overwrite, unpublish, rebuild, reuse the version, or rerun blindly.
+Preserve all evidence, stop, assess the partial public state, and publish any correction under a new
+SemVer.

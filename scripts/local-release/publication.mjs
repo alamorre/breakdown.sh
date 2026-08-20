@@ -17,6 +17,7 @@ import {
   validateRetainedGithubReleaseControls,
   validateWorkflowIdentityEvidence,
 } from './release-controls.mjs';
+import { NPM_PUBLICATION_MODES, validateNpmPublicationControls } from './npm-publishing.mjs';
 
 const execFileAsync = promisify(execFile);
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -38,7 +39,7 @@ const DEFERRED_APPROVAL_STATEMENT =
 const QUALIFIED_APPROVAL_STATEMENT =
   'I approve publication of only the identified candidate bytes after reviewing and accepting the fully qualified passing host-support policy and its exact supported_hosts claims.';
 
-export const HUMAN_RELEASE_ATTESTATIONS = Object.freeze([
+const COMMON_HUMAN_RELEASE_ATTESTATIONS = Object.freeze([
   'legal_licensor_identity_confirmed',
   'publisher_identity_confirmed',
   'publication_authority_confirmed',
@@ -57,20 +58,54 @@ export const HUMAN_RELEASE_ATTESTATIONS = Object.freeze([
   'documentation_gate_passed',
   'traceability_gate_passed',
   'platform_gate_passed',
-  'zero_claim_deferred_host_policy_reviewed',
   'github_release_immutability_enabled',
   'tag_protection_enabled',
-  'npm_trusted_publishing_configured',
   'npm_provenance_enabled',
   'npm_registry_signatures_required',
 ]);
-export const QUALIFIED_HUMAN_RELEASE_ATTESTATIONS = Object.freeze(
-  HUMAN_RELEASE_ATTESTATIONS.map((name) =>
-    name === 'zero_claim_deferred_host_policy_reviewed'
+const NPM_MODE_ATTESTATIONS = Object.freeze({
+  'first-package-bootstrap': Object.freeze([
+    'npm_first_package_bootstrap_exception_approved',
+    'npm_bootstrap_credential_least_privilege_confirmed',
+  ]),
+  'finalize-bootstrap': Object.freeze([
+    'npm_first_package_bootstrap_evidence_reviewed',
+    'npm_trusted_publishing_configured',
+    'npm_token_publication_disabled',
+    'npm_bootstrap_credential_revoked',
+    'npm_bootstrap_github_secret_removed',
+  ]),
+  'oidc-trusted-publishing': Object.freeze([
+    'npm_trusted_publishing_configured',
+    'npm_token_publication_disabled',
+  ]),
+});
+
+/**
+ * @param {'first-package-bootstrap' | 'finalize-bootstrap' | 'oidc-trusted-publishing'} npmPublicationMode
+ * @param {boolean} qualified
+ * @returns {readonly string[]}
+ */
+function humanReleaseAttestations(npmPublicationMode, qualified = false) {
+  invariant(NPM_PUBLICATION_MODES.includes(npmPublicationMode), 'Unknown npm publication mode.');
+  return Object.freeze([
+    ...COMMON_HUMAN_RELEASE_ATTESTATIONS,
+    qualified
       ? 'qualified_host_support_policy_reviewed'
-      : name,
-  ),
+      : 'zero_claim_deferred_host_policy_reviewed',
+    ...NPM_MODE_ATTESTATIONS[npmPublicationMode],
+  ]);
+}
+
+export const HUMAN_RELEASE_ATTESTATIONS = humanReleaseAttestations('oidc-trusted-publishing');
+export const QUALIFIED_HUMAN_RELEASE_ATTESTATIONS = humanReleaseAttestations(
+  'oidc-trusted-publishing',
+  true,
 );
+export const BOOTSTRAP_HUMAN_RELEASE_ATTESTATIONS =
+  humanReleaseAttestations('first-package-bootstrap');
+export const FINALIZE_BOOTSTRAP_HUMAN_RELEASE_ATTESTATIONS =
+  humanReleaseAttestations('finalize-bootstrap');
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -297,6 +332,23 @@ async function readCandidate(candidateDirectory, { allowAdditionalFiles = false 
   };
 }
 
+function npmCandidateBinding(candidate) {
+  return {
+    release_version: candidate.releaseVersion,
+    candidate_digest: candidate.digest,
+    packages: candidate.manifest.packages.map((entry) => {
+      const artifact = candidate.manifest.artifacts.find(
+        (candidateArtifact) => candidateArtifact.file === entry.artifact,
+      );
+      invariant(
+        exactSha256(artifact?.hashes?.sha256),
+        `Candidate has no exact npm artifact digest for ${entry.name}.`,
+      );
+      return { ...entry, sha256: artifact.hashes.sha256 };
+    }),
+  };
+}
+
 function validateBoundEvidence(index, schemaVersion, label, candidate) {
   invariant(index.schema_version === schemaVersion, `${label} has the wrong schema.`);
   invariant(
@@ -358,16 +410,16 @@ function validateHostIndex(index, candidate) {
   );
 }
 
-function approvalRequirements(hostIndex) {
+function approvalRequirements(hostIndex, npmPublicationMode) {
   if (hostIndex.policy.state === 'deferred') {
     return {
-      attestations: HUMAN_RELEASE_ATTESTATIONS,
+      attestations: humanReleaseAttestations(npmPublicationMode),
       policy: DEFERRED_APPROVAL_POLICY,
       statement: DEFERRED_APPROVAL_STATEMENT,
     };
   }
   return {
-    attestations: QUALIFIED_HUMAN_RELEASE_ATTESTATIONS,
+    attestations: humanReleaseAttestations(npmPublicationMode, true),
     policy: {
       state: 'qualified',
       certification_issue: hostIndex.policy.certification_issue,
@@ -377,15 +429,16 @@ function approvalRequirements(hostIndex) {
   };
 }
 
-function validateApproval(approval, candidate, hostIndex) {
-  const requirements = approvalRequirements(hostIndex);
+function validateApproval(approval, candidate, hostIndex, npmPublicationMode) {
+  const requirements = approvalRequirements(hostIndex, npmPublicationMode);
   invariant(
     approval.schema_version === 'breakdown.human-release-approval.v1' &&
       approval.release_version === candidate.releaseVersion &&
       sameJson(approval.candidate_digest, candidate.digest) &&
       approval.source?.repository === candidate.provenance.source.repository &&
       approval.source?.git_commit === candidate.provenance.source.git_commit &&
-      approval.tag === candidate.tag,
+      approval.tag === candidate.tag &&
+      approval.npm_publication_mode === npmPublicationMode,
     'Human release approval is not bound to the exact candidate.',
   );
   invariant(
@@ -455,8 +508,13 @@ platform-index-artifact-id: ${platformIndexArtifactId}`;
   );
 }
 
-export async function writeHumanReleaseApprovalTemplate({ candidateDirectory, outputPath }) {
+export async function writeHumanReleaseApprovalTemplate({
+  candidateDirectory,
+  npmPublicationMode = 'oidc-trusted-publishing',
+  outputPath,
+}) {
   const candidate = await readCandidate(candidateDirectory);
+  const attestations = humanReleaseAttestations(npmPublicationMode);
   const template = {
     schema_version: 'breakdown.human-release-approval.v1',
     release_version: candidate.releaseVersion,
@@ -466,6 +524,7 @@ export async function writeHumanReleaseApprovalTemplate({ candidateDirectory, ou
       git_commit: candidate.provenance.source.git_commit,
     },
     tag: candidate.tag,
+    npm_publication_mode: npmPublicationMode,
     approver: {
       name: '',
       email: '',
@@ -473,7 +532,7 @@ export async function writeHumanReleaseApprovalTemplate({ candidateDirectory, ou
     },
     approved_at: '',
     host_support_policy: DEFERRED_APPROVAL_POLICY,
-    attestations: Object.fromEntries(HUMAN_RELEASE_ATTESTATIONS.map((name) => [name, false])),
+    attestations: Object.fromEntries(attestations.map((name) => [name, false])),
     statement: DEFERRED_APPROVAL_STATEMENT,
   };
   await writeFile(outputPath, `${JSON.stringify(template, null, 2)}\n`, {
@@ -505,7 +564,7 @@ async function artifactRecord(directory, file, role) {
   };
 }
 
-function releaseNotes(candidate, platformIndex, hostIndex) {
+function releaseNotes(candidate, platformIndex, hostIndex, npmControls) {
   const hostQualification =
     hostIndex.policy?.state === 'deferred'
       ? `- Supported Host certification is deferred for Breakdown Local 1.0.\n- \`supported_hosts: []\`\n- Capable unqualified Agent Hosts are Compatible, not Supported. Windows and surfaces without the mandatory capabilities are Unsupported.`
@@ -533,6 +592,16 @@ ${hostQualification}
 The attached publication manifest, evidence indexes, checksums, SBOM, provenance inputs, legal
 material, signed human approval, GitHub controls, and workflow identity are the complete release
 evidence.
+
+## npm publication identity
+
+${
+  npmControls.mode === 'finalize-bootstrap'
+    ? 'npm required a one-time credential to create the three first package records. The retained bootstrap evidence binds those publications to these exact tarballs and their GitHub provenance. Token publication is now disabled, the bootstrap credential has been revoked and removed from GitHub, and every subsequent version is authorized only through the recorded OIDC trusted publisher.'
+    : npmControls.mode === 'first-package-bootstrap'
+      ? 'This intermediate record authorizes only the first-package npm bootstrap. It cannot finalize a GitHub Release and requires the trust transition before release completion.'
+      : 'The three packages were published through the recorded GitHub Actions OIDC trusted publisher. No npm publication token was available to the workflow.'
+}
 `;
 }
 
@@ -552,6 +621,9 @@ export async function prepareLocalPublication({
   candidateDirectory,
   githubControlsPath,
   hostIndexPath,
+  npmBootstrapAttestationPath = /** @type {string | undefined} */ (undefined),
+  npmBootstrapReportPath = /** @type {string | undefined} */ (undefined),
+  npmControlsPath,
   outputDirectory,
   platformIndexPath,
   supportDirectory,
@@ -565,6 +637,28 @@ export async function prepareLocalPublication({
   const candidate = await readCandidate(candidateDirectory);
   const platformInput = await readJson(platformIndexPath, 'Platform evidence index');
   const hostInput = await readJson(hostIndexPath, 'Host evidence index');
+  const npmControlsInput = await readJson(npmControlsPath, 'npm publication controls');
+  let npmBootstrapReportInput;
+  if (npmControlsInput.value.mode === 'finalize-bootstrap') {
+    invariant(
+      npmBootstrapReportPath !== undefined && npmBootstrapAttestationPath !== undefined,
+      'Bootstrap finalization requires the exact report and attestation bundle.',
+    );
+    npmBootstrapReportInput = await readJson(
+      npmBootstrapReportPath,
+      'First-package bootstrap report',
+    );
+    await readRegularFile(npmBootstrapAttestationPath, 'First-package bootstrap attestation');
+    invariant(
+      sameJson(npmBootstrapReportInput.value, npmControlsInput.value.bootstrap_publication),
+      'First-package bootstrap report differs from the validated npm controls.',
+    );
+  } else {
+    invariant(
+      npmBootstrapReportPath === undefined && npmBootstrapAttestationPath === undefined,
+      'Non-finalization publication received bootstrap evidence assets.',
+    );
+  }
   const approvalInput = await readJson(approvalPath, 'Human release approval');
   const approvalSignatureBytes = await readRegularFile(
     approvalSignaturePath,
@@ -579,7 +673,8 @@ export async function prepareLocalPublication({
   const workflowIdentityInput = await readJson(workflowIdentityPath, 'Stable workflow identity');
   validatePlatformIndex(platformInput.value, candidate);
   validateHostIndex(hostInput.value, candidate);
-  validateApproval(approvalInput.value, candidate, hostInput.value);
+  validateNpmPublicationControls(npmControlsInput.value, npmCandidateBinding(candidate));
+  validateApproval(approvalInput.value, candidate, hostInput.value, npmControlsInput.value.mode);
   validateApprovalSignatureEvidence({
     approval: approvalInput.value,
     approvalBytes: approvalInput.bytes,
@@ -637,6 +732,9 @@ export async function prepareLocalPublication({
   const githubControlsFile = 'breakdown-github-release-controls.json';
   const tagFile = 'breakdown-signed-tag-evidence.json';
   const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+  const npmControlsFile = 'breakdown-npm-publication-controls.json';
+  const npmBootstrapReportFile = 'breakdown-npm-first-package-bootstrap.json';
+  const npmBootstrapAttestationFile = 'breakdown-npm-first-package-bootstrap.attestation.json';
   await copyNamedFile(platformIndexPath, outputDirectory, platformFile);
   await copyNamedFile(hostIndexPath, outputDirectory, hostFile);
   await copyNamedFile(approvalPath, outputDirectory, approvalFile);
@@ -645,13 +743,18 @@ export async function prepareLocalPublication({
   await copyNamedFile(githubControlsPath, outputDirectory, githubControlsFile);
   await copyNamedFile(tagEvidencePath, outputDirectory, tagFile);
   await copyNamedFile(workflowIdentityPath, outputDirectory, workflowIdentityFile);
+  await copyNamedFile(npmControlsPath, outputDirectory, npmControlsFile);
+  if (npmBootstrapReportInput !== undefined) {
+    await copyNamedFile(npmBootstrapReportPath, outputDirectory, npmBootstrapReportFile);
+    await copyNamedFile(npmBootstrapAttestationPath, outputDirectory, npmBootstrapAttestationFile);
+  }
   for (const file of supportFiles) {
     await copyNamedFile(join(supportDirectory, file), outputDirectory, file);
   }
   const notesFile = `breakdown-release-notes-${candidate.releaseVersion}.md`;
   await writeFile(
     join(outputDirectory, notesFile),
-    releaseNotes(candidate, platformInput.value, hostInput.value),
+    releaseNotes(candidate, platformInput.value, hostInput.value, npmControlsInput.value),
   );
 
   const roles = new Map([
@@ -669,8 +772,13 @@ export async function prepareLocalPublication({
     [githubControlsFile, 'github-release-controls'],
     [tagFile, 'signed-tag-evidence'],
     [workflowIdentityFile, 'stable-workflow-identity'],
+    [npmControlsFile, 'npm-publication-controls'],
     [notesFile, 'release-notes'],
   ]);
+  if (npmBootstrapReportInput !== undefined) {
+    roles.set(npmBootstrapReportFile, 'npm-first-package-bootstrap-report');
+    roles.set(npmBootstrapAttestationFile, 'npm-first-package-bootstrap-attestation');
+  }
   const payloadFiles = [...roles.keys()].sort();
   const artifacts = [];
   for (const file of payloadFiles) {
@@ -724,6 +832,10 @@ export async function prepareLocalPublication({
         file: workflowIdentityFile,
         sha256: sha256(workflowIdentityInput.bytes),
       },
+      npm_publication_controls: {
+        file: npmControlsFile,
+        sha256: sha256(npmControlsInput.bytes),
+      },
     },
     license_scope: candidate.manifest.license_scope,
     publication: {
@@ -736,7 +848,8 @@ export async function prepareLocalPublication({
       },
       npm: {
         dist_tag: 'latest',
-        authentication: 'OIDC trusted publishing',
+        mode: npmControlsInput.value.mode,
+        authentication: npmControlsInput.value.authentication.method,
         provenance: 'required',
         registry_signatures: 'required',
       },
@@ -841,6 +954,46 @@ export async function inspectLocalPublication({ publicationDirectory }) {
       sameJson(manifest.supported_hosts, hostIndex.supported_hosts),
     'Publication host support policy and claims do not match the authenticated index.',
   );
+  const npmControlsBytes = await readRegularFile(
+    join(publicationDirectory, manifest.evidence?.npm_publication_controls?.file),
+    'Publication npm controls',
+  );
+  invariant(
+    sha256(npmControlsBytes) === manifest.evidence.npm_publication_controls.sha256,
+    'Publication npm controls digest does not match its evidence binding.',
+  );
+  const npmControls = parseJson(npmControlsBytes, 'Publication npm controls');
+  validateNpmPublicationControls(npmControls, npmCandidateBinding(candidate));
+  const npmBootstrapReportFile = 'breakdown-npm-first-package-bootstrap.json';
+  const npmBootstrapAttestationFile = 'breakdown-npm-first-package-bootstrap.attestation.json';
+  if (npmControls.mode === 'finalize-bootstrap') {
+    invariant(
+      files.includes(npmBootstrapReportFile) && files.includes(npmBootstrapAttestationFile),
+      'Bootstrap finalization does not retain its report and attestation.',
+    );
+    invariant(
+      sameJson(
+        parseJson(
+          await readFile(join(publicationDirectory, npmBootstrapReportFile)),
+          'Publication first-package bootstrap report',
+        ),
+        npmControls.bootstrap_publication,
+      ),
+      'Retained first-package bootstrap report differs from the npm controls.',
+    );
+  } else {
+    invariant(
+      !files.includes(npmBootstrapReportFile) && !files.includes(npmBootstrapAttestationFile),
+      'Non-finalization publication contains bootstrap evidence assets.',
+    );
+  }
+  invariant(
+    manifest.publication?.npm?.mode === npmControls.mode &&
+      manifest.publication?.npm?.authentication === npmControls.authentication.method &&
+      manifest.publication?.npm?.provenance === 'required' &&
+      manifest.publication?.npm?.registry_signatures === 'required',
+    'Publication manifest misstates the npm authentication boundary.',
+  );
   const supportJsonFile = `breakdown-supported-hosts-${manifest.release_version}.json`;
   const supportMarkdownFile = `breakdown-supported-hosts-${manifest.release_version}.md`;
   invariant(
@@ -864,7 +1017,7 @@ export async function inspectLocalPublication({ publicationDirectory }) {
     'Publication human release approval',
   );
   const approval = parseJson(approvalBytes, 'Publication human release approval');
-  validateApproval(approval, candidate, hostIndex);
+  validateApproval(approval, candidate, hostIndex, npmControls.mode);
   const approvalSignatureBytes = await readRegularFile(
     join(publicationDirectory, manifest.evidence?.human_approval_signature?.file),
     'Publication human release approval signature',
@@ -1119,6 +1272,39 @@ export async function verifyPublishedLocalRelease({
     ],
     {},
   );
+  if (manifest.publication.npm.mode === 'finalize-bootstrap') {
+    const npmBootstrapReportFile = manifest.artifacts.find(
+      (artifact) => artifact.role === 'npm-first-package-bootstrap-report',
+    )?.file;
+    const npmBootstrapAttestationFile = manifest.artifacts.find(
+      (artifact) => artifact.role === 'npm-first-package-bootstrap-attestation',
+    )?.file;
+    invariant(
+      releaseFilePattern.test(npmBootstrapReportFile ?? '') &&
+        releaseFilePattern.test(npmBootstrapAttestationFile ?? ''),
+      'Publication has no retained first-package bootstrap attestation.',
+    );
+    await commandRunner(
+      'gh',
+      [
+        'attestation',
+        'verify',
+        join(releaseAssetsDirectory, npmBootstrapReportFile),
+        '--repo',
+        repository,
+        '--bundle',
+        join(releaseAssetsDirectory, npmBootstrapAttestationFile),
+        '--signer-workflow',
+        `${repository}/.github/workflows/local-stable-publication.yml`,
+        '--source-ref',
+        `refs/tags/${tag}`,
+        '--source-digest',
+        candidate.provenance.source.git_commit,
+        '--deny-self-hosted-runners',
+      ],
+      {},
+    );
+  }
   await commandRunner(
     'gh',
     ['release', 'verify', tag, '--repo', repository, '--format', 'json'],
