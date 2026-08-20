@@ -88,11 +88,63 @@ jobs:
       - name: Install only the locked release gate
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve immutable artifact source runs before downloading bytes
+        env:
+          AUTHORIZATION_ARTIFACT_ID: ${{ inputs.authorization_artifact_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CEREMONY_RUN_ID: ${{ inputs.ceremony_run_id }}
+          GH_TOKEN: ${{ github.token }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ inputs.host_support_artifact_id }}
+          NPM_BOOTSTRAP_ARTIFACT_ID: ${{ inputs.npm_bootstrap_artifact_id }}
+          NPM_TRUSTED_PUBLISHING_ARTIFACT_ID: ${{ inputs.npm_trusted_publishing_artifact_id }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve_artifact_run() {
+            local artifact_id="$1"
+            local expected_name="$2"
+            local name_match="${3:-exact}"
+            local metadata="${{ runner.temp }}/artifact-${artifact_id}.json"
+            [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" > "$metadata"
+            jq -e \
+              --arg id "$artifact_id" \
+              --arg name "$expected_name" \
+              --arg name_match "$name_match" \
+              --arg source_sha "$GITHUB_SHA" \
+              '(.id | tostring) == $id and (if $name_match == "prefix" then (.name | startswith($name)) else .name == $name end) and .expired == false and .workflow_run.head_sha == $source_sha' \
+              "$metadata" > /dev/null
+            jq -er '.workflow_run.id | tostring' "$metadata"
+          }
+
+          candidate_run_id="$(resolve_artifact_run "$CANDIDATE_ARTIFACT_ID" breakdown-local-candidate)"
+          platform_run_id="$(resolve_artifact_run "$PLATFORM_INDEX_ARTIFACT_ID" breakdown-platform-evidence-index)"
+          test "$candidate_run_id" = "$platform_run_id"
+          printf 'CANDIDATE_RUN_ID=%s\n' "$candidate_run_id" >> "$GITHUB_ENV"
+          printf 'PLATFORM_INDEX_RUN_ID=%s\n' "$platform_run_id" >> "$GITHUB_ENV"
+
+          host_run_id="$(resolve_artifact_run "$HOST_SUPPORT_ARTIFACT_ID" breakdown-host-support)"
+          authorization_run_id="$(resolve_artifact_run "$AUTHORIZATION_ARTIFACT_ID" "breakdown-release-authorization-${CEREMONY_RUN_ID}")"
+          test "$authorization_run_id" = "$CEREMONY_RUN_ID"
+          printf 'HOST_SUPPORT_RUN_ID=%s\n' "$host_run_id" >> "$GITHUB_ENV"
+          printf 'AUTHORIZATION_RUN_ID=%s\n' "$authorization_run_id" >> "$GITHUB_ENV"
+
+          if test '${{ inputs.npm_publication_mode }}' != first-package-bootstrap; then
+            trust_run_id="$(resolve_artifact_run "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID" breakdown-npm-trusted-publishing)"
+            printf 'NPM_TRUST_RUN_ID=%s\n' "$trust_run_id" >> "$GITHUB_ENV"
+          fi
+          if test '${{ inputs.npm_publication_mode }}' = finalize-bootstrap; then
+            bootstrap_run_id="$(resolve_artifact_run "$NPM_BOOTSTRAP_ARTIFACT_ID" breakdown-npm-first-package-bootstrap- prefix)"
+            printf 'NPM_BOOTSTRAP_RUN_ID=%s\n' "$bootstrap_run_id" >> "$GITHUB_ENV"
+          fi
+
       - name: Download the exact once-built candidate by artifact ID
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
           path: ${{ runner.temp }}/candidate
 
       - name: Download the passing platform index by artifact ID
@@ -100,6 +152,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.platform_index_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.PLATFORM_INDEX_RUN_ID }}
           path: ${{ runner.temp }}/platform-index
 
       - name: Download the authenticated host support set by artifact ID
@@ -107,6 +160,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.host_support_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.HOST_SUPPORT_RUN_ID }}
           path: ${{ runner.temp }}/host-support
 
       - name: Download the exact GitHub-authenticated release authorization
@@ -114,6 +168,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.authorization_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.AUTHORIZATION_RUN_ID }}
           path: ${{ runner.temp }}/authorization
 
       - name: Download the sanitized npm trusted-publisher inspection by artifact ID
@@ -122,6 +177,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.npm_trusted_publishing_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.NPM_TRUST_RUN_ID }}
           path: ${{ runner.temp }}/npm-trust
 
       - name: Download the authenticated first-package bootstrap evidence by artifact ID
@@ -130,6 +186,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.npm_bootstrap_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.NPM_BOOTSTRAP_RUN_ID }}
           path: ${{ runner.temp }}/npm-bootstrap
 
       - name: Resolve the one exact input of each kind

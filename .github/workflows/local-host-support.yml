@@ -44,11 +44,29 @@ jobs:
       - name: Install locked indexer dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve the candidate artifact source run
+        env:
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          metadata="${{ runner.temp }}/candidate-artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CANDIDATE_ARTIFACT_ID}" > "$metadata"
+          jq -e \
+            --arg id "$CANDIDATE_ARTIFACT_ID" \
+            --arg source_sha "$GITHUB_SHA" \
+            '(.id | tostring) == $id and .name == "breakdown-local-candidate" and .expired == false and .workflow_run.head_sha == $source_sha' \
+            "$metadata"
+          printf 'CANDIDATE_RUN_ID=%s\n' "$(jq -er '.workflow_run.id' "$metadata")" >> "$GITHUB_ENV"
+
       - name: Download the immutable candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
           path: ${{ runner.temp }}/breakdown-candidate
 
       - name: Require guided-host capture to remain disabled
