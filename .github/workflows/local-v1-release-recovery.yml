@@ -295,6 +295,7 @@ jobs:
             pnpm local:release:plan-v1-handoff \
               --runs "$1" \
               --publication-state "$2" \
+              --workflow-sha "$GITHUB_SHA" \
               --output "$3"
           }
 

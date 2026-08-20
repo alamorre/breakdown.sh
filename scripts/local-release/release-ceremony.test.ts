@@ -20,6 +20,7 @@ import {
 import { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
 
 const sourceSha = 'a'.repeat(40);
+const recoveryWorkflowSha = 'f'.repeat(40);
 const repositoryRoot = join(import.meta.dirname, '../..');
 
 function v1PublicationState(existingPackages: string[] = []) {
@@ -39,12 +40,12 @@ function v1StableRun(overrides: Record<string, unknown> = {}) {
   return {
     id,
     workflow_id: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowId,
-    display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.title,
+    display_title: `${V1_RELEASE_RECOVERY_POLICY.stablePublication.directTitlePrefix}${recoveryWorkflowSha}`,
     event: 'workflow_dispatch',
     status: 'in_progress',
     conclusion: null,
-    head_branch: V1_RELEASE_RECOVERY_POLICY.tag,
-    head_sha: V1_RELEASE_RECOVERY_POLICY.sourceSha,
+    head_branch: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowBranch,
+    head_sha: recoveryWorkflowSha,
     path: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowPath,
     actor: { login: 'github-actions[bot]' },
     triggering_actor: { login: 'github-actions[bot]' },
@@ -56,6 +57,10 @@ function v1StableRun(overrides: Record<string, unknown> = {}) {
 
 function v1WorkflowRuns(runs: unknown[]) {
   return [{ total_count: runs.length, workflow_runs: runs }];
+}
+
+function planV1Handoff(input: { publicationState: unknown; workflowRuns: unknown }) {
+  return planV1StablePublicationHandoff({ ...input, workflowSha: recoveryWorkflowSha });
 }
 
 function fixture() {
@@ -526,9 +531,9 @@ describe('automation signer and recovery', () => {
 });
 
 describe('v1 stable-publication recovery handoff', () => {
-  it('plans the one exact tag dispatch with every retained input', () => {
+  it('plans one exact reviewed-main dispatch targeting the retained tag', () => {
     expect(
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([]),
       }),
@@ -536,7 +541,7 @@ describe('v1 stable-publication recovery handoff', () => {
       schema_version: 'breakdown.v1-stable-publication-handoff.v1',
       action: 'dispatch',
       dispatch: {
-        ref: 'breakdown-local-v1.0.0',
+        ref: 'main',
         inputs: {
           authorization_artifact_id: '9415223409',
           candidate_artifact_id: '9413780200',
@@ -548,6 +553,8 @@ describe('v1 stable-publication recovery handoff', () => {
           npm_publication_mode: 'first-package-bootstrap',
           npm_trusted_publishing_artifact_id: '',
           platform_index_artifact_id: '9413912347',
+          recovery_tag: 'breakdown-local-v1.0.0',
+          recovery_workflow_sha: recoveryWorkflowSha,
         },
       },
     });
@@ -556,37 +563,40 @@ describe('v1 stable-publication recovery handoff', () => {
   it('idempotently resumes one exact direct or earlier deployment run', () => {
     const direct = v1StableRun();
     expect(
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([direct]),
       }),
     ).toMatchObject({ action: 'resume', run: { event: 'workflow_dispatch', id: '800' } });
 
     const deployment = v1StableRun({
+      display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle,
       event: 'deployment',
+      head_branch: V1_RELEASE_RECOVERY_POLICY.tag,
+      head_sha: V1_RELEASE_RECOVERY_POLICY.sourceSha,
       actor: { login: 'alamorre' },
       triggering_actor: { login: 'alamorre' },
     });
     expect(
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([deployment]),
       }),
     ).toMatchObject({ action: 'resume', run: { event: 'deployment', id: '800' } });
 
-    expect(
-      planV1StablePublicationHandoff({
+    expect(() =>
+      planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([
           { ...deployment, triggering_actor: { login: 'github-actions[bot]' }, run_attempt: 2 },
         ]),
       }),
-    ).toMatchObject({ action: 'resume', run: { event: 'deployment', run_attempt: 2 } });
+    ).toThrow('mismatched inputs, ref, commit, event, actor, or identity');
   });
 
   it('refuses duplicate correlated runs', () => {
     expect(() =>
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([v1StableRun(), v1StableRun({ id: 801 })]),
       }),
@@ -595,14 +605,14 @@ describe('v1 stable-publication recovery handoff', () => {
 
   it.each([
     ['inputs', { display_title: 'Breakdown Local stable publication for ceremony 999' }],
-    ['ref', { head_branch: 'main' }],
+    ['ref', { head_branch: V1_RELEASE_RECOVERY_POLICY.tag }],
     ['commit', { head_sha: '0'.repeat(40) }],
     ['actor', { actor: { login: 'alamorre' } }],
     ['triggering actor', { triggering_actor: { login: 'untrusted' } }],
     ['event', { event: 'push' }],
   ])('refuses a correlated run with mismatched %s', (_label, overrides) => {
     expect(() =>
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([v1StableRun(overrides)]),
       }),
@@ -611,19 +621,19 @@ describe('v1 stable-publication recovery handoff', () => {
 
   it('refuses unexpected publication state before dispatch and permits partial state on resume', () => {
     expect(() =>
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(['@breakdown-sh/core']),
         workflowRuns: v1WorkflowRuns([]),
       }),
     ).toThrow('npm package already exists');
     expect(() =>
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: { ...v1PublicationState(), github_release_exists: true },
         workflowRuns: v1WorkflowRuns([]),
       }),
     ).toThrow('GitHub Release already exists');
     expect(
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(['@breakdown-sh/core']),
         workflowRuns: v1WorkflowRuns([v1StableRun({ status: 'completed', conclusion: 'failure' })]),
       }),
@@ -633,13 +643,13 @@ describe('v1 stable-publication recovery handoff', () => {
   it('requires all exact npm package records after a successful bootstrap run', () => {
     const success = v1StableRun({ status: 'completed', conclusion: 'success' });
     expect(() =>
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState(['@breakdown-sh/core']),
         workflowRuns: v1WorkflowRuns([success]),
       }),
     ).toThrow('missing an expected public npm package');
     expect(
-      planV1StablePublicationHandoff({
+      planV1Handoff({
         publicationState: v1PublicationState([
           '@breakdown-sh/core',
           '@breakdown-sh/cli',

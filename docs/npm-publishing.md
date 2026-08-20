@@ -61,8 +61,12 @@ new ceremony or rerun its stale workflow snapshot. After separate authorization 
 the exact one-time recovery procedure in `scripts/local-release/README.md`. It validates the
 existing immutable tag and retained evidence, verifies the already-successful host-support run and
 artifact, then directly dispatches this same protected bootstrap workflow exactly once on the
-existing tag. It does not retag, rebuild, repeat host qualification, create a deployment, or make
-the npm credential available outside `breakdown-local-stable`.
+reviewed `main` commit while passing the existing tag as the independently verified publication
+target. The runbook documents the temporary one-policy environment switch needed because the tag
+contains the stale workflow snapshot: `breakdown-local-stable` admits exact `main` only during the
+authorized recovery, then returns to its sole `breakdown-local-v*` tag policy. It does not retag,
+rebuild, repeat host qualification, create a deployment, or make the npm credential available
+outside `breakdown-local-stable`.
 
 The workflow checks that every name is absent, or that an interrupted prior attempt already
 published the exact 1.0.0 candidate bytes. It refuses a claimed name whose 1.0.0 record is absent.

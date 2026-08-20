@@ -653,29 +653,49 @@ function validateRecoveryPublicationState(publicationState, action, policy) {
   }
 }
 
-function validateRecoveryStableRun(run, policy) {
+function recoveryStableDispatch(policy, workflowSha) {
+  invariant(exactSha1(workflowSha), 'Recovery workflow SHA is invalid.');
+  return {
+    ref: policy.stablePublication.dispatch.ref,
+    inputs: {
+      ...policy.stablePublication.dispatch.inputs,
+      recovery_workflow_sha: workflowSha,
+    },
+  };
+}
+
+function recoveryStableTitle(policy, workflowSha) {
+  invariant(exactSha1(workflowSha), 'Recovery workflow SHA is invalid.');
+  return `${policy.stablePublication.directTitlePrefix}${workflowSha}`;
+}
+
+function validateRecoveryStableRun(run, policy, workflowSha) {
   const stable = policy.stablePublication;
+  const directTitle = recoveryStableTitle(policy, workflowSha);
   const directActor =
     run?.event === 'workflow_dispatch' &&
     run?.actor?.login === 'github-actions[bot]' &&
-    ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(
-      run?.triggering_actor?.login,
-    );
+    run?.triggering_actor?.login === 'github-actions[bot]';
   const earlierDeploymentActor =
     run?.event === 'deployment' &&
     run?.actor?.login === RELEASE_CONTROL_POLICY.maintainer &&
-    [RELEASE_CONTROL_POLICY.maintainer, 'github-actions[bot]'].includes(
-      run?.triggering_actor?.login,
-    );
+    run?.triggering_actor?.login === RELEASE_CONTROL_POLICY.maintainer;
+  const directIdentity =
+    directActor &&
+    run?.display_title === directTitle &&
+    run?.head_branch === stable.workflowBranch &&
+    run?.head_sha === workflowSha;
+  const earlierDeploymentIdentity =
+    earlierDeploymentActor &&
+    run?.display_title === stable.legacyTitle &&
+    run?.head_branch === policy.tag &&
+    run?.head_sha === policy.sourceSha;
   invariant(
     Number.isSafeInteger(run?.id) &&
       run.id > 0 &&
       run?.workflow_id === stable.workflowId &&
       run?.path === stable.workflowPath &&
-      run?.display_title === stable.title &&
-      run?.head_branch === policy.tag &&
-      run?.head_sha === policy.sourceSha &&
-      (directActor || earlierDeploymentActor) &&
+      (directIdentity || earlierDeploymentIdentity) &&
       ['queued', 'in_progress', 'completed', 'pending', 'requested', 'waiting'].includes(
         run?.status,
       ) &&
@@ -699,16 +719,23 @@ function validateRecoveryStableRun(run, policy) {
 }
 
 export function planV1StablePublicationHandoff(
-  { publicationState, workflowRuns },
+  { publicationState, workflowRuns, workflowSha },
   policy = V1_RELEASE_RECOVERY_POLICY,
 ) {
   const stable = policy.stablePublication;
+  const directTitle = recoveryStableTitle(policy, workflowSha);
   const runs = recoveryWorkflowRuns(workflowRuns);
   const candidates = runs.filter(
     (run) =>
-      run?.display_title === stable.title ||
-      run?.head_branch === policy.tag ||
-      (run?.path === stable.workflowPath && run?.head_sha === policy.sourceSha),
+      run?.display_title === directTitle ||
+      run?.display_title === stable.legacyTitle ||
+      (run?.path === stable.workflowPath &&
+        run?.event === 'workflow_dispatch' &&
+        run?.head_branch === stable.workflowBranch) ||
+      (run?.path === stable.workflowPath &&
+        run?.event === 'deployment' &&
+        run?.head_branch === policy.tag &&
+        run?.head_sha === policy.sourceSha),
   );
   invariant(
     candidates.length <= 1,
@@ -720,14 +747,11 @@ export function planV1StablePublicationHandoff(
     return {
       schema_version: 'breakdown.v1-stable-publication-handoff.v1',
       action,
-      dispatch: {
-        ref: stable.dispatch.ref,
-        inputs: { ...stable.dispatch.inputs },
-      },
+      dispatch: recoveryStableDispatch(policy, workflowSha),
     };
   }
   const [run] = candidates;
-  validateRecoveryStableRun(run, policy);
+  validateRecoveryStableRun(run, policy, workflowSha);
   const packageStates = stable.npmPackages.map((name) => publicationState.npm_packages[name]);
   if (run.status === 'completed' && run.conclusion === 'success') {
     invariant(

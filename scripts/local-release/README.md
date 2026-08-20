@@ -202,6 +202,15 @@ for this recovery. See GitHub's documentation for
 and the
 [workflow dispatch endpoint](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event).
 
+The immutable release tag contains the stale workflow snapshot whose commit-style Gitsign command
+failed issue #200. A `workflow_dispatch` whose `ref` is that tag would execute the same stale
+snapshot. Recovery therefore dispatches the reviewed stable workflow on the exact `main` commit
+that is running recovery and passes `breakdown-local-v1.0.0` separately as the immutable release
+target. The stable workflow requires its `recovery_workflow_sha` input to equal both `GITHUB_SHA`
+and `github.workflow_sha`, then independently resolves the signed tag object and exact candidate
+commit. Its correlated run name is emitted only when every retained input and destructive
+confirmation is exact, so the durable run record proves the inputs before any resume or rerun.
+
 Only after separate explicit authorization under issue #190, run the recovery workflow on `main`,
 approve its `breakdown-local-authorization` deployment, and enter exactly:
 
@@ -209,18 +218,29 @@ approve its `breakdown-local-authorization` deployment, and enter exactly:
 CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING
 ```
 
+Immediately before that authorized dispatch, change the sole custom deployment policy on
+`breakdown-local-stable` from tag pattern `breakdown-local-v*` to the exact branch `main`. Do not
+add a second simultaneous policy, enable administrator bypass, move the npm secret, or change any
+other protection. The publication control gate accepts this branch-only boundary solely for the
+v1 recovery mode and exact v1.0.0 tag; ordinary publication still requires the tag-only policy.
+After the child run succeeds, restore the sole `breakdown-local-v*` tag policy and remove the
+temporary `main` branch policy. If recovery is abandoned or paused before a later authorized
+rerun, restore the tag-only policy while it is inactive.
+
 The workflow verifies successful host-support run `32406103756` and its exact retained artifact
 `9420331832`; it never dispatches or repeats host qualification. It then lists stable-publication
 runs across both the earlier deployment path and direct dispatches. One exact existing run is
 resumed under its original run ID. With none, recovery first requires the GitHub Release and all
 three npm package names to remain absent, then sends exactly one authenticated workflow dispatch
-of `local-stable-publication.yml` at `breakdown-local-v1.0.0` with the exact retained artifact IDs,
-ceremony ID, first-package mode, and destructive confirmation.
+of the reviewed `local-stable-publication.yml` on the same exact `main` commit, targeting
+`breakdown-local-v1.0.0` with the exact retained artifact IDs, ceremony ID, first-package mode, and
+destructive confirmation.
 
 The dispatch response supplies the child run ID and URL immediately. Recovery surfaces that URL
-while the existing `breakdown-local-stable` environment approval is pending and on every child
-failure; it never performs a blind dispatch retry. A recovery rerun rescans all workflow events and
-resumes that same exact run. Mismatched titles/inputs, refs, commits, actors, run identity,
+while the protected child job is queued or running and on every child failure; it never performs a
+blind dispatch retry. A recovery rerun rescans all workflow events and
+resumes that same exact run. The input-gated correlated title plus exact workflow SHA make the
+otherwise-unavailable dispatch inputs durable. Mismatched titles/inputs, refs, commits, actors, run identity,
 unexpected public state, or duplicate correlated runs fail closed. Historical deployment
 `6008739973` is left untouched and does not block the direct handoff. The stable workflow keeps
 `NPM_FIRST_PACKAGE_TOKEN` exclusively inside `breakdown-local-stable`; the recovery workflow

@@ -430,6 +430,7 @@ async function publicationFixture() {
   await writeJson(githubControlsPath, {
     schema_version: 'breakdown.github-release-controls.v1',
     captured_at: '2026-07-29T20:02:00.000Z',
+    execution_mode: 'tag',
     phase: 'publication',
     repository: {
       full_name: 'alamorre/breakdown.sh',
@@ -1448,6 +1449,7 @@ describe('stable publication workflow', () => {
       'artifact-ids: 9413912347',
       'pnpm local:release:verify-v1-recovery',
       'pnpm local:release:plan-v1-handoff',
+      '--workflow-sha "$GITHUB_SHA"',
       '"${{ runner.temp }}/gitsign" verify-tag',
       'actions/workflows/323419480/dispatches',
       "--header 'X-GitHub-Api-Version: 2026-03-10'",
@@ -1478,5 +1480,12 @@ describe('stable publication workflow', () => {
     );
     expect(stableWorkflow).toContain('environment: breakdown-local-stable');
     expect(stableWorkflow).toContain('secrets.NPM_FIRST_PACKAGE_TOKEN');
+    expect(stableWorkflow).toContain("github.ref == 'refs/heads/main'");
+    expect(stableWorkflow).toContain("inputs.recovery_tag == 'breakdown-local-v1.0.0'");
+    expect(stableWorkflow).toContain('test "$RECOVERY_WORKFLOW_SHA_INPUT" = "$GITHUB_SHA"');
+    expect(stableWorkflow).toContain('--execution-mode "$RELEASE_EXECUTION_MODE"');
+    expect(stableWorkflow).toContain(
+      "format('Breakdown Local v1.0.0 recovery handoff for workflow {0}', inputs.recovery_workflow_sha)",
+    );
   });
 });

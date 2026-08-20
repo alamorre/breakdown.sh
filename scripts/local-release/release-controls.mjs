@@ -19,6 +19,7 @@ export const RELEASE_CONTROL_POLICY = Object.freeze({
   authorizationEnvironmentId: 20224502339,
   authorizationReviewerId: 15023107,
   authorizationBranch: 'main',
+  recoveryWorkflowBranch: 'main',
   deploymentTagPattern: 'breakdown-local-v*',
   deploymentTagRefPattern: 'refs/tags/breakdown-local-v*',
   rulesetId: 20015652,
@@ -95,6 +96,60 @@ function sanitizeEnvironment(environment) {
   };
 }
 
+function exactDeploymentPolicies(deploymentPolicies, expected) {
+  const policies = deploymentPolicies?.branch_policies ?? [];
+  return (
+    deploymentPolicies?.total_count === expected.length &&
+    policies.length === expected.length &&
+    sameJson(
+      policies
+        .map((policy) => ({ name: policy.name, type: policy.type }))
+        .sort((left, right) =>
+          `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`),
+        ),
+      [...expected].sort((left, right) =>
+        `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`),
+      ),
+    )
+  );
+}
+
+function exactStableEnvironmentBoundary({
+  deploymentPolicies,
+  environment,
+  executionMode,
+  phase,
+  tag,
+}) {
+  const rules = environment?.protection_rules ?? [];
+  const common = sameJson(environment?.deployment_branch_policy, {
+    protected_branches: false,
+    custom_branch_policies: true,
+  });
+  const tagPolicyBoundary =
+    sameJson(
+      rules.map((rule) => rule.type),
+      ['branch_policy'],
+    ) &&
+    exactDeploymentPolicies(deploymentPolicies, [
+      { name: RELEASE_CONTROL_POLICY.deploymentTagPattern, type: 'tag' },
+    ]);
+  const tagBoundary = executionMode === 'tag' && tagPolicyBoundary;
+  const v1RecoveryBoundary =
+    executionMode === 'v1-recovery' &&
+    phase === 'publication' &&
+    tag === V1_RELEASE_RECOVERY_POLICY.tag &&
+    (tagPolicyBoundary ||
+      (sameJson(
+        rules.map((rule) => rule.type),
+        ['branch_policy'],
+      ) &&
+        exactDeploymentPolicies(deploymentPolicies, [
+          { name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
+        ])));
+  return common && (tagBoundary || v1RecoveryBoundary);
+}
+
 function sanitizeRuleset(ruleset) {
   return {
     id: ruleset.id,
@@ -114,6 +169,7 @@ export function validateGithubReleaseControls({
   collaborators,
   deploymentPolicies,
   environment,
+  executionMode = 'tag',
   immutableReleases,
   phase,
   releases,
@@ -134,25 +190,8 @@ export function validateGithubReleaseControls({
     'Stable publication environment still permits administrator bypass.',
   );
   invariant(
-    sameJson(
-      (environment.protection_rules ?? []).map((rule) => rule.type),
-      ['branch_policy'],
-    ),
-    'Stable publication environment has missing or unexpected protection rules.',
-  );
-  invariant(
-    sameJson(environment.deployment_branch_policy, {
-      protected_branches: false,
-      custom_branch_policies: true,
-    }),
-    'Stable publication environment does not require custom deployment policies.',
-  );
-  invariant(
-    deploymentPolicies?.total_count === 1 &&
-      deploymentPolicies.branch_policies?.length === 1 &&
-      deploymentPolicies.branch_policies[0]?.name === RELEASE_CONTROL_POLICY.deploymentTagPattern &&
-      deploymentPolicies.branch_policies[0]?.type === 'tag',
-    'Stable publication environment does not admit exactly the protected release-tag pattern.',
+    exactStableEnvironmentBoundary({ deploymentPolicies, environment, executionMode, phase, tag }),
+    'Stable publication environment does not match the exact tag or one-time v1 recovery boundary.',
   );
   invariant(
     authorizationEnvironment?.id === RELEASE_CONTROL_POLICY.authorizationEnvironmentId &&
@@ -251,6 +290,7 @@ export function validateGithubReleaseControls({
 export async function inspectGithubReleaseControls({
   capturedAt = new Date(),
   commandRunner = defaultCommandRunner,
+  executionMode = 'tag',
   outputPath,
   phase,
   repository = RELEASE_CONTROL_POLICY.repository,
@@ -258,6 +298,10 @@ export async function inspectGithubReleaseControls({
 }) {
   invariant(repository === RELEASE_CONTROL_POLICY.repository, 'Wrong repository.');
   invariant(phase === 'pre-tag' || phase === 'publication', 'Unknown release-control phase.');
+  invariant(
+    executionMode === 'tag' || executionMode === 'v1-recovery',
+    'Unknown release-control execution mode.',
+  );
   invariant(stableTag(tag), 'Wrong phase tag.');
   const environmentName = encodeURIComponent(RELEASE_CONTROL_POLICY.environment);
   const authorizationEnvironmentName = encodeURIComponent(
@@ -320,6 +364,7 @@ export async function inspectGithubReleaseControls({
     collaborators,
     deploymentPolicies,
     environment,
+    executionMode,
     immutableReleases,
     phase,
     releases,
@@ -331,6 +376,7 @@ export async function inspectGithubReleaseControls({
   const snapshot = {
     schema_version: 'breakdown.github-release-controls.v1',
     captured_at: capturedAt.toISOString(),
+    execution_mode: executionMode,
     phase,
     repository: {
       full_name: repositorySnapshot.full_name,
@@ -405,8 +451,19 @@ export async function inspectGithubReleaseControls({
 }
 
 export function validateRetainedGithubReleaseControls(snapshot, { repository, tag }) {
+  const stableEnvironmentBoundary = exactStableEnvironmentBoundary({
+    deploymentPolicies: {
+      total_count: snapshot?.deployment_branch_policies?.length,
+      branch_policies: snapshot?.deployment_branch_policies,
+    },
+    environment: snapshot?.environment,
+    executionMode: snapshot?.execution_mode,
+    phase: snapshot?.phase,
+    tag,
+  });
   invariant(
     snapshot?.schema_version === 'breakdown.github-release-controls.v1' &&
+      ['tag', 'v1-recovery'].includes(snapshot?.execution_mode) &&
       snapshot?.phase === 'publication' &&
       snapshot?.repository?.full_name === RELEASE_CONTROL_POLICY.repository &&
       snapshot?.repository?.html_url === repository &&
@@ -417,18 +474,7 @@ export function validateRetainedGithubReleaseControls(snapshot, { repository, ta
       snapshot?.environment?.id === RELEASE_CONTROL_POLICY.environmentId &&
       snapshot?.environment?.name === RELEASE_CONTROL_POLICY.environment &&
       snapshot?.environment?.can_admins_bypass === false &&
-      sameJson(
-        snapshot?.environment?.protection_rules?.map((rule) => rule.type),
-        ['branch_policy'],
-      ) &&
-      sameJson(snapshot?.environment?.deployment_branch_policy, {
-        protected_branches: false,
-        custom_branch_policies: true,
-      }) &&
-      snapshot?.deployment_branch_policies?.length === 1 &&
-      snapshot.deployment_branch_policies[0]?.name ===
-        RELEASE_CONTROL_POLICY.deploymentTagPattern &&
-      snapshot.deployment_branch_policies[0]?.type === 'tag' &&
+      stableEnvironmentBoundary &&
       snapshot?.authorization_environment?.id ===
         RELEASE_CONTROL_POLICY.authorizationEnvironmentId &&
       snapshot?.authorization_environment?.name ===
@@ -680,8 +726,24 @@ export function validateWorkflowIdentityEvidence(
     evidence?.execution?.workflow_ref === `${workflowPath}@${tagRef}` &&
     evidence?.execution?.workflow_sha === candidate.provenance.source.git_commit &&
     evidence?.actor === 'github-actions[bot]' &&
-    ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(evidence?.triggering_actor);
-  const recoveryExecution =
+    ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(
+      evidence?.triggering_actor,
+    ) &&
+    evidence?.oidc?.ref === tagRef &&
+    evidence?.oidc?.sha === candidate.provenance.source.git_commit;
+  const directRecoveryExecution =
+    candidate.tag === V1_RELEASE_RECOVERY_POLICY.tag &&
+    candidate.provenance.source.git_commit === V1_RELEASE_RECOVERY_POLICY.sourceSha &&
+    evidence?.execution?.mode === 'v1-recovery' &&
+    evidence?.execution?.ref === 'refs/heads/main' &&
+    exactSha1(evidence?.execution?.source_commit) &&
+    evidence?.execution?.source_commit === evidence?.execution?.workflow_sha &&
+    evidence?.execution?.workflow_ref === `${workflowPath}@refs/heads/main` &&
+    evidence?.actor === 'github-actions[bot]' &&
+    evidence?.triggering_actor === 'github-actions[bot]' &&
+    evidence?.oidc?.ref === 'refs/heads/main' &&
+    evidence?.oidc?.sha === evidence?.execution?.workflow_sha;
+  const legacyRecoveryExecution =
     candidate.tag === V1_RELEASE_RECOVERY_POLICY.tag &&
     candidate.provenance.source.git_commit === V1_RELEASE_RECOVERY_POLICY.sourceSha &&
     evidence?.execution?.mode === 'v1-recovery' &&
@@ -690,21 +752,21 @@ export function validateWorkflowIdentityEvidence(
     evidence?.execution?.workflow_ref === `${workflowPath}@refs/heads/main` &&
     exactSha1(evidence?.execution?.workflow_sha) &&
     evidence?.actor === RELEASE_CONTROL_POLICY.maintainer &&
-    [RELEASE_CONTROL_POLICY.maintainer, 'github-actions[bot]'].includes(evidence?.triggering_actor);
+    evidence?.triggering_actor === RELEASE_CONTROL_POLICY.maintainer &&
+    evidence?.oidc?.ref === tagRef &&
+    evidence?.oidc?.sha === candidate.provenance.source.git_commit;
   invariant(
     evidence?.schema_version === 'breakdown.stable-workflow-identity.v1' &&
       evidence?.repository === RELEASE_CONTROL_POLICY.repository &&
       evidence?.ref === tagRef &&
       evidence?.ref_name === candidate.tag &&
       evidence?.source_commit === candidate.provenance.source.git_commit &&
-      (tagExecution || recoveryExecution) &&
+      (tagExecution || directRecoveryExecution || legacyRecoveryExecution) &&
       evidence?.environment === RELEASE_CONTROL_POLICY.environment &&
       evidence?.runner_environment === 'github-hosted' &&
       evidence?.oidc?.subject ===
         `repo:${RELEASE_CONTROL_POLICY.repository}:environment:${RELEASE_CONTROL_POLICY.environment}` &&
       evidence?.oidc?.audience === RELEASE_CONTROL_POLICY.oidcAudience &&
-      evidence?.oidc?.ref === tagRef &&
-      evidence?.oidc?.sha === candidate.provenance.source.git_commit &&
       evidence?.oidc?.job_workflow_ref === evidence.execution.workflow_ref &&
       evidence?.artifact_ids?.candidate === candidateArtifactId &&
       evidence?.artifact_ids?.platform_index === platformIndexArtifactId &&

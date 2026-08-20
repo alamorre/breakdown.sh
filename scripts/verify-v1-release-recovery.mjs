@@ -25,10 +25,11 @@ async function readJson(argv, name, usage) {
 export async function main(argv = process.argv) {
   if (argv.includes('--plan-handoff')) {
     const usage =
-      'Usage: verify-v1-release-recovery.mjs --plan-handoff --runs PATH --publication-state PATH --output PATH';
+      'Usage: verify-v1-release-recovery.mjs --plan-handoff --runs PATH --publication-state PATH --workflow-sha SHA --output PATH';
     const plan = planV1StablePublicationHandoff({
       publicationState: await readJson(argv, '--publication-state', usage),
       workflowRuns: await readJson(argv, '--runs', usage),
+      workflowSha: requiredArgumentValue(argv, '--workflow-sha', usage),
     });
     const outputPath = resolve(requiredArgumentValue(argv, '--output', usage));
     await writeFile(outputPath, `${JSON.stringify(plan, null, 2)}\n`, {
