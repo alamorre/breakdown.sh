@@ -338,6 +338,8 @@ function npmCandidateBinding(candidate) {
   return {
     release_version: candidate.releaseVersion,
     candidate_digest: candidate.digest,
+    source_commit: candidate.provenance.source.git_commit,
+    tag: candidate.tag,
     packages: candidate.manifest.packages.map((entry) => {
       const artifact = candidate.manifest.artifacts.find(
         (candidateArtifact) => candidateArtifact.file === entry.artifact,
@@ -1258,6 +1260,10 @@ export async function verifyPublishedLocalRelease({
         releaseFilePattern.test(npmBootstrapAttestationFile ?? ''),
       'Publication has no retained first-package bootstrap attestation.',
     );
+    const npmBootstrapReport = parseJson(
+      await readFile(join(releaseAssetsDirectory, npmBootstrapReportFile)),
+      'Retained first-package bootstrap report',
+    );
     await commandRunner(
       'gh',
       [
@@ -1271,9 +1277,9 @@ export async function verifyPublishedLocalRelease({
         '--signer-workflow',
         `${repository}/.github/workflows/local-stable-publication.yml`,
         '--source-ref',
-        `refs/tags/${tag}`,
+        npmBootstrapReport.execution.ref,
         '--source-digest',
-        candidate.provenance.source.git_commit,
+        npmBootstrapReport.execution.source_commit,
         '--deny-self-hosted-runners',
       ],
       {},

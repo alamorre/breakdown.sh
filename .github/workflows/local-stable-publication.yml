@@ -230,6 +230,7 @@ jobs:
             local artifact_id="$1"
             local expected_name="$2"
             local name_match="${3:-exact}"
+            local source_match="${4:-release}"
             local metadata="${{ runner.temp }}/artifact-${artifact_id}.json"
             [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" > "$metadata"
@@ -238,7 +239,17 @@ jobs:
               --arg name "$expected_name" \
               --arg name_match "$name_match" \
               --arg source_sha "$RELEASE_SHA" \
-              '(.id | tostring) == $id and (if $name_match == "prefix" then (.name | startswith($name)) else .name == $name end) and .expired == false and .workflow_run.head_sha == $source_sha' \
+              --arg source_match "$source_match" \
+              '(.id | tostring) == $id and
+               (if $name_match == "prefix" then (.name | startswith($name)) else .name == $name end) and
+               .expired == false and
+               (if $source_match == "v1-bootstrap" then
+                  (.workflow_run.head_sha == $source_sha or
+                   (.workflow_run.head_branch == "main" and
+                    (.workflow_run.head_sha | test("^[0-9a-f]{40}$"))))
+                else
+                  .workflow_run.head_sha == $source_sha
+                end)' \
               "$metadata" > /dev/null
             jq -er '.workflow_run.id | tostring' "$metadata"
           }
@@ -260,7 +271,26 @@ jobs:
             printf 'NPM_TRUST_RUN_ID=%s\n' "$trust_run_id" >> "$GITHUB_ENV"
           fi
           if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' = finalize-bootstrap; then
-            bootstrap_run_id="$(resolve_artifact_run "$NPM_BOOTSTRAP_ARTIFACT_ID" breakdown-npm-first-package-bootstrap- prefix)"
+            bootstrap_run_id="$(resolve_artifact_run "$NPM_BOOTSTRAP_ARTIFACT_ID" breakdown-npm-first-package-bootstrap- prefix v1-bootstrap)"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${bootstrap_run_id}" > "${{ runner.temp }}/bootstrap-run.json"
+            jq -e \
+              --arg bootstrap_run_id "$bootstrap_run_id" \
+              --arg release_sha "$RELEASE_SHA" \
+              '(.id | tostring) == $bootstrap_run_id and
+               .workflow_id == 323419480 and
+               .path == ".github/workflows/local-stable-publication.yml" and
+               .event == "workflow_dispatch" and
+               .actor.login == "github-actions[bot]" and
+               .triggering_actor.login == "github-actions[bot]" and
+               .status == "completed" and
+               .conclusion == "success" and
+               ((.head_branch == "breakdown-local-v1.0.0" and
+                 .head_sha == $release_sha and
+                 .display_title == "Breakdown Local stable publication for ceremony 32391936576") or
+                (.head_branch == "main" and
+                 (.head_sha | test("^[0-9a-f]{40}$")) and
+                 .display_title == ("Breakdown Local v1.0.0 recovery handoff for workflow " + .head_sha)))' \
+              "${{ runner.temp }}/bootstrap-run.json" > /dev/null
             printf 'NPM_BOOTSTRAP_RUN_ID=%s\n' "$bootstrap_run_id" >> "$GITHUB_ENV"
           fi
 
@@ -689,12 +719,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          jq -e \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            '(.publication_target == {signed_tag: "breakdown-local-v1.0.0", source_commit: $release_sha}) and
+             ((.execution.mode == "tag" and
+               .execution.ref == $release_ref and
+               .execution.source_commit == $release_sha and
+               .execution.workflow_ref == "alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0" and
+               .execution.workflow_sha == $release_sha) or
+              (.execution.mode == "v1-recovery" and
+               .execution.ref == "refs/heads/main" and
+               (.execution.source_commit | test("^[0-9a-f]{40}$")) and
+               .execution.workflow_ref == "alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main" and
+               .execution.workflow_sha == .execution.source_commit))' \
+            "$DOWNLOADED_NPM_BOOTSTRAP_REPORT"
+          bootstrap_source_ref="$(jq -er '.execution.ref' "$DOWNLOADED_NPM_BOOTSTRAP_REPORT")"
+          bootstrap_source_sha="$(jq -er '.execution.source_commit' "$DOWNLOADED_NPM_BOOTSTRAP_REPORT")"
           gh attestation verify "$DOWNLOADED_NPM_BOOTSTRAP_REPORT" \
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-stable-publication.yml" \
-            --source-ref "$RELEASE_REF" \
-            --source-digest "$RELEASE_SHA" \
+            --source-ref "$bootstrap_source_ref" \
+            --source-digest "$bootstrap_source_sha" \
             --deny-self-hosted-runners
 
       - name: Require removal of the one-time GitHub bootstrap secret

@@ -145,10 +145,14 @@ artifact IDs, and keyless signer match the exact plan. The new GitHub review aut
 finalization mode. Do not create or move a second tag.
 
 The workflow verifies the bootstrap artifact's Sigstore attestation against the exact repository,
-workflow, tag, and commit; rejects the still-present bootstrap environment secret; validates the
-fresh human attestations that token publication is disabled and the credential is revoked; and
-byte-compares every public npm tarball with the qualified candidate. Only then can it create and
-finalize the immutable GitHub Release. This run performs no `npm publish` command.
+workflow, and immutable execution ref and commit recorded in the candidate-bound bootstrap report.
+For ordinary tag execution those are the signed tag and candidate commit. The one-time v1 recovery
+records the reviewed `main` workflow commit that actually performed the bootstrap while separately
+binding the same report to the immutable signed tag and candidate commit. The workflow also rejects
+the still-present bootstrap environment secret, validates the fresh human attestations that token
+publication is disabled and the credential is revoked, and byte-compares every public npm tarball
+with the qualified candidate. Only then can it create and finalize the immutable GitHub Release.
+This run performs no `npm publish` command.
 
 The GitHub control-read credential used by this gate needs read-only Environments permission in
 addition to the permissions listed in the stable release runbook. The environment-secrets API

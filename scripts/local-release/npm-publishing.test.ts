@@ -15,6 +15,7 @@ import {
 } from './npm-publishing.mjs';
 
 const temporaryDirectories: string[] = [];
+const candidateSourceCommit = '723e296c5a0ab5431a02022830adff8bcf0dd818';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'breakdown-npm-publishing-'));
@@ -34,6 +35,10 @@ async function fixture() {
     `${JSON.stringify({
       schema_version: 'breakdown.release-manifest.v1',
       release_version: '1.0.0',
+      source: {
+        repository: 'https://github.com/alamorre/breakdown.sh',
+        git_commit: candidateSourceCommit,
+      },
       packages,
       platform_conformance: {
         current_build: {
@@ -199,6 +204,18 @@ describe('one-time npm publication', () => {
       repository: 'alamorre/breakdown.sh',
       workflow: 'local-stable-publication.yml',
       environment: 'breakdown-local-stable',
+      publication_target: {
+        signed_tag: 'breakdown-local-v1.0.0',
+        source_commit: candidateSourceCommit,
+      },
+      execution: {
+        mode: 'v1-recovery',
+        ref: 'refs/heads/main',
+        source_commit: 'b'.repeat(40),
+        workflow_ref:
+          'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main',
+        workflow_sha: 'b'.repeat(40),
+      },
       packages: bootstrapControls.packages.map(({ name, version, artifact, sha256 }) => ({
         name,
         version,
@@ -281,14 +298,35 @@ describe('one-time npm publication', () => {
     const controlsFile = 'breakdown-npm-publication-controls.json';
     await writeFile(join(candidateDirectory, controlsFile), `${JSON.stringify(controls)}\n`);
     const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+    await writeFile(
+      join(candidateDirectory, workflowIdentityFile),
+      `${JSON.stringify({
+        execution: {
+          mode: 'tag',
+          ref: 'refs/tags/breakdown-local-v1.0.0',
+          source_commit: candidateSourceCommit,
+          workflow_ref:
+            'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+          workflow_sha: candidateSourceCommit,
+        },
+      })}\n`,
+    );
     await writeFile(
       join(candidateDirectory, manifestFile),
       `${JSON.stringify({
         schema_version: 'breakdown.publication-manifest.v1',
         release_version: '1.0.0',
+        source: {
+          signed_tag: 'breakdown-local-v1.0.0',
+          git_commit: candidateSourceCommit,
+        },
         packages,
         candidate: { digest: { algorithm: 'SHA-256', content: 'a'.repeat(64) } },
-        evidence: { npm_publication_controls: { file: controlsFile } },
+        evidence: {
+          npm_publication_controls: { file: controlsFile },
+          stable_workflow_identity: { file: workflowIdentityFile },
+        },
       })}\n`,
     );
     const published: string[] = [];
@@ -326,6 +364,18 @@ describe('one-time npm publication', () => {
       authentication: 'one-time-granular-access-token',
       credential_value_retained: false,
       provenance: 'passed',
+      publication_target: {
+        signed_tag: 'breakdown-local-v1.0.0',
+        source_commit: candidateSourceCommit,
+      },
+      execution: {
+        mode: 'tag',
+        ref: 'refs/tags/breakdown-local-v1.0.0',
+        source_commit: candidateSourceCommit,
+        workflow_ref:
+          'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+        workflow_sha: candidateSourceCommit,
+      },
       packages: packages.map((entry) => ({ name: entry.name, version: '1.0.0' })),
     });
     expect(root).toContain('breakdown-npm-publishing-');

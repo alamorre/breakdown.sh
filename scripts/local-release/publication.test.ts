@@ -834,6 +834,18 @@ describe('prepareLocalPublication', () => {
       repository: 'alamorre/breakdown.sh',
       workflow: 'local-stable-publication.yml',
       environment: 'breakdown-local-stable',
+      publication_target: {
+        signed_tag: 'breakdown-local-v1.0.0',
+        source_commit: gitCommit,
+      },
+      execution: {
+        mode: 'tag',
+        ref: 'refs/tags/breakdown-local-v1.0.0',
+        source_commit: gitCommit,
+        workflow_ref:
+          'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+        workflow_sha: gitCommit,
+      },
       publication_manifest: {
         file: 'breakdown-publication-manifest-1.0.0.json',
         sha256: 'e'.repeat(64),
@@ -1387,6 +1399,8 @@ describe('stable publication workflow', () => {
       'run-id: ${{ env.NPM_BOOTSTRAP_RUN_ID }}',
       'breakdown-release-authorization-${CEREMONY_RUN_ID}',
       'breakdown-npm-first-package-bootstrap- prefix',
+      'v1-bootstrap',
+      'Breakdown Local v1.0.0 recovery handoff for workflow',
       'breakdown-github-release-authorization.json',
       'breakdown-github-release-authorization.attestation.json',
       'local-release-ceremony.yml',

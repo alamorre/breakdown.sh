@@ -138,6 +138,8 @@ async function publicationCandidateBinding(publicationDirectory, manifest) {
   return {
     release_version: manifest.release_version,
     candidate_digest: manifest.candidate?.digest,
+    source_commit: manifest.source?.git_commit,
+    tag: manifest.source?.signed_tag,
     packages,
   };
 }
@@ -437,6 +439,22 @@ export function validateTrustedPublishingEvidence(evidence) {
 
 export function validateBootstrapPublicationEvidence(evidence, candidate) {
   const packages = exactPackageInventory(candidate);
+  const expectedWorkflow = `${NPM_PUBLICATION_POLICY.repository}/.github/workflows/${NPM_PUBLICATION_POLICY.workflow}`;
+  const tagExecution =
+    evidence?.execution?.mode === 'tag' &&
+    evidence?.execution?.ref === `refs/tags/${candidate.tag}` &&
+    evidence?.execution?.source_commit === candidate.source_commit &&
+    evidence?.execution?.workflow_ref === `${expectedWorkflow}@refs/tags/${candidate.tag}` &&
+    evidence?.execution?.workflow_sha === candidate.source_commit;
+  const v1RecoveryExecution =
+    candidate.release_version === NPM_PUBLICATION_POLICY.bootstrapVersion &&
+    candidate.tag === 'breakdown-local-v1.0.0' &&
+    candidate.source_commit === '723e296c5a0ab5431a02022830adff8bcf0dd818' &&
+    evidence?.execution?.mode === 'v1-recovery' &&
+    evidence?.execution?.ref === 'refs/heads/main' &&
+    /^[0-9a-f]{40}$/.test(evidence?.execution?.source_commit ?? '') &&
+    evidence?.execution?.workflow_ref === `${expectedWorkflow}@refs/heads/main` &&
+    evidence?.execution?.workflow_sha === evidence.execution.source_commit;
   invariant(
     evidence?.schema_version === 'breakdown.npm-first-package-bootstrap.v1' &&
       evidence?.registry === NPM_PUBLICATION_POLICY.registry &&
@@ -446,6 +464,9 @@ export function validateBootstrapPublicationEvidence(evidence, candidate) {
       evidence?.repository === NPM_PUBLICATION_POLICY.repository &&
       evidence?.workflow === NPM_PUBLICATION_POLICY.workflow &&
       evidence?.environment === NPM_PUBLICATION_POLICY.environment &&
+      evidence?.publication_target?.signed_tag === candidate.tag &&
+      evidence?.publication_target?.source_commit === candidate.source_commit &&
+      (tagExecution || v1RecoveryExecution) &&
       evidence?.authentication === 'one-time-granular-access-token' &&
       evidence?.credential_value_retained === false &&
       /^breakdown-publication-manifest-1\.0\.0\.json$/.test(
@@ -489,6 +510,8 @@ export async function prepareNpmPublicationControls({
     validateBootstrapPublicationEvidence(bootstrapEvidence, {
       release_version: candidate.releaseVersion,
       candidate_digest: candidate.candidateDigest,
+      source_commit: candidate.source?.git_commit,
+      tag: `breakdown-local-v${candidate.releaseVersion}`,
       packages: candidate.packages,
     });
   } else {
@@ -579,6 +602,8 @@ export function validateNpmPublicationControls(evidence, candidate) {
     validateBootstrapPublicationEvidence(evidence.bootstrap_publication, {
       release_version: candidate.release_version,
       candidate_digest: candidate.candidate_digest,
+      source_commit: candidate.source_commit,
+      tag: candidate.tag,
       packages: evidence.packages,
     });
   } else {
@@ -603,10 +628,17 @@ export async function publishFirstPackages({
   const controlsFile = manifest.evidence?.npm_publication_controls?.file;
   const controlsBytes = await readFile(join(publicationDirectory, controlsFile));
   const controls = parseJson(controlsBytes, 'npm publication controls');
-  validateNpmPublicationControls(
-    controls,
-    await publicationCandidateBinding(publicationDirectory, manifest),
+  const workflowIdentityFile = manifest.evidence?.stable_workflow_identity?.file;
+  invariant(
+    typeof workflowIdentityFile === 'string' && workflowIdentityFile.length > 0,
+    'Publication has no stable workflow identity.',
   );
+  const workflowIdentity = parseJson(
+    await readFile(join(publicationDirectory, workflowIdentityFile)),
+    'Stable workflow identity',
+  );
+  const candidate = await publicationCandidateBinding(publicationDirectory, manifest);
+  validateNpmPublicationControls(controls, candidate);
   invariant(
     controls.mode === 'first-package-bootstrap',
     'One-time npm bootstrap command refuses a non-bootstrap publication.',
@@ -678,13 +710,18 @@ export async function publishFirstPackages({
   } finally {
     await rm(auditDirectory, { recursive: true, force: true });
   }
-  return {
+  const evidence = {
     schema_version: 'breakdown.npm-first-package-bootstrap.v1',
     registry: NPM_PUBLICATION_POLICY.registry,
     release_version: manifest.release_version,
     repository: NPM_PUBLICATION_POLICY.repository,
     workflow: NPM_PUBLICATION_POLICY.workflow,
     environment: NPM_PUBLICATION_POLICY.environment,
+    publication_target: {
+      signed_tag: manifest.source?.signed_tag,
+      source_commit: manifest.source?.git_commit,
+    },
+    execution: workflowIdentity.execution,
     candidate_digest: manifest.candidate?.digest,
     publication_manifest: {
       file: manifestFiles[0],
@@ -697,6 +734,8 @@ export async function publishFirstPackages({
     registry_signatures: 'passed',
     verification: { status: 'passed' },
   };
+  validateBootstrapPublicationEvidence(evidence, candidate);
+  return evidence;
 }
 
 export async function verifyExistingFirstPackages({
