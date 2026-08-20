@@ -424,7 +424,7 @@ jobs:
           set -euo pipefail
           if test "$RELEASE_EXECUTION_MODE" = v1-recovery; then
             test "$GITHUB_ACTOR" = alamorre
-            test "$GITHUB_TRIGGERING_ACTOR" = alamorre
+            [[ "$GITHUB_TRIGGERING_ACTOR" = alamorre || "$GITHUB_TRIGGERING_ACTOR" = 'github-actions[bot]' ]]
             test "$WORKFLOW_REF" = 'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main'
           else
             test "$GITHUB_ACTOR" = 'github-actions[bot]'

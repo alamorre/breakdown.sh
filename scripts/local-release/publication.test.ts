@@ -1441,20 +1441,24 @@ describe('stable publication workflow', () => {
     );
     const requiredSnippets = [
       'environment: breakdown-local-authorization',
-      'secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN',
+      'actions: write',
       'artifact-ids: 9415176744',
       'artifact-ids: 9415223409',
       'artifact-ids: 9413780200',
       'artifact-ids: 9413912347',
       'pnpm local:release:verify-v1-recovery',
+      'pnpm local:release:plan-v1-handoff',
       '"${{ runner.temp }}/gitsign" verify-tag',
-      'gh workflow run 323419478 --ref "$tag"',
+      'actions/workflows/323419480/dispatches',
+      "--header 'X-GitHub-Api-Version: 2026-03-10'",
+      'workflow_run_id',
+      'Host support artifact: `%s`',
       'gh run rerun "$run_id"',
-      'task: "breakdown-local-v1-recovery"',
-      'environment: "breakdown-local-stable"',
-      'HOST_SUPPORT_ARTIFACT_ID',
+      'actions/runs/32406103756',
+      'actions/artifacts/9420331832',
     ];
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
+    expect(workflow.match(/actions\/workflows\/323419480\/dispatches/g)).toHaveLength(1);
     const forbiddenSnippets = [
       'git tag ',
       'git push ',
@@ -1462,7 +1466,17 @@ describe('stable publication workflow', () => {
       'gh release create',
       'gh release edit',
       'secrets.NPM_FIRST_PACKAGE_TOKEN',
+      'secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN',
+      'repos/${GITHUB_REPOSITORY}/deployments',
+      'gh workflow run 323419478',
     ];
     expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
+
+    const stableWorkflow = await readFile(
+      join(repositoryRoot, '.github', 'workflows', 'local-stable-publication.yml'),
+      'utf8',
+    );
+    expect(stableWorkflow).toContain('environment: breakdown-local-stable');
+    expect(stableWorkflow).toContain('secrets.NPM_FIRST_PACKAGE_TOKEN');
   });
 });

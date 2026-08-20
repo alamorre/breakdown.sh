@@ -59,9 +59,10 @@ CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0
 The already-tagged ceremony run `32391936576` is the one documented exception: do not dispatch a
 new ceremony or rerun its stale workflow snapshot. After separate authorization under #190, use
 the exact one-time recovery procedure in `scripts/local-release/README.md`. It validates the
-existing immutable tag and retained evidence, then enters this same protected bootstrap workflow;
-it does not retag, rebuild, or make the npm credential available outside
-`breakdown-local-stable`.
+existing immutable tag and retained evidence, verifies the already-successful host-support run and
+artifact, then directly dispatches this same protected bootstrap workflow exactly once on the
+existing tag. It does not retag, rebuild, repeat host qualification, create a deployment, or make
+the npm credential available outside `breakdown-local-stable`.
 
 The workflow checks that every name is absent, or that an interrupted prior attempt already
 published the exact 1.0.0 candidate bytes. It refuses a claimed name whose 1.0.0 record is absent.

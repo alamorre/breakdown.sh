@@ -690,7 +690,7 @@ export function validateWorkflowIdentityEvidence(
     evidence?.execution?.workflow_ref === `${workflowPath}@refs/heads/main` &&
     exactSha1(evidence?.execution?.workflow_sha) &&
     evidence?.actor === RELEASE_CONTROL_POLICY.maintainer &&
-    evidence?.triggering_actor === RELEASE_CONTROL_POLICY.maintainer;
+    [RELEASE_CONTROL_POLICY.maintainer, 'github-actions[bot]'].includes(evidence?.triggering_actor);
   invariant(
     evidence?.schema_version === 'breakdown.stable-workflow-identity.v1' &&
       evidence?.repository === RELEASE_CONTROL_POLICY.repository &&

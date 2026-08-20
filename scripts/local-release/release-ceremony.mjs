@@ -620,6 +620,135 @@ export function validateReleaseRecoveryEvidence(
   return report;
 }
 
+function recoveryWorkflowRuns(value) {
+  const pages = Array.isArray(value) ? value : [value];
+  invariant(
+    pages.length > 0 && pages.every((page) => Array.isArray(page?.workflow_runs)),
+    'Stable-publication workflow runs are malformed.',
+  );
+  return pages.flatMap((page) => page.workflow_runs);
+}
+
+function validateRecoveryPublicationState(publicationState, action, policy) {
+  invariant(
+    publicationState?.github_release_exists === false,
+    'A GitHub Release already exists during the first-package bootstrap recovery.',
+  );
+  invariant(
+    publicationState?.npm_packages !== null &&
+      typeof publicationState?.npm_packages === 'object' &&
+      policy.stablePublication.npmPackages.every(
+        (name) => typeof publicationState.npm_packages[name] === 'boolean',
+      ),
+    'Recovery npm publication state is malformed.',
+  );
+  const packageStates = policy.stablePublication.npmPackages.map(
+    (name) => publicationState.npm_packages[name],
+  );
+  if (action === 'dispatch') {
+    invariant(
+      packageStates.every((exists) => exists === false),
+      'An npm package already exists before the one correlated stable-publication run.',
+    );
+  }
+}
+
+function validateRecoveryStableRun(run, policy) {
+  const stable = policy.stablePublication;
+  const directActor =
+    run?.event === 'workflow_dispatch' &&
+    run?.actor?.login === 'github-actions[bot]' &&
+    ['github-actions[bot]', RELEASE_CONTROL_POLICY.maintainer].includes(
+      run?.triggering_actor?.login,
+    );
+  const earlierDeploymentActor =
+    run?.event === 'deployment' &&
+    run?.actor?.login === RELEASE_CONTROL_POLICY.maintainer &&
+    [RELEASE_CONTROL_POLICY.maintainer, 'github-actions[bot]'].includes(
+      run?.triggering_actor?.login,
+    );
+  invariant(
+    Number.isSafeInteger(run?.id) &&
+      run.id > 0 &&
+      run?.workflow_id === stable.workflowId &&
+      run?.path === stable.workflowPath &&
+      run?.display_title === stable.title &&
+      run?.head_branch === policy.tag &&
+      run?.head_sha === policy.sourceSha &&
+      (directActor || earlierDeploymentActor) &&
+      ['queued', 'in_progress', 'completed', 'pending', 'requested', 'waiting'].includes(
+        run?.status,
+      ) &&
+      Number.isSafeInteger(run?.run_attempt) &&
+      run.run_attempt > 0 &&
+      run?.html_url ===
+        `https://github.com/${RELEASE_CONTROL_POLICY.repository}/actions/runs/${run.id}`,
+    'A stable-publication run has mismatched inputs, ref, commit, event, actor, or identity.',
+  );
+  if (run.status === 'completed') {
+    invariant(
+      ['success', 'failure', 'cancelled', 'timed_out', 'skipped'].includes(run?.conclusion),
+      'A completed stable-publication run has an unexpected conclusion.',
+    );
+  } else {
+    invariant(
+      run?.conclusion === null,
+      'An active stable-publication run has an unexpected conclusion.',
+    );
+  }
+}
+
+export function planV1StablePublicationHandoff(
+  { publicationState, workflowRuns },
+  policy = V1_RELEASE_RECOVERY_POLICY,
+) {
+  const stable = policy.stablePublication;
+  const runs = recoveryWorkflowRuns(workflowRuns);
+  const candidates = runs.filter(
+    (run) =>
+      run?.display_title === stable.title ||
+      run?.head_branch === policy.tag ||
+      (run?.path === stable.workflowPath && run?.head_sha === policy.sourceSha),
+  );
+  invariant(
+    candidates.length <= 1,
+    'More than one correlated stable-publication run exists; recovery refuses a duplicate.',
+  );
+  const action = candidates.length === 0 ? 'dispatch' : 'resume';
+  validateRecoveryPublicationState(publicationState, action, policy);
+  if (action === 'dispatch') {
+    return {
+      schema_version: 'breakdown.v1-stable-publication-handoff.v1',
+      action,
+      dispatch: {
+        ref: stable.dispatch.ref,
+        inputs: { ...stable.dispatch.inputs },
+      },
+    };
+  }
+  const [run] = candidates;
+  validateRecoveryStableRun(run, policy);
+  const packageStates = stable.npmPackages.map((name) => publicationState.npm_packages[name]);
+  if (run.status === 'completed' && run.conclusion === 'success') {
+    invariant(
+      packageStates.every((exists) => exists === true),
+      'A successful first-package bootstrap run is missing an expected public npm package.',
+    );
+  }
+  return {
+    schema_version: 'breakdown.v1-stable-publication-handoff.v1',
+    action,
+    run: {
+      conclusion: run.conclusion,
+      event: run.event,
+      id: String(run.id),
+      run_attempt: run.run_attempt,
+      status: run.status,
+      url: run.html_url,
+    },
+  };
+}
+
 export function decideCeremonyRecovery({ downstreamRuns, existingTag, plan }) {
   const exactRuns = downstreamRuns.filter(
     (run) => run.ceremony_run_id === plan.ceremony.run_id && run.tag === plan.tag,

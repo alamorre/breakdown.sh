@@ -335,6 +335,18 @@ describe('stable workflow identity evidence', () => {
         platformIndexArtifactId: '2',
       }),
     ).not.toThrow();
+    expect(() =>
+      validateWorkflowIdentityEvidence(
+        { ...evidence, triggering_actor: 'github-actions[bot]' },
+        {
+          authorizationVerificationSha256: 'e'.repeat(64),
+          candidate,
+          candidateArtifactId: '1',
+          controlsSha256: 'd'.repeat(64),
+          platformIndexArtifactId: '2',
+        },
+      ),
+    ).not.toThrow();
   });
 
   it('rejects a self-hosted runner even when every artifact ID matches', () => {

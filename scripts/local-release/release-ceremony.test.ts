@@ -11,14 +11,52 @@ import {
   createGithubReleaseAuthorization,
   createReleaseCeremonyPlan,
   decideCeremonyRecovery,
+  planV1StablePublicationHandoff,
   releaseTagMessage,
   validateAutomationSigner,
   validateGithubReleaseAuthorization,
   validateReleaseRecoveryEvidence,
 } from './release-ceremony.mjs';
+import { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
 
 const sourceSha = 'a'.repeat(40);
 const repositoryRoot = join(import.meta.dirname, '../..');
+
+function v1PublicationState(existingPackages: string[] = []) {
+  return {
+    github_release_exists: false,
+    npm_packages: Object.fromEntries(
+      V1_RELEASE_RECOVERY_POLICY.stablePublication.npmPackages.map((name) => [
+        name,
+        existingPackages.includes(name),
+      ]),
+    ),
+  };
+}
+
+function v1StableRun(overrides: Record<string, unknown> = {}) {
+  const id = typeof overrides.id === 'number' ? overrides.id : 800;
+  return {
+    id,
+    workflow_id: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowId,
+    display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.title,
+    event: 'workflow_dispatch',
+    status: 'in_progress',
+    conclusion: null,
+    head_branch: V1_RELEASE_RECOVERY_POLICY.tag,
+    head_sha: V1_RELEASE_RECOVERY_POLICY.sourceSha,
+    path: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowPath,
+    actor: { login: 'github-actions[bot]' },
+    triggering_actor: { login: 'github-actions[bot]' },
+    run_attempt: 1,
+    html_url: `https://github.com/alamorre/breakdown.sh/actions/runs/${id}`,
+    ...overrides,
+  };
+}
+
+function v1WorkflowRuns(runs: unknown[]) {
+  return [{ total_count: runs.length, workflow_runs: runs }];
+}
 
 function fixture() {
   const candidate = {
@@ -484,5 +522,131 @@ describe('automation signer and recovery', () => {
         policy,
       ),
     ).toThrow('complete exact ceremony message');
+  });
+});
+
+describe('v1 stable-publication recovery handoff', () => {
+  it('plans the one exact tag dispatch with every retained input', () => {
+    expect(
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([]),
+      }),
+    ).toEqual({
+      schema_version: 'breakdown.v1-stable-publication-handoff.v1',
+      action: 'dispatch',
+      dispatch: {
+        ref: 'breakdown-local-v1.0.0',
+        inputs: {
+          authorization_artifact_id: '9415223409',
+          candidate_artifact_id: '9413780200',
+          ceremony_run_id: '32391936576',
+          host_support_artifact_id: '9420331832',
+          npm_bootstrap_artifact_id: '',
+          npm_bootstrap_confirmation:
+            'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0',
+          npm_publication_mode: 'first-package-bootstrap',
+          npm_trusted_publishing_artifact_id: '',
+          platform_index_artifact_id: '9413912347',
+        },
+      },
+    });
+  });
+
+  it('idempotently resumes one exact direct or earlier deployment run', () => {
+    const direct = v1StableRun();
+    expect(
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([direct]),
+      }),
+    ).toMatchObject({ action: 'resume', run: { event: 'workflow_dispatch', id: '800' } });
+
+    const deployment = v1StableRun({
+      event: 'deployment',
+      actor: { login: 'alamorre' },
+      triggering_actor: { login: 'alamorre' },
+    });
+    expect(
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([deployment]),
+      }),
+    ).toMatchObject({ action: 'resume', run: { event: 'deployment', id: '800' } });
+
+    expect(
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([
+          { ...deployment, triggering_actor: { login: 'github-actions[bot]' }, run_attempt: 2 },
+        ]),
+      }),
+    ).toMatchObject({ action: 'resume', run: { event: 'deployment', run_attempt: 2 } });
+  });
+
+  it('refuses duplicate correlated runs', () => {
+    expect(() =>
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([v1StableRun(), v1StableRun({ id: 801 })]),
+      }),
+    ).toThrow('refuses a duplicate');
+  });
+
+  it.each([
+    ['inputs', { display_title: 'Breakdown Local stable publication for ceremony 999' }],
+    ['ref', { head_branch: 'main' }],
+    ['commit', { head_sha: '0'.repeat(40) }],
+    ['actor', { actor: { login: 'alamorre' } }],
+    ['triggering actor', { triggering_actor: { login: 'untrusted' } }],
+    ['event', { event: 'push' }],
+  ])('refuses a correlated run with mismatched %s', (_label, overrides) => {
+    expect(() =>
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([v1StableRun(overrides)]),
+      }),
+    ).toThrow('mismatched inputs, ref, commit, event, actor, or identity');
+  });
+
+  it('refuses unexpected publication state before dispatch and permits partial state on resume', () => {
+    expect(() =>
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(['@breakdown-sh/core']),
+        workflowRuns: v1WorkflowRuns([]),
+      }),
+    ).toThrow('npm package already exists');
+    expect(() =>
+      planV1StablePublicationHandoff({
+        publicationState: { ...v1PublicationState(), github_release_exists: true },
+        workflowRuns: v1WorkflowRuns([]),
+      }),
+    ).toThrow('GitHub Release already exists');
+    expect(
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(['@breakdown-sh/core']),
+        workflowRuns: v1WorkflowRuns([v1StableRun({ status: 'completed', conclusion: 'failure' })]),
+      }),
+    ).toMatchObject({ action: 'resume', run: { conclusion: 'failure' } });
+  });
+
+  it('requires all exact npm package records after a successful bootstrap run', () => {
+    const success = v1StableRun({ status: 'completed', conclusion: 'success' });
+    expect(() =>
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState(['@breakdown-sh/core']),
+        workflowRuns: v1WorkflowRuns([success]),
+      }),
+    ).toThrow('missing an expected public npm package');
+    expect(
+      planV1StablePublicationHandoff({
+        publicationState: v1PublicationState([
+          '@breakdown-sh/core',
+          '@breakdown-sh/cli',
+          '@breakdown-sh/mcp',
+        ]),
+        workflowRuns: v1WorkflowRuns([success]),
+      }),
+    ).toMatchObject({ action: 'resume', run: { conclusion: 'success' } });
   });
 });
