@@ -120,6 +120,13 @@
       "oracle_type": "effect",
       "retained_evidence": "scripts/local-release/release-controls.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml; docs/release-evidence/issue-170-github-controls-2026-08-19.json",
       "oracle": "Pre-tag and publication gates enforce the permanent sole-maintainer model, GitHub-recognized signed approval, exact no-bypass repository controls, GitHub-hosted runner, npm OIDC subject, and retained sanitized evidence without claiming independent review."
+    },
+    {
+      "id": "PKG-019",
+      "requirements": ["REQ-PKG-019"],
+      "oracle_type": "effect",
+      "retained_evidence": "scripts/local-release/npm-publishing.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml; docs/npm-publishing.md",
+      "oracle": "The exact 1.0.0 bootstrap is limited to one least-privilege short-lived credential and cannot finalize a GitHub Release; finalization proves exact public bytes, the attested bootstrap, credential removal, disabled token publication, and all three exact OIDC trust records without republishing npm; later versions are OIDC-only."
     }
   ]
 }

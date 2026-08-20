@@ -23,6 +23,27 @@ on:
         description: Base64-encoded SSH signature for the exact human approval
         required: true
         type: string
+      npm_publication_mode:
+        description: OIDC steady state, one-time first-package bootstrap, or bootstrap finalization
+        required: true
+        default: oidc-trusted-publishing
+        type: choice
+        options:
+          - oidc-trusted-publishing
+          - first-package-bootstrap
+          - finalize-bootstrap
+      npm_bootstrap_confirmation:
+        description: Exact destructive confirmation required only for first-package-bootstrap
+        required: false
+        type: string
+      npm_trusted_publishing_base64:
+        description: Base64-encoded sanitized trust inspection required outside bootstrap creation
+        required: false
+        type: string
+      npm_bootstrap_artifact_id:
+        description: Immutable successful bootstrap evidence artifact ID required for finalization
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -61,7 +82,7 @@ jobs:
 
       - name: Require an npm CLI that supports OIDC trusted publishing
         run: |
-          node -e "const [major, minor] = process.argv[1].split('.').map(Number); if (major < 11 || (major === 11 && minor < 5)) process.exit(1)" "$(npm --version)"
+          node -e "const [major, minor, patch] = process.argv[1].split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) process.exit(1)" "$(npm --version)"
 
       - name: Install only the locked release gate
         run: pnpm install --frozen-lockfile
@@ -87,7 +108,17 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/host-support
 
+      - name: Download the authenticated first-package bootstrap evidence by artifact ID
+        if: ${{ inputs.npm_publication_mode == 'finalize-bootstrap' }}
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ inputs.npm_bootstrap_artifact_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/npm-bootstrap
+
       - name: Resolve the one exact input of each kind
+        env:
+          NPM_BOOTSTRAP_ARTIFACT_ID: ${{ inputs.npm_bootstrap_artifact_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -105,6 +136,56 @@ jobs:
           printf 'PUBLICATION_DIR=%s\n' "${{ runner.temp }}/publication" >> "$GITHUB_ENV"
           printf 'VERIFICATION_DIR=%s\n' "${{ runner.temp }}/post-publication" >> "$GITHUB_ENV"
           printf 'VERIFICATION_REPORT=%s\n' "${{ runner.temp }}/breakdown-post-publication-inspection.json" >> "$GITHUB_ENV"
+          printf 'NPM_CONTROLS=%s\n' "${{ runner.temp }}/breakdown-npm-publication-controls.json" >> "$GITHUB_ENV"
+          printf 'NPM_TRUST_EVIDENCE=%s\n' "${{ runner.temp }}/breakdown-npm-trusted-publishing.json" >> "$GITHUB_ENV"
+          printf 'NPM_BOOTSTRAP_REPORT=%s\n' "${{ runner.temp }}/breakdown-npm-first-package-bootstrap.json" >> "$GITHUB_ENV"
+          printf 'NPM_BOOTSTRAP_EVIDENCE_DIR=%s\n' "${{ runner.temp }}/npm-bootstrap-evidence" >> "$GITHUB_ENV"
+          if test "${{ inputs.npm_publication_mode }}" = finalize-bootstrap; then
+            test -n "$NPM_BOOTSTRAP_ARTIFACT_ID"
+            printf 'DOWNLOADED_NPM_BOOTSTRAP_REPORT=%s\n' "$(resolve_one "${{ runner.temp }}/npm-bootstrap" breakdown-npm-first-package-bootstrap.json)" >> "$GITHUB_ENV"
+            printf 'DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION=%s\n' "$(resolve_one "${{ runner.temp }}/npm-bootstrap" breakdown-npm-first-package-bootstrap.attestation.json)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate the explicitly selected npm publication mode
+        env:
+          BOOTSTRAP_ARTIFACT_ID: ${{ inputs.npm_bootstrap_artifact_id }}
+          BOOTSTRAP_CONFIRMATION: ${{ inputs.npm_bootstrap_confirmation }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ inputs.host_support_artifact_id }}
+          PLATFORM_INDEX_ARTIFACT_ID: ${{ inputs.platform_index_artifact_id }}
+          TRUST_EVIDENCE_BASE64: ${{ inputs.npm_trusted_publishing_base64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mode='${{ inputs.npm_publication_mode }}'
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$HOST_SUPPORT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PLATFORM_INDEX_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          if test "$mode" = first-package-bootstrap; then
+            test "$GITHUB_REF_NAME" = breakdown-local-v1.0.0
+            test "$BOOTSTRAP_CONFIRMATION" = 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0'
+            test -z "$BOOTSTRAP_ARTIFACT_ID"
+            test -z "$TRUST_EVIDENCE_BASE64"
+          elif test "$mode" = finalize-bootstrap; then
+            test -z "$BOOTSTRAP_CONFIRMATION"
+            [[ "$BOOTSTRAP_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+            test -n "$TRUST_EVIDENCE_BASE64"
+          else
+            test -z "$BOOTSTRAP_CONFIRMATION"
+            test -z "$BOOTSTRAP_ARTIFACT_ID"
+            test -n "$TRUST_EVIDENCE_BASE64"
+          fi
+
+      - name: Decode the sanitized npm trusted-publisher inspection
+        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        env:
+          NPM_TRUST_EVIDENCE_BASE64: ${{ inputs.npm_trusted_publishing_base64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NPM_TRUST_EVIDENCE_BASE64"
+          printf '%s' "$NPM_TRUST_EVIDENCE_BASE64" | base64 --decode > "$NPM_TRUST_EVIDENCE"
+          jq -e '.schema_version == "breakdown.npm-trusted-publishing.v1" and .credential_material_retained == false' "$NPM_TRUST_EVIDENCE"
 
       - name: Decode the exact candidate-bound human approval
         env:
@@ -295,21 +376,72 @@ jobs:
             --source-digest "$GITHUB_SHA" \
             --deny-self-hosted-runners
 
-      - name: Gate and assemble the complete stable publication
+      - name: Verify the retained first-package bootstrap attestation
+        if: ${{ inputs.npm_publication_mode == 'finalize-bootstrap' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          gh attestation verify "$DOWNLOADED_NPM_BOOTSTRAP_REPORT" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-stable-publication.yml" \
+            --source-ref "$GITHUB_REF" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+
+      - name: Require removal of the one-time GitHub bootstrap secret
+        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_CONTROL_READ_TOKEN || github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/environments/breakdown-local-stable/secrets?per_page=100" \
+            | jq -e --arg name NPM_FIRST_PACKAGE_TOKEN 'all(.secrets[]?; .name != $name)'
+
+      - name: Bind the selected npm authentication path to the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(
+            --mode '${{ inputs.npm_publication_mode }}'
+            --candidate "$CANDIDATE_DIR"
+            --output "$NPM_CONTROLS"
+          )
+          if test '${{ inputs.npm_publication_mode }}' != first-package-bootstrap; then
+            args+=(--trusted-publishing "$NPM_TRUST_EVIDENCE")
+          fi
+          if test '${{ inputs.npm_publication_mode }}' = finalize-bootstrap; then
+            args+=(--bootstrap-evidence "$DOWNLOADED_NPM_BOOTSTRAP_REPORT")
+          fi
+          pnpm local:release:prepare-npm "${args[@]}"
+
+      - name: Gate and assemble the complete stable publication
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir "$PUBLICATION_DIR"
-          pnpm local:release:prepare-publication \
-            --candidate "$CANDIDATE_DIR" \
-            --platform-index "$PLATFORM_INDEX" \
-            --host-support-index "$HOST_INDEX" \
-            --host-support "$HOST_SUPPORT_DIR" \
-            --approval "$HUMAN_APPROVAL" \
-            --approval-signature "$HUMAN_APPROVAL_SIGNATURE" \
-            --approval-verification "$HUMAN_APPROVAL_VERIFICATION" \
-            --github-controls "$GITHUB_CONTROLS" \
-            --tag-evidence "${{ runner.temp }}/breakdown-signed-tag-evidence.json" \
-            --workflow-identity "$WORKFLOW_IDENTITY" \
+          args=(
+            --candidate "$CANDIDATE_DIR"
+            --platform-index "$PLATFORM_INDEX"
+            --host-support-index "$HOST_INDEX"
+            --host-support "$HOST_SUPPORT_DIR"
+            --approval "$HUMAN_APPROVAL"
+            --approval-signature "$HUMAN_APPROVAL_SIGNATURE"
+            --approval-verification "$HUMAN_APPROVAL_VERIFICATION"
+            --github-controls "$GITHUB_CONTROLS"
+            --tag-evidence "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
+            --workflow-identity "$WORKFLOW_IDENTITY"
+            --npm-controls "$NPM_CONTROLS"
             --output "$PUBLICATION_DIR"
+          )
+          if test '${{ inputs.npm_publication_mode }}' = finalize-bootstrap; then
+            args+=(
+              --npm-bootstrap-report "$DOWNLOADED_NPM_BOOTSTRAP_REPORT"
+              --npm-bootstrap-attestation "$DOWNLOADED_NPM_BOOTSTRAP_ATTESTATION"
+            )
+          fi
+          pnpm local:release:prepare-publication "${args[@]}"
           RELEASE_VERSION="$(jq -r '.release_version' "$PUBLICATION_DIR"/breakdown-publication-manifest-*.json)"
           printf 'RELEASE_VERSION=%s\n' "$RELEASE_VERSION" >> "$GITHUB_ENV"
 
@@ -324,6 +456,10 @@ jobs:
             ${{ runner.temp }}/breakdown-human-release-approval-verification.json
             ${{ runner.temp }}/breakdown-signed-tag-evidence.json
             ${{ runner.temp }}/breakdown-stable-workflow-identity.json
+            ${{ runner.temp }}/breakdown-npm-publication-controls.json
+            ${{ runner.temp }}/breakdown-npm-trusted-publishing.json
+            ${{ runner.temp }}/npm-bootstrap/breakdown-npm-first-package-bootstrap.json
+            ${{ runner.temp }}/npm-bootstrap/breakdown-npm-first-package-bootstrap.attestation.json
           if-no-files-found: error
           retention-days: 90
 
@@ -332,7 +468,12 @@ jobs:
         with:
           subject-path: ${{ runner.temp }}/publication/*
 
+      - name: Reverify the exact bootstrapped npm bytes before finalization
+        if: ${{ inputs.npm_publication_mode == 'finalize-bootstrap' }}
+        run: pnpm local:release:verify-first-npm-packages --publication "$PUBLICATION_DIR"
+
       - name: Create the complete GitHub draft
+        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -346,13 +487,50 @@ jobs:
             --verify-tag
 
       - name: Publish the exact inspected npm tarballs with OIDC and provenance
+        if: ${{ inputs.npm_publication_mode == 'oidc-trusted-publishing' }}
         shell: bash
         run: |
           npm publish "$PUBLICATION_DIR/breakdown-sh-core-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
           npm publish "$PUBLICATION_DIR/breakdown-sh-cli-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
           npm publish "$PUBLICATION_DIR/breakdown-sh-mcp-${RELEASE_VERSION}.tgz" --access public --tag latest --provenance
 
+      - name: Create the three first npm package records with the one-time credential
+        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_FIRST_PACKAGE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NODE_AUTH_TOKEN"
+          pnpm local:release:publish-first-npm-packages \
+            --publication "$PUBLICATION_DIR" \
+            --output "$NPM_BOOTSTRAP_REPORT"
+
+      - name: Attest the sanitized first-package bootstrap result
+        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        id: attest-npm-bootstrap
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ runner.temp }}/breakdown-npm-first-package-bootstrap.json
+
+      - name: Assemble the authenticated first-package bootstrap evidence
+        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        run: |
+          mkdir "$NPM_BOOTSTRAP_EVIDENCE_DIR"
+          cp "$NPM_BOOTSTRAP_REPORT" "$NPM_BOOTSTRAP_EVIDENCE_DIR/breakdown-npm-first-package-bootstrap.json"
+          cp "${{ steps.attest-npm-bootstrap.outputs.bundle-path }}" "$NPM_BOOTSTRAP_EVIDENCE_DIR/breakdown-npm-first-package-bootstrap.attestation.json"
+
+      - name: Retain the authenticated first-package bootstrap evidence
+        if: ${{ inputs.npm_publication_mode == 'first-package-bootstrap' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: breakdown-npm-first-package-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/npm-bootstrap-evidence/*
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Publish the ordinary immutable GitHub Release
+        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -364,6 +542,7 @@ jobs:
             --verify-tag
 
       - name: Verify every public byte and trust record
+        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -375,6 +554,7 @@ jobs:
             --output "$VERIFICATION_REPORT"
 
       - name: Retain the final post-publication inspection
+        if: ${{ inputs.npm_publication_mode != 'first-package-bootstrap' }}
         uses: actions/upload-artifact@v7
         with:
           name: breakdown-post-publication-inspection-${{ env.RELEASE_VERSION }}

@@ -82,9 +82,10 @@ installation guidance MUST continue to pin exact full versions.
 
 Release tags MUST be signed and protected as
 `breakdown-local-v<version>`. Builds MUST start clean, publish immutable
-GitHub releases and attestations, use npm OIDC trusted publishing and
-provenance, carry registry signatures and checksums, and never rebuild or
-overwrite a published version.
+GitHub releases and attestations, use npm OIDC trusted publishing except for
+the one-time package-record creation path in REQ-PKG-019, carry provenance,
+registry signatures, and checksums, and never rebuild or overwrite a published
+version.
 
 ### REQ-PKG-012
 
@@ -146,3 +147,28 @@ step, stable publication MUST verify a candidate-bound SSH approval signature ag
 maintainer's GitHub-recognized signing identity and retain the approval, signature, verification,
 GitHub-hosted runner identity, npm OIDC subject, artifact IDs, source/tag bindings, and exact control
 snapshot. These compensating controls MUST NOT be described as independent review.
+
+### REQ-PKG-019
+
+Because npm trusted publishing cannot be configured before a package record exists, the exact
+first publication of `@breakdown-sh/core@1.0.0`, `@breakdown-sh/cli@1.0.0`, and
+`@breakdown-sh/mcp@1.0.0` MAY use one short-lived granular access token created by the confirmed
+two-factor-authenticated human publisher. The token MUST expire within 24 hours, grant read/write
+only to the `@breakdown-sh` package scope, grant no organization permission, bypass publishing 2FA
+only for this bootstrap, and be supplied only through protected environment secret
+`NPM_FIRST_PACKAGE_TOKEN`. The protected workflow MUST refuse an existing package name without the
+exact candidate version; publish only absent records, in core/CLI/MCP dependency order, from the
+qualified tarballs with public access, `latest`, and provenance; compare every public tarball byte
+for byte; audit registry signatures and provenance; retain a sanitized attested bootstrap report;
+and MUST NOT create or finalize a GitHub Release in that run.
+
+After all three package records exist, the human publisher MUST configure each package's only
+trusted publisher as GitHub repository `alamorre/breakdown.sh`, workflow
+`local-stable-publication.yml`, environment `breakdown-local-stable`, with only `createPackage`
+permission; require two-factor authentication and disallow token publication on each package;
+revoke the bootstrap token; and remove the GitHub environment secret. A second protected run with
+a fresh candidate-bound signed approval MUST validate sanitized trust evidence, the attested
+bootstrap report, absence of the bootstrap secret, and the exact public 1.0.0 tarball bytes before
+finalizing the immutable GitHub Release without republishing npm. Every later package version MUST
+use that OIDC trusted publisher, refuse npm token environment variables, and retain exact trust,
+provenance, signature, and public-byte verification.

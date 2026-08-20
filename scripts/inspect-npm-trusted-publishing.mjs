@@ -5,17 +5,14 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { requiredArgumentValue } from './local-release/command-line.mjs';
-import { writeHumanReleaseApprovalTemplate } from './local-release/publication.mjs';
+import { inspectNpmTrustedPublishing } from './local-release/npm-publishing.mjs';
 
 export async function main(argv = process.argv) {
-  const usage =
-    'Usage: create-release-approval.mjs --candidate PATH --npm-publication-mode first-package-bootstrap|finalize-bootstrap|oidc-trusted-publishing --output PATH';
-  const template = await writeHumanReleaseApprovalTemplate({
-    candidateDirectory: resolve(requiredArgumentValue(argv, '--candidate', usage)),
-    npmPublicationMode: requiredArgumentValue(argv, '--npm-publication-mode', usage),
+  const usage = 'Usage: inspect-npm-trusted-publishing.mjs --output PATH';
+  const evidence = await inspectNpmTrustedPublishing({
     outputPath: resolve(requiredArgumentValue(argv, '--output', usage)),
   });
-  process.stdout.write(`${JSON.stringify(template, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 }
 
 if (

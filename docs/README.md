@@ -13,6 +13,7 @@ notes, or short-lived implementation plans.
 | `docs/headless-agents.md`               | Public                 | `/mcp`                    |
 | `docs/codex-plugin.md`                  | Public                 | `/docs/codex-plugin`      |
 | `docs/plugin-release-loop.md`           | Contributor/operator   | None                      |
+| `docs/npm-publishing.md`                | Contributor/operator   | None                      |
 | `docs/release-evidence/*.json`          | Public audit evidence  | None                      |
 | `docs/local-development.md`             | Contributor/operator   | `/docs/local-development` |
 | `docs/google-drive-production-setup.md` | Public after redaction | `/docs/google-drive`      |
