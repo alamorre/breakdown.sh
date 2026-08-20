@@ -11,8 +11,10 @@ import {
   createGithubReleaseAuthorization,
   createReleaseCeremonyPlan,
   decideCeremonyRecovery,
+  releaseTagMessage,
   validateAutomationSigner,
   validateGithubReleaseAuthorization,
+  validateReleaseRecoveryEvidence,
 } from './release-ceremony.mjs';
 
 const sourceSha = 'a'.repeat(40);
@@ -159,6 +161,27 @@ describe('release ceremony workflow', () => {
     expect(workflow).toContain("printf 'QUALIFICATION_RUN_ID=%s\\n'");
     expect(workflow.match(/run-id: \$\{\{ env\.QUALIFICATION_RUN_ID \}\}/g)).toHaveLength(2);
   });
+
+  it('uses only the annotated-tag verifier and retains failure diagnostics', async () => {
+    const workflowPaths = [
+      '.github/workflows/local-release-ceremony.yml',
+      '.github/workflows/local-stable-publication.yml',
+      '.github/workflows/local-v1-release-recovery.yml',
+    ];
+    for (const path of workflowPaths) {
+      const workflow = await readFile(join(repositoryRoot, path), 'utf8');
+      expect(workflow).toContain('gitsign" verify-tag \\');
+      expect(workflow).not.toMatch(/gitsign" verify \\/);
+      expect(workflow).toContain(
+        "--certificate-identity 'https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main'",
+      );
+      expect(workflow).toContain(
+        "--certificate-oidc-issuer 'https://token.actions.githubusercontent.com'",
+      );
+      expect(workflow).toContain('gitsign-verification.log');
+      expect(workflow).toContain('if: ${{ always() }}');
+    }
+  });
 });
 
 describe('GitHub-authenticated human authorization', () => {
@@ -277,5 +300,189 @@ describe('automation signer and recovery', () => {
     expect(() => assertNoSecretMaterial({ nested: { npm_token: 'do-not-retain' } })).toThrow(
       'forbidden secret-shaped field',
     );
+  });
+
+  it('validates the retained plan, authorization, tag target, complete message, and tag verifier', () => {
+    const input = fixture();
+    const plan = createReleaseCeremonyPlan(input);
+    const planBytes = Buffer.from(`${JSON.stringify(plan, null, 2)}\n`);
+    const authorization = createGithubReleaseAuthorization({
+      approvalHistory: [
+        {
+          state: 'approved',
+          comment: authorizationConfirmation(sha256(planBytes)),
+          environments: [
+            {
+              id: RELEASE_CEREMONY_POLICY.authorizationEnvironmentId,
+              name: RELEASE_CEREMONY_POLICY.authorizationEnvironment,
+            },
+          ],
+          user: { login: 'alamorre', id: 15023107 },
+        },
+      ],
+      authorizedAt: new Date('2026-08-20T03:05:00.000Z'),
+      plan,
+      planBytes,
+      runAttempt: 1,
+    });
+    const authorizationBytes = Buffer.from(`${JSON.stringify(authorization, null, 2)}\n`);
+    const gitsignVerificationLog = Buffer.from(
+      'Validated Git signature: true\nValidated Rekor entry: true\nValidated Certificate claims: true\n',
+    );
+    const artifactMetadata = (id: string, name: string, digest: string, runId: number) => ({
+      id: Number(id),
+      name,
+      expired: false,
+      digest,
+      workflow_run: { id: runId, head_sha: sourceSha },
+    });
+    const policy = {
+      authorizationArtifact: {
+        id: '104',
+        name: 'breakdown-release-authorization-900',
+        digest: `sha256:${'4'.repeat(64)}`,
+      },
+      authorizationSha256: sha256(authorizationBytes),
+      candidateArtifact: {
+        id: input.candidateArtifactId,
+        name: input.candidateArtifact.name,
+        digest: input.candidateArtifact.digest,
+      },
+      candidateDigest: input.candidate.digest.content,
+      candidateChecksumInventorySha256: input.candidate.checksumInventory.sha256,
+      ceremonyRunId: '900',
+      ceremonyWorkflowId: 338665094,
+      confirmation: 'test confirmation',
+      planArtifact: {
+        id: '103',
+        name: 'breakdown-release-ceremony-plan-900',
+        digest: `sha256:${'3'.repeat(64)}`,
+      },
+      planSha256: sha256(planBytes),
+      platformArtifact: {
+        id: input.platformIndexArtifactId,
+        name: input.platformIndexArtifact.name,
+        digest: input.platformIndexArtifact.digest,
+      },
+      qualificationRunId: '700',
+      sourceSha,
+      tag: input.candidate.tag,
+      tagObjectSha: '9'.repeat(40),
+    };
+    const signer = {
+      method: 'sigstore-keyless-gitsign',
+      tag_verifier: 'verify-tag',
+      gitsign_version: '0.17.1',
+      binary_sha256: RELEASE_CEREMONY_POLICY.signer.binarySha256,
+      certificate_identity: RELEASE_CEREMONY_POLICY.signer.certificateIdentity,
+      certificate_oidc_issuer: RELEASE_CEREMONY_POLICY.signer.oidcIssuer,
+      transparency_log: RELEASE_CEREMONY_POLICY.signer.transparencyLog,
+      signature_verified: true,
+      certificate_claims_verified: true,
+      transparency_log_verified: true,
+      verification_log_sha256: sha256(gitsignVerificationLog),
+    };
+    const expectedMessage = releaseTagMessage({
+      authorizationSha256: policy.authorizationSha256,
+      plan,
+    });
+    const evidence = {
+      authorization,
+      authorizationArtifact: artifactMetadata(
+        policy.authorizationArtifact.id,
+        policy.authorizationArtifact.name,
+        policy.authorizationArtifact.digest,
+        900,
+      ),
+      authorizationBytes,
+      candidate: input.candidate,
+      candidateArtifact: input.candidateArtifact,
+      ceremonyRun: {
+        id: 900,
+        workflow_id: policy.ceremonyWorkflowId,
+        repository: { full_name: 'alamorre/breakdown.sh' },
+        path: '.github/workflows/local-release-ceremony.yml',
+        event: 'workflow_dispatch',
+        status: 'completed',
+        conclusion: 'failure',
+        run_attempt: 1,
+        head_branch: 'main',
+        head_sha: sourceSha,
+        actor: { login: 'alamorre' },
+        triggering_actor: { login: 'alamorre' },
+      },
+      gitsignVerificationLog,
+      plan,
+      planArtifact: artifactMetadata(
+        policy.planArtifact.id,
+        policy.planArtifact.name,
+        policy.planArtifact.digest,
+        900,
+      ),
+      planBytes,
+      platformArtifact: input.platformIndexArtifact,
+      platformIndex: input.platformIndex,
+      platformIndexSha256: input.platformIndexSha256,
+      qualificationRun: input.qualificationRun,
+      signer,
+      tagObject: {
+        sha: policy.tagObjectSha,
+        tag: policy.tag,
+        object: { type: 'commit', sha: sourceSha },
+        message: `${expectedMessage}\n-----BEGIN SIGNED MESSAGE-----\nsignature\n-----END SIGNED MESSAGE-----\n`,
+      },
+      tagRef: {
+        ref: `refs/tags/${policy.tag}`,
+        object: { type: 'tag', sha: policy.tagObjectSha },
+      },
+    };
+
+    expect(validateReleaseRecoveryEvidence(evidence, policy)).toMatchObject({
+      ceremony_run_id: '900',
+      tag: policy.tag,
+      verification: { status: 'passed', tag_message: true, tag_target: true },
+    });
+    expect(() =>
+      validateReleaseRecoveryEvidence(
+        { ...evidence, signer: { ...signer, tag_verifier: 'verify' } },
+        policy,
+      ),
+    ).toThrow('Gitsign tag verifier');
+    expect(() =>
+      validateReleaseRecoveryEvidence(
+        {
+          ...evidence,
+          signer: { ...signer, certificate_oidc_issuer: 'https://issuer.example' },
+        },
+        policy,
+      ),
+    ).toThrow('exact keyless automation signing identity');
+    expect(() =>
+      validateReleaseRecoveryEvidence(
+        {
+          ...evidence,
+          signer: { ...signer, transparency_log_verified: false },
+        },
+        policy,
+      ),
+    ).toThrow('exact keyless automation signing identity');
+    expect(() =>
+      validateReleaseRecoveryEvidence(
+        {
+          ...evidence,
+          tagObject: { ...evidence.tagObject, object: { type: 'commit', sha: '0'.repeat(40) } },
+        },
+        policy,
+      ),
+    ).toThrow('tag object or target');
+    expect(() =>
+      validateReleaseRecoveryEvidence(
+        {
+          ...evidence,
+          tagObject: { ...evidence.tagObject, message: evidence.tagObject.message + 'extra' },
+        },
+        policy,
+      ),
+    ).toThrow('complete exact ceremony message');
   });
 });

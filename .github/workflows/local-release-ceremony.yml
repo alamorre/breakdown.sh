@@ -463,10 +463,13 @@ jobs:
             git push origin "refs/tags/${tag}:refs/tags/${tag}"
           fi
           test "$(git rev-list -n 1 "$tag")" = '${{ needs.plan.outputs.source_sha }}'
-          "${{ runner.temp }}/gitsign" verify \
+          verification_status=0
+          "${{ runner.temp }}/gitsign" verify-tag \
             --certificate-identity 'https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main' \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-            "$tag" > "${{ runner.temp }}/gitsign-verification.log" 2>&1
+            "$tag" > "${{ runner.temp }}/gitsign-verification.log" 2>&1 || verification_status=$?
+          cat "${{ runner.temp }}/gitsign-verification.log"
+          test "$verification_status" -eq 0
           gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" > "${{ runner.temp }}/tag-ref.json"
           tag_object_url="$(jq -er 'select(.object.type == "tag") | .object.url' "${{ runner.temp }}/tag-ref.json")"
           gh api "$tag_object_url" > "${{ runner.temp }}/annotated-tag.json"
@@ -481,6 +484,15 @@ jobs:
             rg --fixed-strings --line-regexp 'candidate-artifact-id: ${{ inputs.candidate_artifact_id }}' <<< "$actual_message"
             rg --fixed-strings --line-regexp 'platform-index-artifact-id: ${{ inputs.platform_index_artifact_id }}' <<< "$actual_message"
           fi
+
+      - name: Retain the Gitsign annotated-tag verification log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: breakdown-gitsign-tag-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gitsign-verification.log
+          if-no-files-found: ignore
+          retention-days: 90
 
       - name: Dispatch, await, and resolve the exact host-support artifact
         id: host

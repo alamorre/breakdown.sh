@@ -551,6 +551,18 @@ async function publicationFixture() {
     oidc: {
       subject: 'repo:alamorre/breakdown.sh:environment:breakdown-local-stable',
       audience: 'npm:registry.npmjs.org',
+      job_workflow_ref:
+        'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+      ref: 'refs/tags/breakdown-local-v1.0.0',
+      sha: gitCommit,
+    },
+    execution: {
+      mode: 'tag',
+      ref: 'refs/tags/breakdown-local-v1.0.0',
+      source_commit: gitCommit,
+      workflow_ref:
+        'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+      workflow_sha: gitCommit,
     },
     artifact_ids: {
       candidate: '1234',
@@ -1359,9 +1371,12 @@ describe('stable publication workflow', () => {
       'contents: write',
       'id-token: write',
       'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8',
-      'artifact-ids: ${{ inputs.candidate_artifact_id }}',
-      'artifact-ids: ${{ inputs.platform_index_artifact_id }}',
-      'artifact-ids: ${{ inputs.host_support_artifact_id }}',
+      'deployment:',
+      'breakdown-local-v1-recovery',
+      'ref: ${{ github.workflow_sha }}',
+      'artifact-ids: ${{ env.CANDIDATE_ARTIFACT_ID_INPUT }}',
+      'artifact-ids: ${{ env.PLATFORM_INDEX_ARTIFACT_ID_INPUT }}',
+      'artifact-ids: ${{ env.HOST_SUPPORT_ARTIFACT_ID_INPUT }}',
       'actions/artifacts/${artifact_id}',
       'run-id: ${{ env.CANDIDATE_RUN_ID }}',
       'run-id: ${{ env.PLATFORM_INDEX_RUN_ID }}',
@@ -1380,6 +1395,8 @@ describe('stable publication workflow', () => {
       'npm:registry.npmjs.org',
       'RUNNER_ENVIRONMENT',
       'certificate_claims_verified',
+      'transparency_log_verified',
+      '"${{ runner.temp }}/gitsign" verify-tag',
       'gh attestation verify "$HOST_INDEX"',
       'breakdown-host-support-index.json',
       'breakdown-host-support-index.attestation.json',
@@ -1415,5 +1432,37 @@ describe('stable publication workflow', () => {
       'utf8',
     );
     expect(qualificationWorkflow).not.toContain("tags:\n      - 'breakdown-local-v*'");
+  });
+
+  it('keeps the v1 recovery orchestrator non-publishing and delegates the protected bootstrap', async () => {
+    const workflow = await readFile(
+      join(repositoryRoot, '.github', 'workflows', 'local-v1-release-recovery.yml'),
+      'utf8',
+    );
+    const requiredSnippets = [
+      'environment: breakdown-local-authorization',
+      'secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN',
+      'artifact-ids: 9415176744',
+      'artifact-ids: 9415223409',
+      'artifact-ids: 9413780200',
+      'artifact-ids: 9413912347',
+      'pnpm local:release:verify-v1-recovery',
+      '"${{ runner.temp }}/gitsign" verify-tag',
+      'gh workflow run 323419478 --ref "$tag"',
+      'gh run rerun "$run_id"',
+      'task: "breakdown-local-v1-recovery"',
+      'environment: "breakdown-local-stable"',
+      'HOST_SUPPORT_ARTIFACT_ID',
+    ];
+    expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
+    const forbiddenSnippets = [
+      'git tag ',
+      'git push ',
+      'npm publish ',
+      'gh release create',
+      'gh release edit',
+      'secrets.NPM_FIRST_PACKAGE_TOKEN',
+    ];
+    expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
   });
 });

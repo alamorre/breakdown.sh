@@ -13,6 +13,7 @@ import {
   validateWorkflowIdentityEvidence,
   verifyHumanReleaseApprovalSignature,
 } from './release-controls.mjs';
+import { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
 
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
@@ -286,6 +287,56 @@ describe('sole-maintainer approval signature', () => {
 });
 
 describe('stable workflow identity evidence', () => {
+  it('accepts the reviewed main workflow implementation on the exact recovery tag deployment', () => {
+    const workflowRef =
+      'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main';
+    const candidate = {
+      tag: V1_RELEASE_RECOVERY_POLICY.tag,
+      provenance: { source: { git_commit: V1_RELEASE_RECOVERY_POLICY.sourceSha } },
+    };
+    const evidence = {
+      schema_version: 'breakdown.stable-workflow-identity.v1',
+      repository: RELEASE_CONTROL_POLICY.repository,
+      ref: `refs/tags/${candidate.tag}`,
+      ref_name: candidate.tag,
+      source_commit: candidate.provenance.source.git_commit,
+      actor: 'alamorre',
+      triggering_actor: 'alamorre',
+      environment: RELEASE_CONTROL_POLICY.environment,
+      runner_environment: 'github-hosted',
+      oidc: {
+        subject: `repo:${RELEASE_CONTROL_POLICY.repository}:environment:${RELEASE_CONTROL_POLICY.environment}`,
+        audience: RELEASE_CONTROL_POLICY.oidcAudience,
+        job_workflow_ref: workflowRef,
+        ref: `refs/tags/${candidate.tag}`,
+        sha: candidate.provenance.source.git_commit,
+      },
+      execution: {
+        mode: 'v1-recovery',
+        ref: `refs/tags/${candidate.tag}`,
+        source_commit: candidate.provenance.source.git_commit,
+        workflow_ref: workflowRef,
+        workflow_sha: 'f'.repeat(40),
+      },
+      artifact_ids: { candidate: '1', platform_index: '2', host_support: '3' },
+      release_controls: {
+        ruleset_id: RELEASE_CONTROL_POLICY.rulesetId,
+        snapshot_sha256: 'd'.repeat(64),
+      },
+      authorization_verification_sha256: 'e'.repeat(64),
+    };
+
+    expect(() =>
+      validateWorkflowIdentityEvidence(evidence, {
+        authorizationVerificationSha256: 'e'.repeat(64),
+        candidate,
+        candidateArtifactId: '1',
+        controlsSha256: 'd'.repeat(64),
+        platformIndexArtifactId: '2',
+      }),
+    ).not.toThrow();
+  });
+
   it('rejects a self-hosted runner even when every artifact ID matches', () => {
     const candidate = {
       tag: 'breakdown-local-v1.0.0',

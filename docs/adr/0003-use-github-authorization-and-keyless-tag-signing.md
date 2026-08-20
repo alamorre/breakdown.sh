@@ -48,7 +48,7 @@ to, exported from, or retained by the runner. Verification requires exactly:
 - a valid Rekor transparency-log entry.
 
 GitHub does not currently render Gitsign signatures as “Verified”, so the release gate uses
-identity-aware `gitsign verify`; GitHub's generic annotated-tag `verification` field is not a trust
+identity-aware `gitsign verify-tag`; GitHub's generic annotated-tag `verification` field is not a trust
 oracle for this signer.
 
 ## Threat model and consequences

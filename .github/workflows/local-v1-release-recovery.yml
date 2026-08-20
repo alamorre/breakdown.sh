@@ -1,0 +1,367 @@
+name: Breakdown Local v1.0.0 release recovery
+run-name: Recover exact Breakdown Local v1.0.0 ceremony 32391936576
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Exact confirmation shown in the issue #200 recovery runbook
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  attestations: read
+  contents: read
+  deployments: read
+
+concurrency:
+  group: breakdown-local-v1-release-recovery
+  cancel-in-progress: false
+
+jobs:
+  verify-and-continue:
+    name: Verify retained evidence and continue the exact authorized ceremony
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'alamorre' && github.triggering_actor == 'alamorre' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    environment: breakdown-local-authorization
+    steps:
+      - name: Require the exact recovery confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = 'CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING'
+
+      - name: Check out the reviewed recovery implementation
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - name: Install exact Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install the locked recovery verifier
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve every immutable recovery input before downloading bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/32391936576" > "${{ runner.temp }}/ceremony-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/32388197461" > "${{ runner.temp }}/qualification-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9415176744" > "${{ runner.temp }}/plan-artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9415223409" > "${{ runner.temp }}/authorization-artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9413780200" > "${{ runner.temp }}/candidate-artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9413912347" > "${{ runner.temp }}/platform-artifact.json"
+
+      - name: Download the exact retained ceremony plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: 9415176744
+          github-token: ${{ github.token }}
+          run-id: 32391936576
+          path: ${{ runner.temp }}/plan
+
+      - name: Download the exact retained authorization
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: 9415223409
+          github-token: ${{ github.token }}
+          run-id: 32391936576
+          path: ${{ runner.temp }}/authorization
+
+      - name: Download the exact once-built candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: 9413780200
+          github-token: ${{ github.token }}
+          run-id: 32388197461
+          path: ${{ runner.temp }}/candidate
+
+      - name: Download the exact passing platform index
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: 9413912347
+          github-token: ${{ github.token }}
+          run-id: 32388197461
+          path: ${{ runner.temp }}/platform
+
+      - name: Resolve the one retained file of each required kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve_one() {
+            local root="$1"
+            local name="$2"
+            mapfile -t matches < <(find "$root" -type f -name "$name" -print)
+            test "${#matches[@]}" -eq 1
+            printf '%s' "${matches[0]}"
+          }
+          printf 'AUTHORIZATION=%s\n' "$(resolve_one "${{ runner.temp }}/authorization" breakdown-github-release-authorization.json)" >> "$GITHUB_ENV"
+          printf 'AUTHORIZATION_ATTESTATION=%s\n' "$(resolve_one "${{ runner.temp }}/authorization" breakdown-github-release-authorization.attestation.json)" >> "$GITHUB_ENV"
+          printf 'PLAN=%s\n' "$(resolve_one "${{ runner.temp }}/plan" breakdown-release-ceremony-plan.json)" >> "$GITHUB_ENV"
+          printf 'PLATFORM_INDEX=%s\n' "$(resolve_one "${{ runner.temp }}/platform" breakdown-platform-evidence-index.json)" >> "$GITHUB_ENV"
+
+      - name: Verify the original authorization attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh attestation verify "$AUTHORIZATION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$AUTHORIZATION_ATTESTATION" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/local-release-ceremony.yml" \
+            --source-ref refs/heads/main \
+            --source-digest 723e296c5a0ab5431a02022830adff8bcf0dd818 \
+            --deny-self-hosted-runners
+
+      - name: Install the pinned keyless annotated-tag verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=0.17.1
+          binary="gitsign_${version}_linux_amd64"
+          curl --fail --silent --show-error --location "https://github.com/sigstore/gitsign/releases/download/v${version}/${binary}" --output "${{ runner.temp }}/gitsign"
+          (cd "${{ runner.temp }}" && printf '69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae  gitsign\n' | sha256sum --check --strict -)
+          chmod 0755 "${{ runner.temp }}/gitsign"
+
+      - name: Verify the immutable tag identity, issuer, signature, and Rekor entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=breakdown-local-v1.0.0
+          git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
+          verification_status=0
+          "${{ runner.temp }}/gitsign" verify-tag \
+            --certificate-identity 'https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "$tag" > "${{ runner.temp }}/gitsign-verification.log" 2>&1 || verification_status=$?
+          cat "${{ runner.temp }}/gitsign-verification.log"
+          test "$verification_status" -eq 0
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" > "${{ runner.temp }}/tag-ref.json"
+          test "$(jq -er 'select(.object.type == "tag") | .object.sha' "${{ runner.temp }}/tag-ref.json")" = 222766090da2ad070e8b45619d8f0f844829144f
+          gh api "repos/${GITHUB_REPOSITORY}/git/tags/222766090da2ad070e8b45619d8f0f844829144f" > "${{ runner.temp }}/tag-object.json"
+          jq -n \
+            --arg log_sha256 "$(sha256sum "${{ runner.temp }}/gitsign-verification.log" | cut -d' ' -f1)" \
+            '{
+              method: "sigstore-keyless-gitsign",
+              tag_verifier: "verify-tag",
+              gitsign_version: "0.17.1",
+              binary_sha256: "69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae",
+              certificate_identity: "https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main",
+              certificate_oidc_issuer: "https://token.actions.githubusercontent.com",
+              transparency_log: "https://rekor.sigstore.dev",
+              signature_verified: true,
+              certificate_claims_verified: true,
+              transparency_log_verified: true,
+              verification_log_sha256: $log_sha256
+            }' > "${{ runner.temp }}/signer.json"
+
+      - name: Verify every exact retained binding and complete tag message
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm local:release:verify-v1-recovery \
+            --candidate "${{ runner.temp }}/candidate" \
+            --platform-index "$PLATFORM_INDEX" \
+            --candidate-artifact "${{ runner.temp }}/candidate-artifact.json" \
+            --platform-artifact "${{ runner.temp }}/platform-artifact.json" \
+            --qualification-run "${{ runner.temp }}/qualification-run.json" \
+            --ceremony-run "${{ runner.temp }}/ceremony-run.json" \
+            --plan "$PLAN" \
+            --plan-artifact "${{ runner.temp }}/plan-artifact.json" \
+            --authorization "$AUTHORIZATION" \
+            --authorization-artifact "${{ runner.temp }}/authorization-artifact.json" \
+            --tag-ref "${{ runner.temp }}/tag-ref.json" \
+            --tag-object "${{ runner.temp }}/tag-object.json" \
+            --signer "${{ runner.temp }}/signer.json" \
+            --gitsign-log "${{ runner.temp }}/gitsign-verification.log" \
+            --output "${{ runner.temp }}/breakdown-release-recovery-verification.json"
+
+      - name: Retain recovery and Gitsign diagnostics before continuation
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: breakdown-release-recovery-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/breakdown-release-recovery-verification.json
+            ${{ runner.temp }}/gitsign-verification.log
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Dispatch or resume the one correlated host-support run
+        id: host
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=breakdown-local-v1.0.0
+          title='Breakdown Local host support for ceremony 32391936576'
+          list_runs() {
+            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/323419478/runs?event=workflow_dispatch&per_page=100"
+          }
+          runs="$(list_runs)"
+          count="$(jq --arg title "$title" '[.[].workflow_runs[] | select(.display_title == $title)] | length' <<< "$runs")"
+          test "$count" -le 1
+          if test "$count" -eq 0; then
+            gh workflow run 323419478 --ref "$tag" \
+              -f candidate_artifact_id=9413780200 \
+              -f ceremony_run_id=32391936576
+          fi
+          run_id=''
+          for attempt in $(seq 1 240); do
+            runs="$(list_runs)"
+            mapfile -t ids < <(jq -r --arg title "$title" '.[] | .workflow_runs[] | select(.display_title == $title) | .id' <<< "$runs")
+            test "${#ids[@]}" -le 1
+            if test "${#ids[@]}" -eq 1; then run_id="${ids[0]}"; break; fi
+            sleep 5
+          done
+          test -n "$run_id"
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+          jq -e \
+            --arg tag "$tag" \
+            '.event == "workflow_dispatch" and .path == ".github/workflows/local-host-support.yml" and .head_branch == $tag and .head_sha == "723e296c5a0ab5431a02022830adff8bcf0dd818"' \
+            <<< "$run"
+          status="$(jq -r '.status' <<< "$run")"
+          conclusion="$(jq -r '.conclusion // ""' <<< "$run")"
+          minimum_run_attempt="$(jq -r '.run_attempt' <<< "$run")"
+          if test "$status" = completed && test "$conclusion" != success; then
+            [[ "$conclusion" = failure || "$conclusion" = cancelled || "$conclusion" = timed_out ]]
+            gh run rerun "$run_id"
+            minimum_run_attempt="$((minimum_run_attempt + 1))"
+          fi
+          completed=false
+          for attempt in $(seq 1 240); do
+            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+            run_attempt="$(jq -r '.run_attempt' <<< "$run")"
+            status="$(jq -r '.status' <<< "$run")"
+            if test "$run_attempt" -ge "$minimum_run_attempt" && test "$status" = completed; then
+              test "$(jq -r '.conclusion' <<< "$run")" = success
+              completed=true
+              break
+            fi
+            sleep 5
+          done
+          test "$completed" = true
+          artifacts="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts")"
+          mapfile -t artifact_ids < <(jq -r '.artifacts[] | select(.name == "breakdown-host-support" and .expired == false) | .id' <<< "$artifacts")
+          test "${#artifact_ids[@]}" -eq 1
+          printf 'artifact_id=%s\n' "${artifact_ids[0]}" >> "$GITHUB_OUTPUT"
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch or resume the one correlated protected stable-publication run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOST_SUPPORT_ARTIFACT_ID: ${{ steps.host.outputs.artifact_id }}
+          RECOVERY_DEPLOYMENT_TOKEN: ${{ secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=breakdown-local-v1.0.0
+          task=breakdown-local-v1-recovery
+          title='Breakdown Local stable publication for ceremony 32391936576'
+          list_runs() {
+            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/323419480/runs?event=deployment&per_page=100"
+          }
+          deployments="$(gh api "repos/${GITHUB_REPOSITORY}/deployments?ref=${tag}&task=${task}&environment=breakdown-local-stable&per_page=100")"
+          deployment_count="$(jq 'length' <<< "$deployments")"
+          test "$deployment_count" -le 1
+          if test "$deployment_count" -eq 1; then
+            jq -e \
+              --arg host "$HOST_SUPPORT_ARTIFACT_ID" \
+              '.[0].ref == "breakdown-local-v1.0.0" and
+               .[0].task == "breakdown-local-v1-recovery" and
+               .[0].environment == "breakdown-local-stable" and
+               .[0].payload == {
+                 candidate_artifact_id: "9413780200",
+                 platform_index_artifact_id: "9413912347",
+                 host_support_artifact_id: $host,
+                 authorization_artifact_id: "9415223409",
+                 ceremony_run_id: "32391936576",
+                 npm_publication_mode: "first-package-bootstrap",
+                 npm_bootstrap_confirmation: "CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0",
+                 npm_trusted_publishing_artifact_id: "",
+                 npm_bootstrap_artifact_id: ""
+               }' <<< "$deployments"
+          fi
+          runs="$(list_runs)"
+          run_count="$(jq --arg title "$title" '[.[].workflow_runs[] | select(.display_title == $title)] | length' <<< "$runs")"
+          test "$run_count" -le 1
+          if test "$deployment_count" -eq 0; then
+            test "$run_count" -eq 0
+            test -n "$RECOVERY_DEPLOYMENT_TOKEN"
+            jq -n \
+              --arg host_support_artifact_id "$HOST_SUPPORT_ARTIFACT_ID" \
+              '{
+                ref: "breakdown-local-v1.0.0",
+                task: "breakdown-local-v1-recovery",
+                auto_merge: false,
+                required_contexts: [],
+                environment: "breakdown-local-stable",
+                description: "Continue exact authorized ceremony 32391936576 after issue #200 recovery verification",
+                payload: {
+                  candidate_artifact_id: "9413780200",
+                  platform_index_artifact_id: "9413912347",
+                  host_support_artifact_id: $host_support_artifact_id,
+                  authorization_artifact_id: "9415223409",
+                  ceremony_run_id: "32391936576",
+                  npm_publication_mode: "first-package-bootstrap",
+                  npm_bootstrap_confirmation: "CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0",
+                  npm_trusted_publishing_artifact_id: "",
+                  npm_bootstrap_artifact_id: ""
+                }
+              }' | GH_TOKEN="$RECOVERY_DEPLOYMENT_TOKEN" gh api \
+                --method POST \
+                "repos/${GITHUB_REPOSITORY}/deployments" \
+                --input - > "${{ runner.temp }}/stable-deployment.json"
+          fi
+          run_id=''
+          for attempt in $(seq 1 240); do
+            runs="$(list_runs)"
+            mapfile -t ids < <(jq -r --arg title "$title" '.[] | .workflow_runs[] | select(.display_title == $title) | .id' <<< "$runs")
+            test "${#ids[@]}" -le 1
+            if test "${#ids[@]}" -eq 1; then run_id="${ids[0]}"; break; fi
+            sleep 5
+          done
+          test -n "$run_id"
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+          jq -e \
+            '.event == "deployment" and .path == ".github/workflows/local-stable-publication.yml" and .head_branch == "breakdown-local-v1.0.0" and .head_sha == "723e296c5a0ab5431a02022830adff8bcf0dd818" and .actor.login == "alamorre"' \
+            <<< "$run"
+          status="$(jq -r '.status' <<< "$run")"
+          conclusion="$(jq -r '.conclusion // ""' <<< "$run")"
+          minimum_run_attempt="$(jq -r '.run_attempt' <<< "$run")"
+          if test "$status" = completed && test "$conclusion" != success; then
+            [[ "$conclusion" = failure || "$conclusion" = cancelled || "$conclusion" = timed_out ]]
+            gh run rerun "$run_id"
+            minimum_run_attempt="$((minimum_run_attempt + 1))"
+          fi
+          completed=false
+          for attempt in $(seq 1 240); do
+            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+            run_attempt="$(jq -r '.run_attempt' <<< "$run")"
+            status="$(jq -r '.status' <<< "$run")"
+            if test "$run_attempt" -ge "$minimum_run_attempt" && test "$status" = completed; then
+              test "$(jq -r '.conclusion' <<< "$run")" = success
+              completed=true
+              break
+            fi
+            sleep 5
+          done
+          test "$completed" = true
+          printf '## Exact v1.0.0 recovery continuation complete\n\nHost support run: `%s`. First-package bootstrap run: `%s`. Immutable tag: `%s`. No tag was created or changed by this recovery.\n' \
+            '${{ steps.host.outputs.run_id }}' "$run_id" "$tag" >> "$GITHUB_STEP_SUMMARY"
