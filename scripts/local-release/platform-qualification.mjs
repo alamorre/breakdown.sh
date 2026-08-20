@@ -8,7 +8,7 @@ import {
   version as osVersion,
 } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { promisify } from 'node:util';
+import { promisify, stripVTControlCharacters } from 'node:util';
 
 import { sha256 } from './filesystem.mjs';
 import {
@@ -22,6 +22,7 @@ import { inspectReleaseCandidate, tarGzipEntries } from './release-inspection.mj
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
+const FAILURE_DIAGNOSTIC_LIMIT = 12_000;
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -341,6 +342,21 @@ export async function runVitestLog({ environment, logPath, repositoryRoot, testP
   return report;
 }
 
+export function summarizeQualificationFailure(id, report) {
+  const processFacts = report?.qualification_process;
+  const output = stripVTControlCharacters(
+    [processFacts?.stderr, processFacts?.stdout]
+      .filter((value) => typeof value === 'string' && value.trim().length > 0)
+      .join('\n'),
+  ).trim();
+  const summary = output || 'The suite produced no process diagnostics.';
+  const bounded =
+    summary.length <= FAILURE_DIAGNOSTIC_LIMIT
+      ? summary
+      : `${summary.slice(0, FAILURE_DIAGNOSTIC_LIMIT)}\n... diagnostics truncated ...`;
+  return `[${id}] exit ${String(processFacts?.exit_code ?? 'unknown')}\n${bounded}`;
+}
+
 async function suiteRecord(id, categories, logPath, report) {
   const bytes = await readFile(logPath);
   return {
@@ -425,6 +441,7 @@ export async function qualifyLocalRelease({
   const { manifest, digest } = await readCandidateRelease(candidatePath);
   const provenance = await readCandidateProvenance(candidatePath, manifest.release_version);
   const suites = [];
+  const failureDiagnostics = [];
   const inspectionLogPath = join(evidencePath, 'candidate-inspection.json');
   const inspection = await writeTaskLog(inspectionLogPath, () =>
     inspectReleaseCandidate({
@@ -502,6 +519,9 @@ export async function qualifyLocalRelease({
           testPaths: definition.testPaths,
         });
         suites.push(await suiteRecord(definition.id, definition.categories, logPath, report));
+        if (report.success !== true) {
+          failureDiagnostics.push(summarizeQualificationFailure(definition.id, report));
+        }
       }
     }
 
@@ -581,7 +601,7 @@ export async function qualifyLocalRelease({
         .map((suite) => suite.id)
         .join(', ');
       throw new Error(
-        `Platform qualification failed in ${failedSuites || 'the required suite set'}; retained evidence at ${evidenceFile}.`,
+        `Platform qualification failed in ${failedSuites || 'the required suite set'}; retained evidence at ${evidenceFile}.${failureDiagnostics.length > 0 ? `\n${failureDiagnostics.join('\n')}` : ''}`,
       );
     }
     return evidence;

@@ -101,7 +101,9 @@ function startServer() {
   });
   child.once('exit', (code, signal) => {
     children.delete(child);
-    const error = new Error(`breakdown-mcp exited early (${code ?? signal ?? 'unknown'}).`);
+    const error = new Error(
+      `breakdown-mcp exited early (${code ?? signal ?? 'unknown'}): ${stderr.trim() || '<empty stderr>'}`,
+    );
     for (const waiter of pending.values()) waiter.reject(error);
     pending.clear();
   });
