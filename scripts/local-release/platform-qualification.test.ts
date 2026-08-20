@@ -4,7 +4,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
-import { runVitestLog } from './platform-qualification.mjs';
+import { runVitestLog, summarizeQualificationFailure } from './platform-qualification.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../..');
 
@@ -64,6 +64,10 @@ it('fails an assertion', () => {
       const stderr = stripVTControlCharacters(report.qualification_process.stderr);
       expect(stderr).toContain('Error: Test timed out in 1ms.');
       expect(stderr).toContain("AssertionError: expected 'actual' to be 'expected'");
+      const summary = summarizeQualificationFailure('diagnostic-fixture', report);
+      expect(summary).toContain('[diagnostic-fixture] exit 1');
+      expect(summary).toContain('Error: Test timed out in 1ms.');
+      expect(summary).toContain("AssertionError: expected 'actual' to be 'expected'");
     } finally {
       await rm(fixtureRoot, { recursive: true, force: true });
     }
