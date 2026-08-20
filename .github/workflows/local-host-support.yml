@@ -1,10 +1,15 @@
 name: Breakdown Local authenticated host support
+run-name: Breakdown Local host support for ceremony ${{ inputs.ceremony_run_id }}
 
 on:
   workflow_dispatch:
     inputs:
       candidate_artifact_id:
         description: Immutable artifact ID for the exact Breakdown Local candidate
+        required: true
+        type: string
+      ceremony_run_id:
+        description: Parent release ceremony run ID for retry-safe orchestration
         required: true
         type: string
 
@@ -22,15 +27,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out the release-tag indexer
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
       - name: Install exact Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.13.0
           cache: pnpm
@@ -40,7 +45,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download the immutable candidate
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
@@ -53,11 +58,15 @@ jobs:
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/324133712" --jq .state)" = disabled_manually
 
       - name: Generate the candidate, source, and tag-bound deferred support set
-        run: pnpm local:release:defer-host-support --candidate "${{ runner.temp }}/breakdown-candidate" --tag "$GITHUB_REF_NAME" --output "${{ runner.temp }}/breakdown-host-support-index.json" --support-output "${{ runner.temp }}/breakdown-host-support"
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ '${{ inputs.ceremony_run_id }}' =~ ^[1-9][0-9]*$ ]]
+          pnpm local:release:defer-host-support --candidate "${{ runner.temp }}/breakdown-candidate" --tag "$GITHUB_REF_NAME" --output "${{ runner.temp }}/breakdown-host-support-index.json" --support-output "${{ runner.temp }}/breakdown-host-support"
 
       - name: Attest the exact generated index
         id: attest
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: ${{ runner.temp }}/breakdown-host-support-index.json
 
@@ -65,7 +74,7 @@ jobs:
         run: cp "${{ steps.attest.outputs.bundle-path }}" "${{ runner.temp }}/breakdown-host-support/breakdown-host-support-index.attestation.json"
 
       - name: Retain the authenticated generated support set
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: breakdown-host-support
           path: |

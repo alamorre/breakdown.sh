@@ -8,15 +8,22 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  FINALIZE_BOOTSTRAP_HUMAN_RELEASE_ATTESTATIONS,
   HUMAN_RELEASE_ATTESTATIONS,
-  QUALIFIED_HUMAN_RELEASE_ATTESTATIONS,
   inspectLocalPublication,
   prepareLocalPublication,
+  readCandidate,
   verifyPublishedLocalRelease,
   writeHumanReleaseApprovalTemplate,
 } from './publication.mjs';
 import { indexDeferredHostSupport, writeHostSupportMaterial } from './host-evidence.mjs';
+import {
+  RELEASE_CEREMONY_POLICY,
+  authorizationConfirmation,
+  createGithubReleaseAuthorization,
+  createReleaseCeremonyPlan,
+  releaseAttestations,
+  releaseTagMessage,
+} from './release-ceremony.mjs';
 
 const temporaryDirectories: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -325,70 +332,98 @@ async function publicationFixture() {
     mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
   });
 
-  const approvalPath = join(root, 'breakdown-human-release-approval.json');
-  await writeJson(approvalPath, {
-    schema_version: 'breakdown.human-release-approval.v1',
-    release_version: releaseVersion,
-    candidate_digest: { algorithm: 'SHA-256', content: candidateDigest },
-    source: {
-      repository: 'https://github.com/alamorre/breakdown.sh',
-      git_commit: gitCommit,
+  const candidate = await readCandidate(candidateDirectory);
+  const plan = createReleaseCeremonyPlan({
+    candidate,
+    candidateArtifact: {
+      id: 1234,
+      name: 'breakdown-local-candidate',
+      expired: false,
+      digest: `sha256:${'a'.repeat(64)}`,
+      workflow_run: { id: 700, head_sha: gitCommit },
     },
-    tag: 'breakdown-local-v1.0.0',
-    npm_publication_mode: 'oidc-trusted-publishing',
-    approver: {
-      name: 'Adam La Morre',
-      email: 'release@example.com',
-      github_login: 'alamorre',
+    candidateArtifactId: '1234',
+    ceremonyRun: {
+      repository: 'alamorre/breakdown.sh',
+      ref: 'refs/heads/main',
+      sha: gitCommit,
+      actor: 'alamorre',
+      triggering_actor: 'alamorre',
+      id: 900,
+      attempt: 1,
     },
-    approved_at: '2026-07-29T20:00:00.000Z',
-    host_support_policy: {
-      state: 'qualified',
-      certification_issue: 188,
-      supported_hosts: supportedHosts,
+    currentMainSha: gitCommit,
+    executionMode: 'execute',
+    npmPublicationMode: 'oidc-trusted-publishing',
+    npmTrustedPublishingArtifactId: '3456',
+    plannedAt: new Date('2026-07-29T20:00:00.000Z'),
+    platformIndex: JSON.parse(await readFile(platformIndexPath, 'utf8')),
+    platformIndexArtifact: {
+      id: 5678,
+      name: 'breakdown-platform-evidence-index',
+      expired: false,
+      digest: `sha256:${'b'.repeat(64)}`,
+      workflow_run: { id: 700, head_sha: gitCommit },
     },
-    attestations: Object.fromEntries(
-      QUALIFIED_HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
-    ),
-    statement:
-      'I approve publication of only the identified candidate bytes after reviewing and accepting the fully qualified passing host-support policy and its exact supported_hosts claims.',
+    platformIndexArtifactId: '5678',
+    platformIndexSha256: sha256(await readFile(platformIndexPath)),
+    qualificationRun: {
+      id: 700,
+      workflow_id: RELEASE_CEREMONY_POLICY.qualificationWorkflowId,
+      event: 'workflow_dispatch',
+      conclusion: 'success',
+      run_attempt: 1,
+      head_sha: gitCommit,
+    },
   });
-
-  const approvalSignaturePath = join(root, 'breakdown-human-release-approval.json.sig');
-  await writeFile(
-    approvalSignaturePath,
-    '-----BEGIN SSH SIGNATURE-----\nfixture\n-----END SSH SIGNATURE-----\n',
+  const planBytes = Buffer.from(`${JSON.stringify(plan, null, 2)}\n`);
+  const planSha256 = sha256(planBytes);
+  const authorizationPath = join(root, 'breakdown-github-release-authorization.json');
+  await writeJson(
+    authorizationPath,
+    createGithubReleaseAuthorization({
+      approvalHistory: [
+        {
+          state: 'approved',
+          comment: authorizationConfirmation(planSha256),
+          environments: [
+            {
+              id: RELEASE_CEREMONY_POLICY.authorizationEnvironmentId,
+              name: RELEASE_CEREMONY_POLICY.authorizationEnvironment,
+            },
+          ],
+          user: { login: 'alamorre', id: 15023107 },
+        },
+      ],
+      authorizedAt: new Date('2026-07-29T20:01:00.000Z'),
+      plan,
+      planBytes,
+      runAttempt: 1,
+    }),
   );
-  const approvalVerificationPath = join(root, 'breakdown-human-release-approval-verification.json');
-  const approvalBytes = await readFile(approvalPath);
-  const approval = JSON.parse(approvalBytes.toString('utf8'));
-  await writeJson(approvalVerificationPath, {
-    schema_version: 'breakdown.human-release-approval-signature-verification.v1',
-    verified_at: '2026-07-29T20:01:00.000Z',
-    repository: 'https://github.com/alamorre/breakdown.sh',
-    namespace: 'breakdown-local-release',
-    approver: {
-      github_login: 'alamorre',
-      github_signing_key_ids: [1123668],
+  const authorizationAttestationPath = join(
+    root,
+    'breakdown-github-release-authorization.attestation.json',
+  );
+  await writeJson(authorizationAttestationPath, {
+    mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
+  });
+  const authorizationVerificationPath = join(
+    root,
+    'breakdown-github-release-authorization-verification.json',
+  );
+  await writeJson(authorizationVerificationPath, {
+    schema_version: 'breakdown.github-release-authorization-verification.v1',
+    repository: 'alamorre/breakdown.sh',
+    authorization: { sha256: sha256(await readFile(authorizationPath)) },
+    attestation: {
+      sha256: sha256(await readFile(authorizationAttestationPath)),
+      signer_workflow: 'alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml',
+      source_ref: 'refs/heads/main',
+      source_digest: gitCommit,
+      github_hosted_runner: true,
     },
-    approval: {
-      file: 'breakdown-human-release-approval.json',
-      sha256: sha256(approvalBytes),
-      release_version: approval.release_version,
-      candidate_digest: approval.candidate_digest,
-      source: approval.source,
-      tag: approval.tag,
-      approved_at: approval.approved_at,
-    },
-    signature: {
-      file: 'breakdown-human-release-approval.json.sig',
-      sha256: sha256(await readFile(approvalSignaturePath)),
-      format: 'ssh',
-    },
-    verification: {
-      status: 'passed',
-      github_recognized_signing_key: true,
-    },
+    verification: { status: 'passed' },
   });
 
   const githubControlsPath = join(root, 'breakdown-github-release-controls.json');
@@ -417,6 +452,25 @@ async function publicationFixture() {
       },
     },
     deployment_branch_policies: [{ id: 1, name: 'breakdown-local-v*', type: 'tag' }],
+    authorization_environment: {
+      id: 20224502339,
+      name: 'breakdown-local-authorization',
+      can_admins_bypass: false,
+      protection_rules: [
+        {
+          id: 2,
+          type: 'required_reviewers',
+          prevent_self_review: false,
+          reviewers: [{ type: 'User', reviewer: { id: 15023107, login: 'alamorre' } }],
+        },
+        { id: 3, type: 'branch_policy' },
+      ],
+      deployment_branch_policy: {
+        protected_branches: false,
+        custom_branch_policies: true,
+      },
+    },
+    authorization_deployment_branch_policies: [{ id: 4, name: 'main', type: 'branch' }],
     immutable_releases: { enabled: true, enforced_by_owner: false },
     tag_ruleset: {
       id: 20015652,
@@ -446,13 +500,22 @@ async function publicationFixture() {
     tag: 'breakdown-local-v1.0.0',
     tag_object_sha: 'd'.repeat(40),
     target: { type: 'commit', sha: gitCommit },
-    verification: { verified: true, reason: 'valid' },
-    message: `Breakdown Local 1.0.0
-
-candidate-digest-sha256: ${candidateDigest}
-candidate-checksum-inventory-sha256: ${sha256(checksumBytes)}
-candidate-artifact-id: 1234
-platform-index-artifact-id: 5678`,
+    verification: { verified: true, reason: 'sigstore-keyless-valid' },
+    message: releaseTagMessage({
+      authorizationSha256: sha256(await readFile(authorizationPath)),
+      plan,
+    }),
+    signer: {
+      method: 'sigstore-keyless-gitsign',
+      gitsign_version: '0.17.1',
+      binary_sha256: RELEASE_CEREMONY_POLICY.signer.binarySha256,
+      certificate_identity: RELEASE_CEREMONY_POLICY.signer.certificateIdentity,
+      certificate_oidc_issuer: RELEASE_CEREMONY_POLICY.signer.oidcIssuer,
+      transparency_log: RELEASE_CEREMONY_POLICY.signer.transparencyLog,
+      signature_verified: true,
+      certificate_claims_verified: true,
+      transparency_log_verified: true,
+    },
     artifact_ids: {
       candidate: '1234',
       platform_index: '5678',
@@ -481,8 +544,8 @@ platform-index-artifact-id: 5678`,
     ref: 'refs/tags/breakdown-local-v1.0.0',
     ref_name: 'breakdown-local-v1.0.0',
     source_commit: gitCommit,
-    actor: 'alamorre',
-    triggering_actor: 'alamorre',
+    actor: 'github-actions[bot]',
+    triggering_actor: 'github-actions[bot]',
     environment: 'breakdown-local-stable',
     runner_environment: 'github-hosted',
     oidc: {
@@ -498,7 +561,7 @@ platform-index-artifact-id: 5678`,
       ruleset_id: 20015652,
       snapshot_sha256: sha256(await readFile(githubControlsPath)),
     },
-    approval_verification_sha256: sha256(await readFile(approvalVerificationPath)),
+    authorization_verification_sha256: sha256(await readFile(authorizationVerificationPath)),
   });
 
   const npmControlsPath = join(root, 'breakdown-npm-publication-controls.json');
@@ -558,9 +621,9 @@ platform-index-artifact-id: 5678`,
   });
 
   return {
-    approvalPath,
-    approvalSignaturePath,
-    approvalVerificationPath,
+    authorizationPath,
+    authorizationAttestationPath,
+    authorizationVerificationPath,
     candidateDirectory,
     candidateDigest,
     githubControlsPath,
@@ -581,9 +644,9 @@ function prepareFixture(
   bootstrapEvidence?: { attestationPath: string; reportPath: string },
 ) {
   return prepareLocalPublication({
-    approvalPath: fixture.approvalPath,
-    approvalSignaturePath: fixture.approvalSignaturePath,
-    approvalVerificationPath: fixture.approvalVerificationPath,
+    authorizationPath: fixture.authorizationPath,
+    authorizationAttestationPath: fixture.authorizationAttestationPath,
+    authorizationVerificationPath: fixture.authorizationVerificationPath,
     candidateDirectory: fixture.candidateDirectory,
     githubControlsPath: fixture.githubControlsPath,
     hostIndexPath: fixture.hostIndexPath,
@@ -598,25 +661,28 @@ function prepareFixture(
   });
 }
 
-async function refreshApprovalEvidence(fixture: Awaited<ReturnType<typeof publicationFixture>>) {
-  const approvalBytes = await readFile(fixture.approvalPath);
-  const approval = JSON.parse(approvalBytes.toString('utf8'));
-  const verification = JSON.parse(await readFile(fixture.approvalVerificationPath, 'utf8'));
-  verification.approval = {
-    file: 'breakdown-human-release-approval.json',
-    sha256: sha256(approvalBytes),
-    release_version: approval.release_version,
-    candidate_digest: approval.candidate_digest,
-    source: approval.source,
-    tag: approval.tag,
-    approved_at: approval.approved_at,
-  };
-  await writeJson(fixture.approvalVerificationPath, verification);
+async function refreshAuthorizationEvidence(
+  fixture: Awaited<ReturnType<typeof publicationFixture>>,
+) {
+  const authorization = JSON.parse(await readFile(fixture.authorizationPath, 'utf8'));
+  const planBytes = Buffer.from(`${JSON.stringify(authorization.plan.value, null, 2)}\n`);
+  authorization.plan.sha256 = sha256(planBytes);
+  authorization.github_review.comment = authorizationConfirmation(authorization.plan.sha256);
+  await writeJson(fixture.authorizationPath, authorization);
+  const verification = JSON.parse(await readFile(fixture.authorizationVerificationPath, 'utf8'));
+  verification.authorization.sha256 = sha256(await readFile(fixture.authorizationPath));
+  await writeJson(fixture.authorizationVerificationPath, verification);
   const workflowIdentity = JSON.parse(await readFile(fixture.workflowIdentityPath, 'utf8'));
-  workflowIdentity.approval_verification_sha256 = sha256(
-    await readFile(fixture.approvalVerificationPath),
+  workflowIdentity.authorization_verification_sha256 = sha256(
+    await readFile(fixture.authorizationVerificationPath),
   );
   await writeJson(fixture.workflowIdentityPath, workflowIdentity);
+  const tagEvidence = JSON.parse(await readFile(fixture.tagEvidencePath, 'utf8'));
+  tagEvidence.message = releaseTagMessage({
+    authorizationSha256: sha256(await readFile(fixture.authorizationPath)),
+    plan: authorization.plan.value,
+  });
+  await writeJson(fixture.tagEvidencePath, tagEvidence);
 }
 
 async function configureDeferredHostSupport(
@@ -641,19 +707,6 @@ async function configureDeferredHostSupport(
   await writeJson(join(fixture.supportDirectory, 'breakdown-host-support-index.attestation.json'), {
     mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
   });
-  const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
-  approval.host_support_policy = {
-    state: 'deferred',
-    certification_issue: 188,
-    supported_hosts: [],
-  };
-  approval.attestations = Object.fromEntries(
-    HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
-  );
-  approval.statement =
-    'I approve publication of only the identified candidate bytes after reviewing and accepting the Breakdown Local 1.0 deferred host-certification policy with supported_hosts: [].';
-  await writeJson(fixture.approvalPath, approval);
-  await refreshApprovalEvidence(fixture);
 }
 
 afterEach(async () => {
@@ -783,13 +836,18 @@ describe('prepareLocalPublication', () => {
     controls.authentication.method = 'previously-completed-first-package-bootstrap';
     controls.bootstrap_publication = bootstrapReport;
     await writeJson(fixture.npmControlsPath, controls);
-    const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
-    approval.npm_publication_mode = 'finalize-bootstrap';
-    approval.attestations = Object.fromEntries(
-      FINALIZE_BOOTSTRAP_HUMAN_RELEASE_ATTESTATIONS.map((attestation) => [attestation, true]),
+    const authorization = JSON.parse(await readFile(fixture.authorizationPath, 'utf8'));
+    authorization.plan.value.npm_publication_mode = 'finalize-bootstrap';
+    authorization.plan.value.artifact_ids.npm_bootstrap = '7890';
+    authorization.plan.value.artifact_ids.npm_trusted_publishing = '3456';
+    authorization.plan.value.human_authorization.attestations = [
+      ...releaseAttestations('finalize-bootstrap'),
+    ];
+    authorization.attestations = Object.fromEntries(
+      releaseAttestations('finalize-bootstrap').map((attestation: string) => [attestation, true]),
     );
-    await writeJson(fixture.approvalPath, approval);
-    await refreshApprovalEvidence(fixture);
+    await writeJson(fixture.authorizationPath, authorization);
+    await refreshAuthorizationEvidence(fixture);
     const reportPath = join(fixture.outputDirectory, '..', 'bootstrap-report.json');
     const attestationPath = join(fixture.outputDirectory, '..', 'bootstrap-attestation.json');
     await writeJson(reportPath, bootstrapReport);
@@ -844,18 +902,14 @@ describe('prepareLocalPublication', () => {
     );
   });
 
-  it('should reject a zero-claim approval for a qualified support set', async () => {
+  it('should reject an authorization for a different npm publication mode', async () => {
     const fixture = await publicationFixture();
-    const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
-    approval.host_support_policy = {
-      state: 'deferred',
-      certification_issue: 188,
-      supported_hosts: [],
-    };
-    await writeJson(fixture.approvalPath, approval);
+    const authorization = JSON.parse(await readFile(fixture.authorizationPath, 'utf8'));
+    authorization.plan.value.npm_publication_mode = 'first-package-bootstrap';
+    await writeJson(fixture.authorizationPath, authorization);
 
     await expect(prepareFixture(fixture)).rejects.toThrow(
-      'Human release approval does not match the authenticated host support policy.',
+      'GitHub release authorization is not bound to the exact candidate and publication mode.',
     );
   });
 
@@ -939,24 +993,24 @@ describe('prepareLocalPublication', () => {
     );
   });
 
-  it('should keep publication closed when one human gate is not approved', async () => {
+  it('should keep publication closed when one human authorization gate is not approved', async () => {
     const fixture = await publicationFixture();
-    const approval = JSON.parse(await readFile(fixture.approvalPath, 'utf8'));
-    approval.attestations.npm_scope_control_confirmed = false;
-    await writeJson(fixture.approvalPath, approval);
+    const authorization = JSON.parse(await readFile(fixture.authorizationPath, 'utf8'));
+    authorization.attestations.npm_scope_control_confirmed = false;
+    await writeJson(fixture.authorizationPath, authorization);
 
     await expect(prepareFixture(fixture)).rejects.toThrow(
-      'Human release approval does not affirm every required gate.',
+      'GitHub release authorization is not bound to the exact candidate and publication mode.',
     );
     expect(await readdir(fixture.outputDirectory)).toEqual([]);
   });
 
-  it('should reject approval bytes without matching GitHub-recognized signature evidence', async () => {
+  it('should reject authorization bytes without matching GitHub attestation evidence', async () => {
     const fixture = await publicationFixture();
-    await writeFile(fixture.approvalSignaturePath, 'different signature bytes\n');
+    await writeFile(fixture.authorizationAttestationPath, 'different attestation bytes\n');
 
     await expect(prepareFixture(fixture)).rejects.toThrow(
-      'Human release approval signature evidence does not authenticate the exact approval.',
+      'GitHub release authorization attestation does not authenticate the exact authorization.',
     );
   });
 
@@ -1044,12 +1098,12 @@ describe('prepareLocalPublication', () => {
         fixture.hostIndexPath,
         '--host-support',
         fixture.supportDirectory,
-        '--approval',
-        fixture.approvalPath,
-        '--approval-signature',
-        fixture.approvalSignaturePath,
-        '--approval-verification',
-        fixture.approvalVerificationPath,
+        '--authorization',
+        fixture.authorizationPath,
+        '--authorization-attestation',
+        fixture.authorizationAttestationPath,
+        '--authorization-verification',
+        fixture.authorizationVerificationPath,
         '--github-controls',
         fixture.githubControlsPath,
         '--tag-evidence',
@@ -1177,19 +1231,13 @@ describe('verifyPublishedLocalRelease', () => {
         };
       }
       if (command === 'gh' && args[0] === 'api' && args[1].includes('/git/tags/')) {
+        const retainedTagEvidence = JSON.parse(await readFile(fixture.tagEvidencePath, 'utf8'));
         return {
           stdout: JSON.stringify({
             sha: 'd'.repeat(40),
             tag: 'breakdown-local-v1.0.0',
             object: { type: 'commit', sha: gitCommit },
-            message: `Breakdown Local 1.0.0
-
-candidate-digest-sha256: ${fixture.candidateDigest}
-candidate-checksum-inventory-sha256: ${sha256(
-              await readFile(join(fixture.outputDirectory, 'SHA256SUMS')),
-            )}
-candidate-artifact-id: 1234
-platform-index-artifact-id: 5678`,
+            message: retainedTagEvidence.message,
             verification: { verified: true, reason: 'valid' },
           }),
           stderr: '',
@@ -1296,13 +1344,13 @@ describe('stable publication workflow', () => {
       'candidate_artifact_id:',
       'platform_index_artifact_id:',
       'host_support_artifact_id:',
-      'human_approval_base64:',
-      'human_approval_signature_base64:',
+      'authorization_artifact_id:',
+      'ceremony_run_id:',
       'npm_publication_mode:',
       'first-package-bootstrap',
       'finalize-bootstrap',
       'oidc-trusted-publishing',
-      'npm_trusted_publishing_base64:',
+      'npm_trusted_publishing_artifact_id:',
       'npm_bootstrap_artifact_id:',
       "startsWith(github.ref, 'refs/tags/breakdown-local-v')",
       'environment: breakdown-local-stable',
@@ -1310,20 +1358,19 @@ describe('stable publication workflow', () => {
       'attestations: write',
       'contents: write',
       'id-token: write',
-      'actions/download-artifact@v8',
+      'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8',
       'artifact-ids: ${{ inputs.candidate_artifact_id }}',
       'artifact-ids: ${{ inputs.platform_index_artifact_id }}',
       'artifact-ids: ${{ inputs.host_support_artifact_id }}',
-      'inputs.human_approval_base64',
-      'inputs.human_approval_signature_base64',
-      'pnpm local:release:verify-approval',
+      'breakdown-github-release-authorization.json',
+      'breakdown-github-release-authorization.attestation.json',
+      'local-release-ceremony.yml',
       'pnpm local:release:verify-github-controls',
       'current_user_can_bypass',
       'repo:alamorre/breakdown.sh:environment:breakdown-local-stable',
       'npm:registry.npmjs.org',
       'RUNNER_ENVIRONMENT',
-      'verification.verified',
-      'candidate-checksum-inventory-sha256:',
+      'certificate_claims_verified',
       'gh attestation verify "$HOST_INDEX"',
       'breakdown-host-support-index.json',
       'breakdown-host-support-index.attestation.json',
@@ -1334,7 +1381,7 @@ describe('stable publication workflow', () => {
       'pnpm local:release:verify-first-npm-packages',
       'secrets.NPM_FIRST_PACKAGE_TOKEN',
       'breakdown-npm-first-package-bootstrap.attestation.json',
-      'actions/attest@v4',
+      'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4',
       'gh release create',
       '--draft',
       '--verify-tag',
@@ -1348,7 +1395,7 @@ describe('stable publication workflow', () => {
       '--prerelease=false',
       '--latest',
       'pnpm local:release:verify-publication',
-      'actions/upload-artifact@v7',
+      'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7',
     ];
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
     const forbiddenSnippets = ['local:release:build', 'NPM_TOKEN', 'tag_ruleset_id:'];

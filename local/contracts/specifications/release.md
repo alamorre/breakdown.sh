@@ -137,16 +137,30 @@ unqualified support set MUST fail closed.
 ### REQ-PKG-018
 
 The permanent sole maintainer, release approver, and publisher is `alamorre`; the stable release
-process MUST NOT require or claim an independent reviewer, nominal collaborator, alternate account,
-or automation identity. Before tag creation and again before publication, the release gate MUST
-verify and retain sanitized evidence that environment `breakdown-local-stable` admits only the
-exact `breakdown-local-v*` tag policy with administrator bypass disabled, immutable GitHub Releases
-are enabled, and tag ruleset `20015652` has exactly `refs/tags/breakdown-local-v*`, update/deletion
-restrictions, no exclusions or bypass actors, and no maintainer bypass. Before its first irreversible
-step, stable publication MUST verify a candidate-bound SSH approval signature against the
-maintainer's GitHub-recognized signing identity and retain the approval, signature, verification,
-GitHub-hosted runner identity, npm OIDC subject, artifact IDs, source/tag bindings, and exact control
-snapshot. These compensating controls MUST NOT be described as independent review.
+process MUST NOT require or claim an independent reviewer, nominal collaborator, or alternate
+account. Before tag creation and again before publication, the release gate MUST verify and retain
+sanitized evidence that environment `breakdown-local-stable` admits only the exact
+`breakdown-local-v*` tag policy with administrator bypass disabled, immutable GitHub Releases are
+enabled, and tag ruleset `20015652` has exactly `refs/tags/breakdown-local-v*`, update/deletion
+restrictions, no exclusions or bypass actors, and no maintainer bypass.
+
+Before tag creation, automation MUST prove that the candidate and platform index are immutable
+artifacts from one successful first-attempt qualification run at the current `main` SHA and MUST
+present the exact source SHA, candidate digest, checksum-inventory digest, artifact IDs, version,
+tag, npm mode, ceremony run ID, and required human attestations. Environment
+`breakdown-local-authorization` MUST admit only `main`, require exactly GitHub reviewer `alamorre`,
+permit self-review only because of the permanent sole-maintainer model, and disable administrator
+bypass. The authenticated review MUST explicitly confirm the SHA-256 of that exact plan. Automation
+MUST retain and attest the review-bound authorization and MUST NOT manufacture or claim to sign the
+human decision.
+
+The protected annotated tag MUST be signed by the documented keyless automation identity using a
+short-lived GitHub Actions OIDC certificate and ephemeral signing key, with no long-lived or
+maintainer private key supplied to the runner. Verification MUST check the exact repository,
+workflow, `main` ref, OIDC issuer, Git signature, certificate claims, and transparency-log entry.
+Stable publication MUST retain the authorization, its attestation and verification, signer
+evidence, GitHub-hosted runner identity, npm OIDC subject, artifact IDs, source/tag bindings, and
+exact control snapshot. These compensating controls MUST NOT be described as independent review.
 
 ### REQ-PKG-019
 
@@ -167,7 +181,7 @@ trusted publisher as GitHub repository `alamorre/breakdown.sh`, workflow
 `local-stable-publication.yml`, environment `breakdown-local-stable`, with only `createPackage`
 permission; require two-factor authentication and disallow token publication on each package;
 revoke the bootstrap token; and remove the GitHub environment secret. A second protected run with
-a fresh candidate-bound signed approval MUST validate sanitized trust evidence, the attested
+a fresh candidate-bound GitHub authorization MUST validate attested sanitized trust evidence, the attested
 bootstrap report, absence of the bootstrap secret, and the exact public 1.0.0 tarball bytes before
 finalizing the immutable GitHub Release without republishing npm. Every later package version MUST
 use that OIDC trusted publisher, refuse npm token environment variables, and retain exact trust,
