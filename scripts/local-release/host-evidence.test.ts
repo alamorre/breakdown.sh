@@ -320,6 +320,9 @@ describe('authenticated host support workflow', () => {
       'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8',
     );
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
+    expect(workflow).toContain('actions/artifacts/${CANDIDATE_ARTIFACT_ID}');
+    expect(workflow).toContain(".name == \"breakdown-local-candidate\"");
+    expect(workflow).toContain('run-id: ${{ env.CANDIDATE_RUN_ID }}');
     expect(workflow).not.toContain('evidence_artifact_ids');
     expect(workflow).toContain('actions/workflows/324133712');
     expect(workflow).toContain('disabled_manually');

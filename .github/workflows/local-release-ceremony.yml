@@ -109,12 +109,14 @@ jobs:
           qualification_run_id="$(jq -er '.workflow_run.id' "${{ runner.temp }}/candidate-artifact.json")"
           test "$qualification_run_id" = "$(jq -er '.workflow_run.id' "${{ runner.temp }}/platform-artifact.json")"
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qualification_run_id}" > "${{ runner.temp }}/qualification-run.json"
+          printf 'QUALIFICATION_RUN_ID=%s\n' "$qualification_run_id" >> "$GITHUB_ENV"
 
       - name: Download the exact candidate by artifact ID
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.QUALIFICATION_RUN_ID }}
           path: ${{ runner.temp }}/candidate
 
       - name: Download the exact platform index by artifact ID
@@ -122,6 +124,7 @@ jobs:
         with:
           artifact-ids: ${{ inputs.platform_index_artifact_id }}
           github-token: ${{ github.token }}
+          run-id: ${{ env.QUALIFICATION_RUN_ID }}
           path: ${{ runner.temp }}/platform-index
 
       - name: Resolve one immutable platform index

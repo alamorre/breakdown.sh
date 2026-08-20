@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { sha256 } from './filesystem.mjs';
@@ -13,6 +16,7 @@ import {
 } from './release-ceremony.mjs';
 
 const sourceSha = 'a'.repeat(40);
+const repositoryRoot = join(import.meta.dirname, '../..');
 
 function fixture() {
   const candidate = {
@@ -142,6 +146,18 @@ describe('release ceremony planning', () => {
         platformIndexArtifact: { ...fixture().platformIndexArtifact, digest: 'sha256:nope' },
       }),
     ).toThrow('breakdown-platform-evidence-index artifact metadata');
+  });
+});
+
+describe('release ceremony workflow', () => {
+  it('downloads qualified artifacts from their originating workflow run', async () => {
+    const workflow = await readFile(
+      join(repositoryRoot, '.github', 'workflows', 'local-release-ceremony.yml'),
+      'utf8',
+    );
+
+    expect(workflow).toContain("printf 'QUALIFICATION_RUN_ID=%s\\n'");
+    expect(workflow.match(/run-id: \$\{\{ env\.QUALIFICATION_RUN_ID \}\}/g)).toHaveLength(2);
   });
 });
 
