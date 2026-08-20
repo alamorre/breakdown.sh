@@ -13,7 +13,6 @@ permissions:
   actions: write
   attestations: read
   contents: read
-  deployments: read
 
 concurrency:
   group: breakdown-local-v1-release-recovery
@@ -202,166 +201,175 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
-      - name: Dispatch or resume the one correlated host-support run
+      - name: Verify the exact retained successful host-support run and artifact
         id: host
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=breakdown-local-v1.0.0
-          title='Breakdown Local host support for ceremony 32391936576'
-          list_runs() {
-            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/323419478/runs?event=workflow_dispatch&per_page=100"
-          }
-          runs="$(list_runs)"
-          count="$(jq --arg title "$title" '[.[].workflow_runs[] | select(.display_title == $title)] | length' <<< "$runs")"
-          test "$count" -le 1
-          if test "$count" -eq 0; then
-            gh workflow run 323419478 --ref "$tag" \
-              -f candidate_artifact_id=9413780200 \
-              -f ceremony_run_id=32391936576
-          fi
-          run_id=''
-          for attempt in $(seq 1 240); do
-            runs="$(list_runs)"
-            mapfile -t ids < <(jq -r --arg title "$title" '.[] | .workflow_runs[] | select(.display_title == $title) | .id' <<< "$runs")
-            test "${#ids[@]}" -le 1
-            if test "${#ids[@]}" -eq 1; then run_id="${ids[0]}"; break; fi
-            sleep 5
-          done
-          test -n "$run_id"
-          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/32406103756" > "${{ runner.temp }}/host-support-run.json"
           jq -e \
-            --arg tag "$tag" \
-            '.event == "workflow_dispatch" and .path == ".github/workflows/local-host-support.yml" and .head_branch == $tag and .head_sha == "723e296c5a0ab5431a02022830adff8bcf0dd818"' \
-            <<< "$run"
-          status="$(jq -r '.status' <<< "$run")"
-          conclusion="$(jq -r '.conclusion // ""' <<< "$run")"
-          minimum_run_attempt="$(jq -r '.run_attempt' <<< "$run")"
-          if test "$status" = completed && test "$conclusion" != success; then
-            [[ "$conclusion" = failure || "$conclusion" = cancelled || "$conclusion" = timed_out ]]
-            gh run rerun "$run_id"
-            minimum_run_attempt="$((minimum_run_attempt + 1))"
-          fi
-          completed=false
-          for attempt in $(seq 1 240); do
-            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
-            run_attempt="$(jq -r '.run_attempt' <<< "$run")"
-            status="$(jq -r '.status' <<< "$run")"
-            if test "$run_attempt" -ge "$minimum_run_attempt" && test "$status" = completed; then
-              test "$(jq -r '.conclusion' <<< "$run")" = success
-              completed=true
-              break
-            fi
-            sleep 5
-          done
-          test "$completed" = true
-          artifacts="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts")"
-          mapfile -t artifact_ids < <(jq -r '.artifacts[] | select(.name == "breakdown-host-support" and .expired == false) | .id' <<< "$artifacts")
-          test "${#artifact_ids[@]}" -eq 1
-          printf 'artifact_id=%s\n' "${artifact_ids[0]}" >> "$GITHUB_OUTPUT"
-          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+            '.id == 32406103756 and
+             .workflow_id == 323419478 and
+             .display_title == "Breakdown Local host support for ceremony 32391936576" and
+             .event == "workflow_dispatch" and
+             .path == ".github/workflows/local-host-support.yml" and
+             .head_branch == "breakdown-local-v1.0.0" and
+             .head_sha == "723e296c5a0ab5431a02022830adff8bcf0dd818" and
+             .actor.login == "github-actions[bot]" and
+             .triggering_actor.login == "github-actions[bot]" and
+             .run_attempt == 1 and
+             .status == "completed" and
+             .conclusion == "success"' \
+            "${{ runner.temp }}/host-support-run.json" > /dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9420331832" > "${{ runner.temp }}/host-support-artifact.json"
+          jq -e \
+            '.id == 9420331832 and
+             .name == "breakdown-host-support" and
+             .expired == false and
+             .digest == "sha256:a29b6fb317ce1b94be4e704113dced212e2680e4f06538fcec55b8d1d85928da" and
+             .workflow_run.id == 32406103756 and
+             .workflow_run.head_branch == "breakdown-local-v1.0.0" and
+             .workflow_run.head_sha == "723e296c5a0ab5431a02022830adff8bcf0dd818"' \
+            "${{ runner.temp }}/host-support-artifact.json" > /dev/null
+          printf 'artifact_id=9420331832\n' >> "$GITHUB_OUTPUT"
+          printf 'run_id=32406103756\n' >> "$GITHUB_OUTPUT"
 
       - name: Dispatch or resume the one correlated protected stable-publication run
         env:
           GH_TOKEN: ${{ github.token }}
-          HOST_SUPPORT_ARTIFACT_ID: ${{ steps.host.outputs.artifact_id }}
-          RECOVERY_DEPLOYMENT_TOKEN: ${{ secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=breakdown-local-v1.0.0
-          task=breakdown-local-v1-recovery
-          title='Breakdown Local stable publication for ceremony 32391936576'
-          list_runs() {
-            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/323419480/runs?event=deployment&per_page=100"
+          fail() {
+            printf '::error::%s\n' "$*" >&2
+            exit 1
           }
-          deployments="$(gh api "repos/${GITHUB_REPOSITORY}/deployments?ref=${tag}&task=${task}&environment=breakdown-local-stable&per_page=100")"
-          deployment_count="$(jq 'length' <<< "$deployments")"
-          test "$deployment_count" -le 1
-          if test "$deployment_count" -eq 1; then
-            jq -e \
-              --arg host "$HOST_SUPPORT_ARTIFACT_ID" \
-              '.[0].ref == "breakdown-local-v1.0.0" and
-               .[0].task == "breakdown-local-v1-recovery" and
-               .[0].environment == "breakdown-local-stable" and
-               .[0].payload == {
-                 candidate_artifact_id: "9413780200",
-                 platform_index_artifact_id: "9413912347",
-                 host_support_artifact_id: $host,
-                 authorization_artifact_id: "9415223409",
-                 ceremony_run_id: "32391936576",
-                 npm_publication_mode: "first-package-bootstrap",
-                 npm_bootstrap_confirmation: "CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0",
-                 npm_trusted_publishing_artifact_id: "",
-                 npm_bootstrap_artifact_id: ""
-               }' <<< "$deployments"
-          fi
-          runs="$(list_runs)"
-          run_count="$(jq --arg title "$title" '[.[].workflow_runs[] | select(.display_title == $title)] | length' <<< "$runs")"
-          test "$run_count" -le 1
-          if test "$deployment_count" -eq 0; then
-            test "$run_count" -eq 0
-            test -n "$RECOVERY_DEPLOYMENT_TOKEN"
+          list_runs() {
+            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/323419480/runs?per_page=100" > "$1"
+          }
+          read_publication_state() {
+            local release_exists=false
+            local release_error="${{ runner.temp }}/github-release-error.log"
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/breakdown-local-v1.0.0" > "${{ runner.temp }}/github-release.json" 2> "$release_error"; then
+              release_exists=true
+            else
+              rg --fixed-strings 'HTTP 404' "$release_error" > /dev/null || fail "Could not determine GitHub Release state."
+            fi
+            local core_exists
+            local cli_exists
+            local mcp_exists
+            package_exists() {
+              local key="$1"
+              local encoded_name="$2"
+              local status
+              status="$(curl --silent --show-error --location \
+                --output "${{ runner.temp }}/npm-${key}.json" \
+                --write-out '%{http_code}' \
+                "https://registry.npmjs.org/${encoded_name}")"
+              case "$status" in
+                200) printf true ;;
+                404) printf false ;;
+                *) fail "Could not determine npm state for ${encoded_name}; registry returned HTTP ${status}." ;;
+              esac
+            }
+            core_exists="$(package_exists core '@breakdown-sh%2fcore')"
+            cli_exists="$(package_exists cli '@breakdown-sh%2fcli')"
+            mcp_exists="$(package_exists mcp '@breakdown-sh%2fmcp')"
             jq -n \
-              --arg host_support_artifact_id "$HOST_SUPPORT_ARTIFACT_ID" \
+              --argjson release "$release_exists" \
+              --argjson core "$core_exists" \
+              --argjson cli "$cli_exists" \
+              --argjson mcp "$mcp_exists" \
               '{
-                ref: "breakdown-local-v1.0.0",
-                task: "breakdown-local-v1-recovery",
-                auto_merge: false,
-                required_contexts: [],
-                environment: "breakdown-local-stable",
-                description: "Continue exact authorized ceremony 32391936576 after issue #200 recovery verification",
-                payload: {
-                  candidate_artifact_id: "9413780200",
-                  platform_index_artifact_id: "9413912347",
-                  host_support_artifact_id: $host_support_artifact_id,
-                  authorization_artifact_id: "9415223409",
-                  ceremony_run_id: "32391936576",
-                  npm_publication_mode: "first-package-bootstrap",
-                  npm_bootstrap_confirmation: "CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0",
-                  npm_trusted_publishing_artifact_id: "",
-                  npm_bootstrap_artifact_id: ""
+                github_release_exists: $release,
+                npm_packages: {
+                  "@breakdown-sh/core": $core,
+                  "@breakdown-sh/cli": $cli,
+                  "@breakdown-sh/mcp": $mcp
                 }
-              }' | GH_TOKEN="$RECOVERY_DEPLOYMENT_TOKEN" gh api \
-                --method POST \
-                "repos/${GITHUB_REPOSITORY}/deployments" \
-                --input - > "${{ runner.temp }}/stable-deployment.json"
+              }' > "$1"
+          }
+          create_plan() {
+            pnpm local:release:plan-v1-handoff \
+              --runs "$1" \
+              --publication-state "$2" \
+              --workflow-sha "$GITHUB_SHA" \
+              --output "$3"
+          }
+
+          runs_file="${{ runner.temp }}/stable-publication-runs-before.json"
+          state_file="${{ runner.temp }}/stable-publication-state.json"
+          plan_file="${{ runner.temp }}/stable-publication-handoff-before.json"
+          list_runs "$runs_file"
+          read_publication_state "$state_file"
+          create_plan "$runs_file" "$state_file" "$plan_file"
+
+          action="$(jq -er '.action' "$plan_file")"
+          if test "$action" = dispatch; then
+            request_file="${{ runner.temp }}/stable-publication-dispatch.json"
+            response_file="${{ runner.temp }}/stable-publication-dispatch-response.json"
+            jq -e '.dispatch' "$plan_file" > "$request_file"
+            if ! gh api \
+              --method POST \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/323419480/dispatches" \
+              --input "$request_file" > "$response_file"; then
+              fail 'Stable-publication workflow dispatch failed. It was not retried.'
+            fi
+            run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0) | tostring' "$response_file")" || fail 'Stable-publication dispatch did not return a run ID; do not retry blindly.'
+            run_url="$(jq -er '.html_url | select(type == "string")' "$response_file")" || fail 'Stable-publication dispatch did not return a run URL; do not retry blindly.'
+            test "$run_url" = "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${run_id}" || fail 'Stable-publication dispatch returned a mismatched run URL; do not retry blindly.'
+            printf '::notice::Dispatched the exact stable-publication run: %s\n' "$run_url"
+
+            runs_after_file="${{ runner.temp }}/stable-publication-runs-after.json"
+            plan_after_file="${{ runner.temp }}/stable-publication-handoff-after.json"
+            list_runs "$runs_after_file"
+            create_plan "$runs_after_file" "$state_file" "$plan_after_file"
+            test "$(jq -er '.action' "$plan_after_file")" = resume || fail "The dispatched run could not be correlated: ${run_url}"
+            test "$(jq -er '.run.id' "$plan_after_file")" = "$run_id" || fail "The dispatch response and correlated run disagree: ${run_url}"
+          elif test "$action" = resume; then
+            run_id="$(jq -er '.run.id' "$plan_file")"
+            run_url="$(jq -er '.run.url' "$plan_file")"
+            printf '::notice::Resuming the one exact stable-publication run: %s\n' "$run_url"
+          else
+            fail "Unexpected stable-publication handoff action: ${action}"
           fi
-          run_id=''
-          for attempt in $(seq 1 240); do
-            runs="$(list_runs)"
-            mapfile -t ids < <(jq -r --arg title "$title" '.[] | .workflow_runs[] | select(.display_title == $title) | .id' <<< "$runs")
-            test "${#ids[@]}" -le 1
-            if test "${#ids[@]}" -eq 1; then run_id="${ids[0]}"; break; fi
-            sleep 5
-          done
-          test -n "$run_id"
+
           run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
-          jq -e \
-            '.event == "deployment" and .path == ".github/workflows/local-stable-publication.yml" and .head_branch == "breakdown-local-v1.0.0" and .head_sha == "723e296c5a0ab5431a02022830adff8bcf0dd818" and .actor.login == "alamorre"' \
-            <<< "$run"
-          status="$(jq -r '.status' <<< "$run")"
+          status="$(jq -er '.status' <<< "$run")"
           conclusion="$(jq -r '.conclusion // ""' <<< "$run")"
-          minimum_run_attempt="$(jq -r '.run_attempt' <<< "$run")"
+          minimum_run_attempt="$(jq -er '.run_attempt' <<< "$run")"
           if test "$status" = completed && test "$conclusion" != success; then
-            [[ "$conclusion" = failure || "$conclusion" = cancelled || "$conclusion" = timed_out ]]
+            if [[ "$conclusion" != failure && "$conclusion" != cancelled && "$conclusion" != timed_out ]]; then
+              fail "Stable-publication run cannot be safely resumed after conclusion ${conclusion}: ${run_url}"
+            fi
+            printf '::notice::Rerunning failed attempt %s of the exact stable-publication run: %s\n' "$minimum_run_attempt" "$run_url"
             gh run rerun "$run_id"
             minimum_run_attempt="$((minimum_run_attempt + 1))"
           fi
+
           completed=false
+          last_state=''
           for attempt in $(seq 1 240); do
             run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
-            run_attempt="$(jq -r '.run_attempt' <<< "$run")"
-            status="$(jq -r '.status' <<< "$run")"
+            run_attempt="$(jq -er '.run_attempt' <<< "$run")"
+            status="$(jq -er '.status' <<< "$run")"
+            current_state="attempt ${run_attempt}: ${status}"
+            if test "$current_state" != "$last_state"; then
+              printf 'Stable-publication %s (%s)\n' "$current_state" "$run_url"
+              last_state="$current_state"
+            fi
             if test "$run_attempt" -ge "$minimum_run_attempt" && test "$status" = completed; then
-              test "$(jq -r '.conclusion' <<< "$run")" = success
+              conclusion="$(jq -er '.conclusion' <<< "$run")"
+              test "$conclusion" = success || fail "Stable-publication run concluded ${conclusion}: ${run_url}"
               completed=true
               break
             fi
             sleep 5
           done
-          test "$completed" = true
-          printf '## Exact v1.0.0 recovery continuation complete\n\nHost support run: `%s`. First-package bootstrap run: `%s`. Immutable tag: `%s`. No tag was created or changed by this recovery.\n' \
-            '${{ steps.host.outputs.run_id }}' "$run_id" "$tag" >> "$GITHUB_STEP_SUMMARY"
+          test "$completed" = true || fail "Timed out waiting for stable publication: ${run_url}"
+          printf '## Exact v1.0.0 recovery continuation complete\n\nHost support run: `%s`. Host support artifact: `%s`. First-package bootstrap run: [%s](%s). Immutable tag: `%s`. No tag was created or changed by this recovery.\n' \
+            '${{ steps.host.outputs.run_id }}' '${{ steps.host.outputs.artifact_id }}' "$run_id" "$run_url" breakdown-local-v1.0.0 >> "$GITHUB_STEP_SUMMARY"

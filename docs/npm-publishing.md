@@ -59,9 +59,14 @@ CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0
 The already-tagged ceremony run `32391936576` is the one documented exception: do not dispatch a
 new ceremony or rerun its stale workflow snapshot. After separate authorization under #190, use
 the exact one-time recovery procedure in `scripts/local-release/README.md`. It validates the
-existing immutable tag and retained evidence, then enters this same protected bootstrap workflow;
-it does not retag, rebuild, or make the npm credential available outside
-`breakdown-local-stable`.
+existing immutable tag and retained evidence, verifies the already-successful host-support run and
+artifact, then directly dispatches this same protected bootstrap workflow exactly once on the
+reviewed `main` commit while passing the existing tag as the independently verified publication
+target. The runbook documents the temporary one-policy environment switch needed because the tag
+contains the stale workflow snapshot: `breakdown-local-stable` admits exact `main` only during the
+authorized recovery, then returns to its sole `breakdown-local-v*` tag policy. It does not retag,
+rebuild, repeat host qualification, create a deployment, or make the npm credential available
+outside `breakdown-local-stable`.
 
 The workflow checks that every name is absent, or that an interrupted prior attempt already
 published the exact 1.0.0 candidate bytes. It refuses a claimed name whose 1.0.0 record is absent.
@@ -140,10 +145,14 @@ artifact IDs, and keyless signer match the exact plan. The new GitHub review aut
 finalization mode. Do not create or move a second tag.
 
 The workflow verifies the bootstrap artifact's Sigstore attestation against the exact repository,
-workflow, tag, and commit; rejects the still-present bootstrap environment secret; validates the
-fresh human attestations that token publication is disabled and the credential is revoked; and
-byte-compares every public npm tarball with the qualified candidate. Only then can it create and
-finalize the immutable GitHub Release. This run performs no `npm publish` command.
+workflow, and immutable execution ref and commit recorded in the candidate-bound bootstrap report.
+For ordinary tag execution those are the signed tag and candidate commit. The one-time v1 recovery
+records the reviewed `main` workflow commit that actually performed the bootstrap while separately
+binding the same report to the immutable signed tag and candidate commit. The workflow also rejects
+the still-present bootstrap environment secret, validates the fresh human attestations that token
+publication is disabled and the credential is revoked, and byte-compares every public npm tarball
+with the qualified candidate. Only then can it create and finalize the immutable GitHub Release.
+This run performs no `npm publish` command.
 
 The GitHub control-read credential used by this gate needs read-only Environments permission in
 addition to the permissions listed in the stable release runbook. The environment-secrets API

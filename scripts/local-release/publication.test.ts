@@ -430,6 +430,7 @@ async function publicationFixture() {
   await writeJson(githubControlsPath, {
     schema_version: 'breakdown.github-release-controls.v1',
     captured_at: '2026-07-29T20:02:00.000Z',
+    execution_mode: 'tag',
     phase: 'publication',
     repository: {
       full_name: 'alamorre/breakdown.sh',
@@ -833,6 +834,18 @@ describe('prepareLocalPublication', () => {
       repository: 'alamorre/breakdown.sh',
       workflow: 'local-stable-publication.yml',
       environment: 'breakdown-local-stable',
+      publication_target: {
+        signed_tag: 'breakdown-local-v1.0.0',
+        source_commit: gitCommit,
+      },
+      execution: {
+        mode: 'tag',
+        ref: 'refs/tags/breakdown-local-v1.0.0',
+        source_commit: gitCommit,
+        workflow_ref:
+          'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+        workflow_sha: gitCommit,
+      },
       publication_manifest: {
         file: 'breakdown-publication-manifest-1.0.0.json',
         sha256: 'e'.repeat(64),
@@ -1386,6 +1399,8 @@ describe('stable publication workflow', () => {
       'run-id: ${{ env.NPM_BOOTSTRAP_RUN_ID }}',
       'breakdown-release-authorization-${CEREMONY_RUN_ID}',
       'breakdown-npm-first-package-bootstrap- prefix',
+      'v1-bootstrap',
+      'Breakdown Local v1.0.0 recovery handoff for workflow',
       'breakdown-github-release-authorization.json',
       'breakdown-github-release-authorization.attestation.json',
       'local-release-ceremony.yml',
@@ -1441,20 +1456,25 @@ describe('stable publication workflow', () => {
     );
     const requiredSnippets = [
       'environment: breakdown-local-authorization',
-      'secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN',
+      'actions: write',
       'artifact-ids: 9415176744',
       'artifact-ids: 9415223409',
       'artifact-ids: 9413780200',
       'artifact-ids: 9413912347',
       'pnpm local:release:verify-v1-recovery',
+      'pnpm local:release:plan-v1-handoff',
+      '--workflow-sha "$GITHUB_SHA"',
       '"${{ runner.temp }}/gitsign" verify-tag',
-      'gh workflow run 323419478 --ref "$tag"',
+      'actions/workflows/323419480/dispatches',
+      "--header 'X-GitHub-Api-Version: 2026-03-10'",
+      'workflow_run_id',
+      'Host support artifact: `%s`',
       'gh run rerun "$run_id"',
-      'task: "breakdown-local-v1-recovery"',
-      'environment: "breakdown-local-stable"',
-      'HOST_SUPPORT_ARTIFACT_ID',
+      'actions/runs/32406103756',
+      'actions/artifacts/9420331832',
     ];
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
+    expect(workflow.match(/actions\/workflows\/323419480\/dispatches/g)).toHaveLength(1);
     const forbiddenSnippets = [
       'git tag ',
       'git push ',
@@ -1462,7 +1482,24 @@ describe('stable publication workflow', () => {
       'gh release create',
       'gh release edit',
       'secrets.NPM_FIRST_PACKAGE_TOKEN',
+      'secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN',
+      'repos/${GITHUB_REPOSITORY}/deployments',
+      'gh workflow run 323419478',
     ];
     expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
+
+    const stableWorkflow = await readFile(
+      join(repositoryRoot, '.github', 'workflows', 'local-stable-publication.yml'),
+      'utf8',
+    );
+    expect(stableWorkflow).toContain('environment: breakdown-local-stable');
+    expect(stableWorkflow).toContain('secrets.NPM_FIRST_PACKAGE_TOKEN');
+    expect(stableWorkflow).toContain("github.ref == 'refs/heads/main'");
+    expect(stableWorkflow).toContain("inputs.recovery_tag == 'breakdown-local-v1.0.0'");
+    expect(stableWorkflow).toContain('test "$RECOVERY_WORKFLOW_SHA_INPUT" = "$GITHUB_SHA"');
+    expect(stableWorkflow).toContain('--execution-mode "$RELEASE_EXECUTION_MODE"');
+    expect(stableWorkflow).toContain(
+      "format('Breakdown Local v1.0.0 recovery handoff for workflow {0}', inputs.recovery_workflow_sha)",
+    );
   });
 });

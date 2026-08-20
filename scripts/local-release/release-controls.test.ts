@@ -137,8 +137,35 @@ describe('GitHub stable release controls', () => {
     };
 
     expect(() => validateGithubReleaseControls(invalid)).toThrow(
-      'Stable publication environment has missing or unexpected protection rules.',
+      'Stable publication environment does not match the exact tag or one-time v1 recovery boundary.',
     );
+  });
+
+  it('accepts only the reviewed-main boundary for the one-time v1 recovery', () => {
+    const fixture = releaseControlFixture();
+    const recovery = {
+      ...fixture,
+      executionMode: 'v1-recovery',
+      phase: 'publication',
+      stableTags: [{ name: V1_RELEASE_RECOVERY_POLICY.tag }],
+      deploymentPolicies: {
+        total_count: 1,
+        branch_policies: [
+          { id: 7, name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
+        ],
+      },
+    };
+
+    expect(() => validateGithubReleaseControls(recovery)).not.toThrow();
+    expect(() =>
+      validateGithubReleaseControls({
+        ...recovery,
+        deploymentPolicies: {
+          total_count: 1,
+          branch_policies: [{ id: 8, name: '*', type: 'branch' }],
+        },
+      }),
+    ).toThrow('one-time v1 recovery boundary');
   });
 
   it('rejects a broader tag pattern or any ruleset bypass', () => {
@@ -208,6 +235,7 @@ describe('GitHub stable release controls', () => {
       }),
     ).resolves.toMatchObject({
       schema_version: 'breakdown.github-release-controls.v1',
+      execution_mode: 'tag',
       phase: 'pre-tag',
       permanent_operating_model: {
         sole_maintainer: 'alamorre',
@@ -287,7 +315,7 @@ describe('sole-maintainer approval signature', () => {
 });
 
 describe('stable workflow identity evidence', () => {
-  it('accepts the reviewed main workflow implementation on the exact recovery tag deployment', () => {
+  it('accepts the reviewed main workflow targeting the exact recovery tag', () => {
     const workflowRef =
       'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main';
     const candidate = {
@@ -300,21 +328,21 @@ describe('stable workflow identity evidence', () => {
       ref: `refs/tags/${candidate.tag}`,
       ref_name: candidate.tag,
       source_commit: candidate.provenance.source.git_commit,
-      actor: 'alamorre',
-      triggering_actor: 'alamorre',
+      actor: 'github-actions[bot]',
+      triggering_actor: 'github-actions[bot]',
       environment: RELEASE_CONTROL_POLICY.environment,
       runner_environment: 'github-hosted',
       oidc: {
         subject: `repo:${RELEASE_CONTROL_POLICY.repository}:environment:${RELEASE_CONTROL_POLICY.environment}`,
         audience: RELEASE_CONTROL_POLICY.oidcAudience,
         job_workflow_ref: workflowRef,
-        ref: `refs/tags/${candidate.tag}`,
-        sha: candidate.provenance.source.git_commit,
+        ref: 'refs/heads/main',
+        sha: 'f'.repeat(40),
       },
       execution: {
         mode: 'v1-recovery',
-        ref: `refs/tags/${candidate.tag}`,
-        source_commit: candidate.provenance.source.git_commit,
+        ref: 'refs/heads/main',
+        source_commit: 'f'.repeat(40),
         workflow_ref: workflowRef,
         workflow_sha: 'f'.repeat(40),
       },
@@ -335,6 +363,18 @@ describe('stable workflow identity evidence', () => {
         platformIndexArtifactId: '2',
       }),
     ).not.toThrow();
+    expect(() =>
+      validateWorkflowIdentityEvidence(
+        { ...evidence, triggering_actor: RELEASE_CONTROL_POLICY.maintainer },
+        {
+          authorizationVerificationSha256: 'e'.repeat(64),
+          candidate,
+          candidateArtifactId: '1',
+          controlsSha256: 'd'.repeat(64),
+          platformIndexArtifactId: '2',
+        },
+      ),
+    ).toThrow('Stable workflow identity');
   });
 
   it('rejects a self-hosted runner even when every artifact ID matches', () => {

@@ -9,12 +9,16 @@ import { inspectGithubReleaseControls } from './local-release/release-controls.m
 
 export async function main(argv = process.argv) {
   const usage =
-    'Usage: verify-github-release-controls.mjs --phase pre-tag|publication --tag breakdown-local-vX.Y.Z --output PATH';
+    'Usage: verify-github-release-controls.mjs --phase pre-tag|publication --execution-mode tag|v1-recovery --tag breakdown-local-vX.Y.Z --output PATH';
   const phase = requiredArgumentValue(argv, '--phase', usage);
+  const executionModeIndex = argv.indexOf('--execution-mode');
+  const executionMode =
+    executionModeIndex === -1 ? 'tag' : requiredArgumentValue(argv, '--execution-mode', usage);
   const tagIndex = argv.indexOf('--tag');
   const tag = tagIndex === -1 ? undefined : argv[tagIndex + 1];
   const snapshot = await inspectGithubReleaseControls({
     outputPath: resolve(requiredArgumentValue(argv, '--output', usage)),
+    executionMode,
     phase,
     tag,
   });

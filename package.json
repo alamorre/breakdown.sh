@@ -48,6 +48,7 @@
     "local:release:authorize-ceremony": "node scripts/authorize-release-ceremony.mjs",
     "local:release:render-tag-message": "node scripts/render-release-tag-message.mjs",
     "local:release:verify-v1-recovery": "node scripts/verify-v1-release-recovery.mjs",
+    "local:release:plan-v1-handoff": "node scripts/verify-v1-release-recovery.mjs --plan-handoff",
     "local:release:inspect-npm-trust": "node scripts/inspect-npm-trusted-publishing.mjs",
     "local:release:prepare-npm": "node scripts/prepare-npm-publication.mjs",
     "local:release:publish-first-npm-packages": "node scripts/publish-first-npm-packages.mjs",
