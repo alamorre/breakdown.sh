@@ -1464,6 +1464,7 @@ describe('stable publication workflow', () => {
       'pnpm local:release:verify-v1-recovery',
       'pnpm local:release:plan-v1-handoff',
       '--workflow-sha "$GITHUB_SHA"',
+      'node scripts/verify-v1-release-recovery.mjs --verify-github-release-absence --error-log "$release_error"',
       '"${{ runner.temp }}/gitsign" verify-tag',
       'actions/workflows/323419480/dispatches',
       "--header 'X-GitHub-Api-Version: 2026-03-10'",
@@ -1485,6 +1486,7 @@ describe('stable publication workflow', () => {
       'secrets.RELEASE_RECOVERY_DEPLOYMENT_TOKEN',
       'repos/${GITHUB_REPOSITORY}/deployments',
       'gh workflow run 323419478',
+      "rg --fixed-strings 'HTTP 404'",
     ];
     expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
 
@@ -1501,5 +1503,19 @@ describe('stable publication workflow', () => {
     expect(stableWorkflow).toContain(
       "format('Breakdown Local v1.0.0 recovery handoff for workflow {0}', inputs.recovery_workflow_sha)",
     );
+  });
+
+  it('records the failed recovery snapshot and requires one fresh post-merge dispatch', async () => {
+    const runbook = await readFile(
+      join(repositoryRoot, 'scripts', 'local-release', 'README.md'),
+      'utf8',
+    );
+
+    expect(runbook).toContain('Recovery run `32418990076`');
+    expect(runbook).toContain('artifact `9768245426`');
+    expect(runbook).toContain('Do not use **Re-run failed jobs** on');
+    expect(runbook).toContain('one fresh recovery run from the exact new `main` commit');
+    expect(runbook).toContain('Never manually dispatch the stable-publication child');
+    expect(runbook).toContain('always restore and verify');
   });
 });

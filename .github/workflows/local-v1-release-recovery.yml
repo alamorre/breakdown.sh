@@ -255,7 +255,7 @@ jobs:
             if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/breakdown-local-v1.0.0" > "${{ runner.temp }}/github-release.json" 2> "$release_error"; then
               release_exists=true
             else
-              rg --fixed-strings 'HTTP 404' "$release_error" > /dev/null || fail "Could not determine GitHub Release state."
+              node scripts/verify-v1-release-recovery.mjs --verify-github-release-absence --error-log "$release_error" > /dev/null 2>&1 || fail "Could not determine GitHub Release state."
             fi
             local core_exists
             local cli_exists
