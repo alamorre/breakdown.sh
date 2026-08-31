@@ -1,5 +1,7 @@
 # breakdown.sh
 
+> **Canonical product (1.0+): [Breakdown Local](docs/roadmap.md)** — directory-native, `breakdown.yaml` + CLI + local MCP + 5 skills, file-local secrets (`.env.local.example` inventory, no Doppler). Hosted SaaS is legacy/out-of-scope for the local corpus; see [`docs/roadmap.md`](docs/roadmap.md) and [`docs/adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md`](docs/adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md). This README's hosted sections remain for self-host/operators and Codex plugin users; for Local, start with `docs/roadmap.md` and `local/README.md` (or `docs/local-development.md`).
+
 Breakdown is a hosted/headless reasoning workflow service for coding agents. Agents running in any
 project can connect to hosted Breakdown through public discovery metadata, setup sessions, remote
 MCP, and headless REST. You do not need to clone this repository for normal service usage.
@@ -40,20 +42,19 @@ corepack enable
 pnpm install
 ```
 
-Runtime configuration is managed in Doppler. Use `.env.local.example` as the variable inventory, but
-do not put real secret values in the repo.
+Runtime configuration is file-local. Use `.env.local.example` as the variable inventory — copy it to `.env.local` and fill in values locally; do not put real secret values in the repo. Validate with `pnpm secrets:check`. No Doppler, no Vercel env sync, and no `doppler setup` are required for ordinary development or for Breakdown Local usage.
 
 For first-time setup:
 
 ```bash
-brew install gnupg
-brew install dopplerhq/cli/doppler
-doppler login
-doppler setup
-pnpm dev:secrets
+cp .env.local.example .env.local
+# edit .env.local with your Clerk/Supabase/Google Drive values
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) after the dev server starts.
+
+> **Hosted-legacy note (self-host only):** Operators self-hosting the SaaS app under `src/` may sync env from their own secrets manager (Doppler, Vault, 1Password, Vercel dashboard, or plain env files). That path is explicitly labeled `hosted-legacy / self-host only` and is not required for Breakdown Local. See [`docs/roadmap.md`](docs/roadmap.md), [`docs/adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md`](docs/adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md), and [`docs/secrets-management.md`](docs/secrets-management.md) (Appendix A).
 
 See [docs/local-development.md](docs/local-development.md) and
 [docs/secrets-management.md](docs/secrets-management.md) for contributor and operator details.

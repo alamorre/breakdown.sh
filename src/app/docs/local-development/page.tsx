@@ -35,18 +35,26 @@ pnpm install`}</CodeBlock>
 
           <h2>Configure Environment Variables</h2>
           <p>
-            Use <code>.env.local.example</code> as the variable inventory. Real values should live
-            in Doppler or another secrets manager rather than being committed to the repo.
+            Secrets are file-local only. Use <code>.env.local.example</code> as the variable
+            inventory — copy it to <code>.env.local</code> and fill in values locally. No Doppler
+            setup is required for ordinary development or for Breakdown Local.
           </p>
           <p>
-            For the standard local workflow, install Doppler, authenticate, bind the repo to the
-            development config, and run the app through Doppler.
+            For the standard local workflow, copy the example file, validate, and run:
           </p>
-          <CodeBlock>{`brew install gnupg
-brew install dopplerhq/cli/doppler
-doppler login
-doppler setup
-pnpm dev:secrets`}</CodeBlock>
+          <CodeBlock>{`cp .env.local.example .env.local
+# edit .env.local with your Clerk/Supabase/Google Drive values
+pnpm secrets:check
+pnpm dev`}</CodeBlock>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Hosted-legacy note (self-host only): operators self-hosting the SaaS app under{' '}
+            <code>src/</code> may sync env from their own secrets manager (Doppler, Vault,
+            1Password, or Vercel dashboard) via standard env vars. That hosted-legacy path is
+            documented in{' '}
+            <Link href="/docs/deployment">Operator Deployment — Appendix A</Link> and is not
+            required for Breakdown Local. See <Link href="/docs/roadmap">Roadmap</Link> and ADR
+            0004.
+          </p>
 
           <h2>Run The App</h2>
           <p>
