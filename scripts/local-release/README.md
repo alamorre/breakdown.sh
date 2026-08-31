@@ -246,6 +246,17 @@ unexpected public state, or duplicate correlated runs fail closed. Historical de
 `NPM_FIRST_PACKAGE_TOKEN` exclusively inside `breakdown-local-stable`; the recovery workflow
 contains no tag creation, npm publication, or GitHub Release command.
 
+Recovery run `32418990076` passed the protected authorization and every retained-input, signed-tag,
+Gitsign/Rekor, and host-support check, then failed before dispatching a child because its reviewed
+workflow snapshot assumed an unavailable `rg` binary while checking that the GitHub Release was
+absent. Its diagnostics are retained in artifact `9768245426`. Do not use **Re-run failed jobs** on
+run `32418990076`: GitHub would reuse that stale workflow snapshot. After the issue #204 fix is
+reviewed, merged, and passes post-merge CI, revalidate the immutable and public state and dispatch
+one fresh recovery run from the exact new `main` commit. Use the same exact recovery confirmation
+and a fresh human approval. Never manually dispatch the stable-publication child. Apply the
+temporary sole-`main` environment policy only for that fresh attempt, and always restore and verify
+the sole `breakdown-local-v*` tag policy afterward, whether the attempt succeeds or fails.
+
 ## Secret and evidence boundary
 
 The ceremony retains only sanitized controls, immutable plans, GitHub review identity, artifact

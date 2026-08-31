@@ -23,6 +23,19 @@ async function readJson(argv, name, usage) {
 }
 
 export async function main(argv = process.argv) {
+  if (argv.includes('--verify-github-release-absence')) {
+    const usage =
+      'Usage: verify-v1-release-recovery.mjs --verify-github-release-absence --error-log PATH';
+    const errorLog = await readFile(
+      resolve(requiredArgumentValue(argv, '--error-log', usage)),
+      'utf8',
+    );
+    const statuses = [...errorLog.matchAll(/\bHTTP (\d{3})\b/g)].map((match) => match[1]);
+    if (statuses.length !== 1 || statuses[0] !== '404') {
+      throw new Error('Could not determine GitHub Release state.');
+    }
+    return;
+  }
   if (argv.includes('--plan-handoff')) {
     const usage =
       'Usage: verify-v1-release-recovery.mjs --plan-handoff --runs PATH --publication-state PATH --workflow-sha SHA --output PATH';
