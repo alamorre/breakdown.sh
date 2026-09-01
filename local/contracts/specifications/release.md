@@ -186,3 +186,31 @@ bootstrap report, absence of the bootstrap secret, and the exact public 1.0.0 ta
 finalizing the immutable GitHub Release without republishing npm. Every later package version MUST
 use that OIDC trusted publisher, refuse npm token environment variables, and retain exact trust,
 provenance, signature, and public-byte verification.
+
+### REQ-PKG-020
+
+Release recovery MUST use one durable operation identity derived from the immutable tag and tag
+object, candidate source/content/checksum digests, ceremony run, retained artifact IDs,
+authorization digest, publication mode, and destructive confirmation. Every attempt MUST retain
+its controller and child workflow SHAs, run IDs and run attempts, predecessor, immutable-input
+digest, public-state preflight, last side-effect boundary, conclusion, retry classification, and
+environment cleanup result. A newer reviewed workflow SHA MAY create a successor only when the
+previous child is complete, its pre-publication stop is conclusive, every immutable input still
+matches, every expected public record is absent, and cleanup is restored and verified. Automation
+MUST NOT rerun a stale workflow snapshot or permit more than one active child.
+
+A workflow dispatch MUST correlate and monitor only the run ID returned by the versioned GitHub
+dispatch response. Missing run name, actor, ref, SHA, or input-derived title while GitHub populates
+metadata MUST cause bounded polling of that same run ID, never another dispatch. Mismatched or
+timed-out correlation MUST stop for review. Any npm package, GitHub Release, executed publication
+step, indeterminate public state, unknown side-effect boundary, or cleanup failure MUST terminate
+automatic iteration.
+
+The repository MUST provide an unprotected, no-secret, non-publishing rehearsal from an exact
+development commit that uses the same repository-owned operation, tag, public-state, correlation,
+redaction, and side-effect classifiers as live recovery through the final pre-publication boundary.
+It MUST run with a deliberately minimal declared tool set and fixtures for GitHub, npm, artifacts,
+tags, rulesets, historical attempts, and eventual consistency. The steady stable environment MUST
+retain exactly one `breakdown-local-v*` tag policy. Any bounded exact-`main` v1 recovery exception
+MUST have an auditable least-privilege transition plus an independent idempotent finalizer that
+restores and verifies the sole tag policy on every exit path.

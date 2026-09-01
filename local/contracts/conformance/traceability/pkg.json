@@ -127,6 +127,13 @@
       "oracle_type": "effect",
       "retained_evidence": "scripts/local-release/npm-publishing.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml; docs/npm-publishing.md",
       "oracle": "The exact 1.0.0 bootstrap is limited to one least-privilege short-lived credential and cannot finalize a GitHub Release; finalization proves exact public bytes, the attested bootstrap, credential removal, disabled token publication, and all three exact OIDC trust records without republishing npm; later versions are OIDC-only."
+    },
+    {
+      "id": "PKG-020",
+      "requirements": ["REQ-PKG-020"],
+      "oracle_type": "effect",
+      "retained_evidence": "scripts/local-release/release-operation.test.ts; scripts/local-release/github-release-adapter.test.ts; .github/workflows/local-release-rehearsal.yml; .github/workflows/local-v1-release-recovery.yml; scripts/local-release/README.md; docs/adr/0004-use-durable-agent-operated-release-operations.md",
+      "oracle": "The durable operation adopts prior attempts, permits only a conclusive reviewed successor, correlates the one returned child run ID through delayed metadata, stops at public or ambiguous state, restores the sole tag policy on every exit path, and exercises the shared gates without secrets or publication under a minimal tool set."
     }
   ]
 }

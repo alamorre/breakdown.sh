@@ -1,11 +1,15 @@
 name: Breakdown Local v1.0.0 release recovery
-run-name: Recover exact Breakdown Local v1.0.0 ceremony 32391936576
+run-name: Control ${{ inputs.operation_id }} on ${{ github.sha }}
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
         description: Exact confirmation shown in the issue #200 recovery runbook
+        required: true
+        type: string
+      operation_id:
+        description: Immutable operation ID printed by the release controller
         required: true
         type: string
 
@@ -29,7 +33,10 @@ jobs:
       - name: Require the exact recovery confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-        run: test "$CONFIRMATION" = 'CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING'
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          test "$CONFIRMATION" = 'CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING'
+          test "$OPERATION_ID" = 'breakdown-release-f36df7cb0ec89bdd73bac9c2751d21ee3c1792118fc47a19ff6fdf1bb09e254d'
 
       - name: Check out the reviewed recovery implementation
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -236,140 +243,24 @@ jobs:
           printf 'artifact_id=9420331832\n' >> "$GITHUB_OUTPUT"
           printf 'run_id=32406103756\n' >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch or resume the one correlated protected stable-publication run
+      - name: Control the one exact protected stable-publication child
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          fail() {
-            printf '::error::%s\n' "$*" >&2
-            exit 1
-          }
-          list_runs() {
-            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/323419480/runs?per_page=100" > "$1"
-          }
-          read_publication_state() {
-            local release_exists=false
-            local release_error="${{ runner.temp }}/github-release-error.log"
-            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/breakdown-local-v1.0.0" > "${{ runner.temp }}/github-release.json" 2> "$release_error"; then
-              release_exists=true
-            else
-              node scripts/verify-v1-release-recovery.mjs --verify-github-release-absence --error-log "$release_error" > /dev/null 2>&1 || fail "Could not determine GitHub Release state."
-            fi
-            local core_exists
-            local cli_exists
-            local mcp_exists
-            package_exists() {
-              local key="$1"
-              local encoded_name="$2"
-              local status
-              status="$(curl --silent --show-error --location \
-                --output "${{ runner.temp }}/npm-${key}.json" \
-                --write-out '%{http_code}' \
-                "https://registry.npmjs.org/${encoded_name}")"
-              case "$status" in
-                200) printf true ;;
-                404) printf false ;;
-                *) fail "Could not determine npm state for ${encoded_name}; registry returned HTTP ${status}." ;;
-              esac
-            }
-            core_exists="$(package_exists core '@breakdown-sh%2fcore')"
-            cli_exists="$(package_exists cli '@breakdown-sh%2fcli')"
-            mcp_exists="$(package_exists mcp '@breakdown-sh%2fmcp')"
-            jq -n \
-              --argjson release "$release_exists" \
-              --argjson core "$core_exists" \
-              --argjson cli "$cli_exists" \
-              --argjson mcp "$mcp_exists" \
-              '{
-                github_release_exists: $release,
-                npm_packages: {
-                  "@breakdown-sh/core": $core,
-                  "@breakdown-sh/cli": $cli,
-                  "@breakdown-sh/mcp": $mcp
-                }
-              }' > "$1"
-          }
-          create_plan() {
-            pnpm local:release:plan-v1-handoff \
-              --runs "$1" \
-              --publication-state "$2" \
-              --workflow-sha "$GITHUB_SHA" \
-              --output "$3"
-          }
+          node scripts/run-release-operation.mjs \
+            --hosted-controller \
+            --workflow-sha "$GITHUB_SHA" \
+            --controller-run-id "$GITHUB_RUN_ID" \
+            --controller-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "${{ runner.temp }}/breakdown-release-operation-result.json"
 
-          runs_file="${{ runner.temp }}/stable-publication-runs-before.json"
-          state_file="${{ runner.temp }}/stable-publication-state.json"
-          plan_file="${{ runner.temp }}/stable-publication-handoff-before.json"
-          list_runs "$runs_file"
-          read_publication_state "$state_file"
-          create_plan "$runs_file" "$state_file" "$plan_file"
-
-          action="$(jq -er '.action' "$plan_file")"
-          if test "$action" = dispatch; then
-            request_file="${{ runner.temp }}/stable-publication-dispatch.json"
-            response_file="${{ runner.temp }}/stable-publication-dispatch-response.json"
-            jq -e '.dispatch' "$plan_file" > "$request_file"
-            if ! gh api \
-              --method POST \
-              --header 'Accept: application/vnd.github+json' \
-              --header 'X-GitHub-Api-Version: 2026-03-10' \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/323419480/dispatches" \
-              --input "$request_file" > "$response_file"; then
-              fail 'Stable-publication workflow dispatch failed. It was not retried.'
-            fi
-            run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0) | tostring' "$response_file")" || fail 'Stable-publication dispatch did not return a run ID; do not retry blindly.'
-            run_url="$(jq -er '.html_url | select(type == "string")' "$response_file")" || fail 'Stable-publication dispatch did not return a run URL; do not retry blindly.'
-            test "$run_url" = "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${run_id}" || fail 'Stable-publication dispatch returned a mismatched run URL; do not retry blindly.'
-            printf '::notice::Dispatched the exact stable-publication run: %s\n' "$run_url"
-
-            runs_after_file="${{ runner.temp }}/stable-publication-runs-after.json"
-            plan_after_file="${{ runner.temp }}/stable-publication-handoff-after.json"
-            list_runs "$runs_after_file"
-            create_plan "$runs_after_file" "$state_file" "$plan_after_file"
-            test "$(jq -er '.action' "$plan_after_file")" = resume || fail "The dispatched run could not be correlated: ${run_url}"
-            test "$(jq -er '.run.id' "$plan_after_file")" = "$run_id" || fail "The dispatch response and correlated run disagree: ${run_url}"
-          elif test "$action" = resume; then
-            run_id="$(jq -er '.run.id' "$plan_file")"
-            run_url="$(jq -er '.run.url' "$plan_file")"
-            printf '::notice::Resuming the one exact stable-publication run: %s\n' "$run_url"
-          else
-            fail "Unexpected stable-publication handoff action: ${action}"
-          fi
-
-          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
-          status="$(jq -er '.status' <<< "$run")"
-          conclusion="$(jq -r '.conclusion // ""' <<< "$run")"
-          minimum_run_attempt="$(jq -er '.run_attempt' <<< "$run")"
-          if test "$status" = completed && test "$conclusion" != success; then
-            if [[ "$conclusion" != failure && "$conclusion" != cancelled && "$conclusion" != timed_out ]]; then
-              fail "Stable-publication run cannot be safely resumed after conclusion ${conclusion}: ${run_url}"
-            fi
-            printf '::notice::Rerunning failed attempt %s of the exact stable-publication run: %s\n' "$minimum_run_attempt" "$run_url"
-            gh run rerun "$run_id"
-            minimum_run_attempt="$((minimum_run_attempt + 1))"
-          fi
-
-          completed=false
-          last_state=''
-          for attempt in $(seq 1 240); do
-            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
-            run_attempt="$(jq -er '.run_attempt' <<< "$run")"
-            status="$(jq -er '.status' <<< "$run")"
-            current_state="attempt ${run_attempt}: ${status}"
-            if test "$current_state" != "$last_state"; then
-              printf 'Stable-publication %s (%s)\n' "$current_state" "$run_url"
-              last_state="$current_state"
-            fi
-            if test "$run_attempt" -ge "$minimum_run_attempt" && test "$status" = completed; then
-              conclusion="$(jq -er '.conclusion' <<< "$run")"
-              test "$conclusion" = success || fail "Stable-publication run concluded ${conclusion}: ${run_url}"
-              completed=true
-              break
-            fi
-            sleep 5
-          done
-          test "$completed" = true || fail "Timed out waiting for stable publication: ${run_url}"
-          printf '## Exact v1.0.0 recovery continuation complete\n\nHost support run: `%s`. Host support artifact: `%s`. First-package bootstrap run: [%s](%s). Immutable tag: `%s`. No tag was created or changed by this recovery.\n' \
-            '${{ steps.host.outputs.run_id }}' '${{ steps.host.outputs.artifact_id }}' "$run_id" "$run_url" breakdown-local-v1.0.0 >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain the durable operation attempt and sanitized diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: breakdown-release-operation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/breakdown-release-operation-result.json
+          if-no-files-found: error
+          retention-days: 90

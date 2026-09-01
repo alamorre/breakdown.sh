@@ -7,7 +7,6 @@ import { pathToFileURL } from 'node:url';
 import { requiredArgumentValue } from './local-release/command-line.mjs';
 import { sha256 } from './local-release/filesystem.mjs';
 import {
-  planV1StablePublicationHandoff,
   validateReleaseRecoveryEvidence,
   V1_RELEASE_RECOVERY_POLICY,
 } from './local-release/release-ceremony.mjs';
@@ -34,22 +33,6 @@ export async function main(argv = process.argv) {
     if (statuses.length !== 1 || statuses[0] !== '404') {
       throw new Error('Could not determine GitHub Release state.');
     }
-    return;
-  }
-  if (argv.includes('--plan-handoff')) {
-    const usage =
-      'Usage: verify-v1-release-recovery.mjs --plan-handoff --runs PATH --publication-state PATH --workflow-sha SHA --output PATH';
-    const plan = planV1StablePublicationHandoff({
-      publicationState: await readJson(argv, '--publication-state', usage),
-      workflowRuns: await readJson(argv, '--runs', usage),
-      workflowSha: requiredArgumentValue(argv, '--workflow-sha', usage),
-    });
-    const outputPath = resolve(requiredArgumentValue(argv, '--output', usage));
-    await writeFile(outputPath, `${JSON.stringify(plan, null, 2)}\n`, {
-      flag: 'wx',
-      mode: 0o600,
-    });
-    process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
     return;
   }
   const usage =

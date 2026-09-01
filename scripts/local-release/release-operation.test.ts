@@ -1,0 +1,730 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  RELEASE_OPERATION_RESULTS,
+  V1_ADOPTED_ATTEMPTS,
+  V1_RELEASE_OPERATION,
+  classifyPublicState,
+  classifyRunResult,
+  correlateDispatchedRun,
+  createReleaseOperation,
+  createSignedTagEvidence,
+  enterV1RecoveryPolicy,
+  finalizeV1RecoveryPolicy,
+  githubReleaseObservation,
+  npmPackageObservation,
+  planReleaseAttempt,
+  runWithV1RecoveryPolicy,
+  sanitizeReleaseDiagnostics,
+  validateDispatchResponse,
+} from './release-operation.mjs';
+import {
+  inferSideEffectBoundary,
+  inspectV1StableOutcome,
+  monitorExactRun,
+  runV1HostedController,
+  v1StableChildMetadata,
+  waitForDurableRunMetadata,
+} from './release-controller.mjs';
+import { auditWorkflowToolInventory, runReleaseRehearsal } from './release-rehearsal.mjs';
+
+const repositoryRoot = join(import.meta.dirname, '../..');
+const workflowSha = 'b'.repeat(40);
+
+function absentPublicState() {
+  return {
+    github_release: { status: 'absent', http_status: 404 },
+    npm_packages: {
+      '@breakdown-sh/core': { status: 'absent', http_status: 404 },
+      '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+      '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+    },
+  };
+}
+
+function completePublicState() {
+  return {
+    github_release: { status: 'present', http_status: 200 },
+    npm_packages: {
+      '@breakdown-sh/core': { status: 'present', http_status: 200 },
+      '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+      '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+    },
+  };
+}
+
+function stableRun(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 9900208,
+    workflow_id: 323419480,
+    display_title: `Breakdown Local v1.0.0 recovery handoff for workflow ${workflowSha}`,
+    event: 'workflow_dispatch',
+    status: 'queued',
+    conclusion: null,
+    head_branch: 'main',
+    head_sha: workflowSha,
+    path: '.github/workflows/local-stable-publication.yml',
+    actor: { login: 'github-actions[bot]' },
+    triggering_actor: { login: 'github-actions[bot]' },
+    run_attempt: 1,
+    html_url: 'https://github.com/alamorre/breakdown.sh/actions/runs/9900208',
+    ...overrides,
+  };
+}
+
+describe('durable release operation identity and migration', () => {
+  it('derives one operation ID from every immutable publication input', () => {
+    expect(V1_RELEASE_OPERATION).toMatchObject({
+      schema_version: 'breakdown.release-operation.v1',
+      operation_id:
+        'breakdown-release-f36df7cb0ec89bdd73bac9c2751d21ee3c1792118fc47a19ff6fdf1bb09e254d',
+      immutable_inputs: {
+        tag: 'breakdown-local-v1.0.0',
+        tag_object_sha: '222766090da2ad070e8b45619d8f0f844829144f',
+        ceremony_run_id: '32391936576',
+        publication_mode: 'first-package-bootstrap',
+      },
+    });
+    const changed = createReleaseOperation({
+      ...V1_RELEASE_OPERATION.immutable_inputs,
+      destructive_confirmation: 'a different destructive confirmation',
+    });
+    expect(changed.operation_id).not.toBe(V1_RELEASE_OPERATION.operation_id);
+  });
+
+  it('adopts both failed recoveries and the completed failed child without touching deployment evidence', () => {
+    expect(V1_ADOPTED_ATTEMPTS).toHaveLength(2);
+    expect(V1_ADOPTED_ATTEMPTS[0]).toMatchObject({
+      controller: { run_id: '32418990076' },
+      child: null,
+      retry_classification: 'retryable_before_side_effects',
+    });
+    expect(V1_ADOPTED_ATTEMPTS[1]).toMatchObject({
+      controller: { run_id: '33427730934' },
+      child: { run_id: '33428076790', status: 'completed', conclusion: 'failure' },
+      last_side_effect_boundary: 'preflight',
+      migration_evidence: {
+        publication_steps_skipped: true,
+        historical_deployment_untouched: '6008739973',
+      },
+    });
+  });
+});
+
+describe('public-state and side-effect classification', () => {
+  it('distinguishes GitHub Release 404, present, and ambiguous failures', () => {
+    expect(githubReleaseObservation({ status: 404, body: { message: 'Not Found' } })).toEqual({
+      status: 'absent',
+      http_status: 404,
+    });
+    expect(githubReleaseObservation({ status: 200, body: { tag_name: 'v1' } }).status).toBe(
+      'present',
+    );
+    expect(githubReleaseObservation({ status: 403, body: { message: 'Forbidden' } }).status).toBe(
+      'indeterminate',
+    );
+    expect(npmPackageObservation({ status: 503, body: null }).status).toBe('indeterminate');
+  });
+
+  it('stops on any public or indeterminate state', () => {
+    const partial = absentPublicState();
+    partial.npm_packages['@breakdown-sh/core'] = { status: 'present', http_status: 200 };
+    expect(classifyPublicState(partial)).toBe('public_side_effect');
+    const unknown = absentPublicState();
+    unknown.github_release = { status: 'indeterminate', http_status: 500 };
+    expect(classifyPublicState(unknown)).toBe('indeterminate');
+  });
+
+  it.each(['failure', 'cancelled', 'timed_out'])(
+    'classifies a conclusive %s before side effects as retryable',
+    (conclusion) => {
+      expect(
+        classifyRunResult({
+          kind: 'live',
+          run: { status: 'completed', conclusion },
+          publicState: absentPublicState(),
+          lastBoundary: 'live_prepublication',
+          cleanup: { status: 'restored_and_verified' },
+        }),
+      ).toBe('retryable_before_side_effects');
+    },
+  );
+
+  it('stops after partial publication or when the boundary cannot be proved', () => {
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'failure' },
+        publicState: absentPublicState(),
+        lastBoundary: 'any_public_side_effect',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('partial_publication_stop');
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'failure' },
+        publicState: absentPublicState(),
+        lastBoundary: 'unknown',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('needs_review');
+  });
+
+  it('requires both a successful live child and observed public completion', () => {
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'success' },
+        publicState: completePublicState(),
+        lastBoundary: 'any_public_side_effect',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('complete');
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'success' },
+        publicState: absentPublicState(),
+        lastBoundary: 'any_public_side_effect',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('partial_publication_stop');
+    const partial = absentPublicState();
+    partial.npm_packages['@breakdown-sh/core'] = { status: 'present', http_status: 200 };
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'success' },
+        publicState: partial,
+        lastBoundary: 'any_public_side_effect',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('partial_publication_stop');
+  });
+});
+
+describe('attempt planning and exact dispatch correlation', () => {
+  it('plans one newer reviewed successor after the adopted failed predecessor', () => {
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: V1_ADOPTED_ATTEMPTS,
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'dispatch',
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+    });
+  });
+
+  it('refuses a stale snapshot, active child, cleanup failure, mismatch, and duplicate lineage', () => {
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: V1_ADOPTED_ATTEMPTS,
+        controllerSha: V1_ADOPTED_ATTEMPTS[1].controller.sha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({ action: 'stop', reason: 'stale_snapshot' });
+
+    const active = structuredClone(V1_ADOPTED_ATTEMPTS[1]);
+    if (active.child === null) throw new Error('Expected adopted child fixture.');
+    const activeChild = active.child as { status: string; conclusion: string | null };
+    activeChild.status = 'in_progress';
+    activeChild.conclusion = null;
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [V1_ADOPTED_ATTEMPTS[0], active],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({ action: 'monitor', run_id: '33428076790' });
+
+    const dirty = { ...V1_ADOPTED_ATTEMPTS[1], cleanup: { status: 'failed' } };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [V1_ADOPTED_ATTEMPTS[0], dirty],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({ action: 'stop', reason: 'cleanup_not_verified' });
+
+    const mismatched = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      immutable_inputs_sha256: '0'.repeat(64),
+    };
+    expect(() =>
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [V1_ADOPTED_ATTEMPTS[0], mismatched],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toThrow('exact immutable operation');
+
+    expect(() =>
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, V1_ADOPTED_ATTEMPTS[1]],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toThrow('missing or duplicate sequence');
+
+    expect(() =>
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [V1_ADOPTED_ATTEMPTS[0], { ...V1_ADOPTED_ATTEMPTS[1], predecessor_run_id: '1' }],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toThrow('predecessor lineage');
+  });
+
+  it('uses the dispatch response run ID while name, actor, and input-derived title become visible', async () => {
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    const runs = [stableRun({ actor: null, triggering_actor: null }), stableRun()];
+    const adapter = {
+      getRun: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('GitHub API returned HTTP 404.'))
+        .mockImplementation(async () => runs.shift()),
+    };
+    await expect(
+      waitForDurableRunMetadata({
+        adapter,
+        expected,
+        maximumPolls: 3,
+        pollIntervalMs: 0,
+        sleep: async () => undefined,
+      }),
+    ).resolves.toMatchObject({ polls: 3, run: { id: 9900208 } });
+    expect(adapter.getRun).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not dispatch again when correlation metadata remains temporarily unavailable', async () => {
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    const adapter = {
+      getRun: vi.fn(async () =>
+        stableRun({
+          display_title: '',
+          head_branch: '',
+          head_sha: '',
+          actor: null,
+          triggering_actor: null,
+        }),
+      ),
+    };
+    await expect(
+      waitForDurableRunMetadata({
+        adapter,
+        expected,
+        maximumPolls: 2,
+        pollIntervalMs: 0,
+        sleep: async () => undefined,
+      }),
+    ).resolves.toMatchObject({ result: 'needs_review', reason: 'correlation_timeout' });
+    expect(adapter.getRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not accept a completed run until its exact metadata is durable', async () => {
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    const runs = [
+      stableRun({
+        status: 'completed',
+        conclusion: 'failure',
+        actor: null,
+        triggering_actor: null,
+      }),
+      stableRun({ status: 'completed', conclusion: 'failure' }),
+    ];
+    const adapter = { getRun: vi.fn(async () => runs.shift()) };
+    await expect(
+      monitorExactRun({
+        adapter,
+        expected,
+        maximumPolls: 2,
+        pollIntervalMs: 0,
+        sleep: async () => undefined,
+      }),
+    ).resolves.toMatchObject({ polls: 2, run: { status: 'completed' } });
+  });
+
+  it('rejects mismatched metadata and malformed dispatch responses', () => {
+    expect(() =>
+      correlateDispatchedRun(
+        stableRun({ head_sha: '0'.repeat(40) }),
+        v1StableChildMetadata('9900208', workflowSha),
+      ),
+    ).toThrow('mismatched head_sha');
+    expect(() => validateDispatchResponse({ workflow_run_id: 9900208 })).toThrow(
+      'mismatched run URLs',
+    );
+  });
+});
+
+describe('controller and environment lifecycle', () => {
+  class PolicyAdapter {
+    policies: Array<{ id: number; name: string; type: string }>;
+    nextId = 10;
+    actions: string[] = [];
+
+    constructor(policies: Array<{ id: number; name: string; type: string }>) {
+      this.policies = structuredClone(policies);
+    }
+
+    async listPolicies() {
+      return structuredClone(this.policies);
+    }
+
+    async deletePolicy(id: number) {
+      this.actions.push(`delete:${id}`);
+      this.policies = this.policies.filter((policy) => policy.id !== id);
+    }
+
+    async createPolicy(policy: { name: string; type: string }) {
+      this.actions.push(`create:${policy.type}:${policy.name}`);
+      this.policies.push({ id: this.nextId, ...policy });
+      this.nextId += 1;
+    }
+  }
+
+  it('enters exact main without simultaneous policies and restores the sole tag policy', async () => {
+    const adapter = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
+    await expect(enterV1RecoveryPolicy(adapter)).resolves.toMatchObject({
+      status: 'recovery_policy_verified',
+      after: [{ name: 'main', type: 'branch' }],
+    });
+    expect(adapter.actions).toEqual(['delete:1', 'create:branch:main']);
+    await expect(finalizeV1RecoveryPolicy(adapter)).resolves.toMatchObject({
+      status: 'restored_and_verified',
+      after: [{ name: 'breakdown-local-v*', type: 'tag' }],
+    });
+    expect(adapter.actions.slice(2)).toEqual(['delete:10', 'create:tag:breakdown-local-v*']);
+  });
+
+  it('is idempotent and refuses unexpected simultaneous or broad policies', async () => {
+    const steady = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
+    await expect(finalizeV1RecoveryPolicy(steady)).resolves.toMatchObject({ changed: false });
+    const unexpected = new PolicyAdapter([
+      { id: 1, name: 'main', type: 'branch' },
+      { id: 2, name: 'breakdown-local-v*', type: 'tag' },
+    ]);
+    await expect(finalizeV1RecoveryPolicy(unexpected)).rejects.toThrow(
+      'unexpected or simultaneous',
+    );
+    expect(unexpected.actions).toEqual([]);
+  });
+
+  it.each(['success', 'failure', 'cancellation', 'timeout', 'lost correlation'])(
+    'restores and verifies policy after %s',
+    async (outcome) => {
+      const adapter = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
+      if (outcome === 'success') {
+        await expect(runWithV1RecoveryPolicy(adapter, async () => outcome)).resolves.toMatchObject({
+          outcome,
+          cleanup: { status: 'restored_and_verified' },
+        });
+      } else {
+        await expect(
+          runWithV1RecoveryPolicy(adapter, async () => {
+            throw new Error(outcome);
+          }),
+        ).rejects.toThrow(outcome);
+      }
+      expect(await adapter.listPolicies()).toEqual([
+        { id: 11, name: 'breakdown-local-v*', type: 'tag' },
+      ]);
+    },
+  );
+
+  it('dispatches exactly once, correlates by returned ID, and classifies the failed child', async () => {
+    const runQueue = [
+      stableRun({ display_title: '', actor: null, triggering_actor: null }),
+      stableRun(),
+      stableRun({ status: 'completed', conclusion: 'failure' }),
+    ];
+    const adapter = {
+      readPublicState: vi.fn(async () => absentPublicState()),
+      listWorkflowRuns: vi.fn(async () => []),
+      dispatchWorkflow: vi.fn(async () => ({
+        workflow_run_id: 9900208,
+        run_url: 'https://api.github.com/repos/alamorre/breakdown.sh/actions/runs/9900208',
+        html_url: 'https://github.com/alamorre/breakdown.sh/actions/runs/9900208',
+      })),
+      getRun: vi.fn(async () => runQueue.shift()),
+      getJobs: vi.fn(async () => [
+        {
+          steps: [
+            { name: 'Retain the complete pre-publication gate evidence', conclusion: 'success' },
+            {
+              name: 'Create the complete GitHub draft',
+              conclusion: 'skipped',
+              status: 'completed',
+            },
+          ],
+        },
+      ]),
+      downloadFailureEvidence: vi.fn(async () => ({
+        failed_steps: ['fixture failure'],
+        retained_artifacts: ['diagnostics'],
+      })),
+    };
+    await expect(
+      runV1HostedController({
+        adapter,
+        controller: { sha: workflowSha, run_id: '9900207', run_attempt: 1 },
+        correlationPolls: 2,
+        monitorPolls: 1,
+        pollIntervalMs: 0,
+        sleep: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      action: 'complete_attempt',
+      result: 'retryable_before_side_effects',
+      attempt: {
+        sequence: 3,
+        child: { run_id: '9900208' },
+        last_side_effect_boundary: 'live_prepublication',
+      },
+    });
+    expect(adapter.dispatchWorkflow).toHaveBeenCalledTimes(1);
+  });
+
+  it('discovers and monitors the returned child while its input-derived title is still missing', async () => {
+    const pending = stableRun({
+      display_title: '',
+      actor: null,
+      triggering_actor: null,
+      status: 'in_progress',
+    });
+    const adapter = {
+      readPublicState: vi.fn(async () => absentPublicState()),
+      listWorkflowRuns: vi.fn(async () => [pending]),
+      dispatchWorkflow: vi.fn(),
+      getRun: vi.fn(async () => stableRun({ status: 'completed', conclusion: 'failure' })),
+      getJobs: vi.fn(async () => [
+        {
+          steps: [
+            { name: 'Retain the complete pre-publication gate evidence', conclusion: 'success' },
+          ],
+        },
+      ]),
+      downloadFailureEvidence: vi.fn(async () => ({
+        failed_steps: ['fixture failure'],
+        retained_artifacts: [],
+      })),
+    };
+    await expect(
+      runV1HostedController({
+        adapter,
+        controller: { sha: workflowSha, run_id: '9900209', run_attempt: 1 },
+        correlationPolls: undefined,
+        monitorPolls: 1,
+        pollIntervalMs: 0,
+        sleep: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      action: 'complete_attempt',
+      result: 'retryable_before_side_effects',
+      run: { run_id: '9900208' },
+    });
+    expect(adapter.dispatchWorkflow).not.toHaveBeenCalled();
+  });
+
+  it('reclassifies the outer controller from the exact durable child and public state', async () => {
+    const child = stableRun({ status: 'completed', conclusion: 'failure' });
+    const adapter = {
+      readPublicState: vi.fn(async () => absentPublicState()),
+      listWorkflowRuns: vi.fn(async () => [child]),
+      getJobs: vi.fn(async () => [
+        {
+          steps: [
+            { name: 'Retain the complete pre-publication gate evidence', conclusion: 'success' },
+            {
+              name: 'Create the complete GitHub draft',
+              status: 'completed',
+              conclusion: 'skipped',
+            },
+          ],
+        },
+      ]),
+    };
+    await expect(
+      inspectV1StableOutcome({
+        adapter,
+        workflowSha,
+        controllerConclusion: 'failure',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).resolves.toMatchObject({
+      result: 'retryable_before_side_effects',
+      run_id: '9900208',
+      last_side_effect_boundary: 'live_prepublication',
+    });
+
+    adapter.readPublicState.mockResolvedValueOnce(completePublicState());
+    await expect(
+      inspectV1StableOutcome({
+        adapter,
+        workflowSha,
+        controllerConclusion: 'failure',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).resolves.toMatchObject({ result: 'partial_publication_stop' });
+  });
+
+  it('never calls a missing or active exact child retryable', async () => {
+    const adapter = {
+      readPublicState: vi.fn(async () => absentPublicState()),
+      listWorkflowRuns: vi.fn(async () => [stableRun({ status: 'in_progress' })]),
+    };
+    await expect(
+      inspectV1StableOutcome({
+        adapter,
+        workflowSha,
+        controllerConclusion: 'failure',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).resolves.toMatchObject({ result: 'needs_review', reason: 'active_child' });
+
+    adapter.listWorkflowRuns.mockResolvedValueOnce([]);
+    await expect(
+      inspectV1StableOutcome({
+        adapter,
+        workflowSha,
+        controllerConclusion: null,
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).resolves.toMatchObject({ result: 'needs_review', reason: 'child_run_not_durable' });
+  });
+});
+
+describe('shared hermetic rehearsal and redaction', () => {
+  it('replaces the stable rg gate with the same signed-tag verifier used by rehearsal', async () => {
+    const fixture = JSON.parse(
+      await readFile(join(import.meta.dirname, 'fixtures/rehearsal-v1.json'), 'utf8'),
+    );
+    expect(
+      createSignedTagEvidence({
+        tagObject: fixture.github.tag_object,
+        expected: fixture.github.tag_expectation,
+        signer: fixture.github.signer,
+        gitsignVerificationLog: fixture.github.gitsign_log,
+        controls: fixture.github.controls,
+      }),
+    ).toMatchObject({
+      verification: { verified: true },
+      protection: { ruleset_id: 20015652 },
+    });
+    expect(() =>
+      createSignedTagEvidence({
+        tagObject: {
+          ...fixture.github.tag_object,
+          message: fixture.github.tag_object.message.replace(
+            'candidate-artifact-id: 9413780200',
+            'candidate-artifact-id: 1',
+          ),
+        },
+        expected: fixture.github.tag_expectation,
+        signer: fixture.github.signer,
+        gitsignVerificationLog: fixture.github.gitsign_log,
+        controls: fixture.github.controls,
+      }),
+    ).toThrow('candidate-artifact-id');
+  });
+
+  it('detects rg and every audited undeclared workflow tool', () => {
+    expect(() => auditWorkflowToolInventory('run: rg needle file')).toThrow('undeclared');
+    expect(() => auditWorkflowToolInventory('run: python unsafe.py')).toThrow('undeclared');
+  });
+
+  it('runs the complete fixture gate and never executes publication commands', async () => {
+    const fixture = JSON.parse(
+      await readFile(join(import.meta.dirname, 'fixtures/rehearsal-v1.json'), 'utf8'),
+    );
+    const workflows = {
+      recovery: await readFile(
+        join(repositoryRoot, '.github/workflows/local-v1-release-recovery.yml'),
+        'utf8',
+      ),
+      stable: await readFile(
+        join(repositoryRoot, '.github/workflows/local-stable-publication.yml'),
+        'utf8',
+      ),
+    };
+    expect(
+      runReleaseRehearsal({
+        fixture,
+        scenario: 'pass',
+        workflowSha,
+        controllerRunId: '9900207',
+        workflows,
+      }),
+    ).toMatchObject({
+      result: 'complete',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      adopted_predecessor_run: '33428076790',
+      correlation: { snapshots: ['pending_metadata', 'pending_metadata', 'correlated'] },
+      gates: {
+        final_prepublication_boundary: true,
+        publication_commands_executed: false,
+      },
+      attempt: { sequence: 3, kind: 'rehearsal' },
+    });
+  });
+
+  it('redacts credentials from retained logs and evidence', () => {
+    const sanitized = sanitizeReleaseDiagnostics({
+      message: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
+      npm_token: 'npm_abcdefghijklmnopqrstuvwxyz123456',
+      nested: { password: 'do-not-retain' },
+    });
+    expect(JSON.stringify(sanitized)).not.toContain('abcdefghijklmnopqrstuvwxyz');
+    expect(sanitized).toMatchObject({
+      redacted_field_1: '[REDACTED]',
+      nested: { redacted_field_0: '[REDACTED]' },
+    });
+  });
+
+  it('keeps every controller result in the documented machine-readable vocabulary', () => {
+    expect(RELEASE_OPERATION_RESULTS).toEqual([
+      'rehearsal_failed',
+      'retryable_before_side_effects',
+      'needs_review',
+      'partial_publication_stop',
+      'complete',
+    ]);
+  });
+
+  it('recognizes publication steps as terminal even when a command fails mid-step', () => {
+    expect(
+      inferSideEffectBoundary([
+        {
+          steps: [
+            {
+              name: 'Create the three first npm package records with the one-time credential',
+              status: 'completed',
+              conclusion: 'failure',
+            },
+          ],
+        },
+      ]),
+    ).toBe('any_public_side_effect');
+  });
+});

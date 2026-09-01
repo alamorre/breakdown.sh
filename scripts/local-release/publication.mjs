@@ -430,7 +430,8 @@ platform-index-artifact-id: ${platformIndexArtifactId}`;
     `^${expectedMessagePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n` +
       'release-ceremony-run-id: [1-9]\\d*\\n' +
       'release-plan-sha256: [0-9a-f]{64}\\n' +
-      'release-authorization-sha256: [0-9a-f]{64}$',
+      'release-authorization-sha256: [0-9a-f]{64}' +
+      '(?:\\n-----BEGIN SIGNED MESSAGE-----\\n[\\s\\S]*\\n-----END SIGNED MESSAGE-----)?$',
   );
   invariant(
     evidence.schema_version === 'breakdown.signed-tag-evidence.v1' &&
