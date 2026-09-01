@@ -305,7 +305,7 @@ describe('automation signer and recovery', () => {
         existingTag,
         plan,
       }),
-    ).toBe('rerun-failed-downstream');
+    ).toBe('new-reviewed-successor-required');
     expect(() =>
       decideCeremonyRecovery({
         downstreamRuns: [
@@ -560,14 +560,14 @@ describe('v1 stable-publication recovery handoff', () => {
     });
   });
 
-  it('idempotently resumes one exact direct or earlier deployment run', () => {
+  it('idempotently monitors one exact active direct or earlier deployment run', () => {
     const direct = v1StableRun();
     expect(
       planV1Handoff({
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([direct]),
       }),
-    ).toMatchObject({ action: 'resume', run: { event: 'workflow_dispatch', id: '800' } });
+    ).toMatchObject({ action: 'monitor', run: { event: 'workflow_dispatch', id: '800' } });
 
     const deployment = v1StableRun({
       display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle,
@@ -582,7 +582,7 @@ describe('v1 stable-publication recovery handoff', () => {
         publicationState: v1PublicationState(),
         workflowRuns: v1WorkflowRuns([deployment]),
       }),
-    ).toMatchObject({ action: 'resume', run: { event: 'deployment', id: '800' } });
+    ).toMatchObject({ action: 'monitor', run: { event: 'deployment', id: '800' } });
 
     expect(() =>
       planV1Handoff({
@@ -619,7 +619,7 @@ describe('v1 stable-publication recovery handoff', () => {
     ).toThrow('mismatched inputs, ref, commit, event, actor, or identity');
   });
 
-  it('refuses unexpected publication state before dispatch and permits partial state on resume', () => {
+  it('refuses unexpected publication state before dispatch and stops on partial state', () => {
     expect(() =>
       planV1Handoff({
         publicationState: v1PublicationState(['@breakdown-sh/core']),
@@ -637,7 +637,16 @@ describe('v1 stable-publication recovery handoff', () => {
         publicationState: v1PublicationState(['@breakdown-sh/core']),
         workflowRuns: v1WorkflowRuns([v1StableRun({ status: 'completed', conclusion: 'failure' })]),
       }),
-    ).toMatchObject({ action: 'resume', run: { conclusion: 'failure' } });
+    ).toMatchObject({ action: 'stop', result: 'partial_publication_stop' });
+    expect(
+      planV1Handoff({
+        publicationState: v1PublicationState(),
+        workflowRuns: v1WorkflowRuns([v1StableRun({ status: 'completed', conclusion: 'failure' })]),
+      }),
+    ).toMatchObject({
+      action: 'successor_required',
+      result: 'retryable_before_side_effects',
+    });
   });
 
   it('requires all exact npm package records after a successful bootstrap run', () => {
@@ -657,6 +666,6 @@ describe('v1 stable-publication recovery handoff', () => {
         ]),
         workflowRuns: v1WorkflowRuns([success]),
       }),
-    ).toMatchObject({ action: 'resume', run: { conclusion: 'success' } });
+    ).toMatchObject({ action: 'complete', result: 'complete', run: { conclusion: 'success' } });
   });
 });

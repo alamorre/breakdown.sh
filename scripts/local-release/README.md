@@ -39,6 +39,90 @@ Actions, Environments, and Metadata, store a fine-grained, read-only
 The sole-maintainer repository has no untrusted direct collaborator, pull requests do not receive
 the secret, and the token has no write permission. Never retain its value in an artifact.
 
+## Agent-operated release operation
+
+The durable v1.0.0 operation ID is:
+
+```text
+breakdown-release-f36df7cb0ec89bdd73bac9c2751d21ee3c1792118fc47a19ff6fdf1bb09e254d
+```
+
+It is the SHA-256 identity of the immutable tag and tag object, candidate source/content/checksum
+digests, ceremony run, candidate/platform/host/plan/authorization artifact IDs, authorization
+digest, npm mode, and destructive confirmation. A workflow SHA is deliberately not part of the
+operation ID: every reviewed fix creates a new attempt under the same immutable operation.
+
+For branch work, an assigned agent uses one start/resume/monitor command from the exact pushed
+development ref and SHA:
+
+```sh
+GH_TOKEN="$(gh auth token)" pnpm run local:release:operate -- \
+  --operate rehearsal \
+  --ref agent/issue-208-release-controller \
+  --workflow-sha "$(git rev-parse HEAD)" \
+  --output breakdown-release-controller-result.json
+```
+
+The command dispatches `.github/workflows/local-release-rehearsal.yml`, correlates only the run ID
+returned by GitHub's versioned dispatch response, tolerates bounded eventual consistency in the
+run name, actor, ref, SHA, and input-derived title, monitors that exact run, and downloads a
+sanitized diagnostic summary. Repeating the same command monitors an active exact run and refuses
+a completed stale snapshot; after a patch, the newer SHA becomes a successor attempt. The
+rehearsal also runs automatically on pull requests.
+
+The rehearsal runs on `ubuntu-24.04`, has only `contents: read`, receives no secrets, uses no
+environment, and launches the shared verifier with an environment containing a deliberately
+minimal `PATH` whose only executable is the pinned Node 24.13.0 binary. GitHub, npm, artifact, tag,
+ruleset, historical-attempt, and delayed-correlation behavior comes from checked-in fixtures. It
+stops after the same repository-owned gate that produces complete pre-publication evidence; every
+publication command remains unexecuted. Both release workflows have a checked tool inventory, and
+`rg` is prohibited.
+
+Controller results use exactly these machine states:
+
+- `rehearsal_failed`: safe to patch and create a new rehearsal attempt on a new SHA;
+- `retryable_before_side_effects`: live child conclusively stopped before public effects, cleanup
+  passed, immutable inputs still match, and a newer reviewed SHA may become a successor;
+- `needs_review`: concurrent, duplicate, mismatched, stale, indeterminate, or cleanup state blocks
+  automation;
+- `partial_publication_stop`: a package, Release, publication step, or equivalent public effect
+  exists or cannot be safely resumed; and
+- `complete`: the exact attempt reached its mode's required terminal boundary.
+
+Only `rehearsal_failed` and `retryable_before_side_effects` permit an agent to patch and try a
+newer reviewed SHA. `needs_review`, `partial_publication_stop`, an unknown boundary, an unavailable
+public-state observation, or cleanup failure is an unconditional stop. No controller code calls a
+rerun endpoint.
+
+After review, merge, passing post-merge checks/rehearsal, and separate explicit authorization
+under #190, the corresponding live command uses `--operate live`, exact `main`, and the existing
+recovery confirmation. It is the only supported entry point: never manually dispatch stable
+publication. The command uses the current GitHub CLI authentication in memory; it does not create,
+store, print, or upload a PAT or other credential.
+
+The live controller encapsulates the one-time environment exception. It requires the sole
+`breakdown-local-v*` tag policy, removes it before adding the sole exact `main` branch policy, and
+never creates simultaneous permissive policies. A `finally` path restores and re-reads the sole
+tag policy after success, failure, cancellation, timeout, or lost correlation. Every start/resume
+also finalizes leftover exact-main state before planning a successor. Unexpected, broad, or
+simultaneous policies are never edited and block the operation. The independent idempotent
+finalizer is:
+
+The current GitHub CLI authentication used by the local controller must be able to write Actions
+workflow dispatches and the one environment's deployment-branch policies (fine-grained
+**Actions: write** and **Administration: write**). It is never copied to a workflow, artifact, or
+repository secret. If those permissions are unavailable, the controller stops without broadening
+the credential or asking for a PAT.
+
+```sh
+GH_TOKEN="$(gh auth token)" pnpm run local:release:operate -- \
+  --finalize-policy \
+  --output breakdown-release-policy-finalization.json
+```
+
+Keep the controller result with the attempt evidence. A cleanup result other than
+`restored_and_verified` blocks every later live attempt.
+
 ## 1. Build and fully qualify one current-main candidate
 
 In GitHub, open **Actions → Breakdown Local platform qualification → Run workflow**, select
@@ -147,25 +231,25 @@ Never delete, move, force-push, recreate, or reuse a release tag. Never rebuild 
 qualified candidate. Never overwrite, unpublish, or silently repair public npm or GitHub Release
 bytes.
 
-- **Before authorization:** correct the input or repository control and dispatch a new dry run.
-- **Authorization rejected or invalid:** the run fails before the tag; dispatch a new run and
+- **Before authorization:** correct the input or repository control and create a new dry-run
+  attempt.
+- **Authorization rejected or invalid:** the attempt ends before the tag; create a new run and
   approve its new exact plan digest.
-- **Failure before tag push:** rerun the failed job only if no stable tag exists; otherwise stop and
-  inspect the exact tag first.
-- **Failure after the exact tag exists but before host support:** rerun only the failed job in the
-  same ceremony run. The job accepts the tag only when its source, message, signer, ceremony run,
-  plan, and authorization all match; it never retags.
-- **Host-support failure:** rerun the one correlated child run or the failed parent job; never
-  dispatch a second correlated host run. Duplicate correlated runs fail closed.
-- **Stable-publication failure before public side effects:** preserve the gate artifact and inspect
-  the child run before any rerun.
-- **Interrupted first-package bootstrap:** rerun only after confirming already-public 1.0.0
-  tarballs byte-match the same immutable candidate; the bootstrap command skips only exact matches.
-- **Any npm package or immutable GitHub Release is public:** stop. Preserve all evidence, assess the
-  partial public state, and publish any correction under a new SemVer. Do not blindly rerun.
+- **Failure before tag push:** preserve the attempt and create a new run only after absence of the
+  stable tag is revalidated.
+- **Failure after the exact tag exists:** do not use any GitHub rerun button. Adopt the completed
+  run into the durable operation, prove its last side-effect boundary, re-read every immutable and
+  public input, and permit only a successor on a newer reviewed workflow SHA.
+- **Stable-publication failure before public side effects:** preserve and sanitize the gate evidence.
+  The controller may return `retryable_before_side_effects` only when every publication step was
+  skipped, public records remain absent, and policy cleanup is restored and verified.
+- **Interrupted or partial first-package bootstrap:** stop with `partial_publication_stop`; public
+  state now requires explicit human review even if already-public bytes appear to match.
+- **Any npm package, immutable GitHub Release, publication command, or indeterminate public state:**
+  stop. Preserve evidence and assess the partial state. Never rerun or dispatch a successor.
 
-Use **Re-run failed jobs**, not **Re-run all jobs**, after tag creation. Re-running the plan would
-correctly fail because the protected tag already exists.
+GitHub reruns reuse the original workflow snapshot and do not create immutable successor lineage.
+The agent-operated loop therefore never uses **Re-run failed jobs** or **Re-run all jobs**.
 
 ### One-time v1.0.0 workflow-snapshot recovery
 
@@ -209,39 +293,46 @@ that is running recovery and passes `breakdown-local-v1.0.0` separately as the i
 target. The stable workflow requires its `recovery_workflow_sha` input to equal both `GITHUB_SHA`
 and `github.workflow_sha`, then independently resolves the signed tag object and exact candidate
 commit. Its correlated run name is emitted only when every retained input and destructive
-confirmation is exact, so the durable run record proves the inputs before any resume or rerun.
+confirmation is exact, so the durable run record proves the inputs before any successor attempt.
 
-Only after separate explicit authorization under issue #190, run the recovery workflow on `main`,
-approve its `breakdown-local-authorization` deployment, and enter exactly:
+Only after separate explicit authorization under issue #190, use the agent-operated live command
+on the exact reviewed merged `main` SHA and enter exactly:
 
 ```text
 CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING
 ```
 
-Immediately before that authorized dispatch, change the sole custom deployment policy on
-`breakdown-local-stable` from tag pattern `breakdown-local-v*` to the exact branch `main`. Do not
-add a second simultaneous policy, enable administrator bypass, move the npm secret, or change any
-other protection. The publication control gate accepts this branch-only boundary solely for the
-v1 recovery mode and exact v1.0.0 tag; ordinary publication still requires the tag-only policy.
-After the child run succeeds, restore the sole `breakdown-local-v*` tag policy and remove the
-temporary `main` branch policy. If recovery is abandoned or paused before a later authorized
-rerun, restore the tag-only policy while it is inactive.
+The authorized command shape is:
+
+```sh
+GH_TOKEN="$(gh auth token)" pnpm run local:release:operate -- \
+  --operate live \
+  --ref main \
+  --workflow-sha "$(git rev-parse origin/main)" \
+  --confirmation 'CONTINUE EXACT BREAKDOWN LOCAL 1.0.0 FROM CEREMONY 32391936576 WITHOUT RETAGGING' \
+  --output breakdown-release-controller-result.json
+```
+
+Approve the resulting `breakdown-local-authorization` deployment. Do not dispatch the recovery or
+stable workflow in the Actions UI. The controller performs the bounded sole-policy transition and
+its mandatory restoration; no manual policy swap is part of the supported path. If the agent or
+terminal is lost, run the independent finalizer shown above before any other release action.
 
 The workflow verifies successful host-support run `32406103756` and its exact retained artifact
-`9420331832`; it never dispatches or repeats host qualification. It then lists stable-publication
-runs across both the earlier deployment path and direct dispatches. One exact existing run is
-resumed under its original run ID. With none, recovery first requires the GitHub Release and all
-three npm package names to remain absent, then sends exactly one authenticated workflow dispatch
-of the reviewed `local-stable-publication.yml` on the same exact `main` commit, targeting
-`breakdown-local-v1.0.0` with the exact retained artifact IDs, ceremony ID, first-package mode, and
-destructive confirmation.
+`9420331832`; it never dispatches or repeats host qualification. It discovers all adopted and
+newer stable-publication attempts. An active exact child is monitored under its original run ID; a
+completed child is never rerun. With no child for the current reviewed SHA, recovery first requires
+the GitHub Release and all three npm package names to remain conclusively absent, then sends one
+authenticated workflow dispatch of the reviewed `local-stable-publication.yml` on the same exact
+`main` commit, targeting `breakdown-local-v1.0.0` with the exact retained artifact IDs, ceremony ID,
+first-package mode, and destructive confirmation.
 
 The dispatch response supplies the child run ID and URL immediately. Recovery surfaces that URL
 while the protected child job is queued or running and on every child failure; it never performs a
-blind dispatch retry. A recovery rerun rescans all workflow events and
-resumes that same exact run. The input-gated correlated title plus exact workflow SHA make the
-otherwise-unavailable dispatch inputs durable. Mismatched titles/inputs, refs, commits, actors, run identity,
-unexpected public state, or duplicate correlated runs fail closed. Historical deployment
+blind dispatch retry. A later controller invocation discovers and monitors the same active run by
+ID. The input-gated correlated title plus exact workflow SHA make the otherwise-unavailable
+dispatch inputs durable. Mismatched titles/inputs, refs, commits, actors, run identity, unexpected
+public state, or duplicate correlated runs fail closed. Historical deployment
 `6008739973` is left untouched and does not block the direct handoff. The stable workflow keeps
 `NPM_FIRST_PACKAGE_TOKEN` exclusively inside `breakdown-local-stable`; the recovery workflow
 contains no tag creation, npm publication, or GitHub Release command.
@@ -251,11 +342,18 @@ Gitsign/Rekor, and host-support check, then failed before dispatching a child be
 workflow snapshot assumed an unavailable `rg` binary while checking that the GitHub Release was
 absent. Its diagnostics are retained in artifact `9768245426`. Do not use **Re-run failed jobs** on
 run `32418990076`: GitHub would reuse that stale workflow snapshot. After the issue #204 fix is
-reviewed, merged, and passes post-merge CI, revalidate the immutable and public state and dispatch
-one fresh recovery run from the exact new `main` commit. Use the same exact recovery confirmation
-and a fresh human approval. Never manually dispatch the stable-publication child. Apply the
-temporary sole-`main` environment policy only for that fresh attempt, and always restore and verify
-the sole `breakdown-local-v*` tag policy afterward, whether the attempt succeeds or fails.
+reviewed and merged, recovery run `33427730934` dispatched exact child `33428076790` but failed
+immediate list-based correlation while GitHub populated its metadata. The child then failed on the
+second undeclared `rg` use in the stable tag gate. Hosted job evidence proves all publication steps
+were skipped. Both runs are completed failed predecessors under the operation ID above, public
+state remained absent, deployment `6008739973` remained untouched, and the sole tag policy was
+restored. Never rerun either run.
+
+Issue #208 replaces both fragile paths with dispatch-response run-ID correlation, bounded metadata
+polling, a repository-owned tag verifier, and immutable successor records. After this change is
+reviewed, merged, passes post-merge CI, and completes the required failing-then-passing
+non-publishing demonstration, live continuation still waits for explicit #190 authorization and a
+fresh human environment approval. Never manually dispatch the stable-publication child.
 
 ## Secret and evidence boundary
 

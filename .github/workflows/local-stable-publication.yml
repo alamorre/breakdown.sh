@@ -634,64 +634,20 @@ jobs:
           test "$(jq -r '.object.type' <<< "$tag_ref")" = tag
           tag_object_url="$(jq -r '.object.url' <<< "$tag_ref")"
           gh api "$tag_object_url" > "${{ runner.temp }}/annotated-tag.json"
-          jq -e \
-            --arg tag "$RELEASE_TAG" \
-            --arg commit "$RELEASE_SHA" \
-            '.tag == $tag and .object.type == "commit" and .object.sha == $commit' \
-            "${{ runner.temp }}/annotated-tag.json"
-          tag_message="$(jq -r '.message' "${{ runner.temp }}/annotated-tag.json")"
-          rg --fixed-strings --line-regexp "candidate-digest-sha256: ${CANDIDATE_DIGEST}" <<< "$tag_message"
-          rg --fixed-strings --line-regexp "candidate-checksum-inventory-sha256: ${CANDIDATE_CHECKSUM_INVENTORY_SHA256}" <<< "$tag_message"
-          rg --fixed-strings --line-regexp "candidate-artifact-id: ${CANDIDATE_ARTIFACT_ID}" <<< "$tag_message"
-          rg --fixed-strings --line-regexp "platform-index-artifact-id: ${PLATFORM_INDEX_ARTIFACT_ID}" <<< "$tag_message"
-          rg --regexp '^release-ceremony-run-id: [1-9][0-9]*$' <<< "$tag_message"
-          rg --regexp '^release-plan-sha256: [0-9a-f]{64}$' <<< "$tag_message"
-          rg --regexp '^release-authorization-sha256: [0-9a-f]{64}$' <<< "$tag_message"
-          jq \
-            --arg repository "https://github.com/${GITHUB_REPOSITORY}" \
-            --arg candidate_artifact_id "$CANDIDATE_ARTIFACT_ID" \
-            --arg platform_index_artifact_id "$PLATFORM_INDEX_ARTIFACT_ID" \
-            --slurpfile controls "$GITHUB_CONTROLS" \
-            '{
-              schema_version: "breakdown.signed-tag-evidence.v1",
-              repository: $repository,
-              tag,
-              tag_object_sha: .sha,
-              target: .object,
-              message,
-              artifact_ids: {
-                candidate: $candidate_artifact_id,
-                platform_index: $platform_index_artifact_id
-              },
-              verification: {
-                verified: true,
-                reason: "sigstore-keyless-valid"
-              },
-              signer: {
-                method: "sigstore-keyless-gitsign",
-                gitsign_version: "0.17.1",
-                binary_sha256: "69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae",
-                certificate_identity: "https://github.com/alamorre/breakdown.sh/.github/workflows/local-release-ceremony.yml@refs/heads/main",
-                certificate_oidc_issuer: "https://token.actions.githubusercontent.com",
-                transparency_log: "https://rekor.sigstore.dev",
-                signature_verified: true,
-                certificate_claims_verified: true,
-                transparency_log_verified: true
-              },
-              protection: {
-                ruleset_id: $controls[0].tag_ruleset.id,
-                name: $controls[0].tag_ruleset.name,
-                target: $controls[0].tag_ruleset.target,
-                enforcement: $controls[0].tag_ruleset.enforcement,
-                conditions: $controls[0].tag_ruleset.conditions,
-                rules: $controls[0].tag_ruleset.rules,
-                bypass_actors: $controls[0].tag_ruleset.bypass_actors,
-                current_user_can_bypass: $controls[0].tag_ruleset.current_user_can_bypass
-              }
-            }' \
-            "${{ runner.temp }}/annotated-tag.json" \
-            > "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
-          jq -e '.verification.verified == true and .signer.certificate_claims_verified == true' "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
+          node scripts/run-release-operation.mjs \
+            --verify-tag \
+            --tag-object "${{ runner.temp }}/annotated-tag.json" \
+            --authorization "$AUTHORIZATION" \
+            --controls "$GITHUB_CONTROLS" \
+            --gitsign-log "${{ runner.temp }}/gitsign-verification.log" \
+            --tag "$RELEASE_TAG" \
+            --source-sha "$RELEASE_SHA" \
+            --candidate-digest "$CANDIDATE_DIGEST" \
+            --checksum-inventory-sha256 "$CANDIDATE_CHECKSUM_INVENTORY_SHA256" \
+            --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --platform-index-artifact-id "$PLATFORM_INDEX_ARTIFACT_ID" \
+            --ceremony-run-id "$CEREMONY_RUN_ID_INPUT" \
+            --output "${{ runner.temp }}/breakdown-signed-tag-evidence.json"
 
       - name: Retain the Gitsign annotated-tag verification log
         if: ${{ always() }}

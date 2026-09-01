@@ -741,12 +741,15 @@ export function planV1StablePublicationHandoff(
     candidates.length <= 1,
     'More than one correlated stable-publication run exists; recovery refuses a duplicate.',
   );
-  const action = candidates.length === 0 ? 'dispatch' : 'resume';
-  validateRecoveryPublicationState(publicationState, action, policy);
-  if (action === 'dispatch') {
+  validateRecoveryPublicationState(
+    publicationState,
+    candidates.length === 0 ? 'dispatch' : 'observe',
+    policy,
+  );
+  if (candidates.length === 0) {
     return {
       schema_version: 'breakdown.v1-stable-publication-handoff.v1',
-      action,
+      action: 'dispatch',
       dispatch: recoveryStableDispatch(policy, workflowSha),
     };
   }
@@ -759,9 +762,40 @@ export function planV1StablePublicationHandoff(
       'A successful first-package bootstrap run is missing an expected public npm package.',
     );
   }
+  if (
+    run.status === 'completed' &&
+    run.conclusion !== 'success' &&
+    packageStates.some((exists) => exists)
+  ) {
+    return {
+      schema_version: 'breakdown.v1-stable-publication-handoff.v1',
+      action: 'stop',
+      result: 'partial_publication_stop',
+      run: {
+        conclusion: run.conclusion,
+        event: run.event,
+        id: String(run.id),
+        run_attempt: run.run_attempt,
+        status: run.status,
+        url: run.html_url,
+      },
+    };
+  }
+  const action =
+    run.status !== 'completed'
+      ? 'monitor'
+      : run.conclusion === 'success'
+        ? 'complete'
+        : 'successor_required';
   return {
     schema_version: 'breakdown.v1-stable-publication-handoff.v1',
     action,
+    result:
+      action === 'complete'
+        ? 'complete'
+        : action === 'successor_required'
+          ? 'retryable_before_side_effects'
+          : 'needs_review',
     run: {
       conclusion: run.conclusion,
       event: run.event,
@@ -794,7 +828,7 @@ export function decideCeremonyRecovery({ downstreamRuns, existingTag, plan }) {
     ['failure', 'cancelled', 'timed_out'].includes(exactRuns[0].status),
     'An exact downstream run is still active; do not dispatch a duplicate.',
   );
-  return 'rerun-failed-downstream';
+  return 'new-reviewed-successor-required';
 }
 
 export function assertNoSecretMaterial(value) {

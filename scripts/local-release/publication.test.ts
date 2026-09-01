@@ -822,6 +822,16 @@ describe('prepareLocalPublication', () => {
     }
   });
 
+  it('accepts the complete verified Gitsign envelope retained by the shared tag verifier', async () => {
+    const fixture = await publicationFixture();
+    const tagEvidence = JSON.parse(await readFile(fixture.tagEvidencePath, 'utf8'));
+    tagEvidence.message +=
+      '\n-----BEGIN SIGNED MESSAGE-----\nfixture signature bytes\n-----END SIGNED MESSAGE-----\n';
+    await writeJson(fixture.tagEvidencePath, tagEvidence);
+
+    await expect(prepareFixture(fixture)).resolves.toMatchObject({ status: 'passed' });
+  });
+
   it('should retain the authenticated bootstrap report and bundle only in finalization', async () => {
     const fixture = await publicationFixture();
     await configureDeferredHostSupport(fixture);
@@ -1405,13 +1415,14 @@ describe('stable publication workflow', () => {
       'breakdown-github-release-authorization.attestation.json',
       'local-release-ceremony.yml',
       'pnpm local:release:verify-github-controls',
-      'current_user_can_bypass',
       'repo:alamorre/breakdown.sh:environment:breakdown-local-stable',
       'npm:registry.npmjs.org',
       'RUNNER_ENVIRONMENT',
-      'certificate_claims_verified',
-      'transparency_log_verified',
       '"${{ runner.temp }}/gitsign" verify-tag',
+      'node scripts/run-release-operation.mjs',
+      '--verify-tag',
+      '--controls "$GITHUB_CONTROLS"',
+      '--gitsign-log "${{ runner.temp }}/gitsign-verification.log"',
       'gh attestation verify "$HOST_INDEX"',
       'breakdown-host-support-index.json',
       'breakdown-host-support-index.attestation.json',
@@ -1462,20 +1473,20 @@ describe('stable publication workflow', () => {
       'artifact-ids: 9413780200',
       'artifact-ids: 9413912347',
       'pnpm local:release:verify-v1-recovery',
-      'pnpm local:release:plan-v1-handoff',
+      'operation_id:',
+      'breakdown-release-f36df7cb0ec89bdd73bac9c2751d21ee3c1792118fc47a19ff6fdf1bb09e254d',
+      'node scripts/run-release-operation.mjs',
+      '--hosted-controller',
       '--workflow-sha "$GITHUB_SHA"',
-      'node scripts/verify-v1-release-recovery.mjs --verify-github-release-absence --error-log "$release_error"',
+      '--controller-run-id "$GITHUB_RUN_ID"',
+      '--controller-run-attempt "$GITHUB_RUN_ATTEMPT"',
+      'breakdown-release-operation-result.json',
       '"${{ runner.temp }}/gitsign" verify-tag',
-      'actions/workflows/323419480/dispatches',
-      "--header 'X-GitHub-Api-Version: 2026-03-10'",
-      'workflow_run_id',
-      'Host support artifact: `%s`',
-      'gh run rerun "$run_id"',
       'actions/runs/32406103756',
       'actions/artifacts/9420331832',
     ];
     expect(requiredSnippets.filter((snippet) => !workflow.includes(snippet))).toEqual([]);
-    expect(workflow.match(/actions\/workflows\/323419480\/dispatches/g)).toHaveLength(1);
+    expect(workflow).not.toContain('actions/workflows/323419480/dispatches');
     const forbiddenSnippets = [
       'git tag ',
       'git push ',
@@ -1487,6 +1498,7 @@ describe('stable publication workflow', () => {
       'repos/${GITHUB_REPOSITORY}/deployments',
       'gh workflow run 323419478',
       "rg --fixed-strings 'HTTP 404'",
+      'gh run rerun',
     ];
     expect(forbiddenSnippets.filter((snippet) => workflow.includes(snippet))).toEqual([]);
 
@@ -1503,6 +1515,20 @@ describe('stable publication workflow', () => {
     expect(stableWorkflow).toContain(
       "format('Breakdown Local v1.0.0 recovery handoff for workflow {0}', inputs.recovery_workflow_sha)",
     );
+    expect(stableWorkflow).not.toMatch(/(^|\s)rg\s/m);
+    expect(stableWorkflow).not.toContain('gh run rerun');
+
+    const rehearsalWorkflow = await readFile(
+      join(repositoryRoot, '.github', 'workflows', 'local-release-rehearsal.yml'),
+      'utf8',
+    );
+    expect(rehearsalWorkflow).toContain('runs-on: ubuntu-24.04');
+    expect(rehearsalWorkflow).toContain('contents: read');
+    expect(rehearsalWorkflow).toContain('node-version: 24.13.0');
+    expect(rehearsalWorkflow).toContain('scripts/run-minimal-release-rehearsal.mjs');
+    expect(rehearsalWorkflow).not.toContain('environment:');
+    expect(rehearsalWorkflow).not.toContain('secrets.');
+    expect(rehearsalWorkflow).not.toContain('write');
   });
 
   it('records the failed recovery snapshot and requires one fresh post-merge dispatch', async () => {
@@ -1514,8 +1540,10 @@ describe('stable publication workflow', () => {
     expect(runbook).toContain('Recovery run `32418990076`');
     expect(runbook).toContain('artifact `9768245426`');
     expect(runbook).toContain('Do not use **Re-run failed jobs** on');
-    expect(runbook).toContain('one fresh recovery run from the exact new `main` commit');
+    expect(runbook).toContain('recovery run `33427730934`');
+    expect(runbook).toContain('exact child `33428076790`');
+    expect(runbook).toContain('dispatch-response run-ID correlation');
     expect(runbook).toContain('Never manually dispatch the stable-publication child');
-    expect(runbook).toContain('always restore and verify');
+    expect(runbook).toContain('restores and re-reads the sole');
   });
 });

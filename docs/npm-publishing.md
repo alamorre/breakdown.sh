@@ -62,11 +62,13 @@ the exact one-time recovery procedure in `scripts/local-release/README.md`. It v
 existing immutable tag and retained evidence, verifies the already-successful host-support run and
 artifact, then directly dispatches this same protected bootstrap workflow exactly once on the
 reviewed `main` commit while passing the existing tag as the independently verified publication
-target. The runbook documents the temporary one-policy environment switch needed because the tag
-contains the stale workflow snapshot: `breakdown-local-stable` admits exact `main` only during the
-authorized recovery, then returns to its sole `breakdown-local-v*` tag policy. It does not retag,
-rebuild, repeat host qualification, create a deployment, or make the npm credential available
-outside `breakdown-local-stable`.
+target. Use only the agent-operated controller command in that runbook. It encapsulates the
+temporary one-policy environment transition needed because the tag contains the stale workflow
+snapshot: `breakdown-local-stable` admits exact `main` only during the authorized recovery, then an
+independent idempotent finalizer restores and verifies its sole `breakdown-local-v*` tag policy on
+every exit path. Never swap the policy or dispatch stable publication manually. The controller
+does not retag, rebuild, repeat host qualification, create a deployment, or make the npm credential
+available outside `breakdown-local-stable`.
 
 The workflow checks that every name is absent, or that an interrupted prior attempt already
 published the exact 1.0.0 candidate bytes. It refuses a claimed name whose 1.0.0 record is absent.
@@ -75,10 +77,10 @@ provenance; downloads and byte-compares all three; audits registry signatures an
 attests and uploads `breakdown-npm-first-package-bootstrap-<run>-<attempt>`. It does not create a
 draft or final GitHub Release.
 
-If the run stops after publishing only some packages, preserve its logs and rerun only after
-confirming the same signed tag and immutable candidate inputs. The bootstrap command skips an exact
-already-present 1.0.0 record and still refuses any mismatch. Never unpublish, overwrite, rebuild,
-or choose another 1.0.0 tarball.
+If the run stops after publishing any package, preserve its logs and stop the automated loop with
+`partial_publication_stop`. Human recovery may later use the bootstrap command's exact-byte checks,
+but no controller may infer authorization to retry from a matching record. Never unpublish,
+overwrite, rebuild, or choose another 1.0.0 tarball.
 
 ## 2. Replace the credential with exact OIDC trust
 
