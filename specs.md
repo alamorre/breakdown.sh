@@ -1,5 +1,7 @@
 # Breakdown — Product Specification
 
+> **Current direction:** See [`docs/roadmap.md`](docs/roadmap.md) (single source of truth) and [`docs/adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md`](docs/adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md). This `specs.md` is the historical hosted SaaS spec; **Breakdown Local** (`#142`, Wayfinder #124) is the canonical 1.0+ product and hosted SaaS is legacy/out-of-scope for the local corpus.
+
 > Reasoning that propagates.
 
 A node-based reasoning canvas where hypotheses, assumptions, and conclusions are structured as a directed acyclic graph (DAG). When the world changes — new data, events, or insights — agents propagate updates through the graph, re-evaluating downstream conclusions and surfacing what's changed.

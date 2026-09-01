@@ -71,7 +71,8 @@ if (missingGroups.length > 0 || hasInvalidEncryptionKey) {
     console.error(`  - ${encryptionKeyName} must decode to 32 bytes`);
   }
 
-  console.error('\nLoad secrets with Doppler, for example: pnpm dev:secrets');
+  console.error('\nCopy .env.local.example to .env.local and fill in missing values, then run: pnpm secrets:check');
+  console.error('See docs/secrets-management.md and docs/roadmap.md (file-local only; no Doppler).');
   process.exit(1);
 }
 
