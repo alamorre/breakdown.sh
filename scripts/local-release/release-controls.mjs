@@ -135,18 +135,28 @@ function exactStableEnvironmentBoundary({
       { name: RELEASE_CONTROL_POLICY.deploymentTagPattern, type: 'tag' },
     ]);
   const tagBoundary = executionMode === 'tag' && tagPolicyBoundary;
+  const mainPolicyBoundary =
+    sameJson(
+      rules.map((rule) => rule.type),
+      ['branch_policy'],
+    ) &&
+    exactDeploymentPolicies(deploymentPolicies, [
+      { name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
+    ]);
+  const boundedRecoveryState =
+    sameJson(
+      rules.map((rule) => rule.type),
+      ['branch_policy'],
+    ) &&
+    exactDeploymentPolicies(deploymentPolicies, [
+      { name: RELEASE_CONTROL_POLICY.deploymentTagPattern, type: 'tag' },
+      { name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
+    ]);
   const v1RecoveryBoundary =
     executionMode === 'v1-recovery' &&
     phase === 'publication' &&
     tag === V1_RELEASE_RECOVERY_POLICY.tag &&
-    (tagPolicyBoundary ||
-      (sameJson(
-        rules.map((rule) => rule.type),
-        ['branch_policy'],
-      ) &&
-        exactDeploymentPolicies(deploymentPolicies, [
-          { name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
-        ])));
+    (tagPolicyBoundary || mainPolicyBoundary || boundedRecoveryState);
   return common && (tagBoundary || v1RecoveryBoundary);
 }
 

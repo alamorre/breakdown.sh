@@ -30,6 +30,7 @@ import {
   waitForDurableRunMetadata,
 } from './release-controller.mjs';
 import { auditWorkflowToolInventory, runReleaseRehearsal } from './release-rehearsal.mjs';
+import { V1_RELEASE_RECOVERY_POLICY } from './release-recovery-policy.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../..');
 const workflowSha = 'b'.repeat(40);
@@ -555,6 +556,37 @@ describe('attempt planning and exact dispatch correlation', () => {
     expect(() => correlateDispatchedRun(runWithAltSha, expected)).toThrow('mismatched display_title');
     expect(
       correlateDispatchedRun(runWithAltSha, expected, { allowRecoveryHandoffTitle: true }),
+    ).toMatchObject({ status: 'correlated', missing: [] });
+  });
+
+  it('allows recovery handoff title when actual child uses legacy title', () => {
+    const runWithLegacyTitle = stableRun({
+      display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle,
+    });
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    expect(() => correlateDispatchedRun(runWithLegacyTitle, expected)).toThrow(
+      'mismatched display_title',
+    );
+    expect(
+      correlateDispatchedRun(runWithLegacyTitle, expected, { allowRecoveryHandoffTitle: true }),
+    ).toMatchObject({ status: 'correlated', missing: [] });
+  });
+
+  it('allows recovery handoff title when expected is legacy but actual is recovery handoff', () => {
+    const runWithRecoveryTitle = stableRun({
+      display_title: `Breakdown Local v1.0.0 recovery handoff for workflow ${workflowSha}`,
+    });
+    const expectedWithLegacy = {
+      ...v1StableChildMetadata('9900208', workflowSha),
+      display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle,
+    };
+    expect(() => correlateDispatchedRun(runWithRecoveryTitle, expectedWithLegacy)).toThrow(
+      'mismatched display_title',
+    );
+    expect(
+      correlateDispatchedRun(runWithRecoveryTitle, expectedWithLegacy, {
+        allowRecoveryHandoffTitle: true,
+      }),
     ).toMatchObject({ status: 'correlated', missing: [] });
   });
 });

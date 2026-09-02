@@ -433,6 +433,7 @@ export function correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitl
     }
     if (path === 'display_title' && allowRecoveryHandoffTitle) {
       const recoveryPrefix = V1_RELEASE_RECOVERY_POLICY.stablePublication.directTitlePrefix;
+      const legacyTitle = V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle;
       if (
         typeof actual === 'string' &&
         actual.startsWith(recoveryPrefix) &&
@@ -445,6 +446,15 @@ export function correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitl
           exactSha1(actualSha) && exactSha1(expectedSha),
           'V1 recovery handoff display_title does not contain valid workflow SHAs.',
         );
+        continue;
+      }
+      if (
+        typeof actual === 'string' &&
+        typeof value === 'string' &&
+        (actual === legacyTitle || value === legacyTitle) &&
+        (actual.startsWith(recoveryPrefix) || actual === legacyTitle) &&
+        (value.startsWith(recoveryPrefix) || value === legacyTitle)
+      ) {
         continue;
       }
     }

@@ -168,6 +168,25 @@ describe('GitHub stable release controls', () => {
     ).toThrow('one-time v1 recovery boundary');
   });
 
+  it('accepts the bounded recovery state with both tag and main policies during v1 recovery publication', () => {
+    const fixture = releaseControlFixture();
+    const boundedRecovery = {
+      ...fixture,
+      executionMode: 'v1-recovery',
+      phase: 'publication',
+      stableTags: [{ name: V1_RELEASE_RECOVERY_POLICY.tag }],
+      deploymentPolicies: {
+        total_count: 2,
+        branch_policies: [
+          { id: 6, name: RELEASE_CONTROL_POLICY.deploymentTagPattern, type: 'tag' },
+          { id: 7, name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
+        ],
+      },
+    };
+
+    expect(() => validateGithubReleaseControls(boundedRecovery)).not.toThrow();
+  });
+
   it('rejects a broader tag pattern or any ruleset bypass', () => {
     const fixture = releaseControlFixture();
     const invalid = {
