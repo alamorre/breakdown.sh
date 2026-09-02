@@ -180,16 +180,18 @@ export class GitHubReleaseAdapter {
   }
 
   async deletePolicy(policyId) {
-    await this.request(
+    const response = await this.request(
       `repos/${this.repository}/environments/breakdown-local-stable/deployment-branch-policies/${policyId}`,
-      { method: 'DELETE', expected: [204] },
+      { method: 'DELETE', expected: [204, 403] },
     );
+    return { status: response.status };
   }
 
   async createPolicy(policy) {
-    await this.request(
+    const response = await this.request(
       `repos/${this.repository}/environments/breakdown-local-stable/deployment-branch-policies`,
-      { method: 'POST', body: policy, expected: [200] },
+      { method: 'POST', body: policy, expected: [200, 303, 403] },
     );
+    return { status: response.status, body: response.body };
   }
 }

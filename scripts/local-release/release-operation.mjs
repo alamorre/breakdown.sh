@@ -670,21 +670,40 @@ function isExactPolicy(policies, expected) {
   );
 }
 
+function hasPolicy(policies, expected) {
+  return policies.some((policy) => policy.name === expected.name && policy.type === expected.type);
+}
+
+function isRecoveryState(policies) {
+  return (
+    policies.length === 2 &&
+    hasPolicy(policies, STEADY_POLICY) &&
+    hasPolicy(policies, RECOVERY_POLICY)
+  );
+}
+
 export async function enterV1RecoveryPolicy(adapter) {
   const before = normalizePolicies(await adapter.listPolicies());
   invariant(
-    isExactPolicy(before, STEADY_POLICY),
-    'Recovery policy transition requires the sole steady-state tag policy.',
+    isExactPolicy(before, STEADY_POLICY) || isRecoveryState(before),
+    'Recovery policy transition requires steady-state tag policy or bounded recovery state.',
   );
+  if (isRecoveryState(before)) {
+    return { status: 'recovery_policy_verified', before, after: before };
+  }
   try {
-    await adapter.deletePolicy(before[0].id);
-    await adapter.createPolicy(RECOVERY_POLICY);
+    const createResult = await adapter.createPolicy(RECOVERY_POLICY);
     const after = normalizePolicies(await adapter.listPolicies());
     invariant(
-      isExactPolicy(after, RECOVERY_POLICY),
-      'Recovery policy transition did not produce the sole exact-main policy.',
+      isRecoveryState(after),
+      'Recovery policy transition did not produce bounded recovery state with both tag and main policies.',
     );
-    return { status: 'recovery_policy_verified', before, after };
+    return {
+      status: 'recovery_policy_verified',
+      before,
+      after,
+      create_status: createResult.status,
+    };
   } catch (error) {
     await finalizeV1RecoveryPolicy(adapter);
     throw error;
@@ -697,17 +716,26 @@ export async function finalizeV1RecoveryPolicy(adapter) {
     return { status: 'restored_and_verified', changed: false, before, after: before };
   }
   invariant(
-    before.length === 0 || isExactPolicy(before, RECOVERY_POLICY),
-    'Cleanup refuses to mutate unexpected or simultaneous deployment policies.',
+    isRecoveryState(before),
+    'Cleanup refuses to mutate unexpected deployment policies; expected bounded recovery state with tag and main policies.',
   );
-  if (before.length === 1) await adapter.deletePolicy(before[0].id);
-  await adapter.createPolicy(STEADY_POLICY);
+  const mainPolicy = before.find(
+    (policy) => policy.name === RECOVERY_POLICY.name && policy.type === RECOVERY_POLICY.type,
+  );
+  invariant(mainPolicy, 'Recovery state missing main policy to delete.');
+  const deleteResult = await adapter.deletePolicy(mainPolicy.id);
   const after = normalizePolicies(await adapter.listPolicies());
   invariant(
     isExactPolicy(after, STEADY_POLICY),
-    'Cleanup failed to restore the sole steady-state tag policy.',
+    'Cleanup failed to restore steady-state tag policy.',
   );
-  return { status: 'restored_and_verified', changed: true, before, after };
+  return {
+    status: 'restored_and_verified',
+    changed: true,
+    before,
+    after,
+    delete_status: deleteResult.status,
+  };
 }
 
 export async function runWithV1RecoveryPolicy(adapter, operation) {
