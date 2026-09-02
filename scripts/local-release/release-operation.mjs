@@ -397,6 +397,9 @@ export function planReleaseAttempt({
         (previous.retry_classification === 'needs_review' &&
           (boundaryBeforePublicEffects(previous.last_side_effect_boundary) ||
             previous.last_side_effect_boundary === 'unknown') &&
+          publicClassification === 'absent') ||
+        (previous.retry_classification === 'retryable_before_side_effects' &&
+          previous.last_side_effect_boundary === 'any_public_side_effect' &&
           publicClassification === 'absent'),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
@@ -513,7 +516,7 @@ export function classifyRunResult({ kind, run, publicState, lastBoundary, cleanu
       ? 'partial_publication_stop'
       : 'needs_review';
   }
-  if (publicClassification === 'public_side_effect' || lastBoundary === 'any_public_side_effect') {
+  if (publicClassification === 'public_side_effect') {
     return 'partial_publication_stop';
   }
   if (run.conclusion === 'success') {
@@ -523,9 +526,14 @@ export function classifyRunResult({ kind, run, publicState, lastBoundary, cleanu
   }
   if (kind === 'rehearsal' && lastBoundary === 'rehearsing') return 'rehearsal_failed';
   if (
-    ['rehearsing', 'ready_for_review', 'authorized', 'preflight', 'live_prepublication'].includes(
-      lastBoundary,
-    ) &&
+    [
+      'rehearsing',
+      'ready_for_review',
+      'authorized',
+      'preflight',
+      'live_prepublication',
+      'any_public_side_effect',
+    ].includes(lastBoundary) &&
     (!cleanup ||
       ['not_required', 'restored_and_verified', 'delete_forbidden_recovery_state_stable'].includes(
         cleanup.status,

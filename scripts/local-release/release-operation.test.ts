@@ -174,13 +174,47 @@ describe('public-state and side-effect classification', () => {
         lastBoundary: 'any_public_side_effect',
         cleanup: { status: 'restored_and_verified' },
       }),
-    ).toBe('partial_publication_stop');
+    ).toBe('retryable_before_side_effects');
     expect(
       classifyRunResult({
         kind: 'live',
         run: { status: 'completed', conclusion: 'failure' },
         publicState: absentPublicState(),
         lastBoundary: 'unknown',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('needs_review');
+  });
+
+  it('allows retry when first-package PUT fails with absent public state (issue #227)', () => {
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'failure' },
+        publicState: absentPublicState(),
+        lastBoundary: 'any_public_side_effect',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('retryable_before_side_effects');
+
+    const partialPublicState = absentPublicState();
+    partialPublicState.npm_packages['@breakdown-sh/core'] = { status: 'present', http_status: 200 };
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'failure' },
+        publicState: partialPublicState,
+        lastBoundary: 'any_public_side_effect',
+        cleanup: { status: 'restored_and_verified' },
+      }),
+    ).toBe('partial_publication_stop');
+
+    expect(
+      classifyRunResult({
+        kind: 'live',
+        run: { status: 'completed', conclusion: 'failure' },
+        publicState: indeterminatePublicState(),
+        lastBoundary: 'any_public_side_effect',
         cleanup: { status: 'restored_and_verified' },
       }),
     ).toBe('needs_review');
@@ -297,6 +331,38 @@ describe('attempt planning and exact dispatch correlation', () => {
       action: 'dispatch',
       sequence: 4,
       predecessor_run_id: '33573326601',
+    });
+  });
+
+  it('allows retry after first-package PUT fails with absent public state (issue #227)', () => {
+    const firstPackagePutFailure = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+      controller: { sha: 'c'.repeat(40), run_id: '33587397236', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33587397237',
+        run_attempt: 1,
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+      },
+      last_side_effect_boundary: 'any_public_side_effect' as const,
+      retry_classification: 'retryable_before_side_effects' as const,
+      cleanup: { status: 'restored_and_verified' as const },
+    };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, firstPackagePutFailure],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'dispatch',
+      sequence: 4,
+      predecessor_run_id: '33587397237',
     });
   });
 
