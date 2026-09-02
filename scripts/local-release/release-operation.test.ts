@@ -224,6 +224,98 @@ describe('attempt planning and exact dispatch correlation', () => {
     });
   });
 
+  it('allows a successor after a conclusive pre-side-effect needs_review predecessor', () => {
+    const preSideEffectNeedsReview = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+      controller: { sha: 'c'.repeat(40), run_id: '33572211657', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33573326601',
+        run_attempt: 1,
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+      },
+      last_side_effect_boundary: 'preflight' as const,
+      retry_classification: 'needs_review' as const,
+      cleanup: { status: 'restored_and_verified' as const },
+    };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, preSideEffectNeedsReview],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'dispatch',
+      sequence: 4,
+      predecessor_run_id: '33573326601',
+    });
+  });
+
+  it('stops on needs_review when not conclusively before public effects', () => {
+    const unknownBoundary = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+      controller: { sha: 'c'.repeat(40), run_id: '99001', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '99002',
+        run_attempt: 1,
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+      },
+      last_side_effect_boundary: 'unknown' as const,
+      retry_classification: 'needs_review' as const,
+    };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, unknownBoundary],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'stop',
+      result: 'needs_review',
+      reason: 'ambiguous_predecessor',
+    });
+
+    const afterPublicSideEffect = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+      controller: { sha: 'c'.repeat(40), run_id: '99003', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '99004',
+        run_attempt: 1,
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+      },
+      last_side_effect_boundary: 'any_public_side_effect' as const,
+      retry_classification: 'needs_review' as const,
+    };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, afterPublicSideEffect],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'stop',
+      result: 'needs_review',
+      reason: 'ambiguous_predecessor',
+    });
+  });
+
   it('refuses a stale snapshot, active child, cleanup failure, mismatch, and duplicate lineage', () => {
     expect(
       planReleaseAttempt({
