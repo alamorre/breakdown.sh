@@ -6,6 +6,12 @@ reasoning graphs through Streamable HTTP MCP at `https://www.breakdown.sh/api/mc
 The plugin ships with marketplace metadata, icon/logo/screenshot assets, bundled Breakdown skills,
 a setup diagnostic tool, and a hosted MCP config for Breakdown.
 
+It also includes eight vendored engineering skills: `ask-matt`, `tdd`, `code-review`,
+`diagnosing-bugs`, `prototype`, `wayfinder`, `grill-with-docs`, and `domain-modeling`. Start a new
+Codex thread after installation and invoke `$ask-matt` to choose among the bundled set. Installation,
+direct project-local use, provenance, licensing, and update instructions are documented in
+[`docs/vendored-skills.md`](../../docs/vendored-skills.md).
+
 ## Install From Git
 
 ```bash

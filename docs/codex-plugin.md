@@ -39,7 +39,9 @@ The plugin package includes:
   starter prompts, and bundled capability declarations.
 - `plugins/breakdown/.mcp.json` for hosted Streamable HTTP MCP with
   `Authorization: Bearer ${BREAKDOWN_API_TOKEN}`.
-- `plugins/breakdown/skills/` for Breakdown development and graph evaluation workflows.
+- `plugins/breakdown/skills/` for Breakdown development and graph evaluation workflows, plus the
+  eight vendored engineering skills documented in [`docs/vendored-skills.md`](vendored-skills.md)
+  with pinned file-level provenance and MIT license material.
 - `.agents/plugins/marketplace.json` for the Git marketplace entry.
 
 ## Recommended Hosted MCP Connection

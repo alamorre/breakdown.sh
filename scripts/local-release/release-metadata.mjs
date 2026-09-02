@@ -14,6 +14,7 @@ const releaseSourceDirectories = [
   'local/contracts',
   'local/docs',
   'local/skills',
+  'plugins/breakdown/skills',
   'packages/breakdown-core/src',
   'packages/breakdown-cli/src',
   'packages/breakdown-cli/scripts',

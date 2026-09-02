@@ -408,6 +408,41 @@ function inspectCanonicalSkillManifest(skillsArchive) {
   }
 }
 
+function inspectVendoredSkillManifest(skillsArchive) {
+  const manifestPath = `${skillsArchive.archiveRoot}/VENDORED_SKILLS.json`;
+  const manifest = parseJson(skillsArchive.entries.get(manifestPath), 'vendored skill manifest');
+  invariant(
+    manifest.schema_version === 'breakdown.vendored-skills.v1',
+    'Vendored skill manifest has the wrong schema.',
+  );
+  invariant(
+    manifest.upstream?.revision === '6654f6b60cd9d5be8b54c6fafe44346dabeb3b76',
+    'Vendored skill manifest has the wrong upstream revision.',
+  );
+  const licensePath = `${skillsArchive.archiveRoot}/${manifest.upstream.license_file}`;
+  const license = skillsArchive.entries.get(licensePath);
+  invariant(license !== undefined, 'Skills archive omits the vendored MIT license.');
+  invariant(
+    sha256(license) === manifest.upstream.license_sha256,
+    'Vendored MIT license differs from its recorded digest.',
+  );
+  for (const skill of manifest.skills) {
+    invariant(skill.files.length > 0, `Vendored skill ${skill.name} has no files.`);
+    for (const file of skill.files) {
+      const path = `${skillsArchive.archiveRoot}/${skill.name}/${file.path}`;
+      const bytes = skillsArchive.entries.get(path);
+      invariant(
+        bytes !== undefined,
+        `Skills archive omits vendored file ${skill.name}/${file.path}.`,
+      );
+      invariant(
+        sha256(bytes) === file.sha256,
+        `Vendored skill byte drift at ${skill.name}/${file.path}.`,
+      );
+    }
+  }
+}
+
 function componentForArtifact(sbom, fileName) {
   return sbom.components.find((component) =>
     component.properties?.some(
@@ -918,6 +953,7 @@ export async function inspectReleaseCandidate({
     stem: 'breakdown-skills',
   });
   inspectCanonicalSkillManifest(skills);
+  inspectVendoredSkillManifest(skills);
 
   const sbomName = `breakdown-sbom-${releaseVersion}.cdx.json`;
   const sbom = parseJson(candidateBytes.get(sbomName), 'SBOM');
