@@ -211,6 +211,20 @@ async function packageRegistryState({ commandRunner, packageEntry, candidateDire
   return 'exact-version-present';
 }
 
+function enhanceNpmPublishError(error, packageName) {
+  const text = `${error?.stdout ?? ''}\n${error?.stderr ?? ''}\n${error?.message ?? ''}`;
+  if (/(?:E404|404 Not Found)/.test(text)) {
+    const orgName = packageName.split('/')[0].replace('@', '');
+    throw new Error(
+      `npm publish failed with 404 for ${packageName}. This typically means the token lacks permission to CREATE new packages in the @${orgName} organization. ` +
+      `Required: the NPM_FIRST_PACKAGE_TOKEN must have "packages and scopes" permission set to "Read and write" for @${orgName}, ` +
+      `OR the npm organization must grant explicit createPackage permission to the automation account. ` +
+      `Cannot proceed without this permission. Original error: ${error?.message ?? String(error)}`,
+    );
+  }
+  throw error;
+}
+
 export async function inspectFirstPackageBootstrap({
   candidateDirectory,
   capturedAt = new Date(),
@@ -647,19 +661,23 @@ export async function publishFirstPackages({
   for (const entry of controls.packages) {
     const packageSpecifier = `${entry.name}@${entry.version}`;
     if (entry.registry_state === 'absent') {
-      await commandRunner(
-        'npm',
-        [
-          'publish',
-          join(publicationDirectory, entry.artifact),
-          '--access',
-          'public',
-          '--tag',
-          'latest',
-          '--provenance',
-        ],
-        {},
-      );
+      try {
+        await commandRunner(
+          'npm',
+          [
+            'publish',
+            join(publicationDirectory, entry.artifact),
+            '--access',
+            'public',
+            '--tag',
+            'latest',
+            '--provenance',
+          ],
+          {},
+        );
+      } catch (error) {
+        enhanceNpmPublishError(error, entry.name);
+      }
     }
     const workDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-bootstrap-'));
     try {

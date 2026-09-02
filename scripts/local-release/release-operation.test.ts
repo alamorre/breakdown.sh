@@ -553,7 +553,10 @@ describe('attempt planning and exact dispatch correlation', () => {
       display_title: `Breakdown Local v1.0.0 recovery handoff for workflow ${altWorkflowSha}`,
     });
     const expected = v1StableChildMetadata('9900208', workflowSha);
-    expect(() => correlateDispatchedRun(runWithAltSha, expected)).toThrow('mismatched display_title');
+    expect(correlateDispatchedRun(runWithAltSha, expected)).toMatchObject({
+      status: 'pending_metadata',
+      missing: ['display_title'],
+    });
     expect(
       correlateDispatchedRun(runWithAltSha, expected, { allowRecoveryHandoffTitle: true }),
     ).toMatchObject({ status: 'correlated', missing: [] });
@@ -564,9 +567,10 @@ describe('attempt planning and exact dispatch correlation', () => {
       display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle,
     });
     const expected = v1StableChildMetadata('9900208', workflowSha);
-    expect(() => correlateDispatchedRun(runWithLegacyTitle, expected)).toThrow(
-      'mismatched display_title',
-    );
+    expect(correlateDispatchedRun(runWithLegacyTitle, expected)).toMatchObject({
+      status: 'pending_metadata',
+      missing: ['display_title'],
+    });
     expect(
       correlateDispatchedRun(runWithLegacyTitle, expected, { allowRecoveryHandoffTitle: true }),
     ).toMatchObject({ status: 'correlated', missing: [] });
@@ -580,14 +584,61 @@ describe('attempt planning and exact dispatch correlation', () => {
       ...v1StableChildMetadata('9900208', workflowSha),
       display_title: V1_RELEASE_RECOVERY_POLICY.stablePublication.legacyTitle,
     };
-    expect(() => correlateDispatchedRun(runWithRecoveryTitle, expectedWithLegacy)).toThrow(
-      'mismatched display_title',
-    );
+    expect(correlateDispatchedRun(runWithRecoveryTitle, expectedWithLegacy)).toMatchObject({
+      status: 'pending_metadata',
+      missing: ['display_title'],
+    });
     expect(
       correlateDispatchedRun(runWithRecoveryTitle, expectedWithLegacy, {
         allowRecoveryHandoffTitle: true,
       }),
     ).toMatchObject({ status: 'correlated', missing: [] });
+  });
+
+  it('treats mismatched display_title as pending metadata rather than immediately throwing', () => {
+    const runWithWrongTitle = stableRun({
+      display_title: 'Some other title',
+    });
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    expect(correlateDispatchedRun(runWithWrongTitle, expected)).toMatchObject({
+      status: 'pending_metadata',
+      missing: ['display_title'],
+    });
+  });
+
+  it('treats mismatched display_title as pending even with allowRecoveryHandoffTitle', () => {
+    const runWithWrongTitle = stableRun({
+      display_title: 'Completely different title',
+    });
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    expect(
+      correlateDispatchedRun(runWithWrongTitle, expected, { allowRecoveryHandoffTitle: true }),
+    ).toMatchObject({
+      status: 'pending_metadata',
+      missing: ['display_title'],
+    });
+  });
+
+  it('waits and retries when display_title is pending at create time', async () => {
+    let polls = 0;
+    const getRun = vi.fn(() => {
+      polls += 1;
+      if (polls === 1) {
+        return stableRun({ display_title: 'Temporary title not yet updated' });
+      }
+      return stableRun();
+    });
+    await expect(
+      waitForDurableRunMetadata({
+        adapter: { getRun },
+        expected: v1StableChildMetadata('9900208', workflowSha),
+        maximumPolls: 5,
+        pollIntervalMs: 0,
+        sleep: async () => undefined,
+        allowRecoveryHandoffTitle: true,
+      }),
+    ).resolves.toMatchObject({ polls: 2 });
+    expect(getRun).toHaveBeenCalledTimes(2);
   });
 });
 

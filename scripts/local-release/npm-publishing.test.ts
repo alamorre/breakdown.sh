@@ -399,4 +399,80 @@ describe('one-time npm publication', () => {
       }),
     ).toThrow('npm first-package bootstrap controls are not fail-closed');
   });
+
+  it('provides clear guidance when npm publish fails with 404 due to missing createPackage permission', async () => {
+    const { candidateDirectory, root } = await fixture();
+    const publicationDirectory = join(root, 'publication');
+    await mkdir(publicationDirectory);
+    for (const name of NPM_PACKAGES) {
+      const artifact = `${name.replace('@breakdown-sh/', 'breakdown-sh-')}-1.0.0.tgz`;
+      await writeFile(
+        join(publicationDirectory, artifact),
+        await readFile(join(candidateDirectory, artifact)),
+      );
+    }
+    const controls = await inspectFirstPackageBootstrap({
+      candidateDirectory,
+      commandRunner: async () => {
+        throw notFound();
+      },
+    });
+    const controlsFile = 'breakdown-npm-publication-controls.json';
+    await writeFile(join(publicationDirectory, controlsFile), `${JSON.stringify(controls)}\n`);
+    const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+    await writeFile(
+      join(publicationDirectory, workflowIdentityFile),
+      `${JSON.stringify({
+        execution: {
+          mode: 'v1-recovery',
+          ref: 'refs/heads/main',
+          source_commit: candidateSourceCommit,
+          workflow_ref:
+            'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main',
+          workflow_sha: candidateSourceCommit,
+        },
+      })}\n`,
+    );
+    await writeFile(
+      join(publicationDirectory, manifestFile),
+      `${JSON.stringify({
+        schema_version: 'breakdown.publication-manifest.v1',
+        release_version: '1.0.0',
+        source: {
+          signed_tag: 'breakdown-local-v1.0.0',
+          git_commit: candidateSourceCommit,
+        },
+        packages: controls.packages.map((entry) => ({
+          name: entry.name,
+          version: entry.version,
+          artifact: entry.artifact,
+        })),
+        candidate: { digest: { algorithm: 'SHA-256', content: 'a'.repeat(64) } },
+        evidence: {
+          npm_publication_controls: { file: controlsFile },
+          stable_workflow_identity: { file: workflowIdentityFile },
+        },
+      })}\n`,
+    );
+
+    const commandRunner = async (command: string, args: string[]) => {
+      if (command === 'npm' && args[0] === 'publish') {
+        throw Object.assign(new Error('npm publish failed'), {
+          stderr:
+            'npm error code E404\nnpm error 404 Not Found - PUT https://registry.npmjs.org/@breakdown-sh%2fcore',
+        });
+      }
+      throw new Error('Unexpected command');
+    };
+
+    await expect(
+      publishFirstPackages({
+        commandRunner,
+        publicationDirectory,
+      }),
+    ).rejects.toThrow(
+      /npm publish failed with 404 for @breakdown-sh\/core.*token lacks permission to CREATE new packages.*packages and scopes.*Read and write.*@breakdown-sh/,
+    );
+  });
 });
