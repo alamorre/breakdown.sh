@@ -5,6 +5,7 @@ import {
   classifyRunResult,
   correlateDispatchedRun,
   planReleaseAttempt,
+  runWithV1RecoveryPolicy,
   sanitizeReleaseDiagnostics,
   validateDispatchResponse,
 } from './release-operation.mjs';
@@ -95,6 +96,7 @@ export async function waitForDurableRunMetadata({
   maximumPolls = 24,
   pollIntervalMs = 5_000,
   sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  allowRecoveryHandoffTitle = false,
 }) {
   invariant(maximumPolls > 0, 'Correlation poll limit must be positive.');
   let lastMissing = [];
@@ -109,7 +111,7 @@ export async function waitForDurableRunMetadata({
       if (poll < maximumPolls) await sleep(pollIntervalMs);
       continue;
     }
-    const correlation = correlateDispatchedRun(run, expected);
+    const correlation = correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitle });
     if (correlation.status === 'correlated') return { run, polls: poll };
     lastMissing = correlation.missing;
     if (poll < maximumPolls) await sleep(pollIntervalMs);
@@ -131,6 +133,7 @@ export async function monitorExactRun({
   maximumPolls = 240,
   pollIntervalMs = 5_000,
   sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  allowRecoveryHandoffTitle = false,
 }) {
   invariant(maximumPolls > 0, 'Monitor poll limit must be positive.');
   let lastUnavailable = null;
@@ -145,7 +148,7 @@ export async function monitorExactRun({
       if (poll < maximumPolls) await sleep(pollIntervalMs);
       continue;
     }
-    const correlation = correlateDispatchedRun(run, expected);
+    const correlation = correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitle });
     lastMissing = correlation.missing;
     if (correlation.status === 'correlated' && run.status === 'completed') {
       return { run, polls: poll };
@@ -231,6 +234,7 @@ async function discoverStableAttempts(adapter, adopted, publicState) {
     const correlation = correlateDispatchedRun(
       run,
       v1StableChildMetadata(String(run.id), workflowSha),
+      { allowRecoveryHandoffTitle: true },
     );
     const completed = run.status === 'completed';
     invariant(
@@ -360,6 +364,7 @@ export async function runV1HostedController({
       maximumPolls: monitorPolls,
       pollIntervalMs,
       sleep,
+      allowRecoveryHandoffTitle: true,
     });
     if (monitored.run === null) {
       return {
@@ -378,49 +383,58 @@ export async function runV1HostedController({
     });
   }
 
-  const request = v1StableChildRequest(controller.sha);
-  const dispatchResponse = await adapter.dispatchWorkflow(request.workflow_id, request.body);
-  const dispatched = validateDispatchResponse(dispatchResponse);
-  const expected = v1StableChildMetadata(dispatched.run_id, controller.sha);
-  const correlated = await waitForDurableRunMetadata({
-    adapter,
-    expected,
-    maximumPolls: correlationPolls,
-    pollIntervalMs,
-    sleep,
+  const { outcome, cleanup } = await runWithV1RecoveryPolicy(adapter, async () => {
+    const request = v1StableChildRequest(controller.sha);
+    const dispatchResponse = await adapter.dispatchWorkflow(request.workflow_id, request.body);
+    const dispatched = validateDispatchResponse(dispatchResponse);
+    const expected = v1StableChildMetadata(dispatched.run_id, controller.sha);
+    const correlated = await waitForDurableRunMetadata({
+      adapter,
+      expected,
+      maximumPolls: correlationPolls,
+      pollIntervalMs,
+      sleep,
+      allowRecoveryHandoffTitle: true,
+    });
+    if (correlated.run === null) {
+      return {
+        schema_version: 'breakdown.release-operation-result.v1',
+        operation_id: V1_RELEASE_OPERATION.operation_id,
+        action: 'stop',
+        ...correlated,
+        dispatch: dispatched,
+      };
+    }
+    const monitored = await monitorExactRun({
+      adapter,
+      expected,
+      maximumPolls: monitorPolls,
+      pollIntervalMs,
+      sleep,
+      allowRecoveryHandoffTitle: true,
+    });
+    if (monitored.run === null) {
+      return {
+        schema_version: 'breakdown.release-operation-result.v1',
+        operation_id: V1_RELEASE_OPERATION.operation_id,
+        action: 'stop',
+        ...monitored,
+        dispatch: dispatched,
+      };
+    }
+    return completeStableAttempt({
+      adapter,
+      controller,
+      plan,
+      run: monitored.run,
+      dispatched,
+    });
   });
-  if (correlated.run === null) {
-    return {
-      schema_version: 'breakdown.release-operation-result.v1',
-      operation_id: V1_RELEASE_OPERATION.operation_id,
-      action: 'stop',
-      ...correlated,
-      dispatch: dispatched,
-    };
+
+  if (outcome.schema_version === 'breakdown.release-operation-result.v1') {
+    return { ...outcome, cleanup };
   }
-  const monitored = await monitorExactRun({
-    adapter,
-    expected,
-    maximumPolls: monitorPolls,
-    pollIntervalMs,
-    sleep,
-  });
-  if (monitored.run === null) {
-    return {
-      schema_version: 'breakdown.release-operation-result.v1',
-      operation_id: V1_RELEASE_OPERATION.operation_id,
-      action: 'stop',
-      ...monitored,
-      dispatch: dispatched,
-    };
-  }
-  return completeStableAttempt({
-    adapter,
-    controller,
-    plan,
-    run: monitored.run,
-    dispatched,
-  });
+  return outcome;
 }
 
 export async function inspectV1StableOutcome({
@@ -462,7 +476,7 @@ export async function inspectV1StableOutcome({
   }
   const run = candidates[0];
   const expected = v1StableChildMetadata(String(run.id), workflowSha);
-  const correlation = correlateDispatchedRun(run, expected);
+  const correlation = correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitle: true });
   if (correlation.status !== 'correlated' || run.status !== 'completed') {
     return {
       result: 'needs_review',
