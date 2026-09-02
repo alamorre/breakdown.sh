@@ -660,6 +660,7 @@ export async function publishFirstPackages({
   const packages = [];
   for (const entry of controls.packages) {
     const packageSpecifier = `${entry.name}@${entry.version}`;
+    let digest;
     if (entry.registry_state === 'absent') {
       try {
         await commandRunner(
@@ -678,24 +679,31 @@ export async function publishFirstPackages({
       } catch (error) {
         enhanceNpmPublishError(error, entry.name);
       }
+      const candidateTarball = await readFile(join(publicationDirectory, entry.artifact));
+      digest = sha256(candidateTarball);
+    } else if (entry.registry_state === 'exact-version-present') {
+      const workDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-bootstrap-'));
+      try {
+        digest = await packAndCompare({
+          commandRunner,
+          directory: workDirectory,
+          expectedPath: join(publicationDirectory, entry.artifact),
+          packageSpecifier,
+        });
+      } finally {
+        await rm(workDirectory, { recursive: true, force: true });
+      }
+    } else {
+      throw new Error(
+        `Unexpected registry state '${entry.registry_state}' for ${packageSpecifier}. Expected 'absent' or 'exact-version-present'.`,
+      );
     }
-    const workDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-bootstrap-'));
-    try {
-      const digest = await packAndCompare({
-        commandRunner,
-        directory: workDirectory,
-        expectedPath: join(publicationDirectory, entry.artifact),
-        packageSpecifier,
-      });
-      packages.push({
-        name: entry.name,
-        version: entry.version,
-        artifact: entry.artifact,
-        sha256: digest,
-      });
-    } finally {
-      await rm(workDirectory, { recursive: true, force: true });
-    }
+    packages.push({
+      name: entry.name,
+      version: entry.version,
+      artifact: entry.artifact,
+      sha256: digest,
+    });
   }
   const auditDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-signatures-'));
   try {
