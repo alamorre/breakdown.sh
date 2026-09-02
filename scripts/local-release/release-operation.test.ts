@@ -1410,7 +1410,7 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.reason).toBe('indeterminate_public_state');
   });
 
-  it('planner stops on needs_review with unknown boundary when public is not absent', () => {
+  it('planner allows continuation on needs_review with unknown boundary when public is v1 resumable mixed (issue #241)', () => {
     const mixedState = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
@@ -1446,7 +1446,48 @@ describe('shared hermetic rehearsal and redaction', () => {
       kind: 'live',
     });
 
-    // Should stop with ambiguous_predecessor because unknown boundary + non-absent public is unsafe
+    // Issue #241: Should allow dispatch because unknown boundary + v1 resumable mixed state is safe
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(2);
+  });
+
+  it('planner still stops on needs_review with unknown boundary when public is not the exact v1 resumable mixed pattern', () => {
+    const nonResumableMixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithUnknownBoundary = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33684406602', run_attempt: 1 },
+      child: null,
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'unknown',
+      conclusion: 'failure',
+      retry_classification: 'needs_review',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithUnknownBoundary],
+      controllerSha: 'c'.repeat(40),
+      publicState: nonResumableMixedState,
+      kind: 'live',
+    });
+
+    // Should still stop because the public state doesn't match the exact v1 resumable pattern
     expect(plan.action).toBe('stop');
     expect(plan.result).toBe('needs_review');
     expect(plan.reason).toBe('ambiguous_predecessor');
