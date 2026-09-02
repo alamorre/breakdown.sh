@@ -1148,4 +1148,141 @@ describe('shared hermetic rehearsal and redaction', () => {
       ]),
     ).toBe('any_public_side_effect');
   });
+
+  it('classifies v1 resumable mixed state (core present, cli/mcp absent) as partial_publication_stop', () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    // Classification remains partial_publication_stop, but planner allows continuation
+    const result = classifyRunResult({
+      kind: 'live',
+      run: { status: 'completed', conclusion: 'failure' },
+      publicState: mixedState,
+      lastBoundary: 'any_public_side_effect',
+      cleanup: { status: 'restored_and_verified' },
+    });
+
+    expect(result).toBe('partial_publication_stop');
+  });
+
+  it('planner allows continuation when resumable mixed state is detected', () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithPartialStop = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33661304845', run_attempt: 1 },
+      child: { sha: workflowSha, run_id: '33661304845', run_attempt: 1, status: 'completed', conclusion: 'failure' },
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithPartialStop],
+      controllerSha: 'c'.repeat(40),
+      publicState: mixedState,
+      kind: 'live',
+    });
+
+    // Should allow dispatch rather than stopping
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(2);
+  });
+
+  it('planner stops when partial_publication_stop and state is not resumable', () => {
+    const nonResumableState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithPartialStop = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33661304845', run_attempt: 1 },
+      child: { sha: workflowSha, run_id: '33661304845', run_attempt: 1, status: 'completed', conclusion: 'failure' },
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithPartialStop],
+      controllerSha: 'c'.repeat(40),
+      publicState: nonResumableState,
+      kind: 'live',
+    });
+
+    expect(plan.action).toBe('stop');
+    expect(plan.result).toBe('partial_publication_stop');
+    expect(plan.reason).toBe('terminal_predecessor');
+  });
+
+  it('inspectV1StableOutcome returns retryable for resumable mixed state', async () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const adapter = {
+      async readPublicState() {
+        return mixedState;
+      },
+      async listWorkflowRuns(_workflowId: number) {
+        return [];
+      },
+    };
+
+    const outcome = await inspectV1StableOutcome({
+      adapter,
+      workflowSha,
+      controllerConclusion: 'failure',
+      cleanup: { status: 'restored_and_verified' },
+    });
+
+    expect(outcome).toMatchObject({
+      result: 'retryable_before_side_effects',
+      reason: 'v1_resumable_mixed_state_core_present_cli_mcp_absent',
+      last_side_effect_boundary: 'preflight',
+    });
+  });
 });

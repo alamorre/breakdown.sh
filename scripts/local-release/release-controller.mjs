@@ -437,6 +437,22 @@ export async function runV1HostedController({
   return outcome;
 }
 
+function isV1ResumableMixedState(publicState) {
+  if (!publicState?.npm_packages) return false;
+  
+  const coreStatus = publicState.npm_packages['@breakdown-sh/core']?.status;
+  const cliStatus = publicState.npm_packages['@breakdown-sh/cli']?.status;
+  const mcpStatus = publicState.npm_packages['@breakdown-sh/mcp']?.status;
+  const releaseStatus = publicState.github_release?.status;
+  
+  return (
+    coreStatus === 'present' &&
+    cliStatus === 'absent' &&
+    mcpStatus === 'absent' &&
+    releaseStatus === 'absent'
+  );
+}
+
 export async function inspectV1StableOutcome({
   adapter,
   workflowSha,
@@ -464,6 +480,13 @@ export async function inspectV1StableOutcome({
   }
   if (candidates.length === 0) {
     if (publicClassification === 'public_side_effect') {
+      if (isV1ResumableMixedState(publicState)) {
+        return {
+          result: 'retryable_before_side_effects',
+          reason: 'v1_resumable_mixed_state_core_present_cli_mcp_absent',
+          last_side_effect_boundary: 'preflight',
+        };
+      }
       return { result: 'partial_publication_stop', reason: 'public_side_effect_observed' };
     }
     return ['failure', 'cancelled', 'timed_out'].includes(controllerConclusion)
