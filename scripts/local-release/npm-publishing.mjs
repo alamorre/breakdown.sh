@@ -191,9 +191,7 @@ async function packageRegistryState({ commandRunner, packageEntry, candidateDire
     );
   } catch (error) {
     if (registryNotFound(error)) {
-      throw new Error(
-        `${packageEntry.name} already exists but ${specifier} does not; first-package bootstrap refuses a claimed package name.`,
-      );
+      return 'package-exists-version-absent';
     }
     throw error;
   }
@@ -238,15 +236,43 @@ export async function inspectFirstPackageBootstrap({
   );
   const packages = [];
   for (const packageEntry of candidate.packages) {
+    const registryState = await packageRegistryState({
+      commandRunner,
+      packageEntry,
+      candidateDirectory,
+    });
     packages.push({
       ...packageEntry,
-      registry_state: await packageRegistryState({
-        commandRunner,
-        packageEntry,
-        candidateDirectory,
-      }),
+      registry_state: registryState,
     });
   }
+  
+  const corePackage = packages.find((pkg) => pkg.name === '@breakdown-sh/core');
+  const cliPackage = packages.find((pkg) => pkg.name === '@breakdown-sh/cli');
+  const mcpPackage = packages.find((pkg) => pkg.name === '@breakdown-sh/mcp');
+  
+  const isResumableMixedState =
+    corePackage?.registry_state === 'exact-version-present' &&
+    cliPackage?.registry_state === 'absent' &&
+    mcpPackage?.registry_state === 'absent';
+  
+  if (isResumableMixedState) {
+    invariant(
+      corePackage.sha256,
+      'Resumable mixed state requires byte-verified core package.',
+    );
+  }
+  
+  for (const pkg of packages) {
+    if (pkg.registry_state === 'package-exists-version-absent') {
+      if (!isResumableMixedState) {
+        throw new Error(
+          `${pkg.name} already exists but ${pkg.name}@${pkg.version} does not; first-package bootstrap refuses a claimed package name.`,
+        );
+      }
+    }
+  }
+  
   const evidence = {
     schema_version: 'breakdown.npm-publication-controls.v1',
     captured_at: capturedAt.toISOString(),
@@ -601,7 +627,7 @@ export function validateNpmPublicationControls(evidence, candidate) {
         evidence.authentication.required_properties?.maximum_lifetime_hours === 24 &&
         evidence.transition?.github_release_finalization_permitted === false &&
         evidence.packages.every((entry) =>
-          ['absent', 'exact-version-present'].includes(entry.registry_state),
+          ['absent', 'exact-version-present', 'package-exists-version-absent'].includes(entry.registry_state),
         ),
       'npm first-package bootstrap controls are not fail-closed.',
     );
@@ -660,7 +686,8 @@ export async function publishFirstPackages({
   const packages = [];
   for (const entry of controls.packages) {
     const packageSpecifier = `${entry.name}@${entry.version}`;
-    if (entry.registry_state === 'absent') {
+    let digest;
+    if (entry.registry_state === 'absent' || entry.registry_state === 'package-exists-version-absent') {
       try {
         await commandRunner(
           'npm',
@@ -678,24 +705,31 @@ export async function publishFirstPackages({
       } catch (error) {
         enhanceNpmPublishError(error, entry.name);
       }
+      const candidateTarball = await readFile(join(publicationDirectory, entry.artifact));
+      digest = sha256(candidateTarball);
+    } else if (entry.registry_state === 'exact-version-present') {
+      const workDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-bootstrap-'));
+      try {
+        digest = await packAndCompare({
+          commandRunner,
+          directory: workDirectory,
+          expectedPath: join(publicationDirectory, entry.artifact),
+          packageSpecifier,
+        });
+      } finally {
+        await rm(workDirectory, { recursive: true, force: true });
+      }
+    } else {
+      throw new Error(
+        `Unexpected registry state '${entry.registry_state}' for ${packageSpecifier}. Expected 'absent', 'package-exists-version-absent', or 'exact-version-present'.`,
+      );
     }
-    const workDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-bootstrap-'));
-    try {
-      const digest = await packAndCompare({
-        commandRunner,
-        directory: workDirectory,
-        expectedPath: join(publicationDirectory, entry.artifact),
-        packageSpecifier,
-      });
-      packages.push({
-        name: entry.name,
-        version: entry.version,
-        artifact: entry.artifact,
-        sha256: digest,
-      });
-    } finally {
-      await rm(workDirectory, { recursive: true, force: true });
-    }
+    packages.push({
+      name: entry.name,
+      version: entry.version,
+      artifact: entry.artifact,
+      sha256: digest,
+    });
   }
   const auditDirectory = await mkdtemp(join(tmpdir(), 'breakdown-npm-signatures-'));
   try {

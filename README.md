@@ -79,7 +79,9 @@ bearer_token_env_var = "BREAKDOWN_API_TOKEN"
 
 The plugin package lives at `plugins/breakdown` and reads `BREAKDOWN_API_TOKEN` from the Codex
 process environment. See [docs/codex-plugin.md](docs/codex-plugin.md) for install, first-run token
-setup, validation, and local override guidance.
+setup, validation, and local override guidance. See
+[docs/vendored-skills.md](docs/vendored-skills.md) for the nine bundled engineering skills,
+project-local installation, invocation, and pinned upstream provenance.
 
 ## Package Security
 

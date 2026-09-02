@@ -12,11 +12,15 @@ const skillNames = [
   'summarize-breakdown-run',
 ];
 
+const vendoredManifestName = 'VENDORED_SKILLS.json';
+const vendoredLicenseName = 'LICENSE_MATTPOCOCK_SKILLS.txt';
+
 export function skillsNotice(releaseVersion) {
   return `Breakdown Local Skills
 Copyright 2026 Adam Lamorre
 
-This archive contains the canonical portable Agent Skills for Breakdown Local ${releaseVersion}.
+This archive contains the canonical portable Agent Skills for Breakdown Local ${releaseVersion},
+plus the engineering skills recorded in ${vendoredManifestName}.
 `;
 }
 
@@ -27,9 +31,13 @@ Document kind: License and notice material
 
 Document version: ${releaseVersion}
 
-No third-party implementation is copied or bundled into this archive. Setup guidance references
-the external \`skills@1.5.20\` installer as an optional installation mechanism; that installer is
-not part of this archive and remains under its own license.
+This archive incorporates nine skills from https://github.com/mattpocock/skills at revision
+6654f6b60cd9d5be8b54c6fafe44346dabeb3b76 under the MIT License. The complete upstream license is
+included as \`${vendoredLicenseName}\`; \`${vendoredManifestName}\` records every source path,
+upstream digest, local digest, and Breakdown adaptation.
+
+Setup guidance also references the external \`skills@1.5.20\` installer as an optional installation
+mechanism. That installer is not bundled and remains under its own license.
 `;
 }
 
@@ -40,6 +48,12 @@ function classify(path) {
     return { media_type: 'text/markdown; charset=utf-8', role: 'third-party-notices' };
   }
   if (path === 'VERSION') return { media_type: 'text/plain; charset=utf-8', role: 'version' };
+  if (path === vendoredLicenseName) {
+    return { media_type: 'text/plain; charset=utf-8', role: 'license' };
+  }
+  if (path === vendoredManifestName) {
+    return { media_type: 'application/json', role: 'provenance' };
+  }
   if (path.endsWith('/LICENSE')) {
     return { media_type: 'text/plain; charset=utf-8', role: 'license' };
   }
@@ -51,6 +65,8 @@ function classify(path) {
     '.json': 'application/json',
     '.md': 'text/markdown; charset=utf-8',
     '.mjs': 'text/javascript; charset=utf-8',
+    '.sh': 'text/x-shellscript; charset=utf-8',
+    '.txt': 'text/plain; charset=utf-8',
     '.yaml': 'application/yaml',
   };
   const mediaType = mediaTypes[extension];
@@ -61,27 +77,48 @@ function classify(path) {
     media_type: mediaType,
     role: path.endsWith('/SKILL.md')
       ? 'skill'
-      : path.includes('/assets/')
-        ? 'asset'
-        : path.includes('/references/')
-          ? 'reference'
-          : path.includes('/scripts/')
-            ? 'script'
-            : 'third-party-notices',
+      : path.includes('/agents/')
+        ? 'agent-metadata'
+        : path.includes('/assets/')
+          ? 'asset'
+          : path.includes('/references/')
+            ? 'reference'
+            : path.includes('/scripts/')
+              ? 'script'
+              : 'reference',
   };
 }
 
-export async function buildSkillsArtifacts({ outputPath, releaseVersion, skillsRoot }) {
+export async function buildSkillsArtifacts({
+  outputPath,
+  releaseVersion,
+  skillsRoot,
+  vendoredSkillsRoot,
+}) {
+  const vendoredManifestBytes = await readFile(join(vendoredSkillsRoot, vendoredManifestName));
+  const vendoredManifest = JSON.parse(vendoredManifestBytes.toString('utf8'));
+  if (vendoredManifest.schema_version !== 'breakdown.vendored-skills.v1') {
+    throw new Error('The vendored skill manifest has an unsupported schema version.');
+  }
   const payload = new Map([
     ['LICENSE', await readFile(join(skillsRoot, 'setup-breakdown', 'LICENSE'))],
     ['NOTICE', Buffer.from(skillsNotice(releaseVersion))],
     ['THIRD_PARTY_NOTICES.md', Buffer.from(skillsThirdPartyNotices(releaseVersion))],
     ['VERSION', Buffer.from(`${releaseVersion}\n`)],
+    [vendoredLicenseName, await readFile(join(vendoredSkillsRoot, vendoredLicenseName))],
+    [vendoredManifestName, vendoredManifestBytes],
   ]);
   for (const skillName of skillNames) {
     const skillRoot = join(skillsRoot, skillName);
     for (const absolutePath of await filesBelow(skillRoot)) {
       const path = `${skillName}/${relative(skillRoot, absolutePath).replaceAll('\\', '/')}`;
+      payload.set(path, await readFile(absolutePath));
+    }
+  }
+  for (const skill of vendoredManifest.skills) {
+    const skillRoot = join(vendoredSkillsRoot, skill.name);
+    for (const absolutePath of await filesBelow(skillRoot)) {
+      const path = `${skill.name}/${relative(skillRoot, absolutePath).replaceAll('\\', '/')}`;
       payload.set(path, await readFile(absolutePath));
     }
   }

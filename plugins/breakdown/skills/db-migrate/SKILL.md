@@ -20,7 +20,7 @@ Create a timestamped SQL migration file and apply it to the Supabase database.
    - Generate a timestamp in the format `YYYYMMDDHHMMSS`
    - Create the file at `supabase/migrations/<timestamp>_<slug>.sql`
    - Write the SQL migration based on the description
-   - Follow database rules from `.claude/rules/database.md`:
+   - Follow these database rules:
      - Include `created_at` and `updated_at` columns (TIMESTAMPTZ, DEFAULT now())
      - Use `ON DELETE CASCADE` for child tables
      - Use UUID primary keys (`gen_random_uuid()`)

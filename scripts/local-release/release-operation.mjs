@@ -303,6 +303,22 @@ function boundaryBeforePublicEffects(boundary) {
   );
 }
 
+function isV1ResumableMixedState(publicState) {
+  if (!publicState?.npm_packages) return false;
+  
+  const coreStatus = publicState.npm_packages['@breakdown-sh/core']?.status;
+  const cliStatus = publicState.npm_packages['@breakdown-sh/cli']?.status;
+  const mcpStatus = publicState.npm_packages['@breakdown-sh/mcp']?.status;
+  const releaseStatus = publicState.github_release?.status;
+  
+  return (
+    coreStatus === 'present' &&
+    cliStatus === 'absent' &&
+    mcpStatus === 'absent' &&
+    releaseStatus === 'absent'
+  );
+}
+
 export function planReleaseAttempt({
   operation,
   attempts,
@@ -346,15 +362,20 @@ export function planReleaseAttempt({
   const predecessor = ordered.at(-1);
   invariant(active.length <= 1, 'More than one active child exists for the release operation.');
   const publicClassification = classifyPublicState(publicState);
+  const isResumableMixed = isV1ResumableMixedState(publicState);
   if (publicClassification === 'indeterminate') {
     return { action: 'stop', result: 'needs_review', reason: 'indeterminate_public_state' };
   }
   if (relevant.some((attempt) => attempt.retry_classification === 'partial_publication_stop')) {
-    return {
-      action: 'stop',
-      result: 'partial_publication_stop',
-      reason: 'terminal_predecessor',
-    };
+    if (isResumableMixed) {
+      // Allow resumption for v1 mixed state (core present, cli/mcp absent)
+    } else {
+      return {
+        action: 'stop',
+        result: 'partial_publication_stop',
+        reason: 'terminal_predecessor',
+      };
+    }
   }
   if (
     relevant.some(
@@ -364,17 +385,44 @@ export function planReleaseAttempt({
         (attempt.last_side_effect_boundary !== 'unknown' || publicClassification !== 'absent'),
     )
   ) {
-    return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
+    // Only allow bypass for resumable mixed state when boundary is known and after public effects
+    // Do NOT bypass when boundary is unknown + public not absent (genuinely ambiguous)
+    const canBypassForResumable = relevant.some(
+      (attempt) =>
+        attempt.retry_classification === 'needs_review' &&
+        attempt.last_side_effect_boundary !== 'unknown' &&
+        !boundaryBeforePublicEffects(attempt.last_side_effect_boundary),
+    );
+    // Issue #241: Also allow bypass for unknown boundary when public state is the exact
+    // v1 resumable mixed pattern (core present, cli/mcp absent, Release absent).
+    // This handles the case where a needs_review predecessor had no child (unknown boundary)
+    // but independent public inspection confirms the safe mixed state.
+    const canBypassUnknownBoundaryForResumable = relevant.some(
+      (attempt) =>
+        attempt.retry_classification === 'needs_review' &&
+        attempt.last_side_effect_boundary === 'unknown' &&
+        isResumableMixed,
+    );
+    if (isResumableMixed && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
+      // Allow continuation for v1 mixed state (core present, cli/mcp absent) past needs_review
+      // when we have a known post-effect boundary OR when unknown boundary + exact mixed pattern
+    } else {
+      return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
+    }
   }
   if (previous?.retry_classification === 'complete') {
     return { action: 'stop', result: 'complete', reason: 'operation_complete' };
   }
   if (publicClassification === 'public_side_effect') {
-    return {
-      action: 'stop',
-      result: 'partial_publication_stop',
-      reason: 'public_side_effect_observed',
-    };
+    if (isResumableMixed) {
+      // Allow continuation for v1 mixed state (core present, cli/mcp absent)
+    } else {
+      return {
+        action: 'stop',
+        result: 'partial_publication_stop',
+        reason: 'public_side_effect_observed',
+      };
+    }
   }
   if (active.length === 1) {
     return {
@@ -400,7 +448,17 @@ export function planReleaseAttempt({
           publicClassification === 'absent') ||
         (previous.retry_classification === 'retryable_before_side_effects' &&
           previous.last_side_effect_boundary === 'any_public_side_effect' &&
-          publicClassification === 'absent'),
+          publicClassification === 'absent') ||
+        (previous.retry_classification === 'partial_publication_stop' &&
+          previous.last_side_effect_boundary === 'any_public_side_effect' &&
+          isResumableMixed) ||
+        (previous.retry_classification === 'needs_review' &&
+          !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
+          previous.last_side_effect_boundary !== 'unknown' &&
+          isResumableMixed) ||
+        (previous.retry_classification === 'needs_review' &&
+          previous.last_side_effect_boundary === 'unknown' &&
+          isResumableMixed),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
     if (previous.controller.sha === controllerSha) {
