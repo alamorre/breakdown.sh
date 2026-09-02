@@ -71,7 +71,7 @@ describe('Breakdown Codex plugin release package', () => {
     const manifest = readJson<PluginManifest>('plugins/breakdown/.codex-plugin/plugin.json');
 
     expect(manifest.name).toBe('breakdown');
-    expect(manifest.version).toBe('1.2.0');
+    expect(manifest.version).toBe('1.2.1');
     expect(manifest.description).toContain('hosted breakdown.sh reasoning graphs');
     expect(manifest.keywords).toEqual(expect.arrayContaining(['codex', 'external-evaluator']));
     expect(manifest.skills).toBe('./skills/');
