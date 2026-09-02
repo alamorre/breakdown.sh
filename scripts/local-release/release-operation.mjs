@@ -452,15 +452,15 @@ export function planReleaseAttempt({
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'any_public_side_effect' &&
           isResumableMixed) ||
+        (previous.retry_classification === 'partial_publication_stop' &&
+          previous.last_side_effect_boundary === 'preflight' &&
+          isResumableMixed) ||
         (previous.retry_classification === 'needs_review' &&
           !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
           previous.last_side_effect_boundary !== 'unknown' &&
           isResumableMixed) ||
         (previous.retry_classification === 'needs_review' &&
           previous.last_side_effect_boundary === 'unknown' &&
-          isResumableMixed) ||
-        (previous.retry_classification === 'partial_publication_stop' &&
-          previous.last_side_effect_boundary === 'preflight' &&
           isResumableMixed),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );

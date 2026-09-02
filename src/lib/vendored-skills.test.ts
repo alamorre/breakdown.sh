@@ -21,6 +21,7 @@ const vendoredSkillNames = [
   'wayfinder',
   'grill-with-docs',
   'domain-modeling',
+  'implement',
 ] as const;
 const temporaryDirectories: string[] = [];
 
@@ -132,7 +133,7 @@ describe('vendored Matt Pocock skill pack', () => {
       expect(askMatt).toContain(`/${skillName}`);
     }
     expect(askMatt).toContain('Not bundled');
-    for (const unavailable of ['implement', 'grilling', 'research', 'setup-matt-pocock-skills']) {
+    for (const unavailable of ['grilling', 'research', 'setup-matt-pocock-skills']) {
       expect(askMatt).toMatch(new RegExp(`Not bundled[\\s\\S]*${unavailable}`));
     }
   });

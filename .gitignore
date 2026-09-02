@@ -36,9 +36,6 @@ yarn-error.log*
 .env*
 !.env.local.example
 
-# claude code
-.claude/settings.local.json
-
 # supabase
 supabase/.temp/
 

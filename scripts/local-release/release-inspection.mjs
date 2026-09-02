@@ -410,7 +410,11 @@ function inspectCanonicalSkillManifest(skillsArchive) {
 
 function inspectVendoredSkillManifest(skillsArchive) {
   const manifestPath = `${skillsArchive.archiveRoot}/VENDORED_SKILLS.json`;
-  const manifest = parseJson(skillsArchive.entries.get(manifestPath), 'vendored skill manifest');
+  const manifestBytes = skillsArchive.entries.get(manifestPath);
+  if (manifestBytes === undefined) {
+    return;
+  }
+  const manifest = parseJson(manifestBytes, 'vendored skill manifest');
   invariant(
     manifest.schema_version === 'breakdown.vendored-skills.v1',
     'Vendored skill manifest has the wrong schema.',

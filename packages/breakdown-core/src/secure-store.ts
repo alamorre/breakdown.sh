@@ -355,13 +355,18 @@ async function readSecureRegularFileOnce(
     inputPath = join(inputPath, segment);
     assertSameLinuxMount(linuxMounts, rootMountId, inputPath);
     const facts = await lstat(inputPath, { bigint: true });
+    // Linux pins every traversed path to the project-root mount above, which is the
+    // operative same-filesystem guarantee there: current overlayfs reports anonymous
+    // per-layer device numbers, so a file can legitimately carry a different st_dev
+    // than its parent directory. The device comparison stays load-bearing elsewhere.
+    const sameDeviceRequired = process.platform !== 'linux';
     const validFinalFile =
       isFinalSegment &&
       facts.isFile() &&
       (await hasAcceptedFileLinkCount(inputPath, facts, options));
     if (
       facts.isSymbolicLink() ||
-      facts.dev !== projectFacts.dev ||
+      (sameDeviceRequired && facts.dev !== projectFacts.dev) ||
       (isFinalSegment ? !validFinalFile : !facts.isDirectory())
     ) {
       throw new Error('Workflow Input path traverses a linked, mounted, or non-regular entry.');
