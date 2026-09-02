@@ -216,7 +216,7 @@ function validateCleanup(cleanup) {
   invariant(
     cleanup !== null &&
       typeof cleanup === 'object' &&
-      ['not_required', 'restored_and_verified', 'pending', 'failed'].includes(cleanup.status),
+      ['not_required', 'restored_and_verified', 'pending', 'failed', 'delete_forbidden_recovery_state_stable'].includes(cleanup.status),
     'Release attempt cleanup result is malformed.',
   );
 }
@@ -385,7 +385,11 @@ export function planReleaseAttempt({
     };
   }
   if (previous) {
-    if (cleanupRequired && previous.cleanup.status !== 'restored_and_verified') {
+    if (
+      cleanupRequired &&
+      previous.cleanup.status !== 'restored_and_verified' &&
+      previous.cleanup.status !== 'delete_forbidden_recovery_state_stable'
+    ) {
       return { action: 'stop', result: 'needs_review', reason: 'cleanup_not_verified' };
     }
     invariant(
@@ -503,7 +507,10 @@ export function classifyRunResult({ kind, run, publicState, lastBoundary, cleanu
     ['rehearsing', 'ready_for_review', 'authorized', 'preflight', 'live_prepublication'].includes(
       lastBoundary,
     ) &&
-    (!cleanup || ['not_required', 'restored_and_verified'].includes(cleanup.status))
+    (!cleanup ||
+      ['not_required', 'restored_and_verified', 'delete_forbidden_recovery_state_stable'].includes(
+        cleanup.status,
+      ))
   ) {
     return kind === 'rehearsal' ? 'rehearsal_failed' : 'retryable_before_side_effects';
   }
@@ -725,6 +732,20 @@ export async function finalizeV1RecoveryPolicy(adapter) {
   invariant(mainPolicy, 'Recovery state missing main policy to delete.');
   const deleteResult = await adapter.deletePolicy(mainPolicy.id);
   const after = normalizePolicies(await adapter.listPolicies());
+  if (deleteResult.status === 403) {
+    invariant(
+      isRecoveryState(after),
+      'After 403 on DELETE, policies changed to unexpected state; expected bounded recovery state to remain stable.',
+    );
+    return {
+      status: 'delete_forbidden_recovery_state_stable',
+      changed: false,
+      before,
+      after,
+      delete_status: deleteResult.status,
+      main_policy_id: mainPolicy.id,
+    };
+  }
   invariant(
     isExactPolicy(after, STEADY_POLICY),
     'Cleanup failed to restore steady-state tag policy.',
@@ -739,7 +760,15 @@ export async function finalizeV1RecoveryPolicy(adapter) {
 }
 
 export async function runWithV1RecoveryPolicy(adapter, operation) {
-  await finalizeV1RecoveryPolicy(adapter);
+  const preEnterFinalize = await finalizeV1RecoveryPolicy(adapter);
+  if (
+    preEnterFinalize.status !== 'restored_and_verified' &&
+    preEnterFinalize.status !== 'delete_forbidden_recovery_state_stable'
+  ) {
+    throw new Error(
+      `Pre-enter finalize returned unexpected status: ${preEnterFinalize.status}`,
+    );
+  }
   await enterV1RecoveryPolicy(adapter);
   let outcome;
   let operationError;

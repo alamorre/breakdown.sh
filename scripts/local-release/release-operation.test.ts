@@ -639,6 +639,56 @@ describe('controller and environment lifecycle', () => {
     );
   });
 
+  it('handles 403 on DELETE by verifying bounded recovery state remains stable', async () => {
+    class Policy403Adapter extends PolicyAdapter {
+      async deletePolicy(id: number) {
+        this.actions.push(`delete:${id}`);
+        return { status: 403 };
+      }
+    }
+    const adapter = new Policy403Adapter([
+      { id: 1, name: 'breakdown-local-v*', type: 'tag' },
+      { id: 2, name: 'main', type: 'branch' },
+    ]);
+    await expect(finalizeV1RecoveryPolicy(adapter)).resolves.toMatchObject({
+      status: 'delete_forbidden_recovery_state_stable',
+      changed: false,
+      delete_status: 403,
+      main_policy_id: 2,
+      after: [
+        { name: 'breakdown-local-v*', type: 'tag' },
+        { name: 'main', type: 'branch' },
+      ],
+    });
+    expect(adapter.actions).toEqual(['delete:2']);
+  });
+
+  it('allows dispatch when pre-enter finalize gets 403 but recovery state is stable', async () => {
+    class Policy403Adapter extends PolicyAdapter {
+      deleteAttempts = 0;
+      async deletePolicy(id: number) {
+        this.deleteAttempts += 1;
+        this.actions.push(`delete:${id}`);
+        return { status: 403 };
+      }
+    }
+    const adapter = new Policy403Adapter([
+      { id: 1, name: 'breakdown-local-v*', type: 'tag' },
+      { id: 2, name: 'main', type: 'branch' },
+    ]);
+    await expect(runWithV1RecoveryPolicy(adapter, async () => 'dispatched')).resolves.toMatchObject(
+      {
+        outcome: 'dispatched',
+        cleanup: { status: 'delete_forbidden_recovery_state_stable' },
+      },
+    );
+    expect(adapter.deleteAttempts).toBe(2);
+    expect(await adapter.listPolicies()).toEqual([
+      { id: 1, name: 'breakdown-local-v*', type: 'tag' },
+      { id: 2, name: 'main', type: 'branch' },
+    ]);
+  });
+
   it.each(['success', 'failure', 'cancellation', 'timeout', 'lost correlation'])(
     'restores and verifies policy after %s',
     async (outcome) => {
