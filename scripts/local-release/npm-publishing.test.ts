@@ -475,4 +475,170 @@ describe('one-time npm publication', () => {
       /npm publish failed with 404 for @breakdown-sh\/core.*token lacks permission to CREATE new packages.*packages and scopes.*Read and write.*@breakdown-sh/,
     );
   });
+
+  it('publishes absent packages from local tarballs without fetching from registry', async () => {
+    const { candidateDirectory, packages } = await fixture();
+    const controls = await inspectFirstPackageBootstrap({
+      candidateDirectory,
+      commandRunner: async () => {
+        throw notFound();
+      },
+    });
+    const controlsFile = 'breakdown-npm-publication-controls.json';
+    await writeFile(join(candidateDirectory, controlsFile), `${JSON.stringify(controls)}\n`);
+    const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+    await writeFile(
+      join(candidateDirectory, workflowIdentityFile),
+      `${JSON.stringify({
+        execution: {
+          mode: 'tag',
+          ref: 'refs/tags/breakdown-local-v1.0.0',
+          source_commit: candidateSourceCommit,
+          workflow_ref:
+            'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+          workflow_sha: candidateSourceCommit,
+        },
+      })}\n`,
+    );
+    await writeFile(
+      join(candidateDirectory, manifestFile),
+      `${JSON.stringify({
+        schema_version: 'breakdown.publication-manifest.v1',
+        release_version: '1.0.0',
+        source: {
+          signed_tag: 'breakdown-local-v1.0.0',
+          git_commit: candidateSourceCommit,
+        },
+        packages,
+        candidate: { digest: { algorithm: 'SHA-256', content: 'a'.repeat(64) } },
+        evidence: {
+          npm_publication_controls: { file: controlsFile },
+          stable_workflow_identity: { file: workflowIdentityFile },
+        },
+      })}\n`,
+    );
+    const published: string[] = [];
+    const packCalls: string[] = [];
+    const commandRunner = async (_command: string, args: string[]) => {
+      if (args[0] === 'publish') {
+        published.push(args[1]!);
+        return { stdout: '', stderr: '' };
+      }
+      if (args[0] === 'pack') {
+        packCalls.push(args[1]!);
+        throw notFound();
+      }
+      if (args[0] === 'install') return { stdout: '', stderr: '' };
+      if (args[0] === 'audit' && args[1] === 'signatures') {
+        return { stdout: '{"invalid":[],"missing":[]}', stderr: '' };
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    };
+
+    const report = await publishFirstPackages({
+      commandRunner,
+      publicationDirectory: candidateDirectory,
+    });
+
+    expect(published).toEqual(packages.map((entry) => join(candidateDirectory, entry.artifact)));
+    expect(packCalls).toHaveLength(0);
+    expect(report).toMatchObject({
+      schema_version: 'breakdown.npm-first-package-bootstrap.v1',
+      authentication: 'one-time-granular-access-token',
+      provenance: 'passed',
+      packages: packages.map((entry) => ({ name: entry.name, version: '1.0.0' })),
+    });
+    expect(report.packages.every((entry) => /^[0-9a-f]{64}$/.test(entry.sha256))).toBe(true);
+  });
+
+  it('verifies exact-version-present packages from registry using npm pack', async () => {
+    const { candidateDirectory, packages } = await fixture();
+    const presentControls = {
+      ...(await inspectFirstPackageBootstrap({
+        candidateDirectory,
+        commandRunner: async () => {
+          throw notFound();
+        },
+      })),
+    };
+    presentControls.packages = presentControls.packages.map((entry) => ({
+      ...entry,
+      registry_state: 'exact-version-present',
+    }));
+    const controlsFile = 'breakdown-npm-publication-controls.json';
+    await writeFile(join(candidateDirectory, controlsFile), `${JSON.stringify(presentControls)}\n`);
+    const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+    await writeFile(
+      join(candidateDirectory, workflowIdentityFile),
+      `${JSON.stringify({
+        execution: {
+          mode: 'tag',
+          ref: 'refs/tags/breakdown-local-v1.0.0',
+          source_commit: candidateSourceCommit,
+          workflow_ref:
+            'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+          workflow_sha: candidateSourceCommit,
+        },
+      })}\n`,
+    );
+    await writeFile(
+      join(candidateDirectory, manifestFile),
+      `${JSON.stringify({
+        schema_version: 'breakdown.publication-manifest.v1',
+        release_version: '1.0.0',
+        source: {
+          signed_tag: 'breakdown-local-v1.0.0',
+          git_commit: candidateSourceCommit,
+        },
+        packages,
+        candidate: { digest: { algorithm: 'SHA-256', content: 'a'.repeat(64) } },
+        evidence: {
+          npm_publication_controls: { file: controlsFile },
+          stable_workflow_identity: { file: workflowIdentityFile },
+        },
+      })}\n`,
+    );
+    const published: string[] = [];
+    const packCalls: string[] = [];
+    const commandRunner = async (_command: string, args: string[]) => {
+      if (args[0] === 'publish') {
+        published.push(args[1]!);
+        return { stdout: '', stderr: '' };
+      }
+      if (args[0] === 'pack') {
+        packCalls.push(args[1]!);
+        const packageEntry = packages.find(
+          (entry) => `${entry.name}@${entry.version}` === args[1],
+        )!;
+        const destination = args[args.indexOf('--pack-destination') + 1]!;
+        await writeFile(
+          join(destination, packageEntry.artifact),
+          await readFile(join(candidateDirectory, packageEntry.artifact)),
+        );
+        return { stdout: JSON.stringify([{ filename: packageEntry.artifact }]), stderr: '' };
+      }
+      if (args[0] === 'install') return { stdout: '', stderr: '' };
+      if (args[0] === 'audit' && args[1] === 'signatures') {
+        return { stdout: '{"invalid":[],"missing":[]}', stderr: '' };
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    };
+
+    const report = await publishFirstPackages({
+      commandRunner,
+      publicationDirectory: candidateDirectory,
+    });
+
+    expect(published).toHaveLength(0);
+    expect(packCalls).toHaveLength(3);
+    expect(packCalls).toEqual(packages.map((entry) => `${entry.name}@${entry.version}`));
+    expect(report).toMatchObject({
+      schema_version: 'breakdown.npm-first-package-bootstrap.v1',
+      authentication: 'one-time-granular-access-token',
+      provenance: 'passed',
+      packages: packages.map((entry) => ({ name: entry.name, version: '1.0.0' })),
+    });
+  });
 });
