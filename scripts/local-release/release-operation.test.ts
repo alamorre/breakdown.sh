@@ -56,6 +56,17 @@ function completePublicState() {
   };
 }
 
+function indeterminatePublicState() {
+  return {
+    github_release: { status: 'indeterminate' },
+    npm_packages: {
+      '@breakdown-sh/core': { status: 'absent', http_status: 404 },
+      '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+      '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+    },
+  };
+}
+
 function stableRun(overrides: Record<string, unknown> = {}) {
   return {
     id: 9900208,
@@ -256,8 +267,40 @@ describe('attempt planning and exact dispatch correlation', () => {
     });
   });
 
+  it('allows a successor after a never-started child with unknown boundary and absent public state', () => {
+    const neverStartedChild = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+      controller: { sha: 'c'.repeat(40), run_id: '33572211657', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33573326601',
+        run_attempt: 1,
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+      },
+      last_side_effect_boundary: 'unknown' as const,
+      retry_classification: 'needs_review' as const,
+      cleanup: { status: 'restored_and_verified' as const },
+    };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, neverStartedChild],
+        controllerSha: workflowSha,
+        publicState: absentPublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'dispatch',
+      sequence: 4,
+      predecessor_run_id: '33573326601',
+    });
+  });
+
   it('stops on needs_review when not conclusively before public effects', () => {
-    const unknownBoundary = {
+    const unknownBoundaryWithPublicSideEffect = {
       ...V1_ADOPTED_ATTEMPTS[1],
       sequence: 3,
       predecessor_run_id: '33428076790',
@@ -271,13 +314,14 @@ describe('attempt planning and exact dispatch correlation', () => {
       },
       last_side_effect_boundary: 'unknown' as const,
       retry_classification: 'needs_review' as const,
+      cleanup: { status: 'restored_and_verified' as const },
     };
     expect(
       planReleaseAttempt({
         operation: V1_RELEASE_OPERATION,
-        attempts: [...V1_ADOPTED_ATTEMPTS, unknownBoundary],
+        attempts: [...V1_ADOPTED_ATTEMPTS, unknownBoundaryWithPublicSideEffect],
         controllerSha: workflowSha,
-        publicState: absentPublicState(),
+        publicState: completePublicState(),
         kind: 'live',
       }),
     ).toMatchObject({
@@ -300,6 +344,7 @@ describe('attempt planning and exact dispatch correlation', () => {
       },
       last_side_effect_boundary: 'any_public_side_effect' as const,
       retry_classification: 'needs_review' as const,
+      cleanup: { status: 'restored_and_verified' as const },
     };
     expect(
       planReleaseAttempt({
@@ -313,6 +358,38 @@ describe('attempt planning and exact dispatch correlation', () => {
       action: 'stop',
       result: 'needs_review',
       reason: 'ambiguous_predecessor',
+    });
+  });
+
+  it('stops on indeterminate public state before checking unknown boundary', () => {
+    const unknownBoundaryWithIndeterminateState = {
+      ...V1_ADOPTED_ATTEMPTS[1],
+      sequence: 3,
+      predecessor_run_id: '33428076790',
+      controller: { sha: 'c'.repeat(40), run_id: '99005', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '99006',
+        run_attempt: 1,
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+      },
+      last_side_effect_boundary: 'unknown' as const,
+      retry_classification: 'needs_review' as const,
+      cleanup: { status: 'restored_and_verified' as const },
+    };
+    expect(
+      planReleaseAttempt({
+        operation: V1_RELEASE_OPERATION,
+        attempts: [...V1_ADOPTED_ATTEMPTS, unknownBoundaryWithIndeterminateState],
+        controllerSha: workflowSha,
+        publicState: indeterminatePublicState(),
+        kind: 'live',
+      }),
+    ).toMatchObject({
+      action: 'stop',
+      result: 'needs_review',
+      reason: 'indeterminate_public_state',
     });
   });
 

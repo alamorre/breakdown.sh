@@ -360,8 +360,8 @@ export function planReleaseAttempt({
     relevant.some(
       (attempt) =>
         attempt.retry_classification === 'needs_review' &&
-        (!boundaryBeforePublicEffects(attempt.last_side_effect_boundary) ||
-          publicClassification !== 'absent'),
+        !boundaryBeforePublicEffects(attempt.last_side_effect_boundary) &&
+        (attempt.last_side_effect_boundary !== 'unknown' || publicClassification !== 'absent'),
     )
   ) {
     return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
@@ -391,7 +391,8 @@ export function planReleaseAttempt({
     invariant(
       conclusiveBeforePublicEffects(previous) ||
         (previous.retry_classification === 'needs_review' &&
-          boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
+          (boundaryBeforePublicEffects(previous.last_side_effect_boundary) ||
+            previous.last_side_effect_boundary === 'unknown') &&
           publicClassification === 'absent'),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
