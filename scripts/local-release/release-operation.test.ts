@@ -376,6 +376,18 @@ describe('attempt planning and exact dispatch correlation', () => {
       'mismatched run URLs',
     );
   });
+
+  it('allows recovery handoff title correlation with different workflow SHAs', () => {
+    const altWorkflowSha = 'a'.repeat(40);
+    const runWithAltSha = stableRun({
+      display_title: `Breakdown Local v1.0.0 recovery handoff for workflow ${altWorkflowSha}`,
+    });
+    const expected = v1StableChildMetadata('9900208', workflowSha);
+    expect(() => correlateDispatchedRun(runWithAltSha, expected)).toThrow('mismatched display_title');
+    expect(
+      correlateDispatchedRun(runWithAltSha, expected, { allowRecoveryHandoffTitle: true }),
+    ).toMatchObject({ status: 'correlated', missing: [] });
+  });
 });
 
 describe('controller and environment lifecycle', () => {
@@ -459,6 +471,7 @@ describe('controller and environment lifecycle', () => {
       stableRun(),
       stableRun({ status: 'completed', conclusion: 'failure' }),
     ];
+    const policyAdapter = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
     const adapter = {
       readPublicState: vi.fn(async () => absentPublicState()),
       listWorkflowRuns: vi.fn(async () => []),
@@ -484,6 +497,11 @@ describe('controller and environment lifecycle', () => {
         failed_steps: ['fixture failure'],
         retained_artifacts: ['diagnostics'],
       })),
+      listPolicies: vi.fn(async () => policyAdapter.listPolicies()),
+      deletePolicy: vi.fn(async (id: number) => policyAdapter.deletePolicy(id)),
+      createPolicy: vi.fn(async (policy: { name: string; type: string }) =>
+        policyAdapter.createPolicy(policy),
+      ),
     };
     await expect(
       runV1HostedController({
@@ -502,8 +520,15 @@ describe('controller and environment lifecycle', () => {
         child: { run_id: '9900208' },
         last_side_effect_boundary: 'live_prepublication',
       },
+      cleanup: { status: 'restored_and_verified' },
     });
     expect(adapter.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(policyAdapter.actions).toEqual([
+      'delete:1',
+      'create:branch:main',
+      'delete:10',
+      'create:tag:breakdown-local-v*',
+    ]);
   });
 
   it('discovers and monitors the returned child while its input-derived title is still missing', async () => {
@@ -513,6 +538,7 @@ describe('controller and environment lifecycle', () => {
       triggering_actor: null,
       status: 'in_progress',
     });
+    const policyAdapter = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
     const adapter = {
       readPublicState: vi.fn(async () => absentPublicState()),
       listWorkflowRuns: vi.fn(async () => [pending]),
@@ -529,6 +555,11 @@ describe('controller and environment lifecycle', () => {
         failed_steps: ['fixture failure'],
         retained_artifacts: [],
       })),
+      listPolicies: vi.fn(async () => policyAdapter.listPolicies()),
+      deletePolicy: vi.fn(async (id: number) => policyAdapter.deletePolicy(id)),
+      createPolicy: vi.fn(async (policy: { name: string; type: string }) =>
+        policyAdapter.createPolicy(policy),
+      ),
     };
     await expect(
       runV1HostedController({

@@ -396,7 +396,7 @@ function metadataValueMissing(value) {
   return value === undefined || value === null || value === '';
 }
 
-export function correlateDispatchedRun(run, expected) {
+export function correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitle = false } = {}) {
   invariant(String(run?.id) === expected.run_id, 'Dispatched run ID changed during correlation.');
   const fields = [
     ['display_title', expected.display_title],
@@ -413,6 +413,23 @@ export function correlateDispatchedRun(run, expected) {
     if (metadataValueMissing(actual)) {
       missing.push(path);
       continue;
+    }
+    if (path === 'display_title' && allowRecoveryHandoffTitle) {
+      const recoveryPrefix = V1_RELEASE_RECOVERY_POLICY.stablePublication.directTitlePrefix;
+      if (
+        typeof actual === 'string' &&
+        actual.startsWith(recoveryPrefix) &&
+        typeof value === 'string' &&
+        value.startsWith(recoveryPrefix)
+      ) {
+        const actualSha = actual.slice(recoveryPrefix.length);
+        const expectedSha = value.slice(recoveryPrefix.length);
+        invariant(
+          exactSha1(actualSha) && exactSha1(expectedSha),
+          'V1 recovery handoff display_title does not contain valid workflow SHAs.',
+        );
+        continue;
+      }
     }
     invariant(actual === value, `Dispatched run has mismatched ${path}.`);
   }
