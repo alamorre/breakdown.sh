@@ -1267,7 +1267,7 @@ describe('shared hermetic rehearsal and redaction', () => {
       async readPublicState() {
         return mixedState;
       },
-      async listWorkflowRuns(_workflowId: number) {
+      async listWorkflowRuns() {
         return [];
       },
     };
