@@ -1285,4 +1285,170 @@ describe('shared hermetic rehearsal and redaction', () => {
       last_side_effect_boundary: 'preflight',
     });
   });
+
+  it('planner allows continuation past needs_review predecessor when resumable mixed state is detected', () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithNeedsReview = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33684406601', run_attempt: 1 },
+      child: null,
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'needs_review',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithNeedsReview],
+      controllerSha: 'c'.repeat(40),
+      publicState: mixedState,
+      kind: 'live',
+    });
+
+    // Should allow dispatch rather than stopping with ambiguous_predecessor
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(2);
+  });
+
+  it('planner stops on needs_review predecessor when state is not resumable', () => {
+    const nonResumableState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithNeedsReview = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33684406601', run_attempt: 1 },
+      child: null,
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'needs_review',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithNeedsReview],
+      controllerSha: 'c'.repeat(40),
+      publicState: nonResumableState,
+      kind: 'live',
+    });
+
+    expect(plan.action).toBe('stop');
+    expect(plan.result).toBe('needs_review');
+    expect(plan.reason).toBe('ambiguous_predecessor');
+  });
+
+  it('planner stops on needs_review predecessor when public state is indeterminate', () => {
+    const indeterminateState = {
+      github_release: { status: 'indeterminate', http_status: 500 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithNeedsReview = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33684406601', run_attempt: 1 },
+      child: null,
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'needs_review',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithNeedsReview],
+      controllerSha: 'c'.repeat(40),
+      publicState: indeterminateState,
+      kind: 'live',
+    });
+
+    // Should stop because indeterminate state is detected first
+    expect(plan.action).toBe('stop');
+    expect(plan.result).toBe('needs_review');
+    expect(plan.reason).toBe('indeterminate_public_state');
+  });
+
+  it('planner stops on needs_review with unknown boundary when public is not absent', () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithUnknownBoundary = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33684406601', run_attempt: 1 },
+      child: null,
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'unknown',
+      conclusion: 'failure',
+      retry_classification: 'needs_review',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithUnknownBoundary],
+      controllerSha: 'c'.repeat(40),
+      publicState: mixedState,
+      kind: 'live',
+    });
+
+    // Should stop with ambiguous_predecessor because unknown boundary + non-absent public is unsafe
+    expect(plan.action).toBe('stop');
+    expect(plan.result).toBe('needs_review');
+    expect(plan.reason).toBe('ambiguous_predecessor');
+  });
 });
