@@ -458,6 +458,9 @@ export function planReleaseAttempt({
           isResumableMixed) ||
         (previous.retry_classification === 'needs_review' &&
           previous.last_side_effect_boundary === 'unknown' &&
+          isResumableMixed) ||
+        (previous.retry_classification === 'partial_publication_stop' &&
+          previous.last_side_effect_boundary === 'preflight' &&
           isResumableMixed),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );

@@ -1492,4 +1492,50 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.result).toBe('needs_review');
     expect(plan.reason).toBe('ambiguous_predecessor');
   });
+
+  it('planner allows continuation when partial_publication_stop at preflight with public_side_effect stamped but current state is v1 resumable mixed (issue #251)', () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithPartialStopPreflight = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33688130173', run_attempt: 1 },
+      child: {
+        sha: workflowSha,
+        run_id: '33688130173',
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+      },
+      predecessor_run_id: null,
+      public_state_preflight: 'public_side_effect',
+      last_side_effect_boundary: 'preflight',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithPartialStopPreflight],
+      controllerSha: 'c'.repeat(40),
+      publicState: mixedState,
+      kind: 'live',
+    });
+
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(2);
+  });
 });
