@@ -1492,4 +1492,102 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.result).toBe('needs_review');
     expect(plan.reason).toBe('ambiguous_predecessor');
   });
+
+  it('planner allows continuation after partial_publication_stop at preflight with absent preflight and v1 resumable mixed state (issue #249)', () => {
+    const mixedState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithPreflightPartialStop = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 3,
+      kind: 'live',
+      controller: { sha: 'c'.repeat(40), run_id: '33688130173', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33688130174',
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+      },
+      predecessor_run_id: '33428076790',
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'preflight',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithPreflightPartialStop],
+      controllerSha: workflowSha,
+      publicState: mixedState,
+      kind: 'live',
+    });
+
+    // Issue #249: Should allow dispatch because:
+    // - Previous was partial_publication_stop at preflight (no new public side effects in that attempt)
+    // - public_state_preflight was absent (confirmed no side effects)
+    // - Current public state is the exact v1 resumable mixed pattern (independently verified)
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(4);
+  });
+
+  it('planner stops on partial_publication_stop at preflight when public state is not v1 resumable mixed', () => {
+    const nonResumableState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const attemptWithPreflightPartialStop = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 3,
+      kind: 'live',
+      controller: { sha: 'c'.repeat(40), run_id: '33688130173', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33688130174',
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+      },
+      predecessor_run_id: '33428076790',
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'preflight',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithPreflightPartialStop],
+      controllerSha: workflowSha,
+      publicState: nonResumableState,
+      kind: 'live',
+    });
+
+    // Should stop because public state is not the exact v1 resumable mixed pattern
+    expect(plan.action).toBe('stop');
+    expect(plan.result).toBe('partial_publication_stop');
+    expect(plan.reason).toBe('terminal_predecessor');
+  });
 });
