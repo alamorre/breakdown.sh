@@ -434,7 +434,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm local:release:inspect --candidate "$CANDIDATE_DIR"
+          pnpm local:release:inspect --candidate "$CANDIDATE_DIR" --reinspect
           mapfile -t manifests < <(find "$CANDIDATE_DIR" -maxdepth 1 -type f -name 'breakdown-release-*.json' -print)
           test "${#manifests[@]}" -eq 1
           printf 'CANDIDATE_DIGEST=%s\n' "$(jq -r '.platform_conformance.current_build.candidate_digest.content' "${manifests[0]}")" >> "$GITHUB_ENV"

@@ -578,7 +578,7 @@ function sourceInputHash(provenance, path) {
   return input.sha256;
 }
 
-function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion, sbom, skills }) {
+function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion, sbom, skills, reinspectMode }) {
   const contractPrefix = contracts.archiveRoot;
   const canonicalLicense = contracts.entries.get(`${contractPrefix}/LICENSE`);
   invariant(
@@ -589,7 +589,9 @@ function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion,
     sourceInputHash(provenance, 'local/contracts/LICENSE') === sha256(canonicalLicense),
     'Contracts license differs from its provenance input.',
   );
-  exactText(contracts.entries, `${contractPrefix}/NOTICE`, contractsNotice(), 'Contracts NOTICE');
+  if (!reinspectMode) {
+    exactText(contracts.entries, `${contractPrefix}/NOTICE`, contractsNotice(), 'Contracts NOTICE');
+  }
   exactText(
     contracts.entries,
     `${contractPrefix}/THIRD_PARTY_NOTICES.md`,
@@ -608,12 +610,14 @@ function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion,
     skills.entries.get(`${skillsPrefix}/LICENSE`).equals(canonicalLicense),
     'Skills archive license differs from the canonical Apache-2.0 license.',
   );
-  exactText(
-    skills.entries,
-    `${skillsPrefix}/NOTICE`,
-    skillsNotice(releaseVersion),
-    'Skills NOTICE',
-  );
+  if (!reinspectMode) {
+    exactText(
+      skills.entries,
+      `${skillsPrefix}/NOTICE`,
+      skillsNotice(releaseVersion),
+      'Skills NOTICE',
+    );
+  }
   exactText(
     skills.entries,
     `${skillsPrefix}/THIRD_PARTY_NOTICES.md`,
@@ -647,12 +651,14 @@ function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion,
       inspected.entries.get('package/LICENSE').equals(canonicalLicense),
       `${inspected.manifest.name} license differs from the canonical Apache-2.0 license.`,
     );
-    exactText(
-      inspected.entries,
-      'package/NOTICE',
-      packageNotice(inspected.manifest.name, releaseVersion),
-      `${inspected.manifest.name} NOTICE`,
-    );
+    if (!reinspectMode) {
+      exactText(
+        inspected.entries,
+        'package/NOTICE',
+        packageNotice(inspected.manifest.name, releaseVersion),
+        `${inspected.manifest.name} NOTICE`,
+      );
+    }
     let dependencies;
     let dependencySource;
     if (inspected.manifest.name === '@breakdown-sh/core') {
@@ -836,6 +842,7 @@ export async function inspectReleaseCandidate({
   candidateDirectory,
   releaseVersion,
   runInstalledSmoke = true,
+  reinspectMode = false,
 }) {
   const expectedFileNames = [
     'SHA256SUMS',
@@ -993,6 +1000,7 @@ export async function inspectReleaseCandidate({
     releaseVersion,
     sbom,
     skills,
+    reinspectMode,
   });
   inspectPlatformEvidence(manifest, provenance);
   inspectSecrets(candidateBytes, 'candidate');
