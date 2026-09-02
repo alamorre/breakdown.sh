@@ -1590,7 +1590,6 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.result).toBe('partial_publication_stop');
     expect(plan.reason).toBe('terminal_predecessor');
   });
-}
 
   it('planner allows continuation when partial_publication_stop at preflight with public_side_effect stamped but current state is v1 resumable mixed (issue #251)', () => {
     const mixedState = {
