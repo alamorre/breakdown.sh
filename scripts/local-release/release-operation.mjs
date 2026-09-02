@@ -393,9 +393,19 @@ export function planReleaseAttempt({
         attempt.last_side_effect_boundary !== 'unknown' &&
         !boundaryBeforePublicEffects(attempt.last_side_effect_boundary),
     );
-    if (isResumableMixed && canBypassForResumable) {
+    // Issue #241: Also allow bypass for unknown boundary when public state is the exact
+    // v1 resumable mixed pattern (core present, cli/mcp absent, Release absent).
+    // This handles the case where a needs_review predecessor had no child (unknown boundary)
+    // but independent public inspection confirms the safe mixed state.
+    const canBypassUnknownBoundaryForResumable = relevant.some(
+      (attempt) =>
+        attempt.retry_classification === 'needs_review' &&
+        attempt.last_side_effect_boundary === 'unknown' &&
+        isResumableMixed,
+    );
+    if (isResumableMixed && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent) past needs_review
-      // when we have a known post-effect boundary
+      // when we have a known post-effect boundary OR when unknown boundary + exact mixed pattern
     } else {
       return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
     }
@@ -445,6 +455,9 @@ export function planReleaseAttempt({
         (previous.retry_classification === 'needs_review' &&
           !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
           previous.last_side_effect_boundary !== 'unknown' &&
+          isResumableMixed) ||
+        (previous.retry_classification === 'needs_review' &&
+          previous.last_side_effect_boundary === 'unknown' &&
           isResumableMixed),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
