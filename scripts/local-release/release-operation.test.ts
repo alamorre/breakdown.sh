@@ -499,40 +499,67 @@ describe('controller and environment lifecycle', () => {
     async deletePolicy(id: number) {
       this.actions.push(`delete:${id}`);
       this.policies = this.policies.filter((policy) => policy.id !== id);
+      return { status: 204 };
     }
 
     async createPolicy(policy: { name: string; type: string }) {
       this.actions.push(`create:${policy.type}:${policy.name}`);
+      const existing = this.policies.find((p) => p.name === policy.name && p.type === policy.type);
+      if (existing) {
+        return { status: 303, body: existing };
+      }
       this.policies.push({ id: this.nextId, ...policy });
       this.nextId += 1;
+      return { status: 200, body: this.policies[this.policies.length - 1] };
     }
   }
 
-  it('enters exact main without simultaneous policies and restores the sole tag policy', async () => {
+  it('enters bounded recovery state by adding main policy and restores by removing only main', async () => {
     const adapter = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
     await expect(enterV1RecoveryPolicy(adapter)).resolves.toMatchObject({
       status: 'recovery_policy_verified',
-      after: [{ name: 'main', type: 'branch' }],
+      after: [
+        { name: 'breakdown-local-v*', type: 'tag' },
+        { name: 'main', type: 'branch' },
+      ],
+      create_status: 200,
     });
-    expect(adapter.actions).toEqual(['delete:1', 'create:branch:main']);
+    expect(adapter.actions).toEqual(['create:branch:main']);
     await expect(finalizeV1RecoveryPolicy(adapter)).resolves.toMatchObject({
       status: 'restored_and_verified',
       after: [{ name: 'breakdown-local-v*', type: 'tag' }],
+      delete_status: 204,
     });
-    expect(adapter.actions.slice(2)).toEqual(['delete:10', 'create:tag:breakdown-local-v*']);
+    expect(adapter.actions.slice(1)).toEqual(['delete:10']);
   });
 
-  it('is idempotent and refuses unexpected simultaneous or broad policies', async () => {
+  it('is idempotent for steady state and accepts operator-applied recovery state', async () => {
     const steady = new PolicyAdapter([{ id: 1, name: 'breakdown-local-v*', type: 'tag' }]);
     await expect(finalizeV1RecoveryPolicy(steady)).resolves.toMatchObject({ changed: false });
-    const unexpected = new PolicyAdapter([
-      { id: 1, name: 'main', type: 'branch' },
-      { id: 2, name: 'breakdown-local-v*', type: 'tag' },
+    await expect(enterV1RecoveryPolicy(steady)).resolves.toMatchObject({
+      status: 'recovery_policy_verified',
+      create_status: 200,
+    });
+    const operatorApplied = new PolicyAdapter([
+      { id: 1, name: 'breakdown-local-v*', type: 'tag' },
+      { id: 2, name: 'main', type: 'branch' },
     ]);
+    await expect(enterV1RecoveryPolicy(operatorApplied)).resolves.toMatchObject({
+      status: 'recovery_policy_verified',
+      after: [
+        { name: 'breakdown-local-v*', type: 'tag' },
+        { name: 'main', type: 'branch' },
+      ],
+    });
+    expect(operatorApplied.actions).toEqual([]);
+    await expect(finalizeV1RecoveryPolicy(operatorApplied)).resolves.toMatchObject({
+      status: 'restored_and_verified',
+      after: [{ name: 'breakdown-local-v*', type: 'tag' }],
+    });
+    const unexpected = new PolicyAdapter([{ id: 1, name: 'main', type: 'branch' }]);
     await expect(finalizeV1RecoveryPolicy(unexpected)).rejects.toThrow(
-      'unexpected or simultaneous',
+      'refuses to mutate unexpected deployment policies',
     );
-    expect(unexpected.actions).toEqual([]);
   });
 
   it.each(['success', 'failure', 'cancellation', 'timeout', 'lost correlation'])(
@@ -552,7 +579,7 @@ describe('controller and environment lifecycle', () => {
         ).rejects.toThrow(outcome);
       }
       expect(await adapter.listPolicies()).toEqual([
-        { id: 11, name: 'breakdown-local-v*', type: 'tag' },
+        { id: 1, name: 'breakdown-local-v*', type: 'tag' },
       ]);
     },
   );
@@ -615,12 +642,7 @@ describe('controller and environment lifecycle', () => {
       cleanup: { status: 'restored_and_verified' },
     });
     expect(adapter.dispatchWorkflow).toHaveBeenCalledTimes(1);
-    expect(policyAdapter.actions).toEqual([
-      'delete:1',
-      'create:branch:main',
-      'delete:10',
-      'create:tag:breakdown-local-v*',
-    ]);
+    expect(policyAdapter.actions).toEqual(['create:branch:main', 'delete:10']);
   });
 
   it('discovers and monitors the returned child while its input-derived title is still missing', async () => {

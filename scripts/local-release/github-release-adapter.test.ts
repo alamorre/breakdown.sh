@@ -71,4 +71,38 @@ describe('GitHub release adapter', () => {
       github_release: { status: 'indeterminate', http_status: 0 },
     });
   });
+
+  it('returns status codes for deployment-branch-policy operations including 403', async () => {
+    const fetchImplementation = vi.fn(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const value = String(url);
+        const method = options?.method ?? 'GET';
+        if (value.includes('deployment-branch-policies')) {
+          if (method === 'DELETE') {
+            return new Response(JSON.stringify({ message: 'Resource not accessible' }), {
+              status: 403,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          if (method === 'POST') {
+            return new Response(JSON.stringify({ message: 'Resource not accessible' }), {
+              status: 403,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+        }
+        return jsonResponse({}, 200);
+      },
+    );
+    const adapter = new GitHubReleaseAdapter({
+      token: 'test-token',
+      repository: 'alamorre/breakdown.sh',
+      fetchImplementation,
+    });
+
+    await expect(adapter.deletePolicy(58863256)).resolves.toMatchObject({ status: 403 });
+    await expect(adapter.createPolicy({ name: 'main', type: 'branch' })).resolves.toMatchObject({
+      status: 403,
+    });
+  });
 });
