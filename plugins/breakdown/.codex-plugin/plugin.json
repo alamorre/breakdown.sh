@@ -1,6 +1,6 @@
 {
   "name": "breakdown",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Connect Codex to hosted breakdown.sh reasoning graphs, scoped MCP tools, and external-evaluator runs.",
   "author": {
     "name": "breakdown.sh",

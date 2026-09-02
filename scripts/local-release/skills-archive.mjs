@@ -31,7 +31,7 @@ Document kind: License and notice material
 
 Document version: ${releaseVersion}
 
-This archive incorporates eight skills from https://github.com/mattpocock/skills at revision
+This archive incorporates nine skills from https://github.com/mattpocock/skills at revision
 6654f6b60cd9d5be8b54c6fafe44346dabeb3b76 under the MIT License. The complete upstream license is
 included as \`${vendoredLicenseName}\`; \`${vendoredManifestName}\` records every source path,
 upstream digest, local digest, and Breakdown adaptation.
