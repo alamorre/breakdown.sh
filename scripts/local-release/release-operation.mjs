@@ -297,6 +297,12 @@ function conclusiveBeforePublicEffects(attempt) {
   );
 }
 
+function boundaryBeforePublicEffects(boundary) {
+  return ['rehearsing', 'ready_for_review', 'authorized', 'preflight', 'live_prepublication'].includes(
+    boundary,
+  );
+}
+
 export function planReleaseAttempt({
   operation,
   attempts,
@@ -350,7 +356,14 @@ export function planReleaseAttempt({
       reason: 'terminal_predecessor',
     };
   }
-  if (relevant.some((attempt) => attempt.retry_classification === 'needs_review')) {
+  if (
+    relevant.some(
+      (attempt) =>
+        attempt.retry_classification === 'needs_review' &&
+        (!boundaryBeforePublicEffects(attempt.last_side_effect_boundary) ||
+          publicClassification !== 'absent'),
+    )
+  ) {
     return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
   }
   if (previous?.retry_classification === 'complete') {
@@ -376,7 +389,10 @@ export function planReleaseAttempt({
       return { action: 'stop', result: 'needs_review', reason: 'cleanup_not_verified' };
     }
     invariant(
-      conclusiveBeforePublicEffects(previous),
+      conclusiveBeforePublicEffects(previous) ||
+        (previous.retry_classification === 'needs_review' &&
+          boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
+          publicClassification === 'absent'),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
     if (previous.controller.sha === controllerSha) {
