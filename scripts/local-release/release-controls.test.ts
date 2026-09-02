@@ -141,9 +141,9 @@ describe('GitHub stable release controls', () => {
     );
   });
 
-  it('accepts only the reviewed-main boundary for the one-time v1 recovery', () => {
+  it('rejects main-only and broader patterns for v1 recovery', () => {
     const fixture = releaseControlFixture();
-    const recovery = {
+    const mainOnly = {
       ...fixture,
       executionMode: 'v1-recovery',
       phase: 'publication',
@@ -156,16 +156,37 @@ describe('GitHub stable release controls', () => {
       },
     };
 
-    expect(() => validateGithubReleaseControls(recovery)).not.toThrow();
+    expect(() => validateGithubReleaseControls(mainOnly)).toThrow(
+      'one-time v1 recovery boundary',
+    );
     expect(() =>
       validateGithubReleaseControls({
-        ...recovery,
+        ...mainOnly,
         deploymentPolicies: {
           total_count: 1,
           branch_policies: [{ id: 8, name: '*', type: 'branch' }],
         },
       }),
     ).toThrow('one-time v1 recovery boundary');
+  });
+
+  it('accepts the bounded recovery state with both tag and main policies during v1 recovery publication', () => {
+    const fixture = releaseControlFixture();
+    const boundedRecovery = {
+      ...fixture,
+      executionMode: 'v1-recovery',
+      phase: 'publication',
+      stableTags: [{ name: V1_RELEASE_RECOVERY_POLICY.tag }],
+      deploymentPolicies: {
+        total_count: 2,
+        branch_policies: [
+          { id: 6, name: RELEASE_CONTROL_POLICY.deploymentTagPattern, type: 'tag' },
+          { id: 7, name: RELEASE_CONTROL_POLICY.recoveryWorkflowBranch, type: 'branch' },
+        ],
+      },
+    };
+
+    expect(() => validateGithubReleaseControls(boundedRecovery)).not.toThrow();
   });
 
   it('rejects a broader tag pattern or any ruleset bypass', () => {
