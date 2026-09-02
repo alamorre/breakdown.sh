@@ -21,11 +21,12 @@ export const vendoredSkillNames = [
   'wayfinder',
   'grill-with-docs',
   'domain-modeling',
+  'implement',
 ];
 
 const localModifications = {
   'ask-matt': [
-    'SKILL.md routes only among the eight skills shipped by Breakdown and marks excluded upstream flows unavailable.',
+    'SKILL.md routes only among the nine skills shipped by Breakdown and marks excluded upstream flows unavailable.',
     'SKILL.md uses supported frontmatter while agents/openai.yaml retains explicit-only invocation.',
     'PHASE-BOUNDARIES.md explains that unbundled commands are host-native options only.',
   ],
@@ -46,6 +47,9 @@ const localModifications = {
     'SKILL.md uses supported frontmatter while agents/openai.yaml retains explicit-only invocation.',
   ],
   'domain-modeling': [],
+  implement: [
+    'SKILL.md uses supported frontmatter while agents/openai.yaml retains explicit-only invocation.',
+  ],
 };
 
 function usage() {

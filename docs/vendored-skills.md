@@ -1,6 +1,6 @@
 # Vendored Engineering Skills
 
-Breakdown ships these eight engineering skills from
+Breakdown ships these nine engineering skills from
 [`mattpocock/skills`](https://github.com/mattpocock/skills) so a clean checkout does not depend on
 skills installed in a developer's home directory:
 
@@ -14,6 +14,7 @@ skills installed in a developer's home directory:
 | `wayfinder`       | `$wayfinder`       | Map and resolve decisions for work too large for one session.       |
 | `grill-with-docs` | `$grill-with-docs` | Sharpen a plan while maintaining its glossary and ADRs.             |
 | `domain-modeling` | `$domain-modeling` | Refine domain language, `CONTEXT.md`, and architectural decisions.  |
+| `implement`       | `$implement`       | Build a piece of work from a spec or set of tickets.                |
 
 `ask-matt` is adapted to route only among this list. It marks other upstream flows unavailable
 instead of implying that Breakdown installed them.
@@ -48,6 +49,7 @@ npx --yes skills@1.5.20 add /absolute/path/to/breakdown.sh/plugins/breakdown/ski
   --skill wayfinder \
   --skill grill-with-docs \
   --skill domain-modeling \
+  --skill implement \
   --agent codex \
   --copy \
   --yes
@@ -72,7 +74,7 @@ for every file:
 - whether the file is verbatim or adapted; and
 - a summary of each Breakdown adaptation.
 
-The current source revision is `6654f6b60cd9d5be8b54c6fafe44346dabeb3b76`. All eight skills are
+The current source revision is `6654f6b60cd9d5be8b54c6fafe44346dabeb3b76`. All nine skills are
 licensed under the MIT License, whose complete upstream text is retained in
 `LICENSE_MATTPOCOCK_SKILLS.txt`.
 

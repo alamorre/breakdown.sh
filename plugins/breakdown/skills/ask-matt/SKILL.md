@@ -5,7 +5,7 @@ description: Ask which of the engineering skills bundled with Breakdown fits the
 
 # Ask Matt
 
-Route the request to the smallest useful flow among the eight skills bundled with Breakdown. Do
+Route the request to the smallest useful flow among the nine skills bundled with Breakdown. Do
 not claim that any other skill from the upstream `mattpocock/skills` repository is installed.
 
 ## Routes
@@ -17,12 +17,14 @@ not claim that any other skill from the upstream `mattpocock/skills` repository 
 - A state, logic, or UI design question needs something concrete to react to: use `/prototype`.
 - A bug or performance regression needs a reproducible diagnosis: use `/diagnosing-bugs`.
 - A feature or fix should be built test-first: use `/tdd`, one red-green slice at a time.
+- A spec or set of tickets is ready to build: use `/implement`, working test-first with
+  `/tdd` at pre-agreed seams and finishing with `/code-review`.
 - Existing work needs review against both repository standards and its issue/spec: use
   `/code-review` with an explicit fixed point.
 - The team needs sharper domain terms, a glossary, or an architectural decision record: use
   `/domain-modeling`.
 
-These routes compose. A common Breakdown flow is `/grill-with-docs` → `/tdd` → `/code-review`.
+These routes compose. A common Breakdown flow is `/grill-with-docs` → `/implement` → `/code-review`, with `/tdd` inside the build.
 For a large effort, `/wayfinder` comes first and hands each buildable result to the host's normal
 implementation workflow.
 
@@ -35,7 +37,7 @@ and the Breakdown availability note.
 
 ## Not bundled
 
-The Breakdown edition does not bundle these upstream skills or flows: `implement`, `grilling`,
+The Breakdown edition does not bundle these upstream skills or flows: `grilling`,
 `research`, `setup-matt-pocock-skills`, `codebase-design`, `grill-me`, `handoff`, `to-spec`,
 `to-tickets`, `triage`, `improve-codebase-architecture`, `resolving-merge-conflicts`, `wizard`,
 `to-questionnaire`, `wait-what`, `teach`, and `writing-for-agents`.
