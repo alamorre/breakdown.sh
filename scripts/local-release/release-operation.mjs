@@ -429,6 +429,7 @@ export function correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitl
     ['triggering_actor.login', expected.triggering_actor],
   ];
   const missing = [];
+  const pending = [];
   for (const [path, value] of fields) {
     const actual = path.split('.').reduce((entry, key) => entry?.[key], run);
     if (metadataValueMissing(actual)) {
@@ -462,9 +463,17 @@ export function correlateDispatchedRun(run, expected, { allowRecoveryHandoffTitl
         continue;
       }
     }
-    invariant(actual === value, `Dispatched run has mismatched ${path}.`);
+    if (actual !== value) {
+      if (path === 'display_title') {
+        pending.push(path);
+        continue;
+      }
+      invariant(false, `Dispatched run has mismatched ${path}.`);
+    }
   }
-  if (missing.length > 0) return { status: 'pending_metadata', missing };
+  if (missing.length > 0 || pending.length > 0) {
+    return { status: 'pending_metadata', missing: [...missing, ...pending] };
+  }
   invariant(
     ACTIVE_STATUSES.includes(run.status) || run.status === 'completed',
     'Dispatched run status is invalid.',
