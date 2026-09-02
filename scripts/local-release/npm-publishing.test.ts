@@ -641,4 +641,175 @@ describe('one-time npm publication', () => {
       packages: packages.map((entry) => ({ name: entry.name, version: '1.0.0' })),
     });
   });
+
+  it('detects resumable mixed state when core is present and cli/mcp are absent', async () => {
+    const { candidateDirectory, packages } = await fixture();
+    const commands: string[] = [];
+    const commandRunner = async (command: string, args: string[]) => {
+      commands.push(`${command} ${args.join(' ')}`);
+      
+      if (args[0] === 'view') {
+        const packageSpec = args[1];
+        
+        // Core package exists and version exists
+        if (packageSpec === '@breakdown-sh/core') {
+          return { stdout: JSON.stringify({ name: '@breakdown-sh/core' }), stderr: '' };
+        }
+        if (packageSpec === '@breakdown-sh/core@1.0.0') {
+          return { stdout: JSON.stringify({ name: '@breakdown-sh/core', version: '1.0.0' }), stderr: '' };
+        }
+        
+        // CLI and MCP don't exist yet
+        if (packageSpec === '@breakdown-sh/cli' || packageSpec === '@breakdown-sh/mcp') {
+          throw notFound();
+        }
+        if (packageSpec.includes('@breakdown-sh/cli@') || packageSpec.includes('@breakdown-sh/mcp@')) {
+          throw notFound();
+        }
+      }
+      
+      if (args[0] === 'pack' && args[1] === '@breakdown-sh/core@1.0.0') {
+        const destination = args[args.indexOf('--pack-destination') + 1]!;
+        const coreEntry = packages.find((entry) => entry.name === '@breakdown-sh/core')!;
+        await writeFile(
+          join(destination, coreEntry.artifact),
+          await readFile(join(candidateDirectory, coreEntry.artifact)),
+        );
+        return { stdout: JSON.stringify([{ filename: coreEntry.artifact }]), stderr: '' };
+      }
+      
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    };
+
+    const evidence = await inspectFirstPackageBootstrap({
+      candidateDirectory,
+      capturedAt: new Date('2026-09-02T18:00:00.000Z'),
+      commandRunner,
+    });
+
+    expect(evidence).toMatchObject({
+      schema_version: 'breakdown.npm-publication-controls.v1',
+      mode: 'first-package-bootstrap',
+      release_version: '1.0.0',
+      packages: [
+        {
+          name: '@breakdown-sh/core',
+          version: '1.0.0',
+          registry_state: 'exact-version-present',
+        },
+        {
+          name: '@breakdown-sh/cli',
+          version: '1.0.0',
+          registry_state: 'absent',
+        },
+        {
+          name: '@breakdown-sh/mcp',
+          version: '1.0.0',
+          registry_state: 'absent',
+        },
+      ],
+    });
+  });
+
+  it('publishes cli and mcp when core is already present (resumable mixed state)', async () => {
+    const { candidateDirectory, packages } = await fixture();
+    
+    // Create mixed state controls: core present, cli/mcp absent
+    const mixedControls = {
+      ...(await inspectFirstPackageBootstrap({
+        candidateDirectory,
+        commandRunner: async () => {
+          throw notFound();
+        },
+      })),
+    };
+    mixedControls.packages = mixedControls.packages.map((entry) => ({
+      ...entry,
+      registry_state:
+        entry.name === '@breakdown-sh/core' ? 'exact-version-present' : 'absent',
+    }));
+    
+    const controlsFile = 'breakdown-npm-publication-controls.json';
+    await writeFile(join(candidateDirectory, controlsFile), `${JSON.stringify(mixedControls)}\n`);
+    
+    const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+    await writeFile(
+      join(candidateDirectory, workflowIdentityFile),
+      `${JSON.stringify({
+        execution: {
+          mode: 'v1-recovery',
+          ref: 'refs/heads/main',
+          source_commit: candidateSourceCommit,
+          workflow_ref:
+            'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/heads/main',
+          workflow_sha: candidateSourceCommit,
+        },
+      })}\n`,
+    );
+    
+    await writeFile(
+      join(candidateDirectory, manifestFile),
+      `${JSON.stringify({
+        schema_version: 'breakdown.publication-manifest.v1',
+        release_version: '1.0.0',
+        source: {
+          signed_tag: 'breakdown-local-v1.0.0',
+          git_commit: candidateSourceCommit,
+        },
+        packages,
+        candidate: { digest: { algorithm: 'SHA-256', content: 'a'.repeat(64) } },
+        evidence: {
+          npm_publication_controls: { file: controlsFile },
+          stable_workflow_identity: { file: workflowIdentityFile },
+        },
+      })}\n`,
+    );
+    
+    const published: string[] = [];
+    const packCalls: string[] = [];
+    const commandRunner = async (_command: string, args: string[]) => {
+      if (args[0] === 'publish') {
+        const publishPath = args[1]!;
+        published.push(publishPath);
+        return { stdout: '', stderr: '' };
+      }
+      if (args[0] === 'pack') {
+        packCalls.push(args[1]!);
+        const packageSpec = args[1]!;
+        if (packageSpec === '@breakdown-sh/core@1.0.0') {
+          const destination = args[args.indexOf('--pack-destination') + 1]!;
+          const coreEntry = packages.find((entry) => entry.name === '@breakdown-sh/core')!;
+          await writeFile(
+            join(destination, coreEntry.artifact),
+            await readFile(join(candidateDirectory, coreEntry.artifact)),
+          );
+          return { stdout: JSON.stringify([{ filename: coreEntry.artifact }]), stderr: '' };
+        }
+        throw new Error(`npm pack called for absent package: ${packageSpec}`);
+      }
+      if (args[0] === 'install') return { stdout: '', stderr: '' };
+      if (args[0] === 'audit' && args[1] === 'signatures') {
+        return { stdout: '{"invalid":[],"missing":[]}', stderr: '' };
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    };
+
+    const report = await publishFirstPackages({
+      commandRunner,
+      publicationDirectory: candidateDirectory,
+    });
+
+    // Core was already present (npm pack was called), cli and mcp were published
+    expect(published).toHaveLength(2);
+    expect(published.map((p) => p.split('/').pop())).toEqual([
+      'breakdown-sh-cli-1.0.0.tgz',
+      'breakdown-sh-mcp-1.0.0.tgz',
+    ]);
+    expect(packCalls).toEqual(['@breakdown-sh/core@1.0.0']);
+    expect(report).toMatchObject({
+      schema_version: 'breakdown.npm-first-package-bootstrap.v1',
+      packages: packages.map((entry) => ({ name: entry.name, version: '1.0.0' })),
+    });
+  });
 });
