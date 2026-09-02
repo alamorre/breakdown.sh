@@ -141,9 +141,9 @@ describe('GitHub stable release controls', () => {
     );
   });
 
-  it('accepts only the reviewed-main boundary for the one-time v1 recovery', () => {
+  it('rejects main-only and broader patterns for v1 recovery', () => {
     const fixture = releaseControlFixture();
-    const recovery = {
+    const mainOnly = {
       ...fixture,
       executionMode: 'v1-recovery',
       phase: 'publication',
@@ -156,10 +156,12 @@ describe('GitHub stable release controls', () => {
       },
     };
 
-    expect(() => validateGithubReleaseControls(recovery)).not.toThrow();
+    expect(() => validateGithubReleaseControls(mainOnly)).toThrow(
+      'one-time v1 recovery boundary',
+    );
     expect(() =>
       validateGithubReleaseControls({
-        ...recovery,
+        ...mainOnly,
         deploymentPolicies: {
           total_count: 1,
           branch_policies: [{ id: 8, name: '*', type: 'branch' }],
