@@ -591,13 +591,22 @@ function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion,
   );
   if (!reinspectMode) {
     exactText(contracts.entries, `${contractPrefix}/NOTICE`, contractsNotice(), 'Contracts NOTICE');
+    exactText(
+      contracts.entries,
+      `${contractPrefix}/THIRD_PARTY_NOTICES.md`,
+      contractsThirdPartyNotices(releaseVersion),
+      'Contracts third-party notices',
+    );
+  } else {
+    invariant(
+      contracts.entries.has(`${contractPrefix}/NOTICE`),
+      'Contracts NOTICE is absent from candidate.',
+    );
+    invariant(
+      contracts.entries.has(`${contractPrefix}/THIRD_PARTY_NOTICES.md`),
+      'Contracts third-party notices are absent from candidate.',
+    );
   }
-  exactText(
-    contracts.entries,
-    `${contractPrefix}/THIRD_PARTY_NOTICES.md`,
-    contractsThirdPartyNotices(releaseVersion),
-    'Contracts third-party notices',
-  );
   exactText(
     contracts.entries,
     `${contractPrefix}/VERSION`,
@@ -617,13 +626,22 @@ function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion,
       skillsNotice(releaseVersion),
       'Skills NOTICE',
     );
+    exactText(
+      skills.entries,
+      `${skillsPrefix}/THIRD_PARTY_NOTICES.md`,
+      skillsThirdPartyNotices(releaseVersion),
+      'Skills third-party notices',
+    );
+  } else {
+    invariant(
+      skills.entries.has(`${skillsPrefix}/NOTICE`),
+      'Skills NOTICE is absent from candidate.',
+    );
+    invariant(
+      skills.entries.has(`${skillsPrefix}/THIRD_PARTY_NOTICES.md`),
+      'Skills third-party notices are absent from candidate.',
+    );
   }
-  exactText(
-    skills.entries,
-    `${skillsPrefix}/THIRD_PARTY_NOTICES.md`,
-    skillsThirdPartyNotices(releaseVersion),
-    'Skills third-party notices',
-  );
   exactText(skills.entries, `${skillsPrefix}/VERSION`, `${releaseVersion}\n`, 'Skills VERSION');
   for (const path of skills.entries.keys()) {
     const relativePath = path.slice(skillsPrefix.length + 1);
@@ -658,40 +676,49 @@ function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion,
         packageNotice(inspected.manifest.name, releaseVersion),
         `${inspected.manifest.name} NOTICE`,
       );
-    }
-    let dependencies;
-    let dependencySource;
-    if (inspected.manifest.name === '@breakdown-sh/core') {
-      dependencies = Object.entries(inspected.manifest.dependencies ?? {}).map(
-        ([name, version]) => {
-          const component = sbom.components.find(
-            (candidate) => candidate.name === name && candidate.version === version,
-          );
-          invariant(component !== undefined, `SBOM omits legal dependency ${name}@${version}.`);
-          const license = component.licenses?.[0]?.license?.id;
-          invariant(
-            typeof license === 'string' && license.length > 0,
-            `SBOM omits license for ${name}@${version}.`,
-          );
-          return {
-            license,
-            name,
-            resolved: registryTarballUrl(name, version),
-            version,
-          };
-        },
+      let dependencies;
+      let dependencySource;
+      if (inspected.manifest.name === '@breakdown-sh/core') {
+        dependencies = Object.entries(inspected.manifest.dependencies ?? {}).map(
+          ([name, version]) => {
+            const component = sbom.components.find(
+              (candidate) => candidate.name === name && candidate.version === version,
+            );
+            invariant(component !== undefined, `SBOM omits legal dependency ${name}@${version}.`);
+            const license = component.licenses?.[0]?.license?.id;
+            invariant(
+              typeof license === 'string' && license.length > 0,
+              `SBOM omits license for ${name}@${version}.`,
+            );
+            return {
+              license,
+              name,
+              resolved: registryTarballUrl(name, version),
+              version,
+            };
+          },
+        );
+        dependencySource = 'the final package manifest and installed lockfile input';
+      } else {
+        dependencies = dependencyRecords(inspected.shrinkwrap);
+        dependencySource = "this package's final `npm-shrinkwrap.json` dependency tree";
+      }
+      exactText(
+        inspected.entries,
+        'package/THIRD_PARTY_NOTICES.md',
+        thirdPartyNotices(releaseVersion, dependencies, dependencySource),
+        `${inspected.manifest.name} third-party notices`,
       );
-      dependencySource = 'the final package manifest and installed lockfile input';
     } else {
-      dependencies = dependencyRecords(inspected.shrinkwrap);
-      dependencySource = "this package's final `npm-shrinkwrap.json` dependency tree";
+      invariant(
+        inspected.entries.has('package/NOTICE'),
+        `${inspected.manifest.name} NOTICE is absent from candidate.`,
+      );
+      invariant(
+        inspected.entries.has('package/THIRD_PARTY_NOTICES.md'),
+        `${inspected.manifest.name} third-party notices are absent from candidate.`,
+      );
     }
-    exactText(
-      inspected.entries,
-      'package/THIRD_PARTY_NOTICES.md',
-      thirdPartyNotices(releaseVersion, dependencies, dependencySource),
-      `${inspected.manifest.name} third-party notices`,
-    );
   }
 }
 
