@@ -454,7 +454,6 @@ export function planReleaseAttempt({
           isResumableMixed) ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'preflight' &&
-          previous.public_state_preflight === 'absent' &&
           isResumableMixed) ||
         (previous.retry_classification === 'needs_review' &&
           !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
