@@ -10,11 +10,11 @@ authoritative. Regenerate this file instead of editing it by hand.
 ## Generated from
 
 - `local/contracts/conformance/package/fixtures/artifact-expectations.json` — SHA-256 `cb962b90f237fc1a26e9102d333dd9c40f338d38f70be0ebe536deba54045699`
-- `local/contracts/specifications/release.md` — SHA-256 `b8e825c6557928cb57c517f971dd79a15cf9f41d575f950e51e67f64591be1f3`
+- `local/contracts/specifications/release.md` — SHA-256 `1f796e7971c3482b52e0183985a5f7256da8e473890196535ae7101b7e521839`
 - `local/docs/release-metadata.json` — SHA-256 `41dadb3b249de0b06de694ae42293f417c0be04ded75903c05c4e9f7fc1a3b81`
-- `packages/breakdown-cli/package.json` — SHA-256 `5b56faba721beff79df1f10d3bd0e7013fdf08b83bc1044ea38b25f35bed17bb`
+- `packages/breakdown-cli/package.json` — SHA-256 `f7704beb95186e071c9263da74161edcaf1fc793c84cd711f38d341a139095b5`
 - `packages/breakdown-core/package.json` — SHA-256 `f624e455e6549a099e62452f01945143297ee7909bee1a6b44eb6a57b9b40511`
-- `packages/breakdown-mcp/package.json` — SHA-256 `163d0fcc0abfe5bdae7c0d2a04c4a5115d06513df95407825b77e3f224ae41b8`
+- `packages/breakdown-mcp/package.json` — SHA-256 `51f4fd3c6c7679a1ec97bbab6abb637d85a3e87d12936f2151a97b66b7291f80`
 
 
 ## Inspected package manifests

@@ -41,9 +41,9 @@ package version.
 
 ### REQ-PKG-005
 
-CLI and MCP packages MUST contain explicit file allowlists and no lifecycle
-install scripts. Their runtime dependency graphs MUST preserve exact core
-lockstep and the documented package direction.
+CLI and MCP packages MUST contain shrinkwraps, explicit file allowlists, and no
+lifecycle install scripts. Their runtime dependency graphs MUST preserve exact
+core lockstep and the documented package direction.
 
 ### REQ-PKG-006
 

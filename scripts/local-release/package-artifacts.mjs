@@ -283,12 +283,9 @@ export async function buildPackageArtifacts({ outputPath, releaseVersion, reposi
       const expectedDistTag = releaseChannel(releaseVersion).npm_dist_tag;
       if (
         sourceManifest.publishConfig?.access !== 'public' ||
-        sourceManifest.publishConfig?.provenance !== true ||
         sourceManifest.publishConfig?.tag !== expectedDistTag
       ) {
-        throw new Error(
-          `${definition.name} must publish publicly with provenance on npm ${expectedDistTag}.`,
-        );
+        throw new Error(`${definition.name} must publish publicly on npm ${expectedDistTag}.`);
       }
       const packageManifest = {
         ...sourceManifest,

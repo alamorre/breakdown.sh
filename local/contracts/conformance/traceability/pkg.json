@@ -43,7 +43,7 @@
     {
       "id": "PKG-005",
       "requirements": ["REQ-PKG-005"],
-      "oracle": "CLI/MCP tarballs contain explicit files, no lifecycle install scripts, and exact allowed dependency graphs."
+      "oracle": "CLI/MCP tarballs contain shrinkwraps and explicit files, no lifecycle install scripts, and exact allowed dependency graphs."
     },
     {
       "id": "PKG-006",
