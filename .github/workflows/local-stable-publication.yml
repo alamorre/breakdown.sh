@@ -55,6 +55,6 @@ jobs:
 
       - name: Publish packages
         run: |
-          npm publish "$RUNNER_TEMP"/npm-packages/breakdown-sh-core-*.tgz --access public --tag latest
-          npm publish "$RUNNER_TEMP"/npm-packages/breakdown-sh-cli-*.tgz --access public --tag latest
-          npm publish "$RUNNER_TEMP"/npm-packages/breakdown-sh-mcp-*.tgz --access public --tag latest
+          npm publish "$RUNNER_TEMP"/npm-packages/breakdown-sh-core-*.tgz --access public --tag latest --loglevel verbose
+          npm publish "$RUNNER_TEMP"/npm-packages/breakdown-sh-cli-*.tgz --access public --tag latest --loglevel verbose
+          npm publish "$RUNNER_TEMP"/npm-packages/breakdown-sh-mcp-*.tgz --access public --tag latest --loglevel verbose
