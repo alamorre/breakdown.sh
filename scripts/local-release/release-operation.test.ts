@@ -203,13 +203,12 @@ describe('public-state and side-effect classification', () => {
 
   it('stops on any public or indeterminate state', () => {
     const partial = absentPublicState();
-    // @ts-expect-error Test helper setting present package state
     partial.npm_packages['@breakdown-sh/core'] = { 
       status: 'present', 
       http_status: 200,
       name: '@breakdown-sh/core',
       sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
-    };
+    } as typeof partial.npm_packages['@breakdown-sh/core'];
     expect(classifyPublicState(partial)).toBe('public_side_effect');
     const unknown = absentPublicState();
     unknown.github_release = { status: 'indeterminate', http_status: 500 };
@@ -264,13 +263,12 @@ describe('public-state and side-effect classification', () => {
     ).toBe('retryable_before_side_effects');
 
     const partialPublicState = absentPublicState();
-    // @ts-expect-error Test helper setting present package state
     partialPublicState.npm_packages['@breakdown-sh/core'] = { 
       status: 'present', 
       http_status: 200,
       name: '@breakdown-sh/core',
       sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
-    };
+    } as typeof partialPublicState.npm_packages['@breakdown-sh/core'];
     expect(
       classifyRunResult({
         kind: 'live',
@@ -312,13 +310,12 @@ describe('public-state and side-effect classification', () => {
       }),
     ).toBe('partial_publication_stop');
     const partial = absentPublicState();
-    // @ts-expect-error Test helper setting present package state
     partial.npm_packages['@breakdown-sh/core'] = { 
       status: 'present', 
       http_status: 200,
       name: '@breakdown-sh/core',
       sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
-    };
+    } as typeof partial.npm_packages['@breakdown-sh/core'];
     expect(
       classifyRunResult({
         kind: 'live',
@@ -1766,21 +1763,18 @@ describe('shared hermetic rehearsal and redaction', () => {
     const allPackagesPresentNoRelease = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/core': { 
           status: 'present', 
           http_status: 200,
           name: '@breakdown-sh/core',
           sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
         },
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/cli': { 
           status: 'present', 
           http_status: 200,
           name: '@breakdown-sh/cli',
           sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
         },
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/mcp': { 
           status: 'present', 
           http_status: 200,
@@ -1788,7 +1782,7 @@ describe('shared hermetic rehearsal and redaction', () => {
           sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
         },
       },
-    };
+    } as ReturnType<typeof absentPublicState>;
 
     const attemptWithPartialStop = {
       schema_version: 'breakdown.release-operation-attempt.v1',
@@ -1833,21 +1827,18 @@ describe('shared hermetic rehearsal and redaction', () => {
     const allPackagesPresentNoRelease = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/core': { 
           status: 'present', 
           http_status: 200,
           name: '@breakdown-sh/core',
           sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
         },
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/cli': { 
           status: 'present', 
           http_status: 200,
           name: '@breakdown-sh/cli',
           sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
         },
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/mcp': { 
           status: 'present', 
           http_status: 200,
@@ -1855,7 +1846,7 @@ describe('shared hermetic rehearsal and redaction', () => {
           sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
         },
       },
-    };
+    } as ReturnType<typeof absentPublicState>;
 
     expect(classifyPublicState(allPackagesPresentNoRelease)).toBe('public_side_effect');
   });
@@ -1864,21 +1855,18 @@ describe('shared hermetic rehearsal and redaction', () => {
     const allPackagesPresentNoRelease = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/core': { 
           status: 'present', 
           http_status: 200,
           name: '@breakdown-sh/core',
           sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
         },
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/cli': { 
           status: 'present', 
           http_status: 200,
           name: '@breakdown-sh/cli',
           sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
         },
-        // @ts-expect-error Test helper setting present package states
         '@breakdown-sh/mcp': { 
           status: 'present', 
           http_status: 200,
@@ -1886,7 +1874,7 @@ describe('shared hermetic rehearsal and redaction', () => {
           sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
         },
       },
-    };
+    } as ReturnType<typeof absentPublicState>;
 
     const attemptWithNeedsReview = {
       schema_version: 'breakdown.release-operation-attempt.v1',
