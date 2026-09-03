@@ -131,14 +131,14 @@ describe('npm trusted-publisher inspection', () => {
     const commandRunner = async (_command: string, args: string[]) => {
       if (args[0] === '--version') return { stdout: '11.19.0\n', stderr: '' };
       if (args[0] === 'config') return { stdout: 'https://registry.npmjs.org/\n', stderr: '' };
-      if (args[0] === 'whoami') return { stdout: 'adam-publisher\n', stderr: '' };
-      if (args[0] === 'org') return { stdout: '{"adam-publisher":"owner"}', stderr: '' };
+      if (args[0] === 'whoami') return { stdout: 'adam_lamorre\n', stderr: '' };
+      if (args[0] === 'org') return { stdout: '{"adam_lamorre":"owner"}', stderr: '' };
       if (args[0] === 'access') {
         const packageName = args[3]!;
         return { stdout: JSON.stringify({ [packageName]: 'public' }), stderr: '' };
       }
       if (args[0] === 'owner') {
-        return { stdout: '["adam-publisher <private@example.com>"]', stderr: '' };
+        return { stdout: '["adam_lamorre <private@example.com>"]', stderr: '' };
       }
       if (args[0] === 'trust') {
         return { stdout: JSON.stringify(trustedPublisher()), stderr: '' };
@@ -152,7 +152,7 @@ describe('npm trusted-publisher inspection', () => {
     });
 
     expect(evidence.publisher).toEqual({
-      username: 'adam-publisher',
+      username: 'adam_lamorre',
       organization: 'breakdown-sh',
       organization_role: 'owner',
     });
