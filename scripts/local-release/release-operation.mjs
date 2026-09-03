@@ -319,6 +319,22 @@ function isV1ResumableMixedState(publicState) {
   );
 }
 
+function isAllPackagesPresentReleaseAbsent(publicState) {
+  if (!publicState?.npm_packages) return false;
+  
+  const coreStatus = publicState.npm_packages['@breakdown-sh/core']?.status;
+  const cliStatus = publicState.npm_packages['@breakdown-sh/cli']?.status;
+  const mcpStatus = publicState.npm_packages['@breakdown-sh/mcp']?.status;
+  const releaseStatus = publicState.github_release?.status;
+  
+  return (
+    coreStatus === 'present' &&
+    cliStatus === 'present' &&
+    mcpStatus === 'present' &&
+    releaseStatus === 'absent'
+  );
+}
+
 export function planReleaseAttempt({
   operation,
   attempts,
@@ -363,12 +379,14 @@ export function planReleaseAttempt({
   invariant(active.length <= 1, 'More than one active child exists for the release operation.');
   const publicClassification = classifyPublicState(publicState);
   const isResumableMixed = isV1ResumableMixedState(publicState);
+  const isAllPackagesPresentNoRelease = isAllPackagesPresentReleaseAbsent(publicState);
   if (publicClassification === 'indeterminate') {
     return { action: 'stop', result: 'needs_review', reason: 'indeterminate_public_state' };
   }
   if (relevant.some((attempt) => attempt.retry_classification === 'partial_publication_stop')) {
-    if (isResumableMixed) {
+    if (isResumableMixed || isAllPackagesPresentNoRelease) {
       // Allow resumption for v1 mixed state (core present, cli/mcp absent)
+      // or when all three packages are present but Release is absent
     } else {
       return {
         action: 'stop',
@@ -397,15 +415,17 @@ export function planReleaseAttempt({
     // v1 resumable mixed pattern (core present, cli/mcp absent, Release absent).
     // This handles the case where a needs_review predecessor had no child (unknown boundary)
     // but independent public inspection confirms the safe mixed state.
+    // Issue #257: Also allow bypass when all three packages are present and Release is absent.
     const canBypassUnknownBoundaryForResumable = relevant.some(
       (attempt) =>
         attempt.retry_classification === 'needs_review' &&
         attempt.last_side_effect_boundary === 'unknown' &&
-        isResumableMixed,
+        (isResumableMixed || isAllPackagesPresentNoRelease),
     );
-    if (isResumableMixed && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
+    if ((isResumableMixed || isAllPackagesPresentNoRelease) && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent) past needs_review
       // when we have a known post-effect boundary OR when unknown boundary + exact mixed pattern
+      // Also allow when all three packages are present but Release is absent (issue #257)
     } else {
       return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
     }
@@ -414,8 +434,9 @@ export function planReleaseAttempt({
     return { action: 'stop', result: 'complete', reason: 'operation_complete' };
   }
   if (publicClassification === 'public_side_effect') {
-    if (isResumableMixed) {
+    if (isResumableMixed || isAllPackagesPresentNoRelease) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent)
+      // or when all three packages are present but Release is absent (issue #257)
     } else {
       return {
         action: 'stop',
@@ -451,17 +472,17 @@ export function planReleaseAttempt({
           publicClassification === 'absent') ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'any_public_side_effect' &&
-          isResumableMixed) ||
+          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'preflight' &&
-          isResumableMixed) ||
+          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
         (previous.retry_classification === 'needs_review' &&
           !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
           previous.last_side_effect_boundary !== 'unknown' &&
-          isResumableMixed) ||
+          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
         (previous.retry_classification === 'needs_review' &&
           previous.last_side_effect_boundary === 'unknown' &&
-          isResumableMixed),
+          (isResumableMixed || isAllPackagesPresentNoRelease)),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
     if (previous.controller.sha === controllerSha) {
