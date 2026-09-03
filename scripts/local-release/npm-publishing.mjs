@@ -742,11 +742,24 @@ export async function publishFirstPackages({
         dependencies: Object.fromEntries(packages.map((entry) => [entry.name, entry.version])),
       })}\n`,
     );
-    await commandRunner(
-      'npm',
-      ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--engine-strict', '--save-exact'],
-      { cwd: auditDirectory, ...tokenlessEnvironment() },
-    );
+    const maxRetries = 5;
+    const retryDelays = [2000, 4000, 8000, 16000, 32000];
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await commandRunner(
+          'npm',
+          ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--engine-strict', '--save-exact'],
+          { cwd: auditDirectory, ...tokenlessEnvironment() },
+        );
+        break;
+      } catch (error) {
+        if (registryNotFound(error) && attempt < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+          continue;
+        }
+        throw error;
+      }
+    }
     const { stdout } = await commandRunner('npm', ['audit', 'signatures', '--json'], {
       cwd: auditDirectory,
       ...tokenlessEnvironment(),

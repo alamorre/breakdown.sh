@@ -381,6 +381,95 @@ describe('one-time npm publication', () => {
     expect(root).toContain('breakdown-npm-publishing-');
   });
 
+  it('retries npm install on E404 race during bootstrap verification (issue #257)', async () => {
+    const { candidateDirectory, packages } = await fixture();
+    const controls = await inspectFirstPackageBootstrap({
+      candidateDirectory,
+      commandRunner: async () => {
+        throw notFound();
+      },
+    });
+    const controlsFile = 'breakdown-npm-publication-controls.json';
+    await writeFile(join(candidateDirectory, controlsFile), `${JSON.stringify(controls)}\n`);
+    const manifestFile = 'breakdown-publication-manifest-1.0.0.json';
+    const workflowIdentityFile = 'breakdown-stable-workflow-identity.json';
+    await writeFile(
+      join(candidateDirectory, workflowIdentityFile),
+      `${JSON.stringify({
+        execution: {
+          mode: 'tag',
+          ref: 'refs/tags/breakdown-local-v1.0.0',
+          source_commit: candidateSourceCommit,
+          workflow_ref:
+            'alamorre/breakdown.sh/.github/workflows/local-stable-publication.yml@refs/tags/breakdown-local-v1.0.0',
+          workflow_sha: candidateSourceCommit,
+        },
+      })}\n`,
+    );
+    await writeFile(
+      join(candidateDirectory, manifestFile),
+      `${JSON.stringify({
+        schema_version: 'breakdown.publication-manifest.v1',
+        release_version: '1.0.0',
+        source: {
+          signed_tag: 'breakdown-local-v1.0.0',
+          git_commit: candidateSourceCommit,
+        },
+        packages,
+        candidate: { digest: { algorithm: 'SHA-256', content: 'a'.repeat(64) } },
+        evidence: {
+          npm_publication_controls: { file: controlsFile },
+          stable_workflow_identity: { file: workflowIdentityFile },
+        },
+      })}\n`,
+    );
+    const published: string[] = [];
+    let installAttempts = 0;
+    const commandRunner = async (_command: string, args: string[]) => {
+      if (args[0] === 'publish') {
+        published.push(args[1]!);
+        return { stdout: '', stderr: '' };
+      }
+      if (args[0] === 'pack') {
+        const packageEntry = packages.find(
+          (entry) => `${entry.name}@${entry.version}` === args[1],
+        )!;
+        const destination = args[args.indexOf('--pack-destination') + 1]!;
+        await writeFile(
+          join(destination, packageEntry.artifact),
+          await readFile(join(candidateDirectory, packageEntry.artifact)),
+        );
+        return { stdout: JSON.stringify([{ filename: packageEntry.artifact }]), stderr: '' };
+      }
+      if (args[0] === 'install') {
+        installAttempts++;
+        if (installAttempts === 1) {
+          throw Object.assign(new Error('npm install failed'), {
+            stderr: 'npm error code E404\n404 Not Found - GET https://registry.npmjs.org/@breakdown-sh%2Fcli',
+          });
+        }
+        return { stdout: '', stderr: '' };
+      }
+      if (args[0] === 'audit' && args[1] === 'signatures') {
+        return { stdout: '{"invalid":[],"missing":[]}', stderr: '' };
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    };
+
+    const report = await publishFirstPackages({
+      commandRunner,
+      publicationDirectory: candidateDirectory,
+    });
+
+    expect(installAttempts).toBe(2);
+    expect(published).toEqual(packages.map((entry) => join(candidateDirectory, entry.artifact)));
+    expect(report).toMatchObject({
+      schema_version: 'breakdown.npm-first-package-bootstrap.v1',
+      authentication: 'one-time-granular-access-token',
+      provenance: 'passed',
+    });
+  });
+
   it('rejects a bootstrap control with broader organization permission', async () => {
     const { candidateDirectory } = await fixture();
     const controls = await inspectFirstPackageBootstrap({
