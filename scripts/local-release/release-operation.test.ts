@@ -1568,6 +1568,72 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.reason).toBe('ambiguous_predecessor');
   });
 
+  it('planner allows continuation on needs_review with unknown boundary when public state proves finalize-bootstrap readiness', () => {
+    // Live case (post-#263): stale failed run 33573326601 with unknown boundary
+    // pinned the lineage at ambiguous_predecessor even though live public state
+    // showed all three packages with exact expected sha256s and Release absent.
+    const finalizeReadyState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': {
+          status: 'present',
+          http_status: 200,
+          name: '@breakdown-sh/core',
+          sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+        },
+        '@breakdown-sh/cli': {
+          status: 'present',
+          http_status: 200,
+          name: '@breakdown-sh/cli',
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+        },
+        '@breakdown-sh/mcp': {
+          status: 'present',
+          http_status: 200,
+          name: '@breakdown-sh/mcp',
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        },
+      },
+    } as ReturnType<typeof absentPublicState>;
+
+    const attemptWithUnknownBoundary = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 1,
+      kind: 'live',
+      controller: { sha: workflowSha, run_id: '33573326601', run_attempt: 1 },
+      child: {
+        sha: workflowSha,
+        run_id: '33573326601',
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+      },
+      predecessor_run_id: null,
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'unknown',
+      conclusion: 'failure',
+      retry_classification: 'needs_review',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [attemptWithUnknownBoundary],
+      controllerSha: 'c'.repeat(40),
+      publicState: finalizeReadyState,
+      kind: 'live',
+    });
+
+    // Proven exact sha256s fully determine the safe successor, so the stale
+    // unknown-boundary predecessor must not pin the lineage.
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(2);
+  });
+
   it('planner allows continuation after partial_publication_stop at preflight with absent preflight and v1 resumable mixed state (issue #249)', () => {
     const mixedState = {
       github_release: { status: 'absent', http_status: 404 },
@@ -2063,6 +2129,70 @@ describe('v1StableChildRequest finalize-bootstrap selection (issue #262)', () =>
     expect(request?.body?.inputs?.npm_publication_mode).toBe('finalize-bootstrap');
     expect(request?.body?.inputs?.npm_bootstrap_artifact_id).toBe('12345');
     expect(request?.github_release_finalization_permitted).toBe(true);
+  });
+
+  it('selects finalize-bootstrap when the bootstrap artifact carries the live run-id suffix', async () => {
+    // Live artifact names carry a run-id suffix
+    // (e.g. breakdown-npm-first-package-bootstrap-33699179727-1); exact-name
+    // matching never finds them and the controller fail-closes. Match the prefix.
+    const adapter = {
+      verifyPackageSha256s: vi.fn(),
+      listRunArtifacts: vi.fn(async () => ([
+        {
+          id: 9872893196,
+          name: 'breakdown-npm-first-package-bootstrap-33699179727-1',
+          expired: false,
+        },
+      ])),
+    };
+
+    const publicState = allPackagesPresentPublicState({
+      '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+      '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+      '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+    });
+    const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
+
+    const request = await v1StableChildRequest({
+      workflowSha,
+      adapter,
+      publicState,
+      attempts
+    });
+
+    expect(request).not.toBeNull();
+    expect(request?.body?.inputs?.npm_publication_mode).toBe('finalize-bootstrap');
+    expect(request?.body?.inputs?.npm_bootstrap_artifact_id).toBe('9872893196');
+    expect(request?.github_release_finalization_permitted).toBe(true);
+  });
+
+  it('still fails closed when only an expired prefixed bootstrap artifact exists', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(),
+      listRunArtifacts: vi.fn(async () => ([
+        {
+          id: 9872893196,
+          name: 'breakdown-npm-first-package-bootstrap-33699179727-1',
+          expired: true,
+        },
+      ])),
+    };
+
+    const publicState = allPackagesPresentPublicState({
+      '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+      '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+      '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+    });
+    const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
+
+    const request = await v1StableChildRequest({
+      workflowSha,
+      adapter,
+      publicState,
+      attempts
+    });
+
+    expect(request).toBeNull();
   });
 
   it('fails closed when all packages present but sha256s do not match', async () => {

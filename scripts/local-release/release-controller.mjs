@@ -126,15 +126,21 @@ export async function v1StableChildRequest({ workflowSha, adapter, publicState, 
         attempt.last_side_effect_boundary === 'any_public_side_effect'
     );
     
+    // Live artifact names carry a run-id suffix
+    // (e.g. breakdown-npm-first-package-bootstrap-33699179727-1), so match the
+    // stable prefix rather than the exact name. Expired artifacts never qualify.
+    const BOOTSTRAP_ARTIFACT_PREFIX = 'breakdown-npm-first-package-bootstrap';
+    const isLiveBootstrapArtifact = (artifact) =>
+      typeof artifact?.name === 'string' &&
+      (artifact.name === BOOTSTRAP_ARTIFACT_PREFIX ||
+        artifact.name.startsWith(`${BOOTSTRAP_ARTIFACT_PREFIX}-`)) &&
+      artifact.expired === false;
+
     let bootstrapArtifactId = null;
     for (const attempt of successfulAttempts.reverse()) {
       try {
         const artifacts = await adapter.listRunArtifacts(attempt.child.run_id);
-        const bootstrapArtifact = artifacts.find(
-          (artifact) => 
-            artifact.name === 'breakdown-npm-first-package-bootstrap' &&
-            artifact.expired === false
-        );
+        const bootstrapArtifact = artifacts.find(isLiveBootstrapArtifact);
         if (bootstrapArtifact) {
           bootstrapArtifactId = String(bootstrapArtifact.id);
           break;

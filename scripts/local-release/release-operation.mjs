@@ -435,11 +435,17 @@ export function planReleaseAttempt({
     // v1 resumable mixed pattern (core present, cli/mcp absent, Release absent).
     // This handles the case where a needs_review predecessor had no child (unknown boundary)
     // but independent public inspection confirms the safe mixed state.
+    // The same bypass applies when public state proves finalize-bootstrap readiness
+    // (all three packages present with exact expected sha256s, Release absent):
+    // a stale unknown-boundary predecessor must not pin the lineage when live
+    // public state fully determines the safe successor. This mirrors the successor
+    // invariant below, which already permits unknown-boundary continuation for
+    // both the resumable mixed and finalize-ready patterns.
     const canBypassUnknownBoundaryForResumable = relevant.some(
       (attempt) =>
         attempt.retry_classification === 'needs_review' &&
         attempt.last_side_effect_boundary === 'unknown' &&
-        isResumableMixed,
+        (isResumableMixed || isFinalizeReady),
     );
     if ((isResumableMixed || isFinalizeReady) && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent) past needs_review
