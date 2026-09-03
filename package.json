@@ -36,21 +36,7 @@
     "local:release:bind-host": "node scripts/bind-host-evidence.mjs",
     "local:release:qualify-host": "node scripts/qualify-host-evidence.mjs",
     "local:release:index-hosts": "node scripts/index-host-evidence.mjs",
-    "local:release:defer-host-support": "node scripts/index-host-evidence.mjs --policy deferred",
-    "local:release:create-approval": "node scripts/create-release-approval.mjs",
-    "local:release:verify-approval": "node scripts/verify-release-approval.mjs",
-    "local:release:verify-github-controls": "node scripts/verify-github-release-controls.mjs",
-    "local:release:plan-ceremony": "node scripts/plan-release-ceremony.mjs",
-    "local:release:authorize-ceremony": "node scripts/authorize-release-ceremony.mjs",
-    "local:release:render-tag-message": "node scripts/render-release-tag-message.mjs",
-    "local:release:verify-v1-recovery": "node scripts/verify-v1-release-recovery.mjs",
-    "local:release:operate": "node scripts/run-release-operation.mjs",
-    "local:release:inspect-npm-trust": "node scripts/inspect-npm-trusted-publishing.mjs",
-    "local:release:prepare-npm": "node scripts/prepare-npm-publication.mjs",
-    "local:release:publish-first-npm-packages": "node scripts/publish-first-npm-packages.mjs",
-    "local:release:verify-first-npm-packages": "node scripts/verify-first-npm-packages.mjs",
-    "local:release:prepare-publication": "node scripts/prepare-local-publication.mjs",
-    "local:release:verify-publication": "node scripts/verify-local-publication.mjs"
+    "local:release:defer-host-support": "node scripts/index-host-evidence.mjs --policy deferred"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

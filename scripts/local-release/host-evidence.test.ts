@@ -321,7 +321,7 @@ describe('authenticated host support workflow', () => {
     );
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
     expect(workflow).toContain('actions/artifacts/${CANDIDATE_ARTIFACT_ID}');
-    expect(workflow).toContain(".name == \"breakdown-local-candidate\"");
+    expect(workflow).toContain('.name == "breakdown-local-candidate"');
     expect(workflow).toContain('run-id: ${{ env.CANDIDATE_RUN_ID }}');
     expect(workflow).not.toContain('evidence_artifact_ids');
     expect(workflow).toContain('actions/workflows/324133712');
@@ -858,17 +858,6 @@ describe('writeHostQualificationTemplate', () => {
     expect(guide).toContain('tar -xzf');
     expect(guide).toContain('$project_dir/.agents/skills');
     expect(guide).toContain('$project_dir/.claude/skills');
-
-    const releaseGuide = await readFile(
-      join(repositoryRoot, 'scripts', 'local-release', 'README.md'),
-      'utf8',
-    );
-    expect(releaseGuide).toContain('supported_hosts: []');
-    expect(releaseGuide).toContain('workflow ID `324133712`');
-    expect(releaseGuide).toContain('MUST remain disabled and MUST NOT be dispatched');
-    expect(releaseGuide).toContain('issue #188');
-    expect(releaseGuide).not.toContain('gh workflow run local-host-evidence-capture.yml');
-    expect(releaseGuide).not.toContain('evidence_artifact_ids');
   });
 
   it('should expose local hash and pre-capture rehearsal commands', async () => {

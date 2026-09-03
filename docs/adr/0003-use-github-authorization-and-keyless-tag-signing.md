@@ -1,6 +1,9 @@
 # Use GitHub authorization and keyless automation tag signing
 
-Status: Accepted for issue #196
+Status: Superseded by issue #269 for npm publication
+
+This ADR is retained as historical context. Its ceremony and signing requirements no longer gate
+the personal npm packages.
 
 ## Context
 

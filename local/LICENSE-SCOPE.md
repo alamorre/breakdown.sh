@@ -15,17 +15,14 @@ in these paths:
 - `local/skills/`
 - `scripts/local-release/`
 - `scripts/build-local-release.mjs`
-- `scripts/create-release-approval.mjs`
 - `scripts/generate-local-documentation.mjs`
 - `scripts/index-host-evidence.mjs`
 - `scripts/index-platform-evidence.mjs`
 - `scripts/inspect-local-release.mjs`
 - `scripts/prepare-host-qualification.mjs`
-- `scripts/prepare-local-publication.mjs`
 - `scripts/qualify-host-evidence.mjs`
 - `scripts/qualify-local-release.mjs`
 - `scripts/standalone-validator.mjs`
-- `scripts/verify-local-publication.mjs`
 
 It covers original local implementation code, contracts, schemas, catalogs, documentation,
 canonical Agent Skills, synthetic examples and conformance fixtures, and local release tooling.
