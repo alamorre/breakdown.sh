@@ -1,6 +1,9 @@
 # Use durable agent-operated release operations
 
-Status: Accepted for issue #208
+Status: Superseded by issue #269
+
+This ADR is retained as historical context. The release controller and recovery workflows it
+describes have been removed.
 
 ## Context
 

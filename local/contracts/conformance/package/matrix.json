@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "defaults": {
     "prerequisites": "Inspect the clean tarball installation used by the installed CLI tests.",
     "action": "Read the installed package manifests and runtime dependency graph.",
@@ -20,7 +20,7 @@
     {
       "id": "CASE-PKG-001",
       "requirement": "Issue #143: package the core and CLI separately in lockstep",
-      "oracle": "@breakdown-sh/core and @breakdown-sh/cli both report 1.0.0 and the CLI requires that exact core version."
+      "oracle": "@breakdown-sh/core and @breakdown-sh/cli both report 1.0.1 and the CLI requires that exact core version."
     },
     {
       "id": "CASE-PKG-002",

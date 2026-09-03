@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "defaults": {
     "prerequisites": "Place a valid breakdown.workflow.v1 Workflow Definition and its declared Input files in a real temporary local project.",
     "action": "Call create_run through the core dispatcher with the temporary project as the explicit trusted project root.",

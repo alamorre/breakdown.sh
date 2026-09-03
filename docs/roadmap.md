@@ -6,13 +6,13 @@ Hosted SaaS (`specs.md` era: Clerk/Supabase/Vercel) is **legacy / out of scope**
 
 ## Where to look
 
-| Question | Answer |
-|---|---|
-| What is Breakdown's current direction? | This file (`docs/roadmap.md`). |
-| Why is Local canonical and SaaS legacy? | `docs/adr/0004-*.md` (cites #124, #142, #129, #187). |
-| How are secrets managed? | File-local only — `.env.local.example` is the inventory; no Doppler, no Vercel env sync, no GitHub OIDC Doppler fetch for Local. See `docs/secrets-management.md`. |
+| Question                                        | Answer                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What is Breakdown's current direction?          | This file (`docs/roadmap.md`).                                                                                                                                                                                                                                                                                |
+| Why is Local canonical and SaaS legacy?         | `docs/adr/0004-*.md` (cites #124, #142, #129, #187).                                                                                                                                                                                                                                                          |
+| How are secrets managed?                        | File-local only — `.env.local.example` is the inventory; no Doppler, no Vercel env sync, no GitHub OIDC Doppler fetch for Local. See `docs/secrets-management.md`.                                                                                                                                            |
 | I found `doppler` in grep — is it still needed? | No, except intentional documentation. `doppler.yaml` and `package.json` `*:secrets` scripts were removed in #205. Remaining `doppler` mentions are in this roadmap, ADR 0004, and a hosted-legacy appendix in `docs/secrets-management.md` / workflow comment — all labeled `hosted-legacy / self-host only`. |
-| Original product spec? | `specs.md` (historical hosted spec). For current roadmap, this file takes precedence. Top-of-file pointer in `specs.md:9` links here. |
+| Original product spec?                          | `specs.md` (historical hosted spec). For current roadmap, this file takes precedence. Top-of-file pointer in `specs.md:9` links here.                                                                                                                                                                         |
 
 ## Product models
 
@@ -34,28 +34,28 @@ The hosted Next.js + Clerk + Supabase + Vercel application (`src/`, `supabase/`,
 
 ## Retirement scope (#205)
 
-| Area | Before | After |
-|---|---|---|
-| Secrets source of truth | Doppler project `breakdown-sh` (`doppler.yaml` + `doppler login/setup/run`) | File-local `.env.local.example` inventory; no Doppler. |
-| `package.json` scripts | `dev:secrets`, `build:secrets`, `start:secrets`, `ci:secrets` (all `doppler run -- ...`) | Removed; canonical scripts are `dev`, `build`, `start`, `ci` + `secrets:check`. |
-| `README.md` / `docs/local-development.md` setup | Doppler install + `doppler setup` + `pnpm dev:secrets` | `cp .env.local.example .env.local` + `pnpm dev` (file-local). |
-| `docs/secrets-management.md` | Doppler-as-source-of-truth + Doppler→Vercel sync tables | File-local model; hosted operator sync only in explicit Appendix A (`hosted-legacy`). |
-| `src/app/docs/**` | Rendered Doppler guidance | Updated to match file-local model. |
-| `.github/workflows/supabase-migrations.yml` | `dopplerhq/secrets-fetch-action` OIDC + `doppler_project`/`doppler_config`/`DOPPLER_SERVICE_IDENTITY_ID` | Reads `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_PASSWORD`/`SUPABASE_PROJECT_REF` directly from GitHub Environment secrets; no `id-token: write` needed; comment labels remaining note as hosted-legacy. |
-| `scripts/check-env.mjs` hint | `Load secrets with Doppler, for example: pnpm dev:secrets` | `Copy .env.local.example to .env.local and fill in missing values` |
+| Area                                            | Before                                                                                                   | After                                                                                                                                                                                              |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secrets source of truth                         | Doppler project `breakdown-sh` (`doppler.yaml` + `doppler login/setup/run`)                              | File-local `.env.local.example` inventory; no Doppler.                                                                                                                                             |
+| `package.json` scripts                          | `dev:secrets`, `build:secrets`, `start:secrets`, `ci:secrets` (all `doppler run -- ...`)                 | Removed; canonical scripts are `dev`, `build`, `start`, `ci` + `secrets:check`.                                                                                                                    |
+| `README.md` / `docs/local-development.md` setup | Doppler install + `doppler setup` + `pnpm dev:secrets`                                                   | `cp .env.local.example .env.local` + `pnpm dev` (file-local).                                                                                                                                      |
+| `docs/secrets-management.md`                    | Doppler-as-source-of-truth + Doppler→Vercel sync tables                                                  | File-local model; hosted operator sync only in explicit Appendix A (`hosted-legacy`).                                                                                                              |
+| `src/app/docs/**`                               | Rendered Doppler guidance                                                                                | Updated to match file-local model.                                                                                                                                                                 |
+| `.github/workflows/supabase-migrations.yml`     | `dopplerhq/secrets-fetch-action` OIDC + `doppler_project`/`doppler_config`/`DOPPLER_SERVICE_IDENTITY_ID` | Reads `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_PASSWORD`/`SUPABASE_PROJECT_REF` directly from GitHub Environment secrets; no `id-token: write` needed; comment labels remaining note as hosted-legacy. |
+| `scripts/check-env.mjs` hint                    | `Load secrets with Doppler, for example: pnpm dev:secrets`                                               | `Copy .env.local.example to .env.local and fill in missing values`                                                                                                                                 |
 
 Remaining `doppler` string matches are intentional documentation — ADR 0004, this roadmap, and the hosted-legacy appendix — not accidental residue.
 
 ## Milestones
 
-| Milestone | Scope | Status |
-|---|---|---|
-| **Wayfinder #124** | 15 decisions (#125-#141) defining Local's workflow, run, security, CLI/MCP, skills, distribution | **Done** |
-| **Local MVP #142** | Core + CLI + MCP + 5 skills + contracts + conformance (#143-#166) | **Done** (under release qualification) |
-| **Release deferral #187** | Supported Host certification deferred (`supported_hosts: []`) | **Accepted** — ADR 0002 |
-| **1.0 stable publication (#167/#190)** | Immutable archives + attested `latest`/`next` channels | **Pending** — blocked until qualification passes post-#205 |
-| **Supported Host qualification #188** | Real Agent Host rows beyond deferred empty set | **Deferred** — requires new ADR/workflow per ADR 0002 |
-| **SaaS/hosted revival (if any)** | New ADR defining coexistence, plus Doppler/hosted docs if needed | **Out of scope** unless proposed |
+| Milestone                             | Scope                                                                                            | Status                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| **Wayfinder #124**                    | 15 decisions (#125-#141) defining Local's workflow, run, security, CLI/MCP, skills, distribution | **Done**                                              |
+| **Local MVP #142**                    | Core + CLI + MCP + 5 skills + contracts + conformance (#143-#166)                                | **Done** (under release qualification)                |
+| **Release deferral #187**             | Supported Host certification deferred (`supported_hosts: []`)                                    | **Accepted** — ADR 0002                               |
+| **npm publication (#269)**            | Direct GitHub Actions publication for core, CLI, and MCP                                         | **Available** — manual from `main`                    |
+| **Supported Host qualification #188** | Real Agent Host rows beyond deferred empty set                                                   | **Deferred** — requires new ADR/workflow per ADR 0002 |
+| **SaaS/hosted revival (if any)**      | New ADR defining coexistence, plus Doppler/hosted docs if needed                                 | **Out of scope** unless proposed                      |
 
 ## Non-goals (still out of scope per #124)
 

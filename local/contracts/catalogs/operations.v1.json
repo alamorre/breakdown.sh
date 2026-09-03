@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.operations-catalog.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "operations": [
     "validate_workflow",
     "create_run",

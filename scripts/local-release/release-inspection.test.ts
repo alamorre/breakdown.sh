@@ -5,7 +5,7 @@ import { packageNotice, thirdPartyNotices } from './package-artifacts.mjs';
 import { skillsNotice, skillsThirdPartyNotices } from './skills-archive.mjs';
 
 describe('inspectLegalMaterial reinspect mode', () => {
-  const releaseVersion = '1.0.0';
+  const releaseVersion = '1.0.1';
 
   it('should generate correct NOTICE content for contracts', () => {
     const notice = contractsNotice();
@@ -71,7 +71,7 @@ describe('inspectLegalMaterial reinspect mode', () => {
 
 describe('legal file existence checks', () => {
   it('should validate that NOTICE and THIRD_PARTY_NOTICES paths are consistent', () => {
-    const releaseVersion = '1.0.0';
+    const releaseVersion = '1.0.1';
     const archiveRoot = `breakdown-contracts-${releaseVersion}`;
     
     const expectedPaths = {
@@ -86,7 +86,7 @@ describe('legal file existence checks', () => {
   });
 
   it('should validate skills legal file paths', () => {
-    const releaseVersion = '1.0.0';
+    const releaseVersion = '1.0.1';
     const archiveRoot = `breakdown-skills-${releaseVersion}`;
     
     const expectedPaths = {

@@ -2,17 +2,17 @@
 name: critique-breakdown
 description: Review an existing Breakdown Workflow Definition for unclear outcomes, poor decomposition, missing or false dependencies, weak evidence or verification, excess context, duplication, and unusable Results. Use when the user asks to critique, review, or improve a Breakdown workflow without changing it.
 license: Apache-2.0. See LICENSE.
-compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.0.
+compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.1.
 metadata:
   breakdown-sh.pack: breakdown-local
-  breakdown-sh.version: '1.0.0'
+  breakdown-sh.version: '1.0.1'
 ---
 
 # Critique a Workflow Definition
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 This skill is always read-only. It reports findings; applying them belongs to `author-breakdown`
 after separate confirmation.

@@ -142,7 +142,7 @@ const GUIDED_HOST_STAGE_PROCEDURES = Object.freeze([
         'The operator personally approves each exact installation, skill-copy, host-configuration, and disposable-probe action after checking its target and candidate-bound source; one approval must not cover a later category.',
     },
     expected_observations: [
-      'The exact Breakdown 1.0.0 CLI and canonical skill bytes are selected from this kit without rebuilding them.',
+      'The exact Breakdown 1.0.1 CLI and canonical skill bytes are selected from this kit without rebuilding them.',
       'Full preflight reports Compatible Host when capabilities pass but no authenticated exact host-evidence index is supplied; it does not claim Supported Host.',
       'No breakdown.yaml, Run, Result, score, review, or qualification status is created by setup.',
     ],

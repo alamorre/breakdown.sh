@@ -7,7 +7,7 @@ import { arch, platform, release, version } from 'node:os';
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RELEASE_VERSION = '1.0.0';
+const RELEASE_VERSION = '1.0.1';
 const AUTOMATION_SCHEMA_VERSION = 'breakdown.operation-request.v1';
 const CLI_OUTPUT_SCHEMA_VERSION = 'breakdown.cli-output.v1';
 const SCRIPT_PATH = fileURLToPath(import.meta.url);

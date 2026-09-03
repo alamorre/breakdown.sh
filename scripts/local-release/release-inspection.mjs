@@ -578,7 +578,15 @@ function sourceInputHash(provenance, path) {
   return input.sha256;
 }
 
-function inspectLegalMaterial({ contracts, packages, provenance, releaseVersion, sbom, skills, reinspectMode }) {
+function inspectLegalMaterial({
+  contracts,
+  packages,
+  provenance,
+  releaseVersion,
+  sbom,
+  skills,
+  reinspectMode,
+}) {
   const contractPrefix = contracts.archiveRoot;
   const canonicalLicense = contracts.entries.get(`${contractPrefix}/LICENSE`);
   invariant(
@@ -954,9 +962,8 @@ export async function inspectReleaseCandidate({
   for (const inspected of inspectedPackages) {
     invariant(
       inspected.manifest.publishConfig?.access === 'public' &&
-        inspected.manifest.publishConfig?.provenance === true &&
         inspected.manifest.publishConfig?.tag === expectedDistTag,
-      `${inspected.manifest.name} has the wrong public provenance or npm channel.`,
+      `${inspected.manifest.name} has the wrong public access or npm channel.`,
     );
   }
   inspectPackageArchitecture(inspectedPackages);

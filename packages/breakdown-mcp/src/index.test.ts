@@ -360,7 +360,7 @@ describe('breakdown-mcp stdio process', () => {
         capabilities: {},
         clientInfo: {
           name: 'raw-conformance-client',
-          version: '1.0.0',
+          version: '1.0.1',
         },
       });
 
@@ -373,7 +373,7 @@ describe('breakdown-mcp stdio process', () => {
         serverInfo: {
           name: '@breakdown-sh/mcp',
           title: 'Breakdown Local',
-          version: '1.0.0',
+          version: '1.0.1',
         },
       });
 
@@ -440,7 +440,7 @@ describe('breakdown-mcp stdio process', () => {
       capabilities: {},
       clientInfo: {
         name: 'schema-conformance-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -515,7 +515,7 @@ describe('breakdown-mcp stdio process', () => {
       capabilities: {},
       clientInfo: {
         name: 'older-sdk-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
 
@@ -548,7 +548,7 @@ nodes:
       capabilities: {},
       clientInfo: {
         name: 'raw-operation-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -566,7 +566,7 @@ nodes:
     const structuredContent = called.result?.structuredContent as Record<string, unknown>;
     expect(structuredContent).toEqual({
       schema_version: 'breakdown.mcp-output.v1',
-      release_version: '1.0.0',
+      release_version: '1.0.1',
       supported_operation_schemas: ['breakdown.operation-request.v1'],
       operation: 'validate_workflow',
       ok: true,
@@ -624,7 +624,7 @@ nodes:
       },
       clientInfo: {
         name: 'raw-error-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -671,7 +671,7 @@ nodes:
       isError: true,
       structuredContent: {
         schema_version: 'breakdown.mcp-output.v1',
-        release_version: '1.0.0',
+        release_version: '1.0.1',
         supported_operation_schemas: ['breakdown.operation-request.v1'],
         operation: 'validate_workflow',
         ok: false,
@@ -781,7 +781,7 @@ nodes:
           capabilities: {},
           clientInfo: {
             name: 'shared-trace-client',
-            version: '1.0.0',
+            version: '1.0.1',
           },
         });
         server.notify('notifications/initialized');
@@ -834,7 +834,7 @@ nodes:
       expect(created.data).toMatchObject({
         producer: {
           name: '@breakdown-sh/core',
-          version: '1.0.0',
+          version: '1.0.1',
         },
       });
       const runId = created.data!.run_id as string;
@@ -976,7 +976,7 @@ nodes:
       capabilities: {},
       clientInfo: {
         name: 'cancellation-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -1045,7 +1045,7 @@ nodes:
       capabilities: {},
       clientInfo: {
         name: 'staged-cancellation-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -1184,7 +1184,7 @@ nodes:
       capabilities: {},
       clientInfo: {
         name: 'signal-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -1301,7 +1301,7 @@ nodes:
       capabilities: {},
       clientInfo: {
         name: 'exact-number-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
     });
     server.notify('notifications/initialized');
@@ -1343,7 +1343,7 @@ nodes:
     const client = new Client(
       {
         name: 'independent-sdk-client',
-        version: '1.0.0',
+        version: '1.0.1',
       },
       {
         capabilities: {},
@@ -1364,7 +1364,7 @@ nodes:
     expect(client.getServerVersion()).toEqual({
       name: '@breakdown-sh/mcp',
       title: 'Breakdown Local',
-      version: '1.0.0',
+      version: '1.0.1',
     });
     expect(client.getServerCapabilities()).toEqual({
       tools: {},

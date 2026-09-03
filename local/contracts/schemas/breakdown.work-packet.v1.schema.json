@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "breakdown.work-packet.v1",
-  "$comment": "release_version=1.0.0",
+  "$comment": "release_version=1.0.1",
   "title": "Breakdown Work Packet v1",
   "type": "object",
   "additionalProperties": false,

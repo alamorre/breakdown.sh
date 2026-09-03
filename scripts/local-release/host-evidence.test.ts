@@ -23,7 +23,7 @@ import {
 import { MAINTAINED_PLATFORM_TUPLES } from './platform-evidence.mjs';
 
 const temporaryDirectories: string[] = [];
-const releaseVersion = '1.0.0';
+const releaseVersion = '1.0.1';
 const candidateDigest = 'a'.repeat(64);
 const corpusDigest = 'b'.repeat(64);
 const gitCommit = 'c'.repeat(40);
@@ -321,7 +321,7 @@ describe('authenticated host support workflow', () => {
     );
     expect(workflow).toContain('artifact-ids: ${{ inputs.candidate_artifact_id }}');
     expect(workflow).toContain('actions/artifacts/${CANDIDATE_ARTIFACT_ID}');
-    expect(workflow).toContain(".name == \"breakdown-local-candidate\"");
+    expect(workflow).toContain('.name == "breakdown-local-candidate"');
     expect(workflow).toContain('run-id: ${{ env.CANDIDATE_RUN_ID }}');
     expect(workflow).not.toContain('evidence_artifact_ids');
     expect(workflow).toContain('actions/workflows/324133712');
@@ -345,12 +345,12 @@ describe('indexDeferredHostSupport', () => {
       indexDeferredHostSupport({
         candidateDirectory: candidate.candidateDirectory,
         outputPath,
-        releaseTag: 'breakdown-local-v1.0.0',
+        releaseTag: 'breakdown-local-v1.0.1',
       }),
     ).resolves.toMatchObject({
       schema_version: 'breakdown.host-support-index.v1',
       release_version: releaseVersion,
-      tag: 'breakdown-local-v1.0.0',
+      tag: 'breakdown-local-v1.0.1',
       status: 'deferred',
       policy: {
         state: 'deferred',
@@ -376,7 +376,7 @@ describe('indexDeferredHostSupport', () => {
     await indexDeferredHostSupport({
       candidateDirectory: candidate.candidateDirectory,
       outputPath,
-      releaseTag: 'breakdown-local-v1.0.0',
+      releaseTag: 'breakdown-local-v1.0.1',
     });
     expect(await readFile(outputPath)).toEqual(firstBytes);
   });
@@ -388,7 +388,7 @@ describe('indexDeferredHostSupport', () => {
       indexDeferredHostSupport({
         candidateDirectory: candidate.candidateDirectory,
         outputPath: join(candidate.root, 'breakdown-host-support-index.json'),
-        releaseTag: 'breakdown-local-v1.0.1',
+        releaseTag: 'breakdown-local-v1.0.0',
       }),
     ).rejects.toThrow('Host support tag does not identify the exact candidate release.');
   });
@@ -598,7 +598,7 @@ describe('qualifyHostEvidence', () => {
     );
 
     await expect(qualifySubmission(candidate, row)).rejects.toThrow(
-      'Candidate skill archive artifact breakdown-skills-1.0.0.tar.gz does not match its release digest.',
+      'Candidate skill archive artifact breakdown-skills-1.0.1.tar.gz does not match its release digest.',
     );
   });
 
@@ -858,17 +858,6 @@ describe('writeHostQualificationTemplate', () => {
     expect(guide).toContain('tar -xzf');
     expect(guide).toContain('$project_dir/.agents/skills');
     expect(guide).toContain('$project_dir/.claude/skills');
-
-    const releaseGuide = await readFile(
-      join(repositoryRoot, 'scripts', 'local-release', 'README.md'),
-      'utf8',
-    );
-    expect(releaseGuide).toContain('supported_hosts: []');
-    expect(releaseGuide).toContain('workflow ID `324133712`');
-    expect(releaseGuide).toContain('MUST remain disabled and MUST NOT be dispatched');
-    expect(releaseGuide).toContain('issue #188');
-    expect(releaseGuide).not.toContain('gh workflow run local-host-evidence-capture.yml');
-    expect(releaseGuide).not.toContain('evidence_artifact_ids');
   });
 
   it('should expose local hash and pre-capture rehearsal commands', async () => {
@@ -1871,7 +1860,7 @@ describe('writeHostSupportMaterial', () => {
     const index = await indexDeferredHostSupport({
       candidateDirectory: candidate.candidateDirectory,
       outputPath: indexPath,
-      releaseTag: 'breakdown-local-v1.0.0',
+      releaseTag: 'breakdown-local-v1.0.1',
     });
 
     const generated = await writeHostSupportMaterial({ indexPath, outputDirectory });
@@ -1927,7 +1916,7 @@ describe('writeHostSupportMaterial', () => {
     const qualifiedIndex = {
       ...index,
       schema_version: 'breakdown.host-support-index.v1',
-      tag: 'breakdown-local-v1.0.0',
+      tag: 'breakdown-local-v1.0.1',
       policy: {
         state: 'qualified',
         certification_issue: 188,

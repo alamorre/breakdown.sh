@@ -5,14 +5,14 @@ license: Apache-2.0. See LICENSE.
 compatibility: Requires Linux or macOS and a local Agent Host with project filesystem, process access, and Node.js 24.
 metadata:
   breakdown-sh.pack: breakdown-local
-  breakdown-sh.version: '1.0.0'
+  breakdown-sh.version: '1.0.1'
 ---
 
 # Set up Breakdown Local
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 Establish one exact, capability-checked Breakdown Local release without changing the user's project
 until they approve each mutation.

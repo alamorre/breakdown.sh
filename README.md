@@ -91,3 +91,8 @@ registry metadata that is missing publish times.
 
 Run `pnpm run audit:high` before dependency changes. The PR checks include the same high-severity
 audit, and patched transitive dependency overrides live in `pnpm-workspace.yaml`.
+
+## Publishing npm packages
+
+After bumping the three package versions and merging to `main`, run **Publish npm packages** in
+GitHub Actions. See [docs/npm-publishing.md](docs/npm-publishing.md) for the short release path.

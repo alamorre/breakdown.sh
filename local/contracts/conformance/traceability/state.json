@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "group": "STATE",
   "defaults": {
     "setup": "Materialize the referenced history scenario in one real temporary project without using inspection to derive its expected state.",

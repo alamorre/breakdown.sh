@@ -2,7 +2,7 @@
 
 Document kind: Authored normative contract
 
-Contract version: 1.0.0
+Contract version: 1.0.1
 
 Requirement namespace: `REQ-OPS`
 

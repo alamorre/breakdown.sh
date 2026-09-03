@@ -153,7 +153,7 @@ Skill docs define how agents interact with each node type. They are the "source 
 
 ```yaml
 name: real-estate-market-analysis
-version: 1.0.0
+version: 1.0.1
 node_type: claim
 description: Evaluate real estate market conditions for a specific region
 

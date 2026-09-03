@@ -131,7 +131,7 @@ importers:
   packages/breakdown-cli:
     dependencies:
       '@breakdown-sh/core':
-        specifier: workspace:1.0.0
+        specifier: workspace:1.0.1
         version: link:../breakdown-core
     devDependencies:
       ajv:
@@ -147,7 +147,7 @@ importers:
   packages/breakdown-mcp:
     dependencies:
       '@breakdown-sh/core':
-        specifier: workspace:1.0.0
+        specifier: workspace:1.0.1
         version: link:../breakdown-core
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0

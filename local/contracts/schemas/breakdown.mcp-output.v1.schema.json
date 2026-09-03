@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "breakdown.mcp-output.v1",
-  "$comment": "release_version=1.0.0",
+  "$comment": "release_version=1.0.1",
   "title": "Breakdown MCP Tool Output v1",
   "oneOf": [
     {
@@ -18,7 +18,7 @@
       ],
       "properties": {
         "schema_version": { "const": "breakdown.mcp-output.v1" },
-        "release_version": { "const": "1.0.0" },
+        "release_version": { "const": "1.0.1" },
         "supported_operation_schemas": {
           "const": ["breakdown.operation-request.v1"]
         },
@@ -42,7 +42,7 @@
       ],
       "properties": {
         "schema_version": { "const": "breakdown.mcp-output.v1" },
-        "release_version": { "const": "1.0.0" },
+        "release_version": { "const": "1.0.1" },
         "supported_operation_schemas": {
           "const": ["breakdown.operation-request.v1"]
         },

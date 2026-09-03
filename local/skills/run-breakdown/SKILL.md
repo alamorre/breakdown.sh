@@ -2,17 +2,17 @@
 name: run-breakdown
 description: Create, execute, resume, or explicitly refresh one exact Breakdown Run through safe guided Work Packet execution. Use when the user wants to run a Workflow Definition, continue an existing Run, execute ready work, refresh one completed Node Definition, or recover an observed Run lock.
 license: Apache-2.0. See LICENSE.
-compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.0.
+compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.1.
 metadata:
   breakdown-sh.pack: breakdown-local
-  breakdown-sh.version: '1.0.0'
+  breakdown-sh.version: '1.0.1'
 ---
 
 # Run Breakdown
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 Guide one exact Run under user-supplied Run Authority. The core determines validity, scheduling,
 selection, attempts, and publication; the Agent Host supplies the Executor.

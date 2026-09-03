@@ -1526,7 +1526,7 @@ async function createRun(
 
   const producerValue: unknown = trustedContext.producer ?? {
     name: '@breakdown-sh/core',
-    version: '1.0.0',
+    version: '1.0.1',
   };
   if (
     !isRecord(producerValue) ||

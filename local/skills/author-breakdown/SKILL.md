@@ -2,17 +2,17 @@
 name: author-breakdown
 description: Create or revise a Breakdown Workflow Definition in `breakdown.yaml` by decomposing a complex goal into focused Node Definitions, Workflow Inputs, and real Result dependencies. Use when the user wants to design, edit, restructure, or extend a Breakdown workflow.
 license: Apache-2.0. See LICENSE.
-compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.0.
+compatibility: Requires Linux or macOS, local project access, Node.js 24, and @breakdown-sh/cli 1.0.1.
 metadata:
   breakdown-sh.pack: breakdown-local
-  breakdown-sh.version: '1.0.0'
+  breakdown-sh.version: '1.0.1'
 ---
 
 # Author a Workflow Definition
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 Create or revise only the human-editable `breakdown.yaml`. Discover facts first, resolve material
 choices with the user, and write only after the complete proposal or diff is confirmed.

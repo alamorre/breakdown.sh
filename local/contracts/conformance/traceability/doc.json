@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "group": "DOC",
   "defaults": {
     "setup": "Inspect the exact-version authored corpus, generated material, archive candidate, release manifest, and indexed evidence as applicable.",

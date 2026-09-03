@@ -2,10 +2,10 @@
 
 Document kind: Contract index (non-normative)
 
-Contract version: 1.0.0
+Contract version: 1.0.1
 
 This directory is the self-contained source corpus for Breakdown Local
-1.0.0. `VERSION` identifies the lockstep release.
+1.0.1. `VERSION` identifies the lockstep release.
 
 - `specifications/` contains the authored normative meanings and invariants.
 - `schemas/` owns public machine shapes.

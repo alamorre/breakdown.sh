@@ -2,7 +2,7 @@
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 Apply this rubric only after the exact Workflow Definition passes deterministic validation.
 

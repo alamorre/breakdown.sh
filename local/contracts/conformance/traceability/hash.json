@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "group": "HASH",
   "defaults": {
     "setup": "Load the reviewed literal byte and canonical-preimage vectors without calling the Breakdown implementation to form expectations.",

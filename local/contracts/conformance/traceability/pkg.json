@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "group": "PKG",
   "defaults": {
     "setup": "Build the once-created exact candidate and inspect its npm tarballs, skills/contracts archives, manifest, checksums, SBOM, licenses, and dependency graph.",
@@ -14,7 +14,7 @@
       "host": "none",
       "protocol": "npm+release-archive"
     },
-    "gate": "release-blocking",
+    "gate": "pre-merge",
     "retained_evidence": "packages/breakdown-cli/src/index.test.ts; packages/breakdown-mcp/src/index.test.ts; local/contracts/conformance/package/fixtures/artifact-expectations.json"
   },
   "rows": [
@@ -27,7 +27,7 @@
       "id": "PKG-002",
       "requirements": ["REQ-PKG-002"],
       "oracle_type": "byte",
-      "oracle": "Candidate inventory contains exact-version package tarballs, skills/contracts zip+tar, release manifest, SHA256SUMS, and SBOM."
+      "oracle": "Optional local artifact generation remains available without becoming an npm publication prerequisite."
     },
     {
       "id": "PKG-003",
@@ -70,13 +70,14 @@
       "id": "PKG-010",
       "requirements": ["REQ-PKG-010"],
       "oracle_type": "effect",
-      "oracle": "Stable/prerelease channels and release flags match policy while every public install reference pins exact SemVer."
+      "oracle": "Stable and prerelease npm channels match policy while every public install reference pins exact SemVer."
     },
     {
       "id": "PKG-011",
       "requirements": ["REQ-PKG-011"],
       "oracle_type": "effect",
-      "oracle": "Signed protected tag, clean once-built artifacts, immutable release, attestations, OIDC provenance, signatures, and checksums verify."
+      "retained_evidence": "scripts/simple-npm-publish.test.ts; .github/workflows/local-stable-publication.yml",
+      "oracle": "One manual main workflow builds, packs, and publishes core, CLI, and MCP directly with OIDC and no ceremony inputs."
     },
     {
       "id": "PKG-012",
@@ -93,47 +94,47 @@
       "id": "PKG-014",
       "requirements": ["REQ-PKG-014"],
       "oracle_type": "human",
-      "oracle": "Human gate records DCO, CLA policy, AI provenance review, authority/scope control, audits, scans, and final inventory approval."
+      "oracle": "Normal pull request review and DCO sign-off apply without a second publication ceremony."
     },
     {
       "id": "PKG-015",
       "requirements": ["REQ-PKG-015"],
       "fixture": "conformance/package/fixtures/artifact-expectations.json",
-      "oracle": "Actual tarballs/archives satisfy every indexed version, dependency, engine, export, byte, license, secret, SBOM, checksum, and attestation check."
+      "oracle": "Packed npm tarballs contain the expected runtime files, lockstep dependencies, package metadata, and license material."
     },
     {
       "id": "PKG-016",
       "requirements": ["REQ-PKG-016"],
       "oracle_type": "effect",
-      "oracle": "Every maintained tuple runs the applicable suite against exact candidate digests and retains the full platform identity and corpus revision."
+      "oracle": "Optional platform qualification remains runnable independently and is not an npm publication input."
     },
     {
       "id": "PKG-017",
       "requirements": ["REQ-PKG-017"],
-      "oracle_type": "effect",
-      "retained_evidence": "scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml",
-      "oracle": "Stable publication accepts only an attested exact deferred empty support index or a fully qualified passing set and rejects missing, mismatched, or false Supported Host claims."
+      "oracle_type": "human",
+      "retained_evidence": "local/docs/1.0.1/reference/support.md",
+      "oracle": "Support documentation records the deferred empty set without making host qualification a publication gate."
     },
     {
       "id": "PKG-018",
       "requirements": ["REQ-PKG-018"],
       "oracle_type": "effect",
-      "retained_evidence": "scripts/local-release/release-ceremony.test.ts; scripts/local-release/release-controls.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-release-ceremony.yml; .github/workflows/local-stable-publication.yml; docs/adr/0003-use-github-authorization-and-keyless-tag-signing.md; docs/release-evidence/issue-196-authorization-environment-2026-08-20.json",
-      "oracle": "Pre-tag and publication gates enforce one current-main qualification, an exact GitHub-authenticated sole-maintainer plan approval, keyless workflow-bound tag signing, exact no-bypass repository controls, GitHub-hosted runners, npm OIDC subject, and retained sanitized evidence without claiming independent review."
+      "retained_evidence": "scripts/simple-npm-publish.test.ts; .github/workflows/local-stable-publication.yml",
+      "oracle": "The sole maintainer can manually dispatch publication from main without a separate approval environment or receipt."
     },
     {
       "id": "PKG-019",
       "requirements": ["REQ-PKG-019"],
       "oracle_type": "effect",
-      "retained_evidence": "scripts/local-release/npm-publishing.test.ts; scripts/local-release/publication.test.ts; .github/workflows/local-stable-publication.yml; docs/npm-publishing.md",
-      "oracle": "The exact 1.0.0 bootstrap is limited to one least-privilege short-lived credential and cannot finalize a GitHub Release; finalization proves exact public bytes, the attested bootstrap, credential removal, disabled token publication, and all three exact OIDC trust records without republishing npm; later versions are OIDC-only."
+      "retained_evidence": "scripts/simple-npm-publish.test.ts; .github/workflows/local-stable-publication.yml; docs/npm-publishing.md",
+      "oracle": "The direct workflow uses the configured filename and environment OIDC identity without npm tokens or trust-inspection artifacts."
     },
     {
       "id": "PKG-020",
       "requirements": ["REQ-PKG-020"],
       "oracle_type": "effect",
-      "retained_evidence": "scripts/local-release/release-operation.test.ts; scripts/local-release/github-release-adapter.test.ts; .github/workflows/local-release-rehearsal.yml; .github/workflows/local-v1-release-recovery.yml; scripts/local-release/README.md; docs/adr/0004-use-durable-agent-operated-release-operations.md",
-      "oracle": "The durable operation adopts prior attempts, permits only a conclusive reviewed successor, correlates the one returned child run ID through delayed metadata, stops at public or ambiguous state, restores the sole tag policy on every exit path, and exercises the shared gates without secrets or publication under a minimal tool set."
+      "retained_evidence": "scripts/simple-npm-publish.test.ts; scripts/local-release/README.md",
+      "oracle": "The controller, ceremony, rehearsal, recovery, and trust-inspection workflows are absent from the publication path."
     }
   ]
 }

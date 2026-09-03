@@ -48,7 +48,7 @@ const OPERATION_VALIDATORS: Record<OperationRequest['operation'], ProtocolValida
   submit_candidate: validateSubmitCandidateRequest,
 };
 
-const CLI_VERSION = '1.0.0';
+const CLI_VERSION = '1.0.1';
 const HUMAN_STDERR_LIMIT_BYTES = 65_536;
 
 const USAGE = `Usage:

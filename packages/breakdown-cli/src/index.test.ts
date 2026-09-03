@@ -492,7 +492,7 @@ nodes:
         },
         producer: {
           name: '@breakdown-sh/core',
-          version: '1.0.0',
+          version: '1.0.1',
         },
       },
     });
@@ -1155,7 +1155,7 @@ Buffer.byteLength = (value, encoding) =>
     });
     expect(version).toEqual({
       status: 0,
-      stdout: '1.0.0\n',
+      stdout: '1.0.1\n',
       stderr: '',
     });
   });
@@ -1560,7 +1560,7 @@ nodes:
         },
         producer: {
           name: '@breakdown-sh/core',
-          version: '1.0.0',
+          version: '1.0.1',
         },
       },
     });
@@ -1817,7 +1817,7 @@ nodes: []
     };
 
     expect(corePackage).toMatchObject({
-      version: '1.0.0',
+      version: '1.0.1',
       engines: { node: '^24.0.0' },
       dependencies: { yaml: '2.9.0' },
     });
