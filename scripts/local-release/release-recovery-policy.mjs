@@ -23,6 +23,11 @@ export const V1_RELEASE_RECOVERY_POLICY = Object.freeze({
     runId: '32406103756',
   }),
   hostSupportWorkflowId: 323419478,
+  npmTrustInspection: Object.freeze({
+    artifactName: 'breakdown-npm-trusted-publishing',
+    workflowId: 338665093,
+    workflowPath: '.github/workflows/local-npm-trust-inspection.yml',
+  }),
   planArtifact: Object.freeze({
     digest: 'sha256:c234692cd6b602e8ae58860419ea16cb51ad0142bf1d6495a07b89ff7eb9b605',
     id: '9415176744',

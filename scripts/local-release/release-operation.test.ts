@@ -2106,28 +2106,49 @@ describe('v1StableChildRequest finalize-bootstrap selection (issue #262)', () =>
           status: 'verified' 
         },
       })),
-      listRunArtifacts: vi.fn(async () => ([
+      listRunArtifacts: vi.fn(async (runId) => {
+        if (String(runId) === '33699179727') {
+          return [
+            {
+              id: 12345,
+              name: 'breakdown-npm-first-package-bootstrap',
+              expired: false,
+            },
+          ];
+        }
+        return [
+          {
+            id: 777,
+            name: 'breakdown-npm-trusted-publishing',
+            expired: false,
+          },
+        ];
+      }),
+      listWorkflowRuns: vi.fn(async () => ([
         {
-          id: 12345,
-          name: 'breakdown-npm-first-package-bootstrap',
-          expired: false,
+          id: '555',
+          status: 'completed',
+          conclusion: 'success',
+          head_branch: 'main',
+          path: '.github/workflows/local-npm-trust-inspection.yml',
         },
       ])),
     };
-    
+
     const publicState = allPackagesPresentPublicState();
     const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
-    
-    const request = await v1StableChildRequest({ 
-      workflowSha, 
-      adapter, 
-      publicState, 
-      attempts 
+
+    const request = await v1StableChildRequest({
+      workflowSha,
+      adapter,
+      publicState,
+      attempts
     });
-    
+
     expect(request).not.toBeNull();
     expect(request?.body?.inputs?.npm_publication_mode).toBe('finalize-bootstrap');
     expect(request?.body?.inputs?.npm_bootstrap_artifact_id).toBe('12345');
+    expect(request?.body?.inputs?.npm_trusted_publishing_artifact_id).toBe('777');
     expect(request?.github_release_finalization_permitted).toBe(true);
   });
 
@@ -2137,11 +2158,31 @@ describe('v1StableChildRequest finalize-bootstrap selection (issue #262)', () =>
     // matching never finds them and the controller fail-closes. Match the prefix.
     const adapter = {
       verifyPackageSha256s: vi.fn(),
-      listRunArtifacts: vi.fn(async () => ([
+      listRunArtifacts: vi.fn(async (runId) => {
+        if (String(runId) === '33699179727') {
+          return [
+            {
+              id: 9872893196,
+              name: 'breakdown-npm-first-package-bootstrap-33699179727-1',
+              expired: false,
+            },
+          ];
+        }
+        return [
+          {
+            id: 777,
+            name: 'breakdown-npm-trusted-publishing',
+            expired: false,
+          },
+        ];
+      }),
+      listWorkflowRuns: vi.fn(async () => ([
         {
-          id: 9872893196,
-          name: 'breakdown-npm-first-package-bootstrap-33699179727-1',
-          expired: false,
+          id: '555',
+          status: 'completed',
+          conclusion: 'success',
+          head_branch: 'main',
+          path: '.github/workflows/local-npm-trust-inspection.yml',
         },
       ])),
     };
@@ -2163,7 +2204,38 @@ describe('v1StableChildRequest finalize-bootstrap selection (issue #262)', () =>
     expect(request).not.toBeNull();
     expect(request?.body?.inputs?.npm_publication_mode).toBe('finalize-bootstrap');
     expect(request?.body?.inputs?.npm_bootstrap_artifact_id).toBe('9872893196');
+    expect(request?.body?.inputs?.npm_trusted_publishing_artifact_id).toBe('777');
     expect(request?.github_release_finalization_permitted).toBe(true);
+  });
+
+  it('fails closed when all packages present but no trust inspection evidence exists', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(),
+      listRunArtifacts: vi.fn(async () => ([
+        {
+          id: 9872893196,
+          name: 'breakdown-npm-first-package-bootstrap-33699179727-1',
+          expired: false,
+        },
+      ])),
+      listWorkflowRuns: vi.fn(async () => []),
+    };
+
+    const publicState = allPackagesPresentPublicState({
+      '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+      '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+      '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+    });
+    const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
+
+    const request = await v1StableChildRequest({
+      workflowSha,
+      adapter,
+      publicState,
+      attempts
+    });
+
+    expect(request).toBeNull();
   });
 
   it('still fails closed when only an expired prefixed bootstrap artifact exists', async () => {
