@@ -208,27 +208,15 @@ export function npmPackageObservation(response) {
   if (response.status === 404) return { status: 'absent', http_status: 404 };
   if (response.status === 200 && typeof response?.body?.name === 'string') {
     const observation = { status: 'present', http_status: 200, name: response.body.name };
-    // Extract sha256 from the 1.0.0 version if available
+    // npm uses sha512 integrity and sha1 shasum, not sha256
+    // Include tarball URL so caller can fetch and compute sha256
     const versionData = response.body?.versions?.['1.0.0'];
-    if (versionData?.dist) {
-      // Try integrity first (sha256-<base64> or sha512-<base64>)
-      if (versionData.dist.integrity) {
-        const integrityMatch = /^sha256-([A-Za-z0-9+/=]+)$/.exec(versionData.dist.integrity);
-        if (integrityMatch) {
-          try {
-            const hex = Buffer.from(integrityMatch[1], 'base64').toString('hex');
-            if (/^[0-9a-f]{64}$/.test(hex)) {
-              observation.sha256 = hex;
-            }
-          } catch {
-            // Invalid base64, skip
-          }
-        }
-      }
-      // Fall back to shasum (sha1, not what we want) or tarball field for later fetch
-      if (!observation.sha256 && versionData.dist.tarball) {
-        observation.tarball = versionData.dist.tarball;
-      }
+    if (versionData?.dist?.tarball) {
+      observation.tarball = versionData.dist.tarball;
+    }
+    // If sha256 was already computed and passed in response, include it
+    if (response.sha256) {
+      observation.sha256 = response.sha256;
     }
     return observation;
   }

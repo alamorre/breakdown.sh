@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { GitHubReleaseAdapter } from './github-release-adapter.mjs';
@@ -145,36 +147,58 @@ describe('GitHub release adapter', () => {
     });
   });
 
-  it('verifies package sha256s from npm registry', async () => {
+  it('verifies package sha256s from npm registry by fetching tarballs', async () => {
+    const expectedTarballBytes = {
+      '@breakdown-sh/core': Buffer.from('exact bytes for @breakdown-sh/core\n'),
+      '@breakdown-sh/cli': Buffer.from('exact bytes for @breakdown-sh/cli\n'),
+    };
+    
     const fetchImplementation = vi.fn(async (url: string | URL | Request) => {
       const value = String(url);
-      if (value.includes('registry.npmjs.org/@breakdown-sh%2Fcore/1.0.0')) {
+      
+      // Correct URL encoding: %40breakdown-sh not @breakdown-sh
+      if (value.includes('registry.npmjs.org/%40breakdown-sh%2Fcore/1.0.0')) {
         return jsonResponse({
           name: '@breakdown-sh/core',
           version: '1.0.0',
           dist: {
-            integrity: 'sha256-FQD9Wps3Y23yPy46E8ZPBCK05WuOe0Nwf0PEKhDHOZQ=',
+            integrity: 'sha512-abcdefghijklmnopqrstuvwxyz',
+            shasum: 'abc123',  // sha1, not sha256
             tarball: 'https://registry.npmjs.org/@breakdown-sh/core/-/core-1.0.0.tgz',
           },
         });
       }
-      if (value.includes('registry.npmjs.org/@breakdown-sh%2Fcli/1.0.0')) {
+      if (value.includes('registry.npmjs.org/%40breakdown-sh%2Fcli/1.0.0')) {
         return jsonResponse({
           name: '@breakdown-sh/cli',
           version: '1.0.0',
           dist: {
-            integrity: 'sha256-L9RxBA8guyBn3IdXZ0RABe6OuCOwrahBQXf8aYH2tEk=',
+            integrity: 'sha512-zyxwvutsrqponmlkjihgfedcba',
+            shasum: 'def456',  // sha1, not sha256
             tarball: 'https://registry.npmjs.org/@breakdown-sh/cli/-/cli-1.0.0.tgz',
           },
         });
       }
-      if (value.includes('registry.npmjs.org/@breakdown-sh%2Fmcp/1.0.0')) {
+      if (value.includes('registry.npmjs.org/%40breakdown-sh%2Fmcp/1.0.0')) {
         return jsonResponse(
           {
             message: 'Not Found',
           },
           404,
         );
+      }
+      // Tarball fetches
+      if (value.includes('@breakdown-sh/core/-/core-1.0.0.tgz')) {
+        return new Response(expectedTarballBytes['@breakdown-sh/core'], {
+          status: 200,
+          headers: { 'content-type': 'application/octet-stream' },
+        });
+      }
+      if (value.includes('@breakdown-sh/cli/-/cli-1.0.0.tgz')) {
+        return new Response(expectedTarballBytes['@breakdown-sh/cli'], {
+          status: 200,
+          headers: { 'content-type': 'application/octet-stream' },
+        });
       }
       return jsonResponse({}, 200);
     });
@@ -188,12 +212,17 @@ describe('GitHub release adapter', () => {
       ['@breakdown-sh/core', '@breakdown-sh/cli', '@breakdown-sh/mcp'],
       '1.0.0',
     );
+    
+    // Verify sha256 was computed from tarball bytes
+    const coreHash = createHash('sha256').update(expectedTarballBytes['@breakdown-sh/core']).digest('hex');
+    const cliHash = createHash('sha256').update(expectedTarballBytes['@breakdown-sh/cli']).digest('hex');
+    
     expect(results['@breakdown-sh/core']).toMatchObject({
-      sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+      sha256: coreHash,
       status: 'verified',
     });
     expect(results['@breakdown-sh/cli']).toMatchObject({
-      sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+      sha256: cliHash,
       status: 'verified',
     });
     expect(results['@breakdown-sh/mcp']).toMatchObject({

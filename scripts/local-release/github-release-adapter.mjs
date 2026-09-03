@@ -101,17 +101,35 @@ export class GitHubReleaseAdapter {
       `repos/${this.repository}/releases/tags/breakdown-local-v1.0.0`,
       { expected: [200, 404] },
     ).catch((error) => ({ status: 0, body: null, error }));
+    
     const npmEntries = await Promise.all(
       Object.entries(PACKAGE_URLS).map(async ([name, url]) => {
         try {
+          // Fetch full packument to get all versions
           const response = await this.fetch(url, {
             headers: { Accept: 'application/json' },
             redirect: 'follow',
           });
           const body = await responseBody(response);
+          
+          let sha256 = null;
+          // Try to compute sha256 from tarball if 1.0.0 exists
+          if (response.status === 200 && body?.versions?.['1.0.0']?.dist?.tarball) {
+            try {
+              const tarballUrl = body.versions['1.0.0'].dist.tarball;
+              const tarballResponse = await this.fetch(tarballUrl, { redirect: 'follow' });
+              if (tarballResponse.ok) {
+                const bytes = Buffer.from(await tarballResponse.arrayBuffer());
+                sha256 = createHash('sha256').update(bytes).digest('hex');
+              }
+            } catch {
+              // Failed to fetch/compute tarball sha256, continue without it
+            }
+          }
+          
           return [
             name,
-            npmPackageObservation({ status: response.status, body, name }),
+            npmPackageObservation({ status: response.status, body, name, sha256 }),
           ];
         } catch {
           return [name, { status: 'indeterminate', http_status: 0 }];
@@ -203,6 +221,11 @@ export class GitHubReleaseAdapter {
     return Array.isArray(response.body?.artifacts) ? response.body.artifacts : [];
   }
 
+  /**
+   * @param {string[]} packageNames - Array of package names to verify
+   * @param {string} expectedVersion - The version to verify
+   * @returns {Promise<Record<string, { sha256?: string; status: string; http_status?: number; error?: string }>>}
+   */
   async verifyPackageSha256s(packageNames, expectedVersion) {
     const results = {};
     for (const name of packageNames) {
@@ -214,42 +237,21 @@ export class GitHubReleaseAdapter {
         });
         if (response.status === 200) {
           const packument = await responseBody(response);
-          let sha256Hash = null;
-          // Try to extract sha256 from integrity field (sha256-<base64>)
-          if (packument?.dist?.integrity) {
-            const integrityMatch = /^sha256-([A-Za-z0-9+/=]+)$/.exec(packument.dist.integrity);
-            if (integrityMatch) {
-              try {
-                const hex = Buffer.from(integrityMatch[1], 'base64').toString('hex');
-                if (/^[0-9a-f]{64}$/.test(hex)) {
-                  sha256Hash = hex;
-                }
-              } catch {
-                // Invalid base64, continue
-              }
-            }
-          }
-          // Try shasum256 field if available
-          if (!sha256Hash && packument?.dist?.shasum256 && /^[0-9a-f]{64}$/.test(packument.dist.shasum256)) {
-            sha256Hash = packument.dist.shasum256;
-          }
-          
-          if (sha256Hash) {
-            results[name] = { sha256: sha256Hash, status: 'verified' };
-          } else if (packument?.dist?.tarball) {
-            // If sha256 is not in packument, we need to fetch and compute it
+          // npm uses sha512 integrity and sha1 shasum, not sha256
+          // We must fetch and compute sha256 from the tarball
+          if (packument?.dist?.tarball) {
             const tarballResponse = await this.fetch(packument.dist.tarball, {
               redirect: 'follow',
             });
             if (tarballResponse.ok) {
               const bytes = Buffer.from(await tarballResponse.arrayBuffer());
-              sha256Hash = createHash('sha256').update(bytes).digest('hex');
-              results[name] = { sha256: sha256Hash, status: 'computed' };
+              const sha256Hash = createHash('sha256').update(bytes).digest('hex');
+              results[name] = { sha256: sha256Hash, status: 'verified' };
             } else {
               results[name] = { status: 'tarball_fetch_failed', http_status: tarballResponse.status };
             }
           } else {
-            results[name] = { status: 'no_shasum', http_status: response.status };
+            results[name] = { status: 'no_tarball', http_status: response.status };
           }
         } else if (response.status === 404) {
           results[name] = { status: 'absent', http_status: 404 };
