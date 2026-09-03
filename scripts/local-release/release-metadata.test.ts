@@ -19,14 +19,14 @@ describe('writeReleaseManifest', () => {
     const outputPath = await mkdtemp(join(tmpdir(), 'breakdown-release-metadata-'));
     temporaryDirectories.push(outputPath);
     const archiveNames = {
-      contractsTar: 'breakdown-contracts-1.0.0.tar.gz',
-      contractsZip: 'breakdown-contracts-1.0.0.zip',
-      skillsTar: 'breakdown-skills-1.0.0.tar.gz',
-      skillsZip: 'breakdown-skills-1.0.0.zip',
+      contractsTar: 'breakdown-contracts-1.0.1.tar.gz',
+      contractsZip: 'breakdown-contracts-1.0.1.zip',
+      skillsTar: 'breakdown-skills-1.0.1.tar.gz',
+      skillsZip: 'breakdown-skills-1.0.1.zip',
     };
     const packageResults = [
       {
-        artifactName: 'breakdown-sh-core-1.0.0.tgz',
+        artifactName: 'breakdown-sh-core-1.0.1.tgz',
         role: 'core-library',
         name: '@breakdown-sh/core',
         manifest: {
@@ -36,8 +36,8 @@ describe('writeReleaseManifest', () => {
         },
       },
     ];
-    const sbomName = 'breakdown-sbom-1.0.0.cdx.json';
-    const provenanceName = 'breakdown-provenance-inputs-1.0.0.json';
+    const sbomName = 'breakdown-sbom-1.0.1.cdx.json';
+    const provenanceName = 'breakdown-provenance-inputs-1.0.1.json';
     await Promise.all(
       [
         ...Object.values(archiveNames),
@@ -54,17 +54,17 @@ describe('writeReleaseManifest', () => {
         packageResults,
         platformConformance: {},
         provenanceName,
-        releaseVersion: '1.0.0',
+        releaseVersion: '1.0.1',
         sbomName,
       }),
     ).resolves.toMatchObject({
       manifest: {
-        release_version: '1.0.0',
+        release_version: '1.0.1',
         channel: {
           stability: 'stable',
           npm_dist_tag: 'latest',
           github_prerelease: false,
-          immutable_tag: 'breakdown-local-v1.0.0',
+          immutable_tag: 'breakdown-local-v1.0.1',
         },
       },
     });

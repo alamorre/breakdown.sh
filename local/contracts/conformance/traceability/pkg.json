@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "group": "PKG",
   "defaults": {
     "setup": "Build the once-created exact candidate and inspect its npm tarballs, skills/contracts archives, manifest, checksums, SBOM, licenses, and dependency graph.",
@@ -112,7 +112,7 @@
       "id": "PKG-017",
       "requirements": ["REQ-PKG-017"],
       "oracle_type": "human",
-      "retained_evidence": "local/docs/1.0.0/reference/support.md",
+      "retained_evidence": "local/docs/1.0.1/reference/support.md",
       "oracle": "Support documentation records the deferred empty set without making host qualification a publication gate."
     },
     {

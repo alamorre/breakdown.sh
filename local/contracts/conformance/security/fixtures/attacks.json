@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.security-fixtures.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "defaults": {
     "project": "Create a fresh real temporary project containing examples/contracted-workflow.yaml as breakdown.yaml and a regular inputs/source.txt containing UTF-8 bytes 73 61 66 65 0a.",
     "action": {

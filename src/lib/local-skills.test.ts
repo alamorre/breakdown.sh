@@ -15,7 +15,7 @@ import {
 
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const skillsRoot = join(workspaceRoot, 'local', 'skills');
-const releaseVersion = '1.0.0';
+const releaseVersion = '1.0.1';
 const skillNames = [
   'setup-breakdown',
   'author-breakdown',
@@ -116,7 +116,7 @@ async function runPreflight(
       '--host',
       'test-harness',
       '--host-version',
-      '1.0.0',
+      '1.0.1',
       '--cli-command',
       process.execPath,
       '--cli-arg',
@@ -491,7 +491,7 @@ describe('setup preflight executable', () => {
     const rows = operatingSystems.map((operatingSystem, index) => ({
       host: {
         surface: 'test-harness',
-        version: '1.0.0',
+        version: '1.0.1',
       },
       operating_system: operatingSystem,
       transport: 'cli',

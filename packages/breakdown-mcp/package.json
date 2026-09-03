@@ -1,6 +1,6 @@
 {
   "name": "@breakdown-sh/mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Optional local stdio MCP adapter for Breakdown Local.",
   "license": "Apache-2.0",
   "type": "module",
@@ -39,7 +39,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@breakdown-sh/core": "workspace:1.0.0",
+    "@breakdown-sh/core": "workspace:1.0.1",
     "@modelcontextprotocol/sdk": "1.29.0",
     "zod": "4.3.6"
   },

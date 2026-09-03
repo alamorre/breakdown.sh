@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.skill-invariant-fixtures.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "canonical_skills": [
     "setup-breakdown",
     "author-breakdown",

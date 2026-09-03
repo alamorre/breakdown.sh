@@ -2,9 +2,9 @@
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
-Breakdown Local uses one full-SemVer release train. This skill pack expects `1.0.0`.
+Breakdown Local uses one full-SemVer release train. This skill pack expects `1.0.1`.
 
 ## Inspect first
 
@@ -14,9 +14,9 @@ Breakdown Local uses one full-SemVer release train. This skill pack expects `1.0
    - `.claude/skills/` for Claude Code.
 3. Read the `breakdown-sh.version` metadata from every installed canonical skill.
 4. Run `node --version` and require Node `24.x`.
-5. Run `breakdown --version` and require the exact value `1.0.0`.
+5. Run `breakdown --version` and require the exact value `1.0.1`.
 6. When MCP is selected, initialize the local stdio server and require
-   `serverInfo.version` to equal `1.0.0`.
+   `serverInfo.version` to equal `1.0.1`.
 
 Never use an unqualified npm tag, mutable branch, or "latest" URL as a version pin.
 
@@ -25,13 +25,13 @@ Never use an unqualified npm tag, mutable branch, or "latest" URL as a version p
 Show this command and ask before running it:
 
 ```text
-npm install --global @breakdown-sh/cli@1.0.0
+npm install --global @breakdown-sh/cli@1.0.1
 ```
 
 For an ephemeral, side-by-side invocation, use:
 
 ```text
-npm exec --yes --package=@breakdown-sh/cli@1.0.0 -- breakdown
+npm exec --yes --package=@breakdown-sh/cli@1.0.1 -- breakdown
 ```
 
 Do not create or edit a project package manifest for Breakdown.
@@ -45,22 +45,22 @@ discovery to select the destination.
 
 ```text
 # Codex
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent codex --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent codex --copy --yes
 
 # Claude Code
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent claude-code --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent claude-code --copy --yes
 
 # Gemini CLI
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent gemini-cli --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent gemini-cli --copy --yes
 
 # GitHub Copilot CLI
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent github-copilot --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent github-copilot --copy --yes
 
 # Cursor
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent cursor --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent cursor --copy --yes
 
 # OpenCode
-npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent opencode --copy --yes
+npx --yes skills@1.5.20 add https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/skills --skill setup-breakdown --skill author-breakdown --skill critique-breakdown --skill run-breakdown --skill summarize-breakdown-run --agent opencode --copy --yes
 ```
 
 These commands select an immutable Breakdown release tag, five named skill directories, the exact
@@ -68,8 +68,8 @@ host adapter, and copy semantics. Do not omit `--copy` or replace either version
 `latest`.
 
 The installer-independent fallback is the immutable
-`breakdown-skills-1.0.0.tar.gz` or `.zip` asset from the
-`breakdown-local-v1.0.0` GitHub Release. Verify its exact entry in that Release's signed
+`breakdown-skills-1.0.1.tar.gz` or `.zip` asset from the
+`breakdown-local-v1.0.1` GitHub Release. Verify its exact entry in that Release's signed
 `SHA256SUMS`, then copy each directory unchanged into the host's project skill location. Do not
 merge old and new directory contents.
 

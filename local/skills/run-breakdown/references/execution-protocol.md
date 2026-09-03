@@ -2,10 +2,10 @@
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 This reference defines the host-neutral coordinator behavior for Breakdown Local
-`1.0.0`. Operation templates use angle-bracket placeholders that must be replaced with the
+`1.0.1`. Operation templates use angle-bracket placeholders that must be replaced with the
 exact displayed value before sending one `breakdown.operation-request.v1` document to
 `breakdown operate --project <absolute-root>`. Parse only the matching
 `breakdown.cli-output.v1` envelope.

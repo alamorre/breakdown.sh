@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = join(import.meta.dirname, '..', '..');
-const documentationRoot = join(repositoryRoot, 'local', 'docs', '1.0.0');
-const releaseVersion = '1.0.0';
+const documentationRoot = join(repositoryRoot, 'local', 'docs', '1.0.1');
+const releaseVersion = '1.0.1';
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -127,7 +127,7 @@ describe('Breakdown Local release documentation', () => {
     expect(guide).toContain('Windows is not a maintained operating system');
     expect(guide).toContain('../contracts/specifications/');
     expect(guide).toContain(
-      'https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/',
+      'https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/',
     );
     const support = await readFile(join(documentationRoot, 'reference', 'support.md'), 'utf8');
     expect(support).toContain('Supported Host certification is deferred');
@@ -152,8 +152,8 @@ describe('Breakdown Local release documentation', () => {
     const repositoryIndex = await readFile(join(repositoryRoot, 'llms.txt'), 'utf8');
     expect(versionedIndex.split('\n').length).toBeLessThan(40);
     expect(repositoryIndex.split('\n').length).toBeLessThan(30);
-    expect(versionedIndex).toContain('breakdown-local-v1.0.0');
-    expect(repositoryIndex).toContain('breakdown-local-v1.0.0');
+    expect(versionedIndex).toContain('breakdown-local-v1.0.1');
+    expect(repositoryIndex).toContain('breakdown-local-v1.0.1');
     expect(repositoryIndex).toContain('Discovery index only');
   });
 

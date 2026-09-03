@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.skill-pack-manifest.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "manifest_integrity": "The release archive authenticates this manifest; its inventory covers every other canonical skill payload byte.",
   "skills": [
     {
@@ -20,43 +20,43 @@
         },
         {
           "path": "references/claude-code.md",
-          "sha256": "a88955fb341f0e5d0b769e49e28b4f21cc4452da0a094ca96bf3b9274a2fc064"
+          "sha256": "dcb563646330dc560f25c829dd8b81bfb61a698457f856ecd46b7ab4d21f61d1"
         },
         {
           "path": "references/codex.md",
-          "sha256": "8a7c5ad16e96ea74398f4534fd24bb39131c20e83af852000a4718d45540ff98"
+          "sha256": "bd9a55761ce105faf25a374da13ea3be7889a5982c088dde861279cf1cd51c96"
         },
         {
           "path": "references/cursor.md",
-          "sha256": "ba76b0b19054e5326be1ea62c5a39e23ad4cfd238015c9924cbf07a00ac354a0"
+          "sha256": "498a79a027d7abae0a6dad9551ee904ad0b8f6122afb8f51d1634a40f3c7d153"
         },
         {
           "path": "references/gemini-cli.md",
-          "sha256": "7332fc12beb056f2d561ab0ebbf076158c343d8c672c3b0fbf38be0e28c820eb"
+          "sha256": "e102207eda07d028ea5e7a99ba276dbab8096c38dc57fd65d0bffdf59eea2dcd"
         },
         {
           "path": "references/github-copilot-cli.md",
-          "sha256": "9577074451fa46e4398a440e5702561ec80c51e0464e4427fcd10f1f8eef1d8e"
+          "sha256": "d6ef29be4ac06d21b98f89af8ce8dc46bbcf836c559f91c0452445bf6773da4c"
         },
         {
           "path": "references/installation.md",
-          "sha256": "2b1636cff19452d87de06bf5c732563c682078f82ce83a02547f53c52f865dde"
+          "sha256": "54ce71614a9cef466c6c1a6b619efbee36d4d0b27fc1196fa8b6c8980e2a90dd"
         },
         {
           "path": "references/opencode.md",
-          "sha256": "e44f4b657e6d3e07766f1ed4cbefd98edf487353318139428da75f3123e17faa"
+          "sha256": "abe9e86b95855e55cdeff6f7d2fa4e6678024bce53ea1077801e2fe3a8a2bdb0"
         },
         {
           "path": "scripts/preflight.mjs",
-          "sha256": "9e9a4aef3f952bec8f76b3e11e554d00215d896ee36f4c421dfbb503a3043024"
+          "sha256": "827edeba717d7a9162e7b1add5180bdc661ab556edc2cf0f58eb9a2318e01b74"
         },
         {
           "path": "SKILL.md",
-          "sha256": "541c80e3e4f105b9131ec805e5d523b232841d59ecdac4cc215d3db90b3187cf"
+          "sha256": "dedacc63fa431b7b1fdbfde3b236bfd65f32da090b8d6c2ae438152a3794bffc"
         },
         {
           "path": "THIRD_PARTY_NOTICES.md",
-          "sha256": "e99fdc053358c3906fe3811dfbed204cfbbce1c1c425f6d827bf3c018342e0a9"
+          "sha256": "52eb1af68365559ff4bae4273afbf4ef21df255939a6a4e258c355c2f2d6ff9a"
         }
       ]
     },
@@ -85,19 +85,19 @@
         },
         {
           "path": "references/authoring-method.md",
-          "sha256": "67a56cacfffce658dcdaaf4178ada3c2e7418b60e630ac94d96ebd3e4e13556e"
+          "sha256": "536ef5a0fb5979e24e5ea34ad8b4ebceed8e7f784a3266501692cbc52a9e9217"
         },
         {
           "path": "references/workflow-v1.md",
-          "sha256": "69f6fc444b5e2907fc528c0c65264d96f996d89d0c52f8f3a27c6560054a55cd"
+          "sha256": "718b235cd6a66736a70164200d1cb7fa2ad683de32d3fde55740badf8c838103"
         },
         {
           "path": "SKILL.md",
-          "sha256": "2e0b29a97d67ee4b6cd3607b2269b9c5d3278a56751712c51a3d06f2fc7d9586"
+          "sha256": "ab6073679320aacbc518b83168c881cf2370ebcae827b7b2015c4ad1395d852c"
         },
         {
           "path": "THIRD_PARTY_NOTICES.md",
-          "sha256": "0d1f83626d6ad04a16f0c221e8bebf76b6ac32d78f4986f2fe3baf67e4340374"
+          "sha256": "8265151870fae84d910591b9ec526a4dad4ebb3ef1db655dfb56cbecad9ee700"
         }
       ]
     },
@@ -114,15 +114,15 @@
         },
         {
           "path": "references/critique-rubric.md",
-          "sha256": "7bbf042c6cf474243d669a8faade9637d7894bd3e62a649136119359875df560"
+          "sha256": "08e2fae6cb4ba4011bbbb893ef9ee0eb0139533ce3b8e17792ce93671a7960cf"
         },
         {
           "path": "SKILL.md",
-          "sha256": "cc52c8d49bdd9c2fd810de07decc3b68c2bb3a27370278d71a6f74686dfc945b"
+          "sha256": "37958ceb97cf7ea35884a7bd35d5371201c7cbdd3d720979f3407c2a38ae113a"
         },
         {
           "path": "THIRD_PARTY_NOTICES.md",
-          "sha256": "122782f4bc9acb4f8359b3a32ff49c0cc0f879fc94079fb1f6b23cdf88909d16"
+          "sha256": "6e0c0aefc03f7f410e65d11cd19d54077e1a9f45b42fad0f3f7751eb2576eb28"
         }
       ]
     },
@@ -139,15 +139,15 @@
         },
         {
           "path": "references/execution-protocol.md",
-          "sha256": "9c6a83dffedf8325fe6eb292e022767ec2ab00fca2d2af513a9f6589b64e93be"
+          "sha256": "8292b87507714a6e048260b3fb12044adc7da0a22d34a4c04c60ba92e764cb46"
         },
         {
           "path": "SKILL.md",
-          "sha256": "8f63f27dbe6b04fea36926e0f67d72ac2a5b305c79ca1215333b04fb8981977d"
+          "sha256": "03a80cc022f53ca96373d08ab9603493637f956d128873404dd501720f7a9fb7"
         },
         {
           "path": "THIRD_PARTY_NOTICES.md",
-          "sha256": "642b9918adb3e75165a1cd74db4a363552c4170626f796b287668eed9ce7bf6f"
+          "sha256": "94fa5867bc15891d6b78af885c47645bf2288253e6d70d0bdac68b7f8d0e5422"
         }
       ]
     },
@@ -164,15 +164,15 @@
         },
         {
           "path": "references/summary-protocol.md",
-          "sha256": "2182c25d424cff15baf630ae1ad615a6a1825677b19850b15352c9a88381b554"
+          "sha256": "dedd09fa25bd73efb6a55a74744bc52828c2a99904c1390a6a8b5addcbc2b9db"
         },
         {
           "path": "SKILL.md",
-          "sha256": "ac6ac889911f3585886aa4607882e1e0213124655e4851569cf67627a528004c"
+          "sha256": "5d2352f61a92ec94a806489280667ebfada97e96a81f21051ffedeef0b730bda"
         },
         {
           "path": "THIRD_PARTY_NOTICES.md",
-          "sha256": "c271694fea2f2bd3cc04b27bc2c0172de576149b3e5093184aaa19c8143535e3"
+          "sha256": "9403333f91b5f882faba972b9d285798f7872bd683003d6e2502864a6e9e6574"
         }
       ]
     }

@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.traceability-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "group": "RUN",
   "defaults": {
     "setup": "Create or materialize the referenced literal Run fixture beneath a real temporary project root.",

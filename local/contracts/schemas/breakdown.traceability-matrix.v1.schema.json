@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "breakdown.traceability-matrix.v1",
-  "$comment": "release_version=1.0.0",
+  "$comment": "release_version=1.0.1",
   "title": "Breakdown Traceability Matrix v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "release_version", "group", "defaults", "rows"],
   "properties": {
     "schema_version": { "const": "breakdown.traceability-matrix.v1" },
-    "release_version": { "const": "1.0.0" },
+    "release_version": { "const": "1.0.1" },
     "group": {
       "enum": [
         "WFV",

@@ -1,22 +1,22 @@
 {
   "schema_version": "breakdown.mcp-protocol-fixtures.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "executable": "breakdown-mcp",
   "framing": "One compact UTF-8 JSON-RPC message plus LF in each direction.",
   "byte_oracles": [
     {
       "id": "initialize-2025-06-18",
-      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"fixture-client\",\"version\":\"1.0.0\"}}}\n",
-      "stdout_utf8": "{\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"@breakdown-sh/mcp\",\"title\":\"Breakdown Local\",\"version\":\"1.0.0\"}},\"jsonrpc\":\"2.0\",\"id\":1}\n",
-      "stdout_sha256": "8c24ed34b20450bc71e54ade6f7a58e78982039771114620804328dc0a9edb97",
+      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"fixture-client\",\"version\":\"1.0.1\"}}}\n",
+      "stdout_utf8": "{\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"@breakdown-sh/mcp\",\"title\":\"Breakdown Local\",\"version\":\"1.0.1\"}},\"jsonrpc\":\"2.0\",\"id\":1}\n",
+      "stdout_sha256": "b7014ea5f9e1aba14b52d7a351ebf5a8b58184517b36989a72af38cc8db006f7",
       "stderr_utf8": "",
       "effects": { "project_paths_read": 0, "daemon_remains": false }
     },
     {
       "id": "initialize-2025-11-25",
-      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"fixture-client\",\"version\":\"1.0.0\"}}}\n",
-      "stdout_utf8": "{\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"@breakdown-sh/mcp\",\"title\":\"Breakdown Local\",\"version\":\"1.0.0\"}},\"jsonrpc\":\"2.0\",\"id\":1}\n",
-      "stdout_sha256": "3a47556ca3483f4a438bb2dfbd7e0aba83b4e8fac1d7e454a3f615338a475630",
+      "stdin_utf8": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"fixture-client\",\"version\":\"1.0.1\"}}}\n",
+      "stdout_utf8": "{\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"@breakdown-sh/mcp\",\"title\":\"Breakdown Local\",\"version\":\"1.0.1\"}},\"jsonrpc\":\"2.0\",\"id\":1}\n",
+      "stdout_sha256": "1de4317678d7a9ae64583c6a3a6a1040df532e98054a277744a858414fef3a11",
       "stderr_utf8": "",
       "effects": { "project_paths_read": 0, "daemon_remains": false }
     },
@@ -90,7 +90,7 @@
       "oracle": {
         "name": "@breakdown-sh/mcp",
         "title": "Breakdown Local",
-        "version": "1.0.0"
+        "version": "1.0.1"
       },
       "effects": { "project_paths_read": 0 }
     },

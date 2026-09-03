@@ -2,7 +2,7 @@
 
 Document kind: Task-oriented guidance
 
-Document version: 1.0.0
+Document version: 1.0.1
 
 Use this qualitative method after deterministic version preflight. The core validates syntax and
 graph correctness; this method judges whether the workflow is useful.

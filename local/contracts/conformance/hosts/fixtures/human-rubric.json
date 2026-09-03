@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.guided-host-rubric.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "scale": { "minimum": 0, "maximum": 4 },
   "dimensions": [
     "comprehension",

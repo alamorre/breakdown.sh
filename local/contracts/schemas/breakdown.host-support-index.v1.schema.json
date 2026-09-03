@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "breakdown.host-support-index.v1",
-  "$comment": "release_version=1.0.0; immutable release evidence for either explicit deferred empty host certification or a fully qualified passing support set",
+  "$comment": "release_version=1.0.1; immutable release evidence for either explicit deferred empty host certification or a fully qualified passing support set",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "breakdown.cli-output.v1",
-  "$comment": "release_version=1.0.0",
+  "$comment": "release_version=1.0.1",
   "title": "Breakdown CLI Output v1",
   "oneOf": [
     {

@@ -1,6 +1,6 @@
 {
   "name": "@breakdown-sh/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Filesystem-first command-line interface for Breakdown Local.",
   "license": "Apache-2.0",
   "type": "module",
@@ -38,7 +38,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@breakdown-sh/core": "workspace:1.0.0"
+    "@breakdown-sh/core": "workspace:1.0.1"
   },
   "devDependencies": {
     "ajv": "8.18.0"

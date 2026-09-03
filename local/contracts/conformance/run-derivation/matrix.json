@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "defaults": {
     "prerequisites": "Create exact immutable Runs and StepArtifacts from the frozen derivation fixtures.",
     "action": "Call inspect_run through the core dispatcher with the exact Run ID.",

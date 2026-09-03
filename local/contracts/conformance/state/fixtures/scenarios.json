@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.state-fixtures.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "defaults": {
     "action": {
       "schema_version": "breakdown.operation-request.v1",

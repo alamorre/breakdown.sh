@@ -11,7 +11,7 @@ import { tarGzipEntries, zipEntries } from '../../scripts/local-release/release-
 const repositoryRoot = process.cwd();
 const localSkillsRoot = join(repositoryRoot, 'local', 'skills');
 const pluginSkillsRoot = join(repositoryRoot, 'plugins', 'breakdown', 'skills');
-const releaseVersion = '1.0.0';
+const releaseVersion = '1.0.1';
 const vendoredSkillNames = [
   'ask-matt',
   'tdd',

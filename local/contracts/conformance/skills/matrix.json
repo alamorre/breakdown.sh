@@ -1,6 +1,6 @@
 {
   "schema_version": "breakdown.conformance-matrix.v1",
-  "release_version": "1.0.0",
+  "release_version": "1.0.1",
   "defaults": {
     "prerequisites": "Build the exact matching core, CLI, and optional MCP workspace packages and inspect the canonical local/skills tree.",
     "action": "Run the skill artifact and preflight integration tests against a disposable local project.",
@@ -20,7 +20,7 @@
     {
       "id": "CASE-SKILL-001",
       "requirement": "Issue #160: canonical setup, authoring, and critique skills use the strict common Agent Skills profile",
-      "oracle": "Each directory/name matches and SKILL.md contains only name, description, license, compatibility, and inert string metadata with exact 1.0.0 release identity."
+      "oracle": "Each directory/name matches and SKILL.md contains only name, description, license, compatibility, and inert string metadata with exact 1.0.1 release identity."
     },
     {
       "id": "CASE-SKILL-002",

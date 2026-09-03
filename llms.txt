@@ -1,10 +1,10 @@
 # Breakdown
 > Discovery index only. This file is not a contract, release manifest, support claim, or content mirror.
 
-- Breakdown Local 1.0.0: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/README.md
-- Exact-version guide: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/getting-started.md
-- Normative contracts: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/contracts/README.md
-- Versioned llms.txt: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.0/local/docs/1.0.0/llms.txt
-- Immutable release evidence: https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.0
-- Release metadata input: SHA-256 41dadb3b249de0b06de694ae42293f417c0be04ded75903c05c4e9f7fc1a3b81
+- Breakdown Local 1.0.1: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/docs/1.0.1/README.md
+- Exact-version guide: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/docs/1.0.1/getting-started.md
+- Normative contracts: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/contracts/README.md
+- Versioned llms.txt: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/docs/1.0.1/llms.txt
+- Immutable release evidence: https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.1
+- Release metadata input: SHA-256 f425ce5a60cdfb6418c950f2ecc007838af04b3383bc41229d84befd62dced99
 - Hosted Breakdown overview: https://www.breakdown.sh/
