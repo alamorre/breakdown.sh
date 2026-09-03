@@ -108,9 +108,10 @@ export class GitHubReleaseAdapter {
             headers: { Accept: 'application/json' },
             redirect: 'follow',
           });
+          const body = await responseBody(response);
           return [
             name,
-            npmPackageObservation({ status: response.status, body: await responseBody(response) }),
+            npmPackageObservation({ status: response.status, body, name }),
           ];
         } catch {
           return [name, { status: 'indeterminate', http_status: 0 }];
@@ -193,5 +194,72 @@ export class GitHubReleaseAdapter {
       { method: 'POST', body: policy, expected: [200, 303, 403] },
     );
     return { status: response.status, body: response.body };
+  }
+
+  async listRunArtifacts(runId) {
+    const response = await this.request(
+      `repos/${this.repository}/actions/runs/${runId}/artifacts?per_page=100`,
+    );
+    return Array.isArray(response.body?.artifacts) ? response.body.artifacts : [];
+  }
+
+  async verifyPackageSha256s(packageNames, expectedVersion) {
+    const results = {};
+    for (const name of packageNames) {
+      try {
+        const url = `https://registry.npmjs.org/${encodeURIComponent(name)}/${expectedVersion}`;
+        const response = await this.fetch(url, {
+          headers: { Accept: 'application/json' },
+          redirect: 'follow',
+        });
+        if (response.status === 200) {
+          const packument = await responseBody(response);
+          let sha256Hash = null;
+          // Try to extract sha256 from integrity field (sha256-<base64>)
+          if (packument?.dist?.integrity) {
+            const integrityMatch = /^sha256-([A-Za-z0-9+/=]+)$/.exec(packument.dist.integrity);
+            if (integrityMatch) {
+              try {
+                const hex = Buffer.from(integrityMatch[1], 'base64').toString('hex');
+                if (/^[0-9a-f]{64}$/.test(hex)) {
+                  sha256Hash = hex;
+                }
+              } catch {
+                // Invalid base64, continue
+              }
+            }
+          }
+          // Try shasum256 field if available
+          if (!sha256Hash && packument?.dist?.shasum256 && /^[0-9a-f]{64}$/.test(packument.dist.shasum256)) {
+            sha256Hash = packument.dist.shasum256;
+          }
+          
+          if (sha256Hash) {
+            results[name] = { sha256: sha256Hash, status: 'verified' };
+          } else if (packument?.dist?.tarball) {
+            // If sha256 is not in packument, we need to fetch and compute it
+            const tarballResponse = await this.fetch(packument.dist.tarball, {
+              redirect: 'follow',
+            });
+            if (tarballResponse.ok) {
+              const bytes = Buffer.from(await tarballResponse.arrayBuffer());
+              sha256Hash = createHash('sha256').update(bytes).digest('hex');
+              results[name] = { sha256: sha256Hash, status: 'computed' };
+            } else {
+              results[name] = { status: 'tarball_fetch_failed', http_status: tarballResponse.status };
+            }
+          } else {
+            results[name] = { status: 'no_shasum', http_status: response.status };
+          }
+        } else if (response.status === 404) {
+          results[name] = { status: 'absent', http_status: 404 };
+        } else {
+          results[name] = { status: 'indeterminate', http_status: response.status };
+        }
+      } catch (error) {
+        results[name] = { status: 'error', error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return results;
   }
 }

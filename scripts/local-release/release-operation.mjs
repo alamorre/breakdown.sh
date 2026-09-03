@@ -207,7 +207,30 @@ export function npmPackageObservation(response) {
   invariant(Number.isInteger(response?.status), 'npm package response is malformed.');
   if (response.status === 404) return { status: 'absent', http_status: 404 };
   if (response.status === 200 && typeof response?.body?.name === 'string') {
-    return { status: 'present', http_status: 200 };
+    const observation = { status: 'present', http_status: 200, name: response.body.name };
+    // Extract sha256 from the 1.0.0 version if available
+    const versionData = response.body?.versions?.['1.0.0'];
+    if (versionData?.dist) {
+      // Try integrity first (sha256-<base64> or sha512-<base64>)
+      if (versionData.dist.integrity) {
+        const integrityMatch = /^sha256-([A-Za-z0-9+/=]+)$/.exec(versionData.dist.integrity);
+        if (integrityMatch) {
+          try {
+            const hex = Buffer.from(integrityMatch[1], 'base64').toString('hex');
+            if (/^[0-9a-f]{64}$/.test(hex)) {
+              observation.sha256 = hex;
+            }
+          } catch {
+            // Invalid base64, skip
+          }
+        }
+      }
+      // Fall back to shasum (sha1, not what we want) or tarball field for later fetch
+      if (!observation.sha256 && versionData.dist.tarball) {
+        observation.tarball = versionData.dist.tarball;
+      }
+    }
+    return observation;
   }
   return { status: 'indeterminate', http_status: response.status };
 }
