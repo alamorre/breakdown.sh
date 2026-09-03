@@ -60,16 +60,93 @@ export function inferSideEffectBoundary(jobs) {
   return 'unknown';
 }
 
-export function v1StableChildRequest(workflowSha) {
+function isAllPackagesPresentReleaseAbsent(publicState) {
+  if (!publicState?.npm_packages) return false;
+  
+  const coreStatus = publicState.npm_packages['@breakdown-sh/core']?.status;
+  const cliStatus = publicState.npm_packages['@breakdown-sh/cli']?.status;
+  const mcpStatus = publicState.npm_packages['@breakdown-sh/mcp']?.status;
+  const releaseStatus = publicState.github_release?.status;
+  
+  return (
+    coreStatus === 'present' &&
+    cliStatus === 'present' &&
+    mcpStatus === 'present' &&
+    releaseStatus === 'absent'
+  );
+}
+
+async function findBootstrapArtifactId(adapter, attempts) {
+  // Find the most recent successful child run that completed with all packages present
+  // This should be the first-package-bootstrap run that published the packages
+  const successfulAttempts = attempts
+    .filter((attempt) => 
+      attempt.child?.status === 'completed' &&
+      attempt.child?.conclusion === 'success' &&
+      attempt.last_side_effect_boundary === 'any_public_side_effect'
+    )
+    .reverse(); // Most recent first
+  
+  if (successfulAttempts.length === 0) {
+    return null;
+  }
+  
+  // For the v1 recovery case, we need to find the bootstrap artifact
+  // The artifact pattern is: breakdown-npm-first-package-bootstrap-*
+  // We'll try to get artifacts from the most recent successful child
+  for (const attempt of successfulAttempts) {
+    if (adapter.listRunArtifacts && attempt.child?.run_id) {
+      try {
+        const artifacts = await adapter.listRunArtifacts(attempt.child.run_id);
+        const bootstrapArtifact = artifacts?.find((artifact) =>
+          artifact?.name?.startsWith('breakdown-npm-first-package-bootstrap-')
+        );
+        if (bootstrapArtifact?.id) {
+          return String(bootstrapArtifact.id);
+        }
+      } catch (error) {
+        // Continue to next attempt if artifact lookup fails
+        continue;
+      }
+    }
+  }
+  
+  return null;
+}
+
+export async function v1StableChildRequest(workflowSha, publicState = null, adapter = null, attempts = []) {
   invariant(exactSha1(workflowSha), 'Stable child workflow SHA is invalid.');
+  
+  const baseInputs = V1_RELEASE_RECOVERY_POLICY.stablePublication.dispatch.inputs;
+  let inputs = {
+    ...baseInputs,
+    recovery_workflow_sha: workflowSha,
+  };
+  
+  // Issue #260: When all three packages are exact-version-present and GitHub Release is absent,
+  // dispatch finalize-bootstrap instead of first-package-bootstrap
+  if (publicState && isAllPackagesPresentReleaseAbsent(publicState)) {
+    const bootstrapArtifactId = adapter ? await findBootstrapArtifactId(adapter, attempts) : null;
+    
+    // Only switch to finalize-bootstrap if we found the bootstrap artifact
+    // Otherwise, fail closed and require manual review
+    if (bootstrapArtifactId) {
+      inputs = {
+        ...baseInputs,
+        recovery_workflow_sha: workflowSha,
+        npm_publication_mode: 'finalize-bootstrap',
+        npm_bootstrap_confirmation: '',
+        npm_bootstrap_artifact_id: bootstrapArtifactId,
+        npm_trusted_publishing_artifact_id: '',
+      };
+    }
+  }
+  
   return {
     workflow_id: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowId,
     body: {
       ref: V1_RELEASE_RECOVERY_POLICY.stablePublication.dispatch.ref,
-      inputs: {
-        ...V1_RELEASE_RECOVERY_POLICY.stablePublication.dispatch.inputs,
-        recovery_workflow_sha: workflowSha,
-      },
+      inputs,
     },
   };
 }
@@ -384,7 +461,7 @@ export async function runV1HostedController({
   }
 
   const { outcome, cleanup } = await runWithV1RecoveryPolicy(adapter, async () => {
-    const request = v1StableChildRequest(controller.sha);
+    const request = await v1StableChildRequest(controller.sha, publicState, adapter, durableAttempts);
     const dispatchResponse = await adapter.dispatchWorkflow(request.workflow_id, request.body);
     const dispatched = validateDispatchResponse(dispatchResponse);
     const expected = v1StableChildMetadata(dispatched.run_id, controller.sha);

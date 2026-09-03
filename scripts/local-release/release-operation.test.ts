@@ -1730,6 +1730,99 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.sequence).toBe(4);
   });
 
+  it('controller selects finalize-bootstrap mode when all packages present but Release absent (issue #260)', async () => {
+    const allPackagesPresentNoRelease = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+      },
+    };
+
+    const successfulBootstrapAttempt = {
+      child: {
+        run_id: '33699179727',
+        status: 'completed',
+        conclusion: 'success',
+      },
+      last_side_effect_boundary: 'any_public_side_effect',
+    };
+
+    const adapter = {
+      listRunArtifacts: async (runId: string) => {
+        if (runId === '33699179727') {
+          return [
+            {
+              id: 9999999999,
+              name: 'breakdown-npm-first-package-bootstrap-v1-20260903',
+            },
+          ];
+        }
+        return [];
+      },
+    };
+
+    const { v1StableChildRequest } = await import('./release-controller.mjs');
+    const request = await v1StableChildRequest(
+      workflowSha,
+      allPackagesPresentNoRelease,
+      adapter,
+      [successfulBootstrapAttempt],
+    );
+
+    expect(request.body.inputs.npm_publication_mode).toBe('finalize-bootstrap');
+    expect(request.body.inputs.npm_bootstrap_artifact_id).toBe('9999999999');
+    expect(request.body.inputs.npm_bootstrap_confirmation).toBe('');
+  });
+
+  it('controller keeps first-package-bootstrap mode when bootstrap artifact not found (issue #260)', async () => {
+    const allPackagesPresentNoRelease = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+      },
+    };
+
+    const adapter = {
+      listRunArtifacts: async () => [],
+    };
+
+    const { v1StableChildRequest } = await import('./release-controller.mjs');
+    const request = await v1StableChildRequest(
+      workflowSha,
+      allPackagesPresentNoRelease,
+      adapter,
+      [],
+    );
+
+    // Should fall back to first-package-bootstrap when artifact not found (fail-closed)
+    expect(request.body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
+  });
+
+  it('controller uses first-package-bootstrap mode when not all packages present (issue #260)', async () => {
+    const partialPackagesPresent = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+
+    const { v1StableChildRequest } = await import('./release-controller.mjs');
+    const request = await v1StableChildRequest(
+      workflowSha,
+      partialPackagesPresent,
+      null,
+      [],
+    );
+
+    expect(request.body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
+  });
+
   it('classifies all packages present but Release absent as public_side_effect', () => {
     const allPackagesPresentNoRelease = {
       github_release: { status: 'absent', http_status: 404 },
