@@ -154,7 +154,48 @@ export async function v1StableChildRequest({ workflowSha, adapter, publicState, 
       // Bootstrap artifact not found - fail closed
       return null;
     }
-    
+
+    // Discover the sanitized npm trust inspection evidence: exact artifact
+    // name, unexpired, from the latest successful main-branch trust
+    // inspection run. The child workflow requires it for finalize-bootstrap.
+    // Fail closed when none can be proven.
+    const trustPolicy = V1_RELEASE_RECOVERY_POLICY.npmTrustInspection;
+    let trustArtifactId = null;
+    try {
+      const trustRuns = await adapter.listWorkflowRuns(trustPolicy.workflowId);
+      const candidates = (Array.isArray(trustRuns) ? trustRuns : [])
+        .filter(
+          (run) =>
+            run?.status === 'completed' &&
+            run?.conclusion === 'success' &&
+            run?.head_branch === 'main' &&
+            run?.path === trustPolicy.workflowPath,
+        )
+        .sort((left, right) => Number(right.id) - Number(left.id));
+      for (const run of candidates) {
+        try {
+          const artifacts = await adapter.listRunArtifacts(String(run.id));
+          const trusted = artifacts.find(
+            (artifact) =>
+              artifact?.name === trustPolicy.artifactName && artifact?.expired === false,
+          );
+          if (trusted) {
+            trustArtifactId = String(trusted.id);
+            break;
+          }
+        } catch {
+          // Continue to next trust run
+        }
+      }
+    } catch {
+      // Fail closed below when no trust artifact was proven
+    }
+
+    if (!trustArtifactId) {
+      // Trust evidence not found - fail closed
+      return null;
+    }
+
     // All conditions met: dispatch with finalize-bootstrap mode
     return {
       workflow_id: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowId,
@@ -164,6 +205,7 @@ export async function v1StableChildRequest({ workflowSha, adapter, publicState, 
           ...baseInputs,
           npm_publication_mode: 'finalize-bootstrap',
           npm_bootstrap_artifact_id: bootstrapArtifactId,
+          npm_trusted_publishing_artifact_id: trustArtifactId,
         },
       },
       github_release_finalization_permitted: true,

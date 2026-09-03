@@ -108,10 +108,13 @@ jobs:
            inputs.platform_index_artifact_id == '9413912347' &&
            inputs.host_support_artifact_id == '9420331832' &&
            inputs.authorization_artifact_id == '9415223409' &&
-           inputs.npm_publication_mode == 'first-package-bootstrap' &&
            inputs.npm_bootstrap_confirmation == 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0' &&
-           inputs.npm_trusted_publishing_artifact_id == '' &&
-           inputs.npm_bootstrap_artifact_id == '') ||
+           ((inputs.npm_publication_mode == 'first-package-bootstrap' &&
+             inputs.npm_trusted_publishing_artifact_id == '' &&
+             inputs.npm_bootstrap_artifact_id == '') ||
+            (inputs.npm_publication_mode == 'finalize-bootstrap' &&
+             inputs.npm_trusted_publishing_artifact_id != '' &&
+             inputs.npm_bootstrap_artifact_id != ''))) ||
           (startsWith(github.ref, 'refs/tags/breakdown-local-v') &&
            github.event_name == 'deployment' &&
             github.event.deployment.task == 'breakdown-local-v1-recovery' &&
@@ -156,10 +159,16 @@ jobs:
             test "$PLATFORM_INDEX_ARTIFACT_ID_INPUT" = 9413912347
             test "$HOST_SUPPORT_ARTIFACT_ID_INPUT" = 9420331832
             test "$AUTHORIZATION_ARTIFACT_ID_INPUT" = 9415223409
-            test "$NPM_PUBLICATION_MODE_INPUT" = first-package-bootstrap
-            test "$NPM_BOOTSTRAP_CONFIRMATION_INPUT" = 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0'
-            test -z "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT"
-            test -z "$NPM_BOOTSTRAP_ARTIFACT_ID_INPUT"
+            if test "$NPM_PUBLICATION_MODE_INPUT" = finalize-bootstrap; then
+              test "$NPM_BOOTSTRAP_CONFIRMATION_INPUT" = 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0'
+              [[ "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT" =~ ^[1-9][0-9]*$ ]]
+              [[ "$NPM_BOOTSTRAP_ARTIFACT_ID_INPUT" =~ ^[1-9][0-9]*$ ]]
+            else
+              test "$NPM_PUBLICATION_MODE_INPUT" = first-package-bootstrap
+              test "$NPM_BOOTSTRAP_CONFIRMATION_INPUT" = 'CREATE EXACT @breakdown-sh/core @breakdown-sh/cli @breakdown-sh/mcp 1.0.0'
+              test -z "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID_INPUT"
+              test -z "$NPM_BOOTSTRAP_ARTIFACT_ID_INPUT"
+            fi
           elif test "$EVENT_NAME" = workflow_dispatch; then
             [[ "$GITHUB_REF" == refs/tags/breakdown-local-v* ]]
             test -z "$RECOVERY_WORKFLOW_SHA_INPUT"
@@ -267,7 +276,15 @@ jobs:
           printf 'AUTHORIZATION_RUN_ID=%s\n' "$authorization_run_id" >> "$GITHUB_ENV"
 
           if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' != first-package-bootstrap; then
-            trust_run_id="$(resolve_artifact_run "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID" breakdown-npm-trusted-publishing)"
+            if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' = finalize-bootstrap; then
+              # Trust evidence is a sanitized inspection of live npm state (no
+              # credentials, attested at creation). For finalization it is bound
+              # to a recent main-branch inspection run, like the bootstrap
+              # evidence, rather than to the pinned release source commit.
+              trust_run_id="$(resolve_artifact_run "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID" breakdown-npm-trusted-publishing exact v1-bootstrap)"
+            else
+              trust_run_id="$(resolve_artifact_run "$NPM_TRUSTED_PUBLISHING_ARTIFACT_ID" breakdown-npm-trusted-publishing)"
+            fi
             printf 'NPM_TRUST_RUN_ID=%s\n' "$trust_run_id" >> "$GITHUB_ENV"
           fi
           if test '${{ env.NPM_PUBLICATION_MODE_INPUT }}' = finalize-bootstrap; then
