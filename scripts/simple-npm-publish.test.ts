@@ -17,6 +17,8 @@ describe('simple npm publication', () => {
     expect(source).toContain('    environment: breakdown-local-stable');
     expect(source).toContain('pnpm install --frozen-lockfile');
     expect(source).toContain('pnpm --filter @breakdown-sh/core build');
+    expect(source).not.toContain('registry-url');
+    expect(source).not.toContain('NODE_AUTH_TOKEN');
     expect(source).toMatch(
       /breakdown-sh-core-\*\.tgz[\s\S]+breakdown-sh-cli-\*\.tgz[\s\S]+breakdown-sh-mcp-\*\.tgz/,
     );
