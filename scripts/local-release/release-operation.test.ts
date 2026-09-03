@@ -27,6 +27,7 @@ import {
   monitorExactRun,
   runV1HostedController,
   v1StableChildMetadata,
+  v1StableChildRequest,
   waitForDurableRunMetadata,
 } from './release-controller.mjs';
 import { auditWorkflowToolInventory, runReleaseRehearsal } from './release-rehearsal.mjs';
@@ -50,9 +51,24 @@ function completePublicState() {
   return {
     github_release: { status: 'present', http_status: 200 },
     npm_packages: {
-      '@breakdown-sh/core': { status: 'present', http_status: 200 },
-      '@breakdown-sh/cli': { status: 'present', http_status: 200 },
-      '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+      '@breakdown-sh/core': { 
+        status: 'present', 
+        http_status: 200,
+        name: '@breakdown-sh/core',
+        sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+      },
+      '@breakdown-sh/cli': { 
+        status: 'present', 
+        http_status: 200,
+        name: '@breakdown-sh/cli',
+        sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+      },
+      '@breakdown-sh/mcp': { 
+        status: 'present', 
+        http_status: 200,
+        name: '@breakdown-sh/mcp',
+        sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+      },
     },
   };
 }
@@ -141,9 +157,58 @@ describe('public-state and side-effect classification', () => {
     expect(npmPackageObservation({ status: 503, body: null }).status).toBe('indeterminate');
   });
 
+  it('npmPackageObservation requires proven sha256', () => {
+    // 404 is absent
+    expect(npmPackageObservation({ status: 404, body: { message: 'Not Found' } })).toEqual({
+      status: 'absent',
+      http_status: 404,
+    });
+    
+    // HTTP 200 + name but NO sha256 = indeterminate (not present)
+    const observation = npmPackageObservation({ 
+      status: 200, 
+      body: { name: '@breakdown-sh/core' } 
+    });
+    expect(observation.status).toBe('indeterminate');
+    expect(observation.http_status).toBe(200);
+    
+    // HTTP 200 + name + invalid sha256 = indeterminate
+    const observation2 = npmPackageObservation({ 
+      status: 200, 
+      body: { name: '@breakdown-sh/core' },
+      sha256: 'invalid',
+    });
+    expect(observation2.status).toBe('indeterminate');
+    expect(observation2.http_status).toBe(200);
+    
+    // HTTP 200 + name + valid sha256 = present
+    const validSha256 = '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994';
+    expect(npmPackageObservation({ 
+      status: 200, 
+      body: { name: '@breakdown-sh/core' },
+      sha256: validSha256,
+    })).toEqual({
+      status: 'present',
+      http_status: 200,
+      name: '@breakdown-sh/core',
+      sha256: validSha256,
+    });
+    
+    // Other HTTP codes are indeterminate
+    expect(npmPackageObservation({ status: 503, body: null })).toEqual({
+      status: 'indeterminate',
+      http_status: 503,
+    });
+  });
+
   it('stops on any public or indeterminate state', () => {
     const partial = absentPublicState();
-    partial.npm_packages['@breakdown-sh/core'] = { status: 'present', http_status: 200 };
+    partial.npm_packages['@breakdown-sh/core'] = { 
+      status: 'present', 
+      http_status: 200,
+      name: '@breakdown-sh/core',
+      sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+    } as typeof partial.npm_packages['@breakdown-sh/core'];
     expect(classifyPublicState(partial)).toBe('public_side_effect');
     const unknown = absentPublicState();
     unknown.github_release = { status: 'indeterminate', http_status: 500 };
@@ -198,7 +263,12 @@ describe('public-state and side-effect classification', () => {
     ).toBe('retryable_before_side_effects');
 
     const partialPublicState = absentPublicState();
-    partialPublicState.npm_packages['@breakdown-sh/core'] = { status: 'present', http_status: 200 };
+    partialPublicState.npm_packages['@breakdown-sh/core'] = { 
+      status: 'present', 
+      http_status: 200,
+      name: '@breakdown-sh/core',
+      sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+    } as typeof partialPublicState.npm_packages['@breakdown-sh/core'];
     expect(
       classifyRunResult({
         kind: 'live',
@@ -240,7 +310,12 @@ describe('public-state and side-effect classification', () => {
       }),
     ).toBe('partial_publication_stop');
     const partial = absentPublicState();
-    partial.npm_packages['@breakdown-sh/core'] = { status: 'present', http_status: 200 };
+    partial.npm_packages['@breakdown-sh/core'] = { 
+      status: 'present', 
+      http_status: 200,
+      name: '@breakdown-sh/core',
+      sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+    } as typeof partial.npm_packages['@breakdown-sh/core'];
     expect(
       classifyRunResult({
         kind: 'live',
@@ -1684,15 +1759,30 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.reason).toBe('terminal_predecessor');
   });
 
-  it('planner allows continuation when all three packages present but Release absent (issue #257)', () => {
-    const allPackagesPresentNoRelease = {
+  it('planner CONTINUES (dispatch) when all three packages present with proven sha256s, Release absent, artifact available (finalize-bootstrap)', () => {
+    const allPackagesPresentProvenSha256s = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
-        '@breakdown-sh/core': { status: 'present', http_status: 200 },
-        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
-        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+        '@breakdown-sh/core': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/core',
+          sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+        },
+        '@breakdown-sh/cli': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/cli',
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+        },
+        '@breakdown-sh/mcp': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/mcp',
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        },
       },
-    };
+    } as ReturnType<typeof absentPublicState>;
 
     const attemptWithPartialStop = {
       schema_version: 'breakdown.release-operation-attempt.v1',
@@ -1722,36 +1812,130 @@ describe('shared hermetic rehearsal and redaction', () => {
       operation: V1_RELEASE_OPERATION,
       attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithPartialStop],
       controllerSha: workflowSha,
-      publicState: allPackagesPresentNoRelease,
+      publicState: allPackagesPresentProvenSha256s,
       kind: 'live',
     });
 
+    // Now CONTINUES (dispatch) because sha256s are proven and match candidate
     expect(plan.action).toBe('dispatch');
     expect(plan.sequence).toBe(4);
+  });
+
+  it('planner STOPS (fail-closed) when all three packages present but sha256s do NOT match, Release absent', () => {
+    const allPackagesPresentWrongSha256s = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/core',
+          sha256: 'wrong_sha256_value_000000000000000000000000000000000000000000000000',
+        },
+        '@breakdown-sh/cli': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/cli',
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+        },
+        '@breakdown-sh/mcp': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/mcp',
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        },
+      },
+    } as ReturnType<typeof absentPublicState>;
+
+    const attemptWithPartialStop = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 3,
+      kind: 'live',
+      controller: { sha: 'c'.repeat(40), run_id: '33696559431', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33696676641',
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+      },
+      predecessor_run_id: '33428076790',
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithPartialStop],
+      controllerSha: workflowSha,
+      publicState: allPackagesPresentWrongSha256s,
+      kind: 'live',
+    });
+
+    // STOPS (fail-closed) because sha256s don't match
+    expect(plan.action).toBe('stop');
+    expect(plan.result).toBe('partial_publication_stop');
+    expect(plan.reason).toBe('terminal_predecessor');
   });
 
   it('classifies all packages present but Release absent as public_side_effect', () => {
     const allPackagesPresentNoRelease = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
-        '@breakdown-sh/core': { status: 'present', http_status: 200 },
-        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
-        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+        '@breakdown-sh/core': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/core',
+          sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+        },
+        '@breakdown-sh/cli': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/cli',
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+        },
+        '@breakdown-sh/mcp': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/mcp',
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        },
       },
-    };
+    } as ReturnType<typeof absentPublicState>;
 
     expect(classifyPublicState(allPackagesPresentNoRelease)).toBe('public_side_effect');
   });
 
-  it('planner allows continuation past needs_review when all packages present but Release absent (issue #257)', () => {
-    const allPackagesPresentNoRelease = {
+  it('planner CONTINUES past needs_review when all packages present with proven sha256s, Release absent', () => {
+    const allPackagesPresentProvenSha256s = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
-        '@breakdown-sh/core': { status: 'present', http_status: 200 },
-        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
-        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+        '@breakdown-sh/core': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/core',
+          sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+        },
+        '@breakdown-sh/cli': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/cli',
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+        },
+        '@breakdown-sh/mcp': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/mcp',
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        },
       },
-    };
+    } as ReturnType<typeof absentPublicState>;
 
     const attemptWithNeedsReview = {
       schema_version: 'breakdown.release-operation-attempt.v1',
@@ -1781,11 +1965,233 @@ describe('shared hermetic rehearsal and redaction', () => {
       operation: V1_RELEASE_OPERATION,
       attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithNeedsReview],
       controllerSha: workflowSha,
-      publicState: allPackagesPresentNoRelease,
+      publicState: allPackagesPresentProvenSha256s,
       kind: 'live',
     });
 
+    // Now CONTINUES because sha256s are proven
     expect(plan.action).toBe('dispatch');
     expect(plan.sequence).toBe(4);
+  });
+});
+
+describe('v1StableChildRequest finalize-bootstrap selection (issue #262)', () => {
+  const workflowSha = 'b'.repeat(40);
+  
+  function allPackagesPresentPublicState(sha256s?: Record<string, string>) {
+    return {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { 
+          status: 'present', 
+          http_status: 200,
+          sha256: sha256s?.['@breakdown-sh/core'],
+        },
+        '@breakdown-sh/cli': { 
+          status: 'present', 
+          http_status: 200,
+          sha256: sha256s?.['@breakdown-sh/cli'],
+        },
+        '@breakdown-sh/mcp': { 
+          status: 'present', 
+          http_status: 200,
+          sha256: sha256s?.['@breakdown-sh/mcp'],
+        },
+      },
+    };
+  }
+  
+  const successfulBootstrapAttempt = {
+    schema_version: 'breakdown.release-operation-attempt.v1',
+    operation_id: V1_RELEASE_OPERATION.operation_id,
+    immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+    immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+    sequence: 3,
+    kind: 'live',
+    controller: { sha: 'c'.repeat(40), run_id: '33699179727', run_attempt: 1 },
+    child: {
+      sha: 'c'.repeat(40),
+      run_id: '33699179727',
+      run_attempt: 1,
+      status: 'completed',
+      conclusion: 'success',
+    },
+    predecessor_run_id: '33428076790',
+    public_state_preflight: 'absent',
+    last_side_effect_boundary: 'any_public_side_effect',
+    conclusion: 'success',
+    retry_classification: 'partial_publication_stop',
+    cleanup: { status: 'restored_and_verified' },
+  };
+
+  it('selects finalize-bootstrap when all packages present with matching sha256s and bootstrap artifact exists', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(async () => ({
+        '@breakdown-sh/core': { 
+          sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994', 
+          status: 'verified' 
+        },
+        '@breakdown-sh/cli': { 
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49', 
+          status: 'verified' 
+        },
+        '@breakdown-sh/mcp': { 
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107', 
+          status: 'verified' 
+        },
+      })),
+      listRunArtifacts: vi.fn(async () => ([
+        {
+          id: 12345,
+          name: 'breakdown-npm-first-package-bootstrap',
+          expired: false,
+        },
+      ])),
+    };
+    
+    const publicState = allPackagesPresentPublicState();
+    const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
+    
+    const request = await v1StableChildRequest({ 
+      workflowSha, 
+      adapter, 
+      publicState, 
+      attempts 
+    });
+    
+    expect(request).not.toBeNull();
+    expect(request?.body?.inputs?.npm_publication_mode).toBe('finalize-bootstrap');
+    expect(request?.body?.inputs?.npm_bootstrap_artifact_id).toBe('12345');
+    expect(request?.github_release_finalization_permitted).toBe(true);
+  });
+
+  it('fails closed when all packages present but sha256s do not match', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(async () => ({
+        '@breakdown-sh/core': { 
+          sha256: '0000000000000000000000000000000000000000000000000000000000000000', 
+          status: 'verified' 
+        },
+        '@breakdown-sh/cli': { 
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49', 
+          status: 'verified' 
+        },
+        '@breakdown-sh/mcp': { 
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107', 
+          status: 'verified' 
+        },
+      })),
+      listRunArtifacts: vi.fn(),
+    };
+    
+    const publicState = allPackagesPresentPublicState();
+    const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
+    
+    const request = await v1StableChildRequest({ 
+      workflowSha, 
+      adapter, 
+      publicState, 
+      attempts 
+    });
+    
+    expect(request).toBeNull();
+    expect(adapter.listRunArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when all packages present but bootstrap artifact not found', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(async () => ({
+        '@breakdown-sh/core': { 
+          sha256: '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994', 
+          status: 'verified' 
+        },
+        '@breakdown-sh/cli': { 
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49', 
+          status: 'verified' 
+        },
+        '@breakdown-sh/mcp': { 
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107', 
+          status: 'verified' 
+        },
+      })),
+      listRunArtifacts: vi.fn(async () => ([
+        {
+          id: 99999,
+          name: 'other-artifact',
+          expired: false,
+        },
+      ])),
+    };
+    
+    const publicState = allPackagesPresentPublicState();
+    const attempts = [...V1_ADOPTED_ATTEMPTS, successfulBootstrapAttempt];
+    
+    const request = await v1StableChildRequest({ 
+      workflowSha, 
+      adapter, 
+      publicState, 
+      attempts 
+    });
+    
+    expect(request).toBeNull();
+    expect(adapter.listRunArtifacts).toHaveBeenCalledWith('33699179727');
+  });
+
+  it('defaults to first-package-bootstrap when not all packages are present', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(),
+      listRunArtifacts: vi.fn(),
+    };
+    
+    const publicState = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'absent', http_status: 404 },
+        '@breakdown-sh/mcp': { status: 'absent', http_status: 404 },
+      },
+    };
+    const attempts = V1_ADOPTED_ATTEMPTS;
+    
+    const request = await v1StableChildRequest({ 
+      workflowSha, 
+      adapter, 
+      publicState, 
+      attempts 
+    });
+    
+    expect(request).not.toBeNull();
+    expect(request?.body?.inputs?.npm_publication_mode).toBe('first-package-bootstrap');
+    expect(adapter.verifyPackageSha256s).not.toHaveBeenCalled();
+    expect(adapter.listRunArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('defaults to first-package-bootstrap when Release is present', async () => {
+    const adapter = {
+      verifyPackageSha256s: vi.fn(),
+      listRunArtifacts: vi.fn(),
+    };
+    
+    const publicState = {
+      github_release: { status: 'present', http_status: 200 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+      },
+    };
+    const attempts = V1_ADOPTED_ATTEMPTS;
+    
+    const request = await v1StableChildRequest({ 
+      workflowSha, 
+      adapter, 
+      publicState, 
+      attempts 
+    });
+    
+    expect(request).not.toBeNull();
+    expect(request?.body?.inputs?.npm_publication_mode).toBe('first-package-bootstrap');
+    expect(adapter.verifyPackageSha256s).not.toHaveBeenCalled();
+    expect(adapter.listRunArtifacts).not.toHaveBeenCalled();
   });
 });

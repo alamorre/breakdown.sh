@@ -207,7 +207,18 @@ export function npmPackageObservation(response) {
   invariant(Number.isInteger(response?.status), 'npm package response is malformed.');
   if (response.status === 404) return { status: 'absent', http_status: 404 };
   if (response.status === 200 && typeof response?.body?.name === 'string') {
-    return { status: 'present', http_status: 200 };
+    // npm uses sha512 integrity and sha1 shasum, not sha256
+    // Observation REQUIRES proven sha256 from tarball, not just HTTP 200 + name
+    if (!response.sha256 || !/^[0-9a-f]{64}$/.test(response.sha256)) {
+      // Cannot prove sha256 - return indeterminate, not present
+      return { status: 'indeterminate', http_status: response.status, name: response.body.name };
+    }
+    return { 
+      status: 'present', 
+      http_status: 200, 
+      name: response.body.name,
+      sha256: response.sha256,
+    };
   }
   return { status: 'indeterminate', http_status: response.status };
 }
@@ -319,19 +330,28 @@ function isV1ResumableMixedState(publicState) {
   );
 }
 
-function isAllPackagesPresentReleaseAbsent(publicState) {
+function isV1FinalizeBootstrapReady(publicState) {
   if (!publicState?.npm_packages) return false;
   
-  const coreStatus = publicState.npm_packages['@breakdown-sh/core']?.status;
-  const cliStatus = publicState.npm_packages['@breakdown-sh/cli']?.status;
-  const mcpStatus = publicState.npm_packages['@breakdown-sh/mcp']?.status;
+  const EXPECTED_SHA256S = {
+    '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+    '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+    '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+  };
+  
+  const corePackage = publicState.npm_packages['@breakdown-sh/core'];
+  const cliPackage = publicState.npm_packages['@breakdown-sh/cli'];
+  const mcpPackage = publicState.npm_packages['@breakdown-sh/mcp'];
   const releaseStatus = publicState.github_release?.status;
   
   return (
-    coreStatus === 'present' &&
-    cliStatus === 'present' &&
-    mcpStatus === 'present' &&
-    releaseStatus === 'absent'
+    corePackage?.status === 'present' &&
+    cliPackage?.status === 'present' &&
+    mcpPackage?.status === 'present' &&
+    releaseStatus === 'absent' &&
+    corePackage?.sha256 === EXPECTED_SHA256S['@breakdown-sh/core'] &&
+    cliPackage?.sha256 === EXPECTED_SHA256S['@breakdown-sh/cli'] &&
+    mcpPackage?.sha256 === EXPECTED_SHA256S['@breakdown-sh/mcp']
   );
 }
 
@@ -379,14 +399,14 @@ export function planReleaseAttempt({
   invariant(active.length <= 1, 'More than one active child exists for the release operation.');
   const publicClassification = classifyPublicState(publicState);
   const isResumableMixed = isV1ResumableMixedState(publicState);
-  const isAllPackagesPresentNoRelease = isAllPackagesPresentReleaseAbsent(publicState);
+  const isFinalizeReady = isV1FinalizeBootstrapReady(publicState);
   if (publicClassification === 'indeterminate') {
     return { action: 'stop', result: 'needs_review', reason: 'indeterminate_public_state' };
   }
   if (relevant.some((attempt) => attempt.retry_classification === 'partial_publication_stop')) {
-    if (isResumableMixed || isAllPackagesPresentNoRelease) {
+    if (isResumableMixed || isFinalizeReady) {
       // Allow resumption for v1 mixed state (core present, cli/mcp absent)
-      // or when all three packages are present but Release is absent
+      // OR when all three packages present with proven matching sha256s and Release absent
     } else {
       return {
         action: 'stop',
@@ -415,17 +435,16 @@ export function planReleaseAttempt({
     // v1 resumable mixed pattern (core present, cli/mcp absent, Release absent).
     // This handles the case where a needs_review predecessor had no child (unknown boundary)
     // but independent public inspection confirms the safe mixed state.
-    // Issue #257: Also allow bypass when all three packages are present and Release is absent.
     const canBypassUnknownBoundaryForResumable = relevant.some(
       (attempt) =>
         attempt.retry_classification === 'needs_review' &&
         attempt.last_side_effect_boundary === 'unknown' &&
-        (isResumableMixed || isAllPackagesPresentNoRelease),
+        isResumableMixed,
     );
-    if ((isResumableMixed || isAllPackagesPresentNoRelease) && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
+    if ((isResumableMixed || isFinalizeReady) && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent) past needs_review
       // when we have a known post-effect boundary OR when unknown boundary + exact mixed pattern
-      // Also allow when all three packages are present but Release is absent (issue #257)
+      // OR when all three packages present with proven matching sha256s and Release absent
     } else {
       return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
     }
@@ -434,9 +453,9 @@ export function planReleaseAttempt({
     return { action: 'stop', result: 'complete', reason: 'operation_complete' };
   }
   if (publicClassification === 'public_side_effect') {
-    if (isResumableMixed || isAllPackagesPresentNoRelease) {
+    if (isResumableMixed || isFinalizeReady) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent)
-      // or when all three packages are present but Release is absent (issue #257)
+      // OR when all three packages present with proven matching sha256s and Release absent
     } else {
       return {
         action: 'stop',
@@ -472,17 +491,17 @@ export function planReleaseAttempt({
           publicClassification === 'absent') ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'any_public_side_effect' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
+          (isResumableMixed || isFinalizeReady)) ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'preflight' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
+          (isResumableMixed || isFinalizeReady)) ||
         (previous.retry_classification === 'needs_review' &&
           !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
           previous.last_side_effect_boundary !== 'unknown' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
+          (isResumableMixed || isFinalizeReady)) ||
         (previous.retry_classification === 'needs_review' &&
           previous.last_side_effect_boundary === 'unknown' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)),
+          (isResumableMixed || isFinalizeReady)),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
     if (previous.controller.sha === controllerSha) {

@@ -101,16 +101,35 @@ export class GitHubReleaseAdapter {
       `repos/${this.repository}/releases/tags/breakdown-local-v1.0.0`,
       { expected: [200, 404] },
     ).catch((error) => ({ status: 0, body: null, error }));
+    
     const npmEntries = await Promise.all(
       Object.entries(PACKAGE_URLS).map(async ([name, url]) => {
         try {
+          // Fetch full packument to get all versions
           const response = await this.fetch(url, {
             headers: { Accept: 'application/json' },
             redirect: 'follow',
           });
+          const body = await responseBody(response);
+          
+          let sha256 = null;
+          // Try to compute sha256 from tarball if 1.0.0 exists
+          if (response.status === 200 && body?.versions?.['1.0.0']?.dist?.tarball) {
+            try {
+              const tarballUrl = body.versions['1.0.0'].dist.tarball;
+              const tarballResponse = await this.fetch(tarballUrl, { redirect: 'follow' });
+              if (tarballResponse.ok) {
+                const bytes = Buffer.from(await tarballResponse.arrayBuffer());
+                sha256 = createHash('sha256').update(bytes).digest('hex');
+              }
+            } catch {
+              // Failed to fetch/compute tarball sha256, continue without it
+            }
+          }
+          
           return [
             name,
-            npmPackageObservation({ status: response.status, body: await responseBody(response) }),
+            npmPackageObservation({ status: response.status, body, name, sha256 }),
           ];
         } catch {
           return [name, { status: 'indeterminate', http_status: 0 }];
@@ -193,5 +212,56 @@ export class GitHubReleaseAdapter {
       { method: 'POST', body: policy, expected: [200, 303, 403] },
     );
     return { status: response.status, body: response.body };
+  }
+
+  async listRunArtifacts(runId) {
+    const response = await this.request(
+      `repos/${this.repository}/actions/runs/${runId}/artifacts?per_page=100`,
+    );
+    return Array.isArray(response.body?.artifacts) ? response.body.artifacts : [];
+  }
+
+  /**
+   * @param {string[]} packageNames - Array of package names to verify
+   * @param {string} expectedVersion - The version to verify
+   * @returns {Promise<Record<string, { sha256?: string; status: string; http_status?: number; error?: string }>>}
+   */
+  async verifyPackageSha256s(packageNames, expectedVersion) {
+    const results = {};
+    for (const name of packageNames) {
+      try {
+        const url = `https://registry.npmjs.org/${encodeURIComponent(name)}/${expectedVersion}`;
+        const response = await this.fetch(url, {
+          headers: { Accept: 'application/json' },
+          redirect: 'follow',
+        });
+        if (response.status === 200) {
+          const packument = await responseBody(response);
+          // npm uses sha512 integrity and sha1 shasum, not sha256
+          // We must fetch and compute sha256 from the tarball
+          if (packument?.dist?.tarball) {
+            const tarballResponse = await this.fetch(packument.dist.tarball, {
+              redirect: 'follow',
+            });
+            if (tarballResponse.ok) {
+              const bytes = Buffer.from(await tarballResponse.arrayBuffer());
+              const sha256Hash = createHash('sha256').update(bytes).digest('hex');
+              results[name] = { sha256: sha256Hash, status: 'verified' };
+            } else {
+              results[name] = { status: 'tarball_fetch_failed', http_status: tarballResponse.status };
+            }
+          } else {
+            results[name] = { status: 'no_tarball', http_status: response.status };
+          }
+        } else if (response.status === 404) {
+          results[name] = { status: 'absent', http_status: 404 };
+        } else {
+          results[name] = { status: 'indeterminate', http_status: response.status };
+        }
+      } catch (error) {
+        results[name] = { status: 'error', error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return results;
   }
 }
