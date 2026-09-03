@@ -1759,8 +1759,8 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(plan.reason).toBe('terminal_predecessor');
   });
 
-  it('planner STOPS (fail-closed) when all three packages present but Release absent (was #257, now fail-closed per #262)', () => {
-    const allPackagesPresentNoRelease = {
+  it('planner CONTINUES (dispatch) when all three packages present with proven sha256s, Release absent, artifact available (finalize-bootstrap)', () => {
+    const allPackagesPresentProvenSha256s = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
         '@breakdown-sh/core': { 
@@ -1812,12 +1812,73 @@ describe('shared hermetic rehearsal and redaction', () => {
       operation: V1_RELEASE_OPERATION,
       attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithPartialStop],
       controllerSha: workflowSha,
-      publicState: allPackagesPresentNoRelease,
+      publicState: allPackagesPresentProvenSha256s,
       kind: 'live',
     });
 
-    // Changed expectation: now STOPS (fail-closed) instead of dispatch
-    // v1StableChildRequest is responsible for selecting finalize-bootstrap
+    // Now CONTINUES (dispatch) because sha256s are proven and match candidate
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(4);
+  });
+
+  it('planner STOPS (fail-closed) when all three packages present but sha256s do NOT match, Release absent', () => {
+    const allPackagesPresentWrongSha256s = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/core',
+          sha256: 'wrong_sha256_value_000000000000000000000000000000000000000000000000',
+        },
+        '@breakdown-sh/cli': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/cli',
+          sha256: '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+        },
+        '@breakdown-sh/mcp': { 
+          status: 'present', 
+          http_status: 200,
+          name: '@breakdown-sh/mcp',
+          sha256: '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        },
+      },
+    } as ReturnType<typeof absentPublicState>;
+
+    const attemptWithPartialStop = {
+      schema_version: 'breakdown.release-operation-attempt.v1',
+      operation_id: V1_RELEASE_OPERATION.operation_id,
+      immutable_inputs_sha256: V1_RELEASE_OPERATION.immutable_inputs_sha256,
+      immutable_inputs: V1_RELEASE_OPERATION.immutable_inputs,
+      sequence: 3,
+      kind: 'live',
+      controller: { sha: 'c'.repeat(40), run_id: '33696559431', run_attempt: 1 },
+      child: {
+        sha: 'c'.repeat(40),
+        run_id: '33696676641',
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+      },
+      predecessor_run_id: '33428076790',
+      public_state_preflight: 'absent',
+      last_side_effect_boundary: 'any_public_side_effect',
+      conclusion: 'failure',
+      retry_classification: 'partial_publication_stop',
+      cleanup: { status: 'restored_and_verified' },
+      diagnostics: {},
+    };
+
+    const plan = planReleaseAttempt({
+      operation: V1_RELEASE_OPERATION,
+      attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithPartialStop],
+      controllerSha: workflowSha,
+      publicState: allPackagesPresentWrongSha256s,
+      kind: 'live',
+    });
+
+    // STOPS (fail-closed) because sha256s don't match
     expect(plan.action).toBe('stop');
     expect(plan.result).toBe('partial_publication_stop');
     expect(plan.reason).toBe('terminal_predecessor');
@@ -1851,8 +1912,8 @@ describe('shared hermetic rehearsal and redaction', () => {
     expect(classifyPublicState(allPackagesPresentNoRelease)).toBe('public_side_effect');
   });
 
-  it('planner STOPS (fail-closed) past needs_review when all packages present but Release absent (was #257, now fail-closed per #262)', () => {
-    const allPackagesPresentNoRelease = {
+  it('planner CONTINUES past needs_review when all packages present with proven sha256s, Release absent', () => {
+    const allPackagesPresentProvenSha256s = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
         '@breakdown-sh/core': { 
@@ -1904,14 +1965,13 @@ describe('shared hermetic rehearsal and redaction', () => {
       operation: V1_RELEASE_OPERATION,
       attempts: [...V1_ADOPTED_ATTEMPTS, attemptWithNeedsReview],
       controllerSha: workflowSha,
-      publicState: allPackagesPresentNoRelease,
+      publicState: allPackagesPresentProvenSha256s,
       kind: 'live',
     });
 
-    // Changed expectation: now STOPS (fail-closed) instead of dispatch
-    expect(plan.action).toBe('stop');
-    expect(plan.result).toBe('needs_review');
-    expect(plan.reason).toBe('ambiguous_predecessor');
+    // Now CONTINUES because sha256s are proven
+    expect(plan.action).toBe('dispatch');
+    expect(plan.sequence).toBe(4);
   });
 });
 
