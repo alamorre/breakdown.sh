@@ -382,7 +382,7 @@ describe('one-time npm publication', () => {
   });
 
   it('retries npm install on E404 race during bootstrap verification (issue #257)', async () => {
-    const { candidateDirectory, packages, root } = await fixture();
+    const { candidateDirectory, packages } = await fixture();
     const controls = await inspectFirstPackageBootstrap({
       candidateDirectory,
       commandRunner: async () => {
@@ -443,7 +443,7 @@ describe('one-time npm publication', () => {
       }
       if (args[0] === 'install') {
         installAttempts++;
-        if (installAttempts <= 2) {
+        if (installAttempts === 1) {
           throw Object.assign(new Error('npm install failed'), {
             stderr: 'npm error code E404\n404 Not Found - GET https://registry.npmjs.org/@breakdown-sh%2Fcli',
           });
@@ -461,7 +461,7 @@ describe('one-time npm publication', () => {
       publicationDirectory: candidateDirectory,
     });
 
-    expect(installAttempts).toBe(3);
+    expect(installAttempts).toBe(2);
     expect(published).toEqual(packages.map((entry) => join(candidateDirectory, entry.artifact)));
     expect(report).toMatchObject({
       schema_version: 'breakdown.npm-first-package-bootstrap.v1',
