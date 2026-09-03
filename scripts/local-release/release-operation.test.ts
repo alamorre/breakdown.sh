@@ -1749,7 +1749,12 @@ describe('shared hermetic rehearsal and redaction', () => {
       last_side_effect_boundary: 'any_public_side_effect' as const,
     };
 
-    const adapter: any = {
+    type TestAdapter = {
+      listRunArtifacts: (runId: string) => Promise<Array<{ id: number; name: string }>>;
+      verifyPackageSha256s: (expectedSha256s: Record<string, string>) => Promise<{ verified: boolean; reason?: string }>;
+    };
+
+    const adapter: TestAdapter = {
       listRunArtifacts: async (runId: string) => {
         if (runId === '33699179727') {
           return [
@@ -1777,16 +1782,17 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease as any,
-      adapter,
-      [successfulBootstrapAttempt as any],
+      allPackagesPresentNoRelease as unknown as null,
+      adapter as unknown as null,
+      [successfulBootstrapAttempt as unknown as never],
     );
 
     expect(request).not.toBeNull();
-    if (request) {
-      expect((request as any).body.inputs.npm_publication_mode).toBe('finalize-bootstrap');
-      expect((request as any).body.inputs.npm_bootstrap_artifact_id).toBe('9999999999');
-      expect((request as any).body.inputs.npm_bootstrap_confirmation).toBe('');
+    if (request && typeof request === 'object' && 'body' in request) {
+      const typedRequest = request as { body: { inputs: Record<string, unknown> } };
+      expect(typedRequest.body.inputs.npm_publication_mode).toBe('finalize-bootstrap');
+      expect(typedRequest.body.inputs.npm_bootstrap_artifact_id).toBe('9999999999');
+      expect(typedRequest.body.inputs.npm_bootstrap_confirmation).toBe('');
     }
   });
 
@@ -1800,7 +1806,12 @@ describe('shared hermetic rehearsal and redaction', () => {
       },
     };
 
-    const adapter: any = {
+    type TestAdapter = {
+      listRunArtifacts: () => Promise<never[]>;
+      verifyPackageSha256s: () => Promise<{ verified: boolean }>;
+    };
+
+    const adapter: TestAdapter = {
       listRunArtifacts: async () => [],
       verifyPackageSha256s: async () => ({ verified: true }),
     };
@@ -1808,8 +1819,8 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease as any,
-      adapter,
+      allPackagesPresentNoRelease as unknown as null,
+      adapter as unknown as null,
       [],
     );
 
@@ -1836,7 +1847,12 @@ describe('shared hermetic rehearsal and redaction', () => {
       last_side_effect_boundary: 'any_public_side_effect' as const,
     };
 
-    const adapter: any = {
+    type TestAdapter = {
+      listRunArtifacts: (runId: string) => Promise<Array<{ id: number; name: string }>>;
+      verifyPackageSha256s: () => Promise<{ verified: boolean; reason: string }>;
+    };
+
+    const adapter: TestAdapter = {
       listRunArtifacts: async (runId: string) => {
         if (runId === '33699179727') {
           return [
@@ -1854,9 +1870,9 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease as any,
-      adapter,
-      [successfulBootstrapAttempt as any],
+      allPackagesPresentNoRelease as unknown as null,
+      adapter as unknown as null,
+      [successfulBootstrapAttempt as unknown as never],
     );
 
     // Should fail closed (return null) when sha256 verification fails
@@ -1876,14 +1892,15 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      partialPackagesPresent as any,
+      partialPackagesPresent as unknown as null,
       undefined,
       [],
     );
 
     expect(request).not.toBeNull();
-    if (request) {
-      expect((request as any).body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
+    if (request && typeof request === 'object' && 'body' in request) {
+      const typedRequest = request as { body: { inputs: Record<string, unknown> } };
+      expect(typedRequest.body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
     }
   });
 
