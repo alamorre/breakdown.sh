@@ -60,6 +60,13 @@ export function inferSideEffectBoundary(jobs) {
   return 'unknown';
 }
 
+// Expected package sha256s for v1.0.0 from the candidate
+const V1_PACKAGE_SHA256S = Object.freeze({
+  '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+  '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+  '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+});
+
 function isAllPackagesPresentReleaseAbsent(publicState) {
   if (!publicState?.npm_packages) return false;
   
@@ -74,6 +81,21 @@ function isAllPackagesPresentReleaseAbsent(publicState) {
     mcpStatus === 'present' &&
     releaseStatus === 'absent'
   );
+}
+
+async function verifyPackageSha256s(adapter, expectedSha256s) {
+  // Verify that published packages match the candidate's expected sha256s
+  // This is required for fail-closed safety before selecting finalize-bootstrap
+  if (!adapter.verifyPackageSha256s) {
+    return { verified: false, reason: 'adapter_missing_verification_method' };
+  }
+  
+  try {
+    const result = await adapter.verifyPackageSha256s(expectedSha256s);
+    return result;
+  } catch {
+    return { verified: false, reason: 'verification_failed' };
+  }
 }
 
 async function findBootstrapArtifactId(adapter, attempts) {
@@ -104,7 +126,7 @@ async function findBootstrapArtifactId(adapter, attempts) {
         if (bootstrapArtifact?.id) {
           return String(bootstrapArtifact.id);
         }
-      } catch (error) {
+      } catch {
         // Continue to next attempt if artifact lookup fails
         continue;
       }
@@ -114,6 +136,14 @@ async function findBootstrapArtifactId(adapter, attempts) {
   return null;
 }
 
+/**
+ * Create a v1 stable child dispatch request
+ * @param {string} workflowSha - The workflow SHA
+ * @param {object} [publicState] - The current public state (packages and Release)
+ * @param {object} [adapter] - The adapter with verifyPackageSha256s and listRunArtifacts methods
+ * @param {Array} [attempts] - The list of durable attempts
+ * @returns {Promise<object|null>} The dispatch request, or null if fail-closed
+ */
 export async function v1StableChildRequest(workflowSha, publicState = null, adapter = null, attempts = []) {
   invariant(exactSha1(workflowSha), 'Stable child workflow SHA is invalid.');
   
@@ -124,22 +154,35 @@ export async function v1StableChildRequest(workflowSha, publicState = null, adap
   };
   
   // Issue #260: When all three packages are exact-version-present and GitHub Release is absent,
-  // dispatch finalize-bootstrap instead of first-package-bootstrap
+  // dispatch finalize-bootstrap instead of first-package-bootstrap ONLY if:
+  // 1. Bootstrap artifact from successful child is found
+  // 2. Package sha256s match the candidate
+  // Otherwise, return null to signal needs_review (fail-closed)
   if (publicState && isAllPackagesPresentReleaseAbsent(publicState)) {
     const bootstrapArtifactId = adapter ? await findBootstrapArtifactId(adapter, attempts) : null;
     
-    // Only switch to finalize-bootstrap if we found the bootstrap artifact
-    // Otherwise, fail closed and require manual review
-    if (bootstrapArtifactId) {
-      inputs = {
-        ...baseInputs,
-        recovery_workflow_sha: workflowSha,
-        npm_publication_mode: 'finalize-bootstrap',
-        npm_bootstrap_confirmation: '',
-        npm_bootstrap_artifact_id: bootstrapArtifactId,
-        npm_trusted_publishing_artifact_id: '',
-      };
+    if (!bootstrapArtifactId) {
+      // Fail closed: cannot find bootstrap artifact when all packages are present
+      return null;
     }
+    
+    // Verify package sha256s match candidate before selecting finalize-bootstrap
+    const sha256Verification = await verifyPackageSha256s(adapter, V1_PACKAGE_SHA256S);
+    
+    if (!sha256Verification.verified) {
+      // Fail closed: sha256 mismatch or verification unavailable
+      return null;
+    }
+    
+    // All safety checks passed: dispatch finalize-bootstrap
+    inputs = {
+      ...baseInputs,
+      recovery_workflow_sha: workflowSha,
+      npm_publication_mode: 'finalize-bootstrap',
+      npm_bootstrap_confirmation: '',
+      npm_bootstrap_artifact_id: bootstrapArtifactId,
+      npm_trusted_publishing_artifact_id: '',
+    };
   }
   
   return {
@@ -462,6 +505,16 @@ export async function runV1HostedController({
 
   const { outcome, cleanup } = await runWithV1RecoveryPolicy(adapter, async () => {
     const request = await v1StableChildRequest(controller.sha, publicState, adapter, durableAttempts);
+    
+    // Fail-closed: if v1StableChildRequest returns null, it means all packages are present
+    // but safety requirements (bootstrap artifact or sha256 verification) failed
+    if (request === null) {
+      throw new Error(
+        'Cannot dispatch: all packages present but Release absent, ' +
+        'yet bootstrap artifact not found or sha256 verification failed. Manual review required.'
+      );
+    }
+    
     const dispatchResponse = await adapter.dispatchWorkflow(request.workflow_id, request.body);
     const dispatched = validateDispatchResponse(dispatchResponse);
     const expected = v1StableChildMetadata(dispatched.run_id, controller.sha);

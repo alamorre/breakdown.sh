@@ -1743,13 +1743,13 @@ describe('shared hermetic rehearsal and redaction', () => {
     const successfulBootstrapAttempt = {
       child: {
         run_id: '33699179727',
-        status: 'completed',
-        conclusion: 'success',
+        status: 'completed' as const,
+        conclusion: 'success' as const,
       },
-      last_side_effect_boundary: 'any_public_side_effect',
+      last_side_effect_boundary: 'any_public_side_effect' as const,
     };
 
-    const adapter = {
+    const adapter: any = {
       listRunArtifacts: async (runId: string) => {
         if (runId === '33699179727') {
           return [
@@ -1761,22 +1761,36 @@ describe('shared hermetic rehearsal and redaction', () => {
         }
         return [];
       },
+      verifyPackageSha256s: async (expectedSha256s: Record<string, string>) => {
+        // Verify the expected sha256s match the v1.0.0 candidate
+        const expected = {
+          '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+          '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+          '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+        };
+        return {
+          verified: JSON.stringify(expectedSha256s) === JSON.stringify(expected),
+        };
+      },
     };
 
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease,
+      allPackagesPresentNoRelease as any,
       adapter,
-      [successfulBootstrapAttempt],
+      [successfulBootstrapAttempt as any],
     );
 
-    expect(request.body.inputs.npm_publication_mode).toBe('finalize-bootstrap');
-    expect(request.body.inputs.npm_bootstrap_artifact_id).toBe('9999999999');
-    expect(request.body.inputs.npm_bootstrap_confirmation).toBe('');
+    expect(request).not.toBeNull();
+    if (request) {
+      expect((request as any).body.inputs.npm_publication_mode).toBe('finalize-bootstrap');
+      expect((request as any).body.inputs.npm_bootstrap_artifact_id).toBe('9999999999');
+      expect((request as any).body.inputs.npm_bootstrap_confirmation).toBe('');
+    }
   });
 
-  it('controller keeps first-package-bootstrap mode when bootstrap artifact not found (issue #260)', async () => {
+  it('controller fails closed when bootstrap artifact not found and all packages present (issue #260)', async () => {
     const allPackagesPresentNoRelease = {
       github_release: { status: 'absent', http_status: 404 },
       npm_packages: {
@@ -1786,20 +1800,67 @@ describe('shared hermetic rehearsal and redaction', () => {
       },
     };
 
-    const adapter = {
+    const adapter: any = {
       listRunArtifacts: async () => [],
+      verifyPackageSha256s: async () => ({ verified: true }),
     };
 
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease,
+      allPackagesPresentNoRelease as any,
       adapter,
       [],
     );
 
-    // Should fall back to first-package-bootstrap when artifact not found (fail-closed)
-    expect(request.body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
+    // Should fail closed (return null) when artifact not found
+    expect(request).toBeNull();
+  });
+
+  it('controller fails closed when sha256 verification fails and all packages present (issue #260)', async () => {
+    const allPackagesPresentNoRelease = {
+      github_release: { status: 'absent', http_status: 404 },
+      npm_packages: {
+        '@breakdown-sh/core': { status: 'present', http_status: 200 },
+        '@breakdown-sh/cli': { status: 'present', http_status: 200 },
+        '@breakdown-sh/mcp': { status: 'present', http_status: 200 },
+      },
+    };
+
+    const successfulBootstrapAttempt = {
+      child: {
+        run_id: '33699179727',
+        status: 'completed' as const,
+        conclusion: 'success' as const,
+      },
+      last_side_effect_boundary: 'any_public_side_effect' as const,
+    };
+
+    const adapter: any = {
+      listRunArtifacts: async (runId: string) => {
+        if (runId === '33699179727') {
+          return [
+            {
+              id: 9999999999,
+              name: 'breakdown-npm-first-package-bootstrap-v1-20260903',
+            },
+          ];
+        }
+        return [];
+      },
+      verifyPackageSha256s: async () => ({ verified: false, reason: 'sha256_mismatch' }),
+    };
+
+    const { v1StableChildRequest } = await import('./release-controller.mjs');
+    const request = await v1StableChildRequest(
+      workflowSha,
+      allPackagesPresentNoRelease as any,
+      adapter,
+      [successfulBootstrapAttempt as any],
+    );
+
+    // Should fail closed (return null) when sha256 verification fails
+    expect(request).toBeNull();
   });
 
   it('controller uses first-package-bootstrap mode when not all packages present (issue #260)', async () => {
@@ -1815,12 +1876,15 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      partialPackagesPresent,
-      null,
+      partialPackagesPresent as any,
+      undefined,
       [],
     );
 
-    expect(request.body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
+    expect(request).not.toBeNull();
+    if (request) {
+      expect((request as any).body.inputs.npm_publication_mode).toBe('first-package-bootstrap');
+    }
   });
 
   it('classifies all packages present but Release absent as public_side_effect', () => {
