@@ -1782,8 +1782,8 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease as unknown as null,
-      adapter as unknown as null,
+      allPackagesPresentNoRelease as unknown as undefined,
+      adapter as unknown as undefined,
       [successfulBootstrapAttempt as unknown as never],
     );
 
@@ -1819,8 +1819,8 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease as unknown as null,
-      adapter as unknown as null,
+      allPackagesPresentNoRelease as unknown as undefined,
+      adapter as unknown as undefined,
       [],
     );
 
@@ -1870,8 +1870,8 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      allPackagesPresentNoRelease as unknown as null,
-      adapter as unknown as null,
+      allPackagesPresentNoRelease as unknown as undefined,
+      adapter as unknown as undefined,
       [successfulBootstrapAttempt as unknown as never],
     );
 
@@ -1892,7 +1892,7 @@ describe('shared hermetic rehearsal and redaction', () => {
     const { v1StableChildRequest } = await import('./release-controller.mjs');
     const request = await v1StableChildRequest(
       workflowSha,
-      partialPackagesPresent as unknown as null,
+      partialPackagesPresent as unknown as undefined,
       undefined,
       [],
     );
