@@ -36,6 +36,11 @@ jobs:
           cache: pnpm
           package-manager-cache: false
 
+      - name: Install an npm CLI that supports trusted publishing
+        run: |
+          npm install -g "npm@^11.15.0"
+          npm --version
+
       - name: Install the locked trust inspector
         run: pnpm install --frozen-lockfile
 
