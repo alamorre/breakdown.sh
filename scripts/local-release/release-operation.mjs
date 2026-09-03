@@ -207,18 +207,18 @@ export function npmPackageObservation(response) {
   invariant(Number.isInteger(response?.status), 'npm package response is malformed.');
   if (response.status === 404) return { status: 'absent', http_status: 404 };
   if (response.status === 200 && typeof response?.body?.name === 'string') {
-    const observation = { status: 'present', http_status: 200, name: response.body.name };
     // npm uses sha512 integrity and sha1 shasum, not sha256
-    // Include tarball URL so caller can fetch and compute sha256
-    const versionData = response.body?.versions?.['1.0.0'];
-    if (versionData?.dist?.tarball) {
-      observation.tarball = versionData.dist.tarball;
+    // Observation REQUIRES proven sha256 from tarball, not just HTTP 200 + name
+    if (!response.sha256 || !/^[0-9a-f]{64}$/.test(response.sha256)) {
+      // Cannot prove sha256 - return indeterminate, not present
+      return { status: 'indeterminate', http_status: response.status, name: response.body.name };
     }
-    // If sha256 was already computed and passed in response, include it
-    if (response.sha256) {
-      observation.sha256 = response.sha256;
-    }
-    return observation;
+    return { 
+      status: 'present', 
+      http_status: 200, 
+      name: response.body.name,
+      sha256: response.sha256,
+    };
   }
   return { status: 'indeterminate', http_status: response.status };
 }
@@ -330,22 +330,6 @@ function isV1ResumableMixedState(publicState) {
   );
 }
 
-function isAllPackagesPresentReleaseAbsent(publicState) {
-  if (!publicState?.npm_packages) return false;
-  
-  const coreStatus = publicState.npm_packages['@breakdown-sh/core']?.status;
-  const cliStatus = publicState.npm_packages['@breakdown-sh/cli']?.status;
-  const mcpStatus = publicState.npm_packages['@breakdown-sh/mcp']?.status;
-  const releaseStatus = publicState.github_release?.status;
-  
-  return (
-    coreStatus === 'present' &&
-    cliStatus === 'present' &&
-    mcpStatus === 'present' &&
-    releaseStatus === 'absent'
-  );
-}
-
 export function planReleaseAttempt({
   operation,
   attempts,
@@ -390,14 +374,12 @@ export function planReleaseAttempt({
   invariant(active.length <= 1, 'More than one active child exists for the release operation.');
   const publicClassification = classifyPublicState(publicState);
   const isResumableMixed = isV1ResumableMixedState(publicState);
-  const isAllPackagesPresentNoRelease = isAllPackagesPresentReleaseAbsent(publicState);
   if (publicClassification === 'indeterminate') {
     return { action: 'stop', result: 'needs_review', reason: 'indeterminate_public_state' };
   }
   if (relevant.some((attempt) => attempt.retry_classification === 'partial_publication_stop')) {
-    if (isResumableMixed || isAllPackagesPresentNoRelease) {
+    if (isResumableMixed) {
       // Allow resumption for v1 mixed state (core present, cli/mcp absent)
-      // or when all three packages are present but Release is absent
     } else {
       return {
         action: 'stop',
@@ -426,17 +408,15 @@ export function planReleaseAttempt({
     // v1 resumable mixed pattern (core present, cli/mcp absent, Release absent).
     // This handles the case where a needs_review predecessor had no child (unknown boundary)
     // but independent public inspection confirms the safe mixed state.
-    // Issue #257: Also allow bypass when all three packages are present and Release is absent.
     const canBypassUnknownBoundaryForResumable = relevant.some(
       (attempt) =>
         attempt.retry_classification === 'needs_review' &&
         attempt.last_side_effect_boundary === 'unknown' &&
-        (isResumableMixed || isAllPackagesPresentNoRelease),
+        isResumableMixed,
     );
-    if ((isResumableMixed || isAllPackagesPresentNoRelease) && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
+    if (isResumableMixed && (canBypassForResumable || canBypassUnknownBoundaryForResumable)) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent) past needs_review
       // when we have a known post-effect boundary OR when unknown boundary + exact mixed pattern
-      // Also allow when all three packages are present but Release is absent (issue #257)
     } else {
       return { action: 'stop', result: 'needs_review', reason: 'ambiguous_predecessor' };
     }
@@ -445,9 +425,8 @@ export function planReleaseAttempt({
     return { action: 'stop', result: 'complete', reason: 'operation_complete' };
   }
   if (publicClassification === 'public_side_effect') {
-    if (isResumableMixed || isAllPackagesPresentNoRelease) {
+    if (isResumableMixed) {
       // Allow continuation for v1 mixed state (core present, cli/mcp absent)
-      // or when all three packages are present but Release is absent (issue #257)
     } else {
       return {
         action: 'stop',
@@ -483,17 +462,17 @@ export function planReleaseAttempt({
           publicClassification === 'absent') ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'any_public_side_effect' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
+          isResumableMixed) ||
         (previous.retry_classification === 'partial_publication_stop' &&
           previous.last_side_effect_boundary === 'preflight' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
+          isResumableMixed) ||
         (previous.retry_classification === 'needs_review' &&
           !boundaryBeforePublicEffects(previous.last_side_effect_boundary) &&
           previous.last_side_effect_boundary !== 'unknown' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)) ||
+          isResumableMixed) ||
         (previous.retry_classification === 'needs_review' &&
           previous.last_side_effect_boundary === 'unknown' &&
-          (isResumableMixed || isAllPackagesPresentNoRelease)),
+          isResumableMixed),
       'A successor requires a conclusive pre-side-effect predecessor.',
     );
     if (previous.controller.sha === controllerSha) {

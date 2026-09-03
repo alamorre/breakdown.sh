@@ -68,7 +68,7 @@ export async function v1StableChildRequest({ workflowSha, adapter, publicState, 
     recovery_workflow_sha: workflowSha,
   };
   
-  // Check if all packages are present but Release is absent
+  // Check if all packages are present but Release is absent (mixed state)
   const allPackagesPresent = 
     publicState?.npm_packages?.['@breakdown-sh/core']?.status === 'present' &&
     publicState?.npm_packages?.['@breakdown-sh/cli']?.status === 'present' &&
@@ -76,94 +76,101 @@ export async function v1StableChildRequest({ workflowSha, adapter, publicState, 
   
   const releaseAbsent = publicState?.github_release?.status === 'absent';
   
-  if (!allPackagesPresent || !releaseAbsent || !adapter || !attempts) {
-    // Default to first-package-bootstrap
+  // When all packages are present and Release is absent, ONLY allow finalize-bootstrap
+  // if sha256s + artifact can be proven. Otherwise fail-closed. NEVER fall back to first-package-bootstrap.
+  if (allPackagesPresent && releaseAbsent) {
+    if (!adapter || !attempts) {
+      // Cannot verify - fail closed
+      return null;
+    }
+    
+    // Expected sha256s for the three packages
+    const EXPECTED_PACKAGE_SHA256S = {
+      '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
+      '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
+      '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
+    };
+    
+    // Verify sha256s match if available in public state
+    let sha256sVerified = false;
+    const npmPackages = publicState.npm_packages;
+    if (npmPackages['@breakdown-sh/core']?.sha256 && 
+        npmPackages['@breakdown-sh/cli']?.sha256 && 
+        npmPackages['@breakdown-sh/mcp']?.sha256) {
+      sha256sVerified = 
+        npmPackages['@breakdown-sh/core'].sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/core'] &&
+        npmPackages['@breakdown-sh/cli'].sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/cli'] &&
+        npmPackages['@breakdown-sh/mcp'].sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/mcp'];
+    } else {
+      // Fetch and verify sha256s from registry
+      const verification = await adapter.verifyPackageSha256s(
+        ['@breakdown-sh/core', '@breakdown-sh/cli', '@breakdown-sh/mcp'],
+        '1.0.0'
+      );
+      sha256sVerified = 
+        verification['@breakdown-sh/core']?.sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/core'] &&
+        verification['@breakdown-sh/cli']?.sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/cli'] &&
+        verification['@breakdown-sh/mcp']?.sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/mcp'];
+    }
+    
+    if (!sha256sVerified) {
+      // SHA256s don't match or couldn't be verified - fail closed
+      return null;
+    }
+    
+    // Find the bootstrap artifact from a successful predecessor
+    const successfulAttempts = attempts.filter(
+      (attempt) => 
+        attempt.child?.status === 'completed' && 
+        attempt.child?.conclusion === 'success' &&
+        attempt.last_side_effect_boundary === 'any_public_side_effect'
+    );
+    
+    let bootstrapArtifactId = null;
+    for (const attempt of successfulAttempts.reverse()) {
+      try {
+        const artifacts = await adapter.listRunArtifacts(attempt.child.run_id);
+        const bootstrapArtifact = artifacts.find(
+          (artifact) => 
+            artifact.name === 'breakdown-npm-first-package-bootstrap' &&
+            artifact.expired === false
+        );
+        if (bootstrapArtifact) {
+          bootstrapArtifactId = String(bootstrapArtifact.id);
+          break;
+        }
+      } catch {
+        // Continue to next attempt
+      }
+    }
+    
+    if (!bootstrapArtifactId) {
+      // Bootstrap artifact not found - fail closed
+      return null;
+    }
+    
+    // All conditions met: dispatch with finalize-bootstrap mode
     return {
       workflow_id: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowId,
       body: {
         ref: V1_RELEASE_RECOVERY_POLICY.stablePublication.dispatch.ref,
-        inputs: baseInputs,
+        inputs: {
+          ...baseInputs,
+          npm_publication_mode: 'finalize-bootstrap',
+          npm_bootstrap_artifact_id: bootstrapArtifactId,
+        },
       },
+      github_release_finalization_permitted: true,
     };
   }
   
-  // Expected sha256s for the three packages
-  const EXPECTED_PACKAGE_SHA256S = {
-    '@breakdown-sh/core': '1500fd5a9b37636df23f2e3a13c64f0422b4e56b8e7b43707f43c42a10c73994',
-    '@breakdown-sh/cli': '2fd471040e3b206e77dc875767444005ec6ec8e9300dab14177dfc6981cf6b49',
-    '@breakdown-sh/mcp': '3897628206dfd10a486efb1dc20723885fca66523ccb2cbc1cef51f052715107',
-  };
-  
-  // Verify sha256s match if available in public state
-  let sha256sVerified = false;
-  const npmPackages = publicState.npm_packages;
-  if (npmPackages['@breakdown-sh/core']?.sha256 && 
-      npmPackages['@breakdown-sh/cli']?.sha256 && 
-      npmPackages['@breakdown-sh/mcp']?.sha256) {
-    sha256sVerified = 
-      npmPackages['@breakdown-sh/core'].sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/core'] &&
-      npmPackages['@breakdown-sh/cli'].sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/cli'] &&
-      npmPackages['@breakdown-sh/mcp'].sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/mcp'];
-  } else {
-    // Fetch and verify sha256s from registry
-    const verification = await adapter.verifyPackageSha256s(
-      ['@breakdown-sh/core', '@breakdown-sh/cli', '@breakdown-sh/mcp'],
-      '1.0.0'
-    );
-    sha256sVerified = 
-      verification['@breakdown-sh/core']?.sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/core'] &&
-      verification['@breakdown-sh/cli']?.sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/cli'] &&
-      verification['@breakdown-sh/mcp']?.sha256 === EXPECTED_PACKAGE_SHA256S['@breakdown-sh/mcp'];
-  }
-  
-  if (!sha256sVerified) {
-    // SHA256s don't match or couldn't be verified - fail closed, return null to prevent dispatch
-    return null;
-  }
-  
-  // Find the bootstrap artifact from a successful predecessor
-  const successfulAttempts = attempts.filter(
-    (attempt) => 
-      attempt.child?.status === 'completed' && 
-      attempt.child?.conclusion === 'success' &&
-      attempt.last_side_effect_boundary === 'any_public_side_effect'
-  );
-  
-  let bootstrapArtifactId = null;
-  for (const attempt of successfulAttempts.reverse()) {
-    try {
-      const artifacts = await adapter.listRunArtifacts(attempt.child.run_id);
-      const bootstrapArtifact = artifacts.find(
-        (artifact) => 
-          artifact.name === 'breakdown-npm-first-package-bootstrap' &&
-          artifact.expired === false
-      );
-      if (bootstrapArtifact) {
-        bootstrapArtifactId = String(bootstrapArtifact.id);
-        break;
-      }
-    } catch {
-      // Continue to next attempt
-    }
-  }
-  
-  if (!bootstrapArtifactId) {
-    // Bootstrap artifact not found - fail closed, return null to prevent dispatch
-    return null;
-  }
-  
-  // All conditions met: dispatch with finalize-bootstrap mode
+  // NOT in the mixed state - default to first-package-bootstrap
   return {
     workflow_id: V1_RELEASE_RECOVERY_POLICY.stablePublication.workflowId,
     body: {
       ref: V1_RELEASE_RECOVERY_POLICY.stablePublication.dispatch.ref,
-      inputs: {
-        ...baseInputs,
-        npm_publication_mode: 'finalize-bootstrap',
-        npm_bootstrap_artifact_id: bootstrapArtifactId,
-      },
+      inputs: baseInputs,
     },
-    github_release_finalization_permitted: true,
   };
 }
 
