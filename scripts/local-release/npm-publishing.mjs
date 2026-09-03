@@ -383,7 +383,7 @@ export async function inspectNpmTrustedPublishing({
     'npm trusted-publisher inspection is not using the public registry.',
   );
   const publisherName = publisher.trim();
-  invariant(/^[a-z0-9][a-z0-9-]*$/.test(publisherName), 'npm returned an invalid publisher name.');
+  invariant(/^[a-z0-9][a-z0-9_-]*$/.test(publisherName), 'npm returned an invalid publisher name.');
   const { stdout: organizationOutput } = await commandRunner(
     'npm',
     ['org', 'ls', NPM_PUBLICATION_POLICY.organization, publisherName, '--json'],
