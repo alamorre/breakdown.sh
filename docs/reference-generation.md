@@ -2,6 +2,8 @@
 
 Use [the documentation index](README.md) for current guidance. Generated reference summarizes facts;
 it does not replace public semantic contracts or independently reviewed compatibility expectations.
+Follow [contribution guidance](../CONTRIBUTING.md#implementation-and-documentation) when deciding
+whether a change belongs in code, authored docs, or generated output.
 
 | Fact | Authored owner | Existing consumers and generators |
 | --- | --- | --- |
@@ -41,17 +43,10 @@ both navigation and generated drift without a second documentation job.
 
 ## Consolidate in small steps
 
-The CLI catalog/runtime copies are consolidated in #240. The existing CLI build generator emits
-`dist/cli-reference.js` from the CLI catalog and package manifest. Runtime help, failure/usage exit
-codes, stderr limit, and `--version` now consume that module. No second authored value table remains
-in the CLI implementation. The generated header names both sources and the package build command;
-the module ships inside the existing CLI tarball and adds no runtime dependency.
+Generate shared reference facts from their authored owners while keeping compatibility fixtures
+independent. The completed CLI consolidation is recorded in
+[#275](https://github.com/alamorre/breakdown.sh/pull/275), part of
+[#240](https://github.com/alamorre/breakdown.sh/issues/240).
 
-Independent CLI process-byte fixtures still specify exact help, version, exit status, stdout, and
-stderr. They are not regenerated from the new module. Existing installed-tarball tests and terminal
-escaping/diagnostic bounds checks exercise the changed surface. Core, MCP, schemas, catalogs, public
-fixtures, versioned docs, and release evidence remain unchanged by this consolidation.
-
-Further consolidation of limit values, failure unions, or release versions should be scoped
-separately once its concrete maintenance benefit and independent compatibility checks are clear.
-Do not reorganize core as a prerequisite.
+Scope further consolidation only when its concrete maintenance benefit and independent
+compatibility checks are clear. Do not reorganize core as a prerequisite.
