@@ -21,7 +21,7 @@ instead of implying that Breakdown installed them.
 
 ## Install from a clean clone
 
-### Project-local skills without the plugin
+### Project-local skills
 
 From a clean Breakdown checkout and the target project root, use the pinned installer and the
 checked-in source directory:
@@ -43,12 +43,43 @@ npx --yes skills@1.5.20 add /absolute/path/to/breakdown.sh/local/vendor/skills \
 ```
 
 Replace `--agent codex` with another installer-supported host when needed. Keep `--copy` so the
-target project remains independent from the Breakdown checkout.
+target project remains independent from the Breakdown checkout. Copy the complete skill directories,
+including `agents/openai.yaml`; checking only `SKILL.md` misses invocation policy.
+
+Codex CLI 0.153.4 and Muse Code 1.0.2 both discovered the same unchanged project
+`.agents/skills/` directory in the [#264 investigation](research/264-shared-skill-discovery.md).
+For those versions, one project installation serves both hosts; no second tree or sync step is needed.
 
 The same directories are included in `breakdown-skills-<version>.tar.gz` and `.zip`. Verify the
 archive against the release's signed `SHA256SUMS`, extract it, and copy the named skill directories
 into the target host's project skill directory. The archive includes `VENDORED_SKILLS.json` and
 `LICENSE_MATTPOCOCK_SKILLS.txt` beside the skills.
+
+## Discovery and invocation
+
+An installed skill, an implicitly available skill, and an explicitly selected skill are different
+states. `implement`, `wayfinder`, and `grill-with-docs` deliberately retain explicit-only invocation
+in `agents/openai.yaml`. An absent initial model-catalog entry does not prove installation failed.
+Preserve that policy when installing; do not remove it to make a catalog check pass.
+
+Before using a same-name skill, inspect the host's resolved path, scope, activation state, and
+load/shadowing diagnostics. Codex can retain both project and user copies; the tested Muse version
+selects the project copy and reports the user copy as shadowed. Do not assume one precedence rule
+across hosts. Select the intended project skill explicitly using the host's native selector or
+exact resolved path. In Codex headless prompts, a path-qualified mention disambiguates same-name
+copies. Substitute the real absolute path returned by the registry:
+
+```text
+[$implement](<exact-registry-path>)
+```
+
+For Muse 1.0.2, use interactive `/skill implement` and verify that it loads the project copy.
+Asking the model to
+call `read_skill` is not equivalent: that tool rejects this explicit-only skill as `disabled-skill`.
+
+The [investigation and recheck commands](research/264-shared-skill-discovery.md) show the tested
+versions, controlled policy probes, registry commands, and invocation limits. These observations
+are not Supported Host certification or a release gate.
 
 ## Provenance and updates
 
