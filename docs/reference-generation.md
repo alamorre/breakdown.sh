@@ -9,8 +9,8 @@ it does not replace public semantic contracts or independently reviewed compatib
 | Request/output shapes | `local/contracts/schemas/*.schema.json` | CLI `generate-protocol-validator.mjs` and MCP `generate-protocol-assets.mjs` use AJV; MCP projects tool schemas from operation variants |
 | Operation names and structured failure codes | `local/contracts/catalogs/operations.v1.json` | Documentation generator; schemas, TypeScript discriminated unions, and adapter dispatch still repeat some facts |
 | Fixed resource limits | `local/contracts/catalogs/limits.v1.json` | Core `fixed-limits.ts` and schema limits still repeat values; independent boundary fixtures check behavior |
-| CLI help commands and exit codes | `local/contracts/catalogs/cli.v1.json` | Generated CLI reference; CLI runtime also maintains literal help and exit codes (next consolidation in #240) |
-| Package versions | `packages/*/package.json` | npm packing and package reference; runtime CLI/core version strings still repeat the current version |
+| CLI help commands and exit codes | `local/contracts/catalogs/cli.v1.json` | CLI build emits `dist/cli-reference.js` for runtime help, exit codes, and stderr limit; the documentation generator uses the same catalog |
+| Package versions | `packages/*/package.json` | npm packing, package reference, and generated CLI version; the core version string remains a separate candidate for consolidation |
 | Current contract/document version | `local/contracts/VERSION` | Documentation/contract archive generator; current release metadata, catalogs, and independent fixtures intentionally assert an exact version |
 | Host support claims and historical evidence | Exact release artifacts and `local/docs/release-metadata.json` | Existing versioned support reference; do not turn historical certification requirements into npm gates |
 | Vendored skill provenance | `local/vendor/skills/VENDORED_SKILLS.json` and pinned upstream source | Manifest generator and independent skill/archive tests |
@@ -41,8 +41,17 @@ both navigation and generated drift without a second documentation job.
 
 ## Consolidate in small steps
 
-Start with the CLI catalog/runtime copies: the existing CLI build generator can emit help and exit
-codes without changing the public format or introducing a contract framework. Independent CLI
-process-byte fixtures already specify the exact output. Further consolidation of limit values,
-failure unions, or release versions should be scoped separately once its concrete maintenance
-benefit and independent compatibility checks are clear. Do not reorganize core as a prerequisite.
+The CLI catalog/runtime copies are consolidated in #240. The existing CLI build generator emits
+`dist/cli-reference.js` from the CLI catalog and package manifest. Runtime help, failure/usage exit
+codes, stderr limit, and `--version` now consume that module. No second authored value table remains
+in the CLI implementation. The generated header names both sources and the package build command;
+the module ships inside the existing CLI tarball and adds no runtime dependency.
+
+Independent CLI process-byte fixtures still specify exact help, version, exit status, stdout, and
+stderr. They are not regenerated from the new module. Existing installed-tarball tests and terminal
+escaping/diagnostic bounds checks exercise the changed surface. Core, MCP, schemas, catalogs, public
+fixtures, versioned docs, and release evidence remain unchanged by this consolidation.
+
+Further consolidation of limit values, failure unions, or release versions should be scoped
+separately once its concrete maintenance benefit and independent compatibility checks are clear.
+Do not reorganize core as a prerequisite.

@@ -29,15 +29,12 @@ import {
   type ProtocolValidator,
 } from './protocol-validator.js';
 
-const EXIT_BY_FAILURE_KIND = {
-  invalid: 3,
-  conflict: 4,
-  unsupported: 5,
-  cancelled: 6,
-  resource_limit: 7,
-  io: 8,
-  internal: 70,
-} as const;
+import {
+  CLI_EXIT_CODES,
+  CLI_USAGE,
+  CLI_VERSION,
+  HUMAN_STDERR_LIMIT_BYTES,
+} from './cli-reference.js';
 
 const OPERATION_VALIDATORS: Record<OperationRequest['operation'], ProtocolValidator> = {
   validate_workflow: validateValidateWorkflowRequest,
@@ -47,16 +44,6 @@ const OPERATION_VALIDATORS: Record<OperationRequest['operation'], ProtocolValida
   read_work_input: validateReadWorkInputRequest,
   submit_candidate: validateSubmitCandidateRequest,
 };
-
-const CLI_VERSION = '1.0.1';
-const HUMAN_STDERR_LIMIT_BYTES = 65_536;
-
-const USAGE = `Usage:
-  breakdown workflow validate --project PATH [--json]
-  breakdown run create --project PATH [--input ID=PATH]... [--json]
-  breakdown run inspect --project PATH --run RUN_ID [--json]
-  breakdown operate --project PATH
-`;
 
 interface ValidateArguments {
   operation: 'validate_workflow';
@@ -293,7 +280,7 @@ function writeHumanFailure(failure: OperationFailure['failure']) {
 async function main(signal: AbortSignal) {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === '--help') {
-    process.stdout.write(USAGE);
+    process.stdout.write(CLI_USAGE);
     return;
   }
   if (args.length === 1 && args[0] === '--version') {
@@ -302,8 +289,8 @@ async function main(signal: AbortSignal) {
   }
   const parsed = parseArguments(args);
   if (parsed === undefined) {
-    process.stderr.write(USAGE);
-    process.exitCode = 2;
+    process.stderr.write(CLI_USAGE);
+    process.exitCode = CLI_EXIT_CODES.usage;
     return;
   }
 
@@ -315,7 +302,7 @@ async function main(signal: AbortSignal) {
     if (input === undefined) {
       const result = resourceLimitFailure();
       writeMachineResult('unknown', result);
-      process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[result.failure.kind];
       return;
     }
     try {
@@ -330,7 +317,7 @@ async function main(signal: AbortSignal) {
         },
       ]);
       writeMachineResult('unknown', result);
-      process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[result.failure.kind];
       return;
     }
     if (!isRecord(request)) {
@@ -342,7 +329,7 @@ async function main(signal: AbortSignal) {
         },
       ]);
       writeMachineResult('unknown', result);
-      process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[result.failure.kind];
       return;
     }
     const operation = isOperation(request.operation) ? request.operation : 'unknown';
@@ -352,13 +339,13 @@ async function main(signal: AbortSignal) {
     ) {
       const result = unsupportedOperationRequestFailure('unsupported_version');
       writeMachineResult(operation, result);
-      process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[result.failure.kind];
       return;
     }
     if (typeof request.operation === 'string' && !isOperation(request.operation)) {
       const result = unsupportedOperationRequestFailure('unsupported_operation');
       writeMachineResult('unknown', result);
-      process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[result.failure.kind];
       return;
     }
     const requestValidator =
@@ -366,7 +353,7 @@ async function main(signal: AbortSignal) {
     if (!requestValidator(request)) {
       const result = invalidOperationRequest(operationRequestDiagnostics(requestValidator.errors));
       writeMachineResult(operation, result);
-      process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[result.failure.kind];
       return;
     }
     const operationRequest = request as unknown as OperationRequest;
@@ -423,7 +410,7 @@ async function main(signal: AbortSignal) {
     }
     const emittedResult = writeMachineResult(operationRequest.operation, result);
     if (!emittedResult.ok) {
-      process.exitCode = EXIT_BY_FAILURE_KIND[emittedResult.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[emittedResult.failure.kind];
     }
     return;
   }
@@ -436,7 +423,7 @@ async function main(signal: AbortSignal) {
   if (parsed.json) {
     const emittedResult = writeMachineResult(parsed.operation, result);
     if (result.ok && !emittedResult.ok) {
-      process.exitCode = EXIT_BY_FAILURE_KIND[emittedResult.failure.kind];
+      process.exitCode = CLI_EXIT_CODES[emittedResult.failure.kind];
       return;
     }
   } else if (result.ok) {
@@ -479,7 +466,7 @@ async function main(signal: AbortSignal) {
   }
 
   if (!result.ok) {
-    process.exitCode = EXIT_BY_FAILURE_KIND[result.failure.kind];
+    process.exitCode = CLI_EXIT_CODES[result.failure.kind];
   }
 }
 
@@ -491,7 +478,7 @@ try {
   await main(invocation.signal);
 } catch {
   process.stderr.write('Internal CLI failure.\n');
-  process.exitCode = 70;
+  process.exitCode = CLI_EXIT_CODES.internal;
 } finally {
   process.off('SIGINT', cancelInvocation);
   process.off('SIGTERM', cancelInvocation);
