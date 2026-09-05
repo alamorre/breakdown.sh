@@ -29,7 +29,7 @@ export async function buildLocalRelease({ outputPath, repositoryRoot = defaultRe
   const candidateDirectory = resolve(outputPath);
   const contractsRoot = join(repositoryRoot, 'local', 'contracts');
   const skillsRoot = join(repositoryRoot, 'local', 'skills');
-  const vendoredSkillsRoot = join(repositoryRoot, 'plugins', 'breakdown', 'skills');
+  const vendoredSkillsRoot = join(repositoryRoot, 'local', 'vendor', 'skills');
 
   await mkdir(candidateDirectory, { recursive: true });
   if ((await readdir(candidateDirectory)).length > 0) {

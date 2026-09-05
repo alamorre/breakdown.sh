@@ -1,17 +1,19 @@
+import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
-import nextVitals from 'eslint-config-next/core-web-vitals';
-import nextTs from 'eslint-config-next/typescript';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  globalIgnores(['.next/**', 'out/**', 'build/**', 'coverage/**', 'next-env.d.ts']),
+export default defineConfig([
+  globalIgnores(['**/dist/**', '**/coverage/**', 'local/vendor/**']),
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   {
-    rules: {
-      'no-console': 'error',
-      '@typescript-eslint/no-explicit-any': 'error',
-    },
+    languageOptions: { globals: globals.node },
+    // Literal spaces make the independently reviewed wire-format checks easier to compare.
+    rules: { 'no-regex-spaces': 'off' },
+  },
+  {
+    files: ['**/*.ts'],
+    rules: { 'no-console': 'error', '@typescript-eslint/no-explicit-any': 'error' },
   },
 ]);
-
-export default eslintConfig;

@@ -479,7 +479,7 @@ ${navigationLines}
 - Versioned llms.txt: ${immutableRepositoryRoot}local/docs/${releaseVersion}/llms.txt
 - Immutable release evidence: ${immutableReleaseUrl}
 - Release metadata input: SHA-256 ${sha256(releaseMetadataBytes)}
-- Hosted Breakdown overview: https://www.breakdown.sh/
+- Hosted archive: https://github.com/alamorre/breakdown.sh/tree/a784e61955b1635827c8a22acaea4377a1207e07
 `;
 
   return { documents, repositoryLlms };

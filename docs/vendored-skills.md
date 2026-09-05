@@ -21,26 +21,13 @@ instead of implying that Breakdown installed them.
 
 ## Install from a clean clone
 
-### Codex plugin
-
-Install the repository marketplace and plugin:
-
-```bash
-codex plugin marketplace add alamorre/breakdown.sh --ref main --sparse .agents/plugins --sparse plugins/breakdown
-codex plugin add breakdown@breakdown
-```
-
-Start a new Codex thread so it discovers `plugins/breakdown/skills/`, then invoke a skill with the
-name in the table above. `$ask-matt` is the discovery entry point when you are unsure which one to
-use.
-
 ### Project-local skills without the plugin
 
 From a clean Breakdown checkout and the target project root, use the pinned installer and the
 checked-in source directory:
 
 ```bash
-npx --yes skills@1.5.20 add /absolute/path/to/breakdown.sh/plugins/breakdown/skills \
+npx --yes skills@1.5.20 add /absolute/path/to/breakdown.sh/local/vendor/skills \
   --skill ask-matt \
   --skill tdd \
   --skill code-review \
@@ -65,7 +52,7 @@ into the target host's project skill directory. The archive includes `VENDORED_S
 
 ## Provenance and updates
 
-The canonical vendored bytes live in `plugins/breakdown/skills/`. `VENDORED_SKILLS.json` records,
+The canonical vendored bytes live in `local/vendor/skills/`. `VENDORED_SKILLS.json` records,
 for every file:
 
 - upstream repository and source path;
@@ -88,4 +75,4 @@ node scripts/generate-vendored-skills-manifest.mjs --upstream /absolute/path/to/
 
 When moving to a newer upstream revision, update the pinned revision in the generator, preserve or
 reapply the recorded Breakdown adaptations, retain the upstream license, regenerate the manifest,
-and run the skill and plugin conformance tests.
+and run the skill conformance tests (`pnpm test`).

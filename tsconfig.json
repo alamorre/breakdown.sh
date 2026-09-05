@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "target": "ES2024",
+    "lib": ["ES2024"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -11,29 +11,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "types": ["node", "vitest/globals"]
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
-  ],
-  "exclude": [
-    "node_modules",
-    "packages/breakdown-core",
-    "packages/breakdown-cli",
-    "packages/breakdown-mcp"
-  ]
+  "include": ["local/**/*.test.ts", "scripts/**/*.test.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "local/vendor"]
 }
