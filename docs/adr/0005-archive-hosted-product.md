@@ -38,3 +38,9 @@ platform/host qualification is separate from ordinary contribution and npm publi
 
 A hosted revival requires a separate decision about maintenance and coexistence. Git history is
 the archive; a second in-tree copy would keep the competing contributor path alive.
+
+The existing Vercel GitHub integration attempted a failed hosted preview on the archival PR.
+`vercel.json` now disables automatic Git deployments for this Local checkout using Vercel's
+[documented setting](https://vercel.com/docs/project-configuration/git-configuration#turning-off-all-automatic-deployments).
+This inert opt-out is the only retained hosted configuration; it does not alter the live site,
+disconnect the integration, or publish anything.
