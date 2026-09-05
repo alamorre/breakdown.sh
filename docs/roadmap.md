@@ -5,32 +5,18 @@ and StepArtifacts, deterministic resume, core, CLI, optional local stdio MCP, an
 See [architecture](architecture.md) and the [contracts](../local/contracts/README.md).
 
 The Local MVP (#124, #142) is implemented and released. Repository cleanup #240 is complete through
-#273–#275; skill-discovery guidance is resolved by #277. The priority is useful, reliable personal
-use: fixes for installing, running, resuming, debugging, or shipping Local, and capabilities the
-owner actually wants.
+#273–#275; skill-discovery guidance is resolved by #277, and contributor ownership guidance by
+#280. The priority is useful, reliable personal use: fixes for installing, running, resuming,
+debugging, or shipping Local, and capabilities the owner actually wants.
 
 ## Next work
 
-1. [#279 — Make source-checkout setup and same-Run resume reproducible from the guides](https://github.com/alamorre/breakdown.sh/issues/279).
-   The #276 trial needed manual runtime/CLI selection and bespoke fresh-session prompts. Add one
-   example across the existing getting-started and resume guides carrying the absolute Node 24,
-   CLI, setup-skill, and project paths, preflight arguments, exact Run ID, and user-granted authority
-   and isolation context. Working behavior: a fresh session inspects and resumes that same Run,
-   reuses matching completed work, and honors existing approval and no-hidden-retry rules without
-   reconstructing setup. **Dependencies:** none outstanding; #277 is merged. Validate the example
-   against the existing interface, without making another trial report a prerequisite.
-
-2. [#280 — Make code clarity and documentation ownership explicit for new agents](https://github.com/alamorre/breakdown.sh/issues/280).
-   Added by the owner during this cleanup: fresh agents currently have to rediscover the intended
-   code/documentation distinction in closed #240. Put the existing convention in contributor
-   guidance so an agent can identify where behavior, rationale, public contracts, and generated
-   facts belong without maintaining prose copies of implementation details. **Dependencies:**
-   none; independent of #279. Keep useful usage docs and contracts, with no new policy document,
-   audit process, tooling, or runtime refactor.
-
-#279 is the sole task retained from the reviewed follow-up batch; #280 is a new owner-requested
-improvement. These two documentation tasks can proceed independently. Add further work only when
-an observed problem or an owner-requested capability gives it a concrete user-visible outcome.
+The [source-checkout example](getting-started.md#try-a-source-checkout) and
+[same-Run handoff](runs-and-authority.md#source-checkout-handoff) address
+[#279](https://github.com/alamorre/breakdown.sh/issues/279), the setup/resume gap observed in #276.
+The contributor guidance addresses [#280](https://github.com/alamorre/breakdown.sh/issues/280).
+No task remains from this follow-up batch. Add further work only when an observed problem or an
+owner-requested capability gives it a concrete user-visible outcome.
 
 ## Backlog decisions (#278)
 
