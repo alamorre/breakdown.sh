@@ -131,7 +131,7 @@ export async function main(argv = process.argv.slice(2)) {
   const upstream = argumentValue(argv, '--upstream');
   if (upstream === undefined) throw new Error(usage());
   const repositoryRoot = resolve(import.meta.dirname, '..');
-  const vendoredSkillsRoot = join(repositoryRoot, 'plugins', 'breakdown', 'skills');
+  const vendoredSkillsRoot = join(repositoryRoot, 'local', 'vendor', 'skills');
   const manifest = await buildVendoredSkillsManifest({
     upstreamRoot: resolve(upstream),
     vendoredSkillsRoot,

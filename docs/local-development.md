@@ -1,65 +1,40 @@
-# Local Development
+# Develop Breakdown Local
 
-Use this contributor path when you are changing Breakdown, self-hosting it, or testing repo-local
-integration scaffolding. Hosted MCP and REST users should start with
-[Getting Started](getting-started.md) instead.
-
-> **Canonical direction:** [Roadmap](roadmap.md) — Breakdown Local (#142) is the 1.0+ product (Wayfinder #124). Hosted SaaS is legacy/out-of-scope for the local corpus; see [ADR 0004](adr/0004-declare-breakdown-local-canonical-and-retire-doppler-hosted-legacy.md). Secrets are file-local only (`.env.local.example` inventory, no Doppler).
-
-## Install
-
-Breakdown uses the pnpm version pinned in `package.json`. Enable Corepack, then install
-dependencies from the repo root.
-
-```bash
-corepack enable
-pnpm install
-```
-
-## Configure Environment Variables
-
-Secrets are file-local only. Use `.env.local.example` as the variable inventory. Real values live in untracked local files (`.env.local`) and are never committed. No Doppler, no Vercel env sync, and no `doppler setup` are required for ordinary development or for Breakdown Local usage.
-
-For the standard local workflow:
-
-```bash
-cp .env.local.example .env.local
-# edit .env.local with your Clerk/Supabase/Google Drive values
-pnpm secrets:check
-pnpm dev
-```
-
-Validate that all required variables are present with:
+Install Node 24 and the pnpm version pinned by `package.json`, then run:
 
 ```sh
-pnpm secrets:check
+corepack enable
+pnpm install
+pnpm check
 ```
 
-> **Hosted-legacy note (self-host only):** Operators who self-host the SaaS app under `src/` may sync env from their own secrets manager (Doppler, Vault, 1Password, Vercel dashboard, or plain env files) and inject via standard env vars. That hosted-legacy path is documented in [Secrets Management — Appendix A](secrets-management.md#appendix-a-hosted-legacy-self-host-only-doppler--vercel-sync) and is not required for Breakdown Local or ordinary development.
+Linux glibc and macOS on x64/arm64 are maintained. Use a local disk with private permissions and
+atomic rename support. Windows and remote/synchronized filesystems are unsupported for Run storage.
+There are no hosted credentials, environment files, Next.js build, or web server in this path.
 
-## Run The App
+| Command | Purpose |
+| --- | --- |
+| `pnpm build` | Build core, CLI, and MCP in dependency order |
+| `pnpm test` | Build and run Local suites once with coverage |
+| `pnpm test:watch` | Build, then watch the Local tests |
+| `pnpm lint` | ESLint for Local code and tooling |
+| `pnpm typecheck` | Check Local packages and repository test/tool types |
+| `pnpm check` | Reproduce PR CI, including the dependency audit |
+| `pnpm local:docs:generate` | Regenerate current reference/manifest output |
+| `pnpm local:docs:check` | Check generated output without writing |
 
-Open [http://localhost:3000](http://localhost:3000) after the dev server starts. Use the sign-in
-flow to reach the dashboard and graph editor.
+The documentation artifact suite already checks generated output during `pnpm test`; CI does not
+run it a second time. CLI tests collect subprocess V8 coverage and exercise installed tarballs.
+The release packaging test uses a temporary checkout of **HEAD**, installs offline, and checks an
+installed candidate. Commit your changes locally before relying on that test as final packaging
+validation. It creates local artifacts only. Independent fixtures, filesystem races, hostile-input,
+resume/staleness, and protocol-byte checks remain part of the test suite.
 
-## Useful Checks
+For focused iteration, use `pnpm build` followed by `pnpm exec vitest run PATH/TO/TEST`.
+Package-local `pnpm --filter @breakdown-sh/cli test` (and core/MCP equivalents) remain available.
+Rebuild after runtime changes when using watch mode: CLI/MCP tests launch compiled entrypoints.
 
-Before sending changes for review, run the focused checks for the work you touched.
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-## Package Security
-
-Dependency resolution uses pnpm with a seven-day release cooldown. Run the high-severity audit
-before dependency changes.
-
-```bash
-pnpm run audit:high
-```
-
-See [Secrets Management](secrets-management.md) for the fuller file-local model and [Roadmap](roadmap.md) for product direction.
+See [architecture](architecture.md), [contribution/sign-off guidance](../CONTRIBUTING.md), and
+[the simple npm publication path](npm-publishing.md). Optional qualification tools are documented
+under [scripts/local-release](../scripts/local-release/README.md); they are not publication gates.
+Hosted operator instructions are available through [the archive](adr/0005-archive-hosted-product.md).

@@ -7,4 +7,4 @@
 - Versioned llms.txt: https://github.com/alamorre/breakdown.sh/tree/breakdown-local-v1.0.1/local/docs/1.0.1/llms.txt
 - Immutable release evidence: https://github.com/alamorre/breakdown.sh/releases/tag/breakdown-local-v1.0.1
 - Release metadata input: SHA-256 f425ce5a60cdfb6418c950f2ecc007838af04b3383bc41229d84befd62dced99
-- Hosted Breakdown overview: https://www.breakdown.sh/
+- Hosted archive: https://github.com/alamorre/breakdown.sh/tree/a784e61955b1635827c8a22acaea4377a1207e07

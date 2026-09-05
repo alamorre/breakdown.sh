@@ -1,7 +1,8 @@
-# Contributing to Breakdown
+# Contributing to Breakdown Local
 
-Use this contributor path when you are changing Breakdown or its repo-local integration tooling.
-Hosted MCP and REST users do not need to clone this repository.
+Use Node 24 and pnpm 11.3.0. Run `pnpm install && pnpm check` from the repository root.
+No hosted credentials or environment file is required. See the [architecture map](docs/architecture.md)
+and [Local development guide](docs/local-development.md).
 
 ## Developer Certificate of Origin
 
