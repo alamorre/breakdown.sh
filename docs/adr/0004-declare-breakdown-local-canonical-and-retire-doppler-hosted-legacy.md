@@ -1,5 +1,7 @@
 # Declare Breakdown Local as canonical 1.0+ product and retire Doppler/hosted assumptions
 
+> The Local product decision remains. [ADR 0005](0005-archive-hosted-product.md) supersedes the hosted coexistence and environment-inventory instructions below; hosted files now live only at the archive reference.
+
 Status: Accepted for issue #205
 
 ## Context

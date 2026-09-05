@@ -3,6 +3,8 @@
 - [Getting started and a working example](getting-started.md)
 - [Contributor commands](local-development.md) and [contribution policy](../CONTRIBUTING.md)
 - [Architecture map](architecture.md)
+- [Resume, stale results, file integrity, and authority](runs-and-authority.md)
+- [Reference owners and regeneration](reference-generation.md)
 - [Normative contracts](../local/contracts/README.md), including [resume and stale results](../local/contracts/specifications/hashing-and-state.md) and [integrity and authorization](../local/contracts/specifications/security-and-publication.md)
 - [Versioned Local guidance and generated reference](../local/docs/1.0.1/README.md)
 - [Canonical Agent Skills](../local/skills/) and [vendored engineering skills](vendored-skills.md)

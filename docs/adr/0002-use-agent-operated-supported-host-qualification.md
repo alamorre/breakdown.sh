@@ -1,5 +1,7 @@
 # Defer Supported Host certification for Breakdown Local 1.0
 
+> Historical release design. #269 supersedes the publication gates below; the deferred Supported Host policy remains. Current npm publication follows [the simple manual workflow](../npm-publishing.md).
+
 Issue #187 replaces the agent-operated qualification decision explored for #186. Breakdown Local
 1.0 is intended to put the complete local MVP in the product owner's hands without making an
 untested host claim or blocking on real Agent Host execution.
