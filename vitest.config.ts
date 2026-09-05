@@ -2,7 +2,13 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['packages/*/src/**/*.test.ts', 'local/**/*.test.ts', 'scripts/**/*.test.ts'],
+    // Also support package-local invocations, where Vitest resolves globs from that package.
+    include: [
+      'src/**/*.test.ts',
+      'packages/*/src/**/*.test.ts',
+      'local/**/*.test.ts',
+      'scripts/**/*.test.ts',
+    ],
     coverage: {
       provider: 'v8',
       include: [
