@@ -32,9 +32,37 @@ the applicable project license or licenses and the DCO 1.1 certification above.
 
 ## Prepare a Change
 
-Keep changes focused and update relevant documentation and tests with the implementation. Follow
-the setup and validation guidance in [Local Development](docs/local-development.md), and run the
-focused checks for the files you changed before opening a pull request.
+Keep changes focused. Update affected usage guidance, decisions, contracts, and behavior tests;
+a private refactor needs no prose companion that mirrors its implementation. Follow the setup
+and validation guidance in [Local Development](docs/local-development.md), and run the focused
+checks for the files you changed before opening a pull request.
 
 Contributors are responsible for reviewing AI-assisted work before submission and for ensuring
 that they have the right to submit all contributed code, documentation, and other content.
+
+## Implementation and documentation
+
+Make implementation understandable through domain names, explicit types, cohesive module
+interfaces, and meaningful behavior tests. Improve confusing code when practical. Use comments
+to explain non-obvious rationale, constraints, and invariants.
+
+Authored docs add product intent, roadmap, decisions and tradeoffs, user/contributor instructions,
+and necessary semantic contracts. Keep useful setup, resume, and architecture navigation concise;
+link to historical issues or PRs for completed implementation details. Avoid prose copies of
+internal algorithms, call flows, type shapes, or value tables with an existing authoritative source.
+Generate repetitive reference facts from their [existing owners](docs/reference-generation.md)
+where supported.
+
+Choose updates by what changed:
+
+- Internal implementation changes belong in code and behavior tests; update prose only when usage,
+  rationale, or a contract is affected.
+- Public semantic changes update the [normative owner](local/contracts/README.md) and independently
+  reviewed compatibility expectations. Implementation and generated reference are not normative;
+  never derive conformance oracles from the implementation they check.
+- Product decisions and tradeoffs belong in [ADRs](docs/adr/); planned work and priorities belong in
+  the [roadmap](docs/roadmap.md).
+
+Preserve historical versioned output and vendored upstream material. Follow
+[reference ownership and regeneration guidance](docs/reference-generation.md) when updating current
+generated output, and use the existing link/drift checks and normal PR checks.
