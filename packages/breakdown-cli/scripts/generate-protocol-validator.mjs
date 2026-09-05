@@ -60,3 +60,22 @@ const output = execFileSync(process.execPath, [standalonePostprocessorPath], {
 });
 
 await writeFile(outputPath, `${output}\n`, 'utf8');
+
+// Keep CLI presentation facts with their existing authored owners; no runtime filesystem lookup.
+const catalog = JSON.parse(
+  await readFile(new URL('../../../local/contracts/catalogs/cli.v1.json', import.meta.url), 'utf8'),
+);
+const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const usage = `Usage:\n${[...catalog.human_commands, catalog.automation_command]
+  .map((command) => `  ${command}\n`)
+  .join('')}`;
+await writeFile(
+  new URL('../dist/cli-reference.js', import.meta.url),
+  '// Generated from local/contracts/catalogs/cli.v1.json and packages/breakdown-cli/package.json.\n' +
+    '// Regenerate: pnpm --filter @breakdown-sh/cli build\n' +
+    `export const CLI_VERSION = ${JSON.stringify(manifest.version)};\n` +
+    `export const CLI_USAGE = ${JSON.stringify(usage)};\n` +
+    `export const CLI_EXIT_CODES = ${JSON.stringify(catalog.exit_codes)};\n` +
+    `export const HUMAN_STDERR_LIMIT_BYTES = ${JSON.stringify(catalog.presentation.human_stderr_bytes)};\n`,
+  'utf8',
+);
