@@ -31,6 +31,8 @@ agent prepares work, reads only declared Inputs, submits Candidate Outcomes, and
 Use `summarize-breakdown-run` with that same Run ID for a summary. MCP is an optional adapter over
 the same six operations; machine clients use `breakdown operate --project PATH` and structured JSON.
 
+For the next steps, read [resume, stale results, integrity, and authority](runs-and-authority.md).
+
 See [CLI reference](../local/docs/1.0.1/reference/cli.md),
 [operation semantics](../local/contracts/specifications/operations.md),
 [resume and state](../local/contracts/specifications/hashing-and-state.md), and

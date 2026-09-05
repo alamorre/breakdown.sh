@@ -23,7 +23,7 @@ There are no hosted credentials, environment files, Next.js build, or web server
 | `pnpm local:docs:generate` | Regenerate current reference/manifest output |
 | `pnpm local:docs:check` | Check generated output without writing |
 
-The documentation artifact suite already checks generated output during `pnpm test`; CI does not
+The documentation suites check [internal links and generated output](reference-generation.md) during `pnpm test`; CI does not
 run it a second time. CLI tests collect subprocess V8 coverage and exercise installed tarballs.
 The release packaging test uses a temporary checkout of **HEAD**, installs offline, and checks an
 installed candidate. Commit your changes locally before relying on that test as final packaging
